@@ -65,7 +65,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         # initialize attributes
         self.pending_reqs_to_broadcast : set[TaskRequest] = set()            # set of observation requests that have not been broadcasted
 
-    @runtime_tracker
+    
     def update_percepts(self, 
                         state : SimulationAgentState,
                         current_plan : Plan,
@@ -80,7 +80,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         # update percepts
         super().update_percepts(state, incoming_reqs, relay_messages, completed_actions)
     
-    @runtime_tracker
+    
     def needs_planning( self, 
                         state : SimulationAgentState,
                         __ : object,
@@ -97,11 +97,10 @@ class AbstractPeriodicPlanner(AbstractPlanner):
             return not bool(pending_actions)     # no actions left to do before the end of the replanning period 
         return False
 
-    @runtime_tracker
+    
     def generate_plan(  self, 
                         state : SimulationAgentState,
                         specs : object,
-                        clock_config : ClockConfig,
                         orbitdata : OrbitData,
                         mission : Mission,
                         tasks : list,
@@ -127,7 +126,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         observation_opportunities : list[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
 
         # schedule observation tasks
-        observations : list = self._schedule_observations(state, specs, clock_config, orbitdata, observation_opportunities, mission, observation_history)
+        observations : list = self._schedule_observations(state, specs, orbitdata, observation_opportunities, mission, observation_history)
 
         assert isinstance(observations, list) and all([isinstance(obs, ObservationAction) for obs in observations]), \
             f'Observation actions not generated correctly. Is of type `{type(observations)}` with elements of type `{type(observations[0])}`.'
@@ -138,7 +137,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         broadcasts : list = self._schedule_broadcasts(state, observations, orbitdata)
 
         # generate maneuver and travel actions from measurements
-        maneuvers : list = self._schedule_maneuvers(state, specs, observations, clock_config, orbitdata)
+        maneuvers : list = self._schedule_maneuvers(state, specs, observations, orbitdata)
         
         # generate plan from actions
         self.plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, t=state.t, horizon=self.horizon, t_next=state.t+self.period)    
@@ -150,7 +149,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         # return plan and save local copy
         return self.plan.copy()
             
-    @runtime_tracker
+    
     def get_available_tasks(self, tasks : list, planning_horizon : Interval) -> list:
         """ Returns a list of tasks that are available at the given time """
         if not isinstance(tasks, list):
@@ -164,7 +163,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 and task.availability.overlaps(planning_horizon)]
     
     @abstractmethod
-    def _schedule_observations(self, state : SimulationAgentState, specs : object, clock_config : ClockConfig, orbitdata : OrbitData, observation_opportunities : list, mission : Mission, observation_history : ObservationHistory) -> list:
+    def _schedule_observations(self, state : SimulationAgentState, specs : object, orbitdata : OrbitData, observation_opportunities : list, mission : Mission, observation_history : ObservationHistory) -> list:
         """ Creates a list of observation actions to be performed by the agent """    
 
     @abstractmethod
@@ -261,7 +260,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
             # assert all([isinstance(broadcast, BroadcastMessageAction) for broadcast in broadcasts]), \
             #     f'Broadcasts not scheduled correctly. Is of type `{type(broadcasts)}`.'
 
-    @runtime_tracker
+    
     def _schedule_periodic_replan(self, state : SimulationAgentState, prelim_plan : Plan, t_next : float) -> list:
         """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
 
@@ -284,7 +283,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         # create wait action
         return [WaitAction(t_wait_start, t_next)] if t_wait_start < t_next else []
     
-    @runtime_tracker
+    
     def get_ground_points(self,
                           orbitdata : OrbitData
                         ) -> dict:

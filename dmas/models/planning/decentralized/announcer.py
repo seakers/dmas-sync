@@ -71,9 +71,8 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
     def generate_plan(  self, 
                         state : SimulationAgentState,
                         _ : object,
-                        __ : ClockConfig,
                         orbitdata : OrbitData,
-                        *___
+                        *__
                     ) -> Plan:
         """ Generates a new plan for the agent """            
         # schedule broadcasts to be perfomed

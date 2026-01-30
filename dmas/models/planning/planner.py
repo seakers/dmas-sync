@@ -20,6 +20,7 @@ from execsatm.mission import Mission
 from execsatm.requirements import CapabilityRequirement, CategoricalRequirement, ConstantValueRequirement, ExpDecayRequirement, ExpSaturationRequirement, GaussianRequirement, IntervalInterpolationRequirement, LogThresholdRequirement, PerformancePreferenceStrategies, PerformanceRequirement, StepsRequirement, TriangleRequirement
 from execsatm.utils import Interval
 
+from dmas.models.actions import ObservationAction
 from dmas.models.planning.plan import Plan
 from dmas.models.planning.tracker import ObservationHistory, ObservationTracker
 from dmas.models.states import *
@@ -154,50 +155,6 @@ class AbstractPlanner(ABC):
                                                                                     ) )
 
         return access_opportunities
-
-        # TEMP previous implementation kept for reference
-        # # initiate access times
-        # access_opportunities : Dict[int, Dict[int, Dict[str, List]]] = {}
-        
-        # for i in tqdm(range(len(raw_coverage_data['time [s]'])), 
-        #                 desc=f'{state.agent_name}/PLANNER: Compiling access opportunities', 
-        #                 leave=False):
-        #     t_img = raw_coverage_data['time [s]'][i]
-        #     grid_index = raw_coverage_data['grid index'][i]
-        #     gp_index = raw_coverage_data['GP index'][i]
-        #     instrument = raw_coverage_data['instrument'][i]
-        #     # look_angle = raw_coverage_data['look angle [deg]'][i]
-        #     off_nadir_angle = raw_coverage_data['off-nadir axis angle [deg]'][i]
-            
-        #     # initialize dictionaries if needed
-        #     if grid_index not in access_opportunities:
-        #         access_opportunities[grid_index] = {}
-                
-        #     if gp_index not in access_opportunities[grid_index]:
-        #         access_opportunities[grid_index][gp_index] = defaultdict(list)
-
-        #     # compile time interval information 
-        #     found = False
-        #     for interval, t, th in access_opportunities[grid_index][gp_index][instrument]:
-        #         interval : Interval
-        #         t : list
-        #         th : list
-
-        #         overlap_interval = Interval(t_img - orbitdata.time_step, 
-        #                                     t_img + orbitdata.time_step)
-                
-        #         if overlap_interval.overlaps(interval):
-        #             interval.extend(t_img)
-        #             t.append(t_img)
-        #             th.append(off_nadir_angle)
-        #             found = True
-        #             break      
-
-        #     if not found:
-        #         access_opportunities[grid_index][gp_index][instrument].append([Interval(t_img, t_img), [t_img], [off_nadir_angle]])     
-
-        # # return access times and grid information
-        # return access_opportunities
 
     
     def create_observation_opportunities_from_accesses(self, 
@@ -1036,7 +993,6 @@ class AbstractPlanner(ABC):
                                 state : SimulationAgentState, 
                                 specs : object,
                                 observations : List[ObservationAction],
-                                _ : ClockConfig,
                                 orbitdata : OrbitData = None
                             ) -> list:
         """
@@ -1049,7 +1005,6 @@ class AbstractPlanner(ABC):
             - specs (`dict` or `Sapcecraft`): contains information regarding the physical specifications of the agent
             - path (`list`): list of tuples indicating the sequence of observations to be performed and time of observation
             - t_init (`float`): start time for plan
-            - clock_config (:obj:`ClockConfig`): clock being used for this simulation
         """
 
         # validate inputs

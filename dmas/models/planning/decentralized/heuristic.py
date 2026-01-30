@@ -23,7 +23,6 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
     def _schedule_observations(self, 
                                state : SimulationAgentState, 
                                specs : object, 
-                               _ : ClockConfig, 
                                orbitdata : OrbitData, 
                                observation_opportunities : list,
                                mission : Mission,

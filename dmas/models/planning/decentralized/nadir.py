@@ -21,7 +21,6 @@ class NadirPointingPlanner(EarliestAccessPlanner):
                                 state : SimulationAgentState, 
                                 specs : object,
                                 observations : List[ObservationAction],
-                                _ : ClockConfig,
                                 orbitdata : OrbitData = None
                             ) -> list:
         # Nadir pointing planner does not schedule maneuvers
@@ -39,8 +38,7 @@ class NadirPointingPlanner(EarliestAccessPlanner):
     
     def _schedule_observations(self, 
                                state : SimulationAgentState, 
-                               specs : object, 
-                               _ : ClockConfig, 
+                               specs : object,  
                                orbitdata : OrbitData, 
                                observation_opportunities : List[ObservationOpportunity],
                                mission : Mission,
