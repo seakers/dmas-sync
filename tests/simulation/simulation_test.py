@@ -4,7 +4,10 @@ import unittest
 
 import pandas as pd
 
+from dmas.core.orbitdata import OrbitData
 from dmas.core.simulation import Simulation
+from dmas.models.agent import SimulationAgent
+from dmas.models.environment import SimulationEnvironment
 from dmas.utils.tools import print_scenario_banner
 
 
@@ -226,8 +229,29 @@ class TestSimulationLoading(unittest.TestCase):
 
         # initialize mission
         simulation : Simulation = Simulation.from_dict(mission_specs, overwrite=True)
-        x = 10  # placeholder to avoid empty test case
+        
+        # check that simulation is initialized
+        self.assertIsInstance(simulation, Simulation)
+        self.assertIsInstance(simulation._environment, SimulationEnvironment)
+        self.assertTrue(all(isinstance(agent, SimulationAgent) for agent in simulation._agents))
+        self.assertIsInstance(simulation._orbitdata, dict)
+        self.assertTrue(all(isinstance(orbitdata, OrbitData) for orbitdata in simulation._orbitdata.values()))
+        self.assertEqual(len(simulation._orbitdata), len(simulation._agents))
 
+    def test_simulation_runs_successfully(self):
+
+       # create mission specs with given connectivity
+        mission_specs = self.build_mission(connectivity='LOS')
+
+        # initialize mission
+        simulation : Simulation = Simulation.from_dict(mission_specs, overwrite=True)
+
+        # execute simulation
+        val = simulation.execute()
+
+        # ensure 
+        self.assertTrue(val)
+    
 
 if __name__ == '__main__':
     # just ensure it runs without error

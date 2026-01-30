@@ -25,10 +25,10 @@
             }
         },
         {
-            "name": "TEST: Simulation Loading",
+            "name": "TEST: Simulation Tests",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceRoot}/tests/simulation/load_test.py",
+            "program": "${workspaceRoot}/tests/simulation/simulation_test.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "cwd": "${workspaceRoot}",

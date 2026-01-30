@@ -1,9 +1,11 @@
 
+from datetime import timedelta
 from enum import Enum
 import json
 import logging
 import os
 import shutil
+from time import time
 from typing import Dict, List
 import numpy as np
 import pandas as pd
@@ -17,6 +19,7 @@ from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
 from dmas.core.orbitdata import OrbitData
+from dmas.models.actions import AgentAction
 from dmas.models.agent import SimulationAgent
 from dmas.models.environment import SimulationEnvironment
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
@@ -37,6 +40,7 @@ from dmas.utils.tools import SimulationRoles
 
 class Simulation:
     def __init__(self,
+                 name : str,
                  duration : float,
                  results_path : str,
                  orbitdata : Dict[str, OrbitData],
@@ -50,6 +54,8 @@ class Simulation:
         Initializes simulation instance 
         
         ### Arguments
+        - name : str
+            Name of the scenario being simulated
         - duration : float
             Total duration of the simulation in [days]
         - results_path : str
@@ -69,6 +75,7 @@ class Simulation:
 
         """
         # validate inputs
+        assert isinstance(name, str), "Simulation name must be a string."
         assert isinstance(duration, (int, float)) and duration > 0, "Duration must be a positive number."
         assert isinstance(results_path, str), "Results path must be a string."
         assert isinstance(orbitdata, dict), "Orbit data must be a dictionary."
@@ -80,6 +87,7 @@ class Simulation:
         if time_step is not None: raise NotImplementedError('simulations with fixed time-step not yet implemented.')
         
         # set simulation attributes
+        self._name : str = name
         self._duration : float = duration 
         self._results_path : str = results_path         
         self._orbitdata : Dict[str, OrbitData] = orbitdata
@@ -89,21 +97,70 @@ class Simulation:
         self._level = level
 
         # initialize execution flag
-        self.__executed : bool = False
+        self.__executed : bool = self.__check_if_results_exist()
 
     """
     SIMULATION EXECUTION METHODS
     """
     def execute(self) -> None:
         """ executes the simulation """
-        ...
+        try:
+            # define start and end times in seconds
+            t, tf = 0.0, timedelta(days=self._duration).total_seconds()
+            
+            # execute simulation loop
+            with tqdm(total=tf, desc=f'{self._name}: Simulating', leave=True, mininterval=0.5, unit=' s') as pbar:
+                
+                while t < tf:
+                    # update environment
+                    self._environment.update_state(t)
 
-    def is_executed(self) -> bool:
-        """ returns whether the simulation has been executed """
+                    # update agent states
+                    senses = self._environment.update_agent_states({},t)
+                    
+                    # agent think
+
+                    # agent do
+                    agent_actions : Dict[str, AgentAction] = {}
+
+                    # determine next time 
+                    t_next_min = min([action.t_end for action in agent_actions.values()], 
+                                     default=np.Inf) # base case for no agents
+
+                    # update progress bar 
+                    dt_progress = min(t_next_min - t, tf - t)
+                    pbar.update(dt_progress)
+
+                    # update current time
+                    t += dt_progress
+                    
+            # return true if execution completed successfully
+            return True
+
+        except Exception as e:
+            raise e
+
+        finally:
+            # mark simulation as executed
+            self.__executed = True
+
+            # print results for every member of the simulation
+            self._environment.print_results()
+            for agent in self._agents: agent.print_results()
+            self.print_results()
+
+    def print_results(self) -> str:
+        """ prints simulation results after execution """
+        if not self.is_executed():
+            raise RuntimeError("Simulation has not been executed yet. Cannot print results.")
+
+        # TODO implement results printing
+        return "Results printing not yet implemented."
 
     """
     DATA PROCESSING METHODS
     """
+
     def process_results(self, 
                         reevaluate : bool = False, 
                         display_summary : bool = True,
@@ -111,10 +168,26 @@ class Simulation:
                         precision : int = 5
                         ) -> pd.DataFrame:
         """ processes simulation results after execution """
+        raise NotImplementedError('results processing not yet implemented.')
     
     """
     UTILITY METHODS
     """
+    def is_executed(self) -> bool:
+        """ returns whether the simulation has been executed """
+        # return true if this simulation has been executed or if results exist
+        return self.__executed or self.__check_if_results_exist()
+
+    def __check_if_results_exist(self) -> bool:
+        """ checks if the simulation has been executed by looking for result files """
+        # check for existence of result files for all agents
+        return False # TODO
+        # for agent in self._agents:
+        #     agent_results_file = os.path.join(self._results_path, agent.name.lower(), 'results.csv')
+        #     if not os.path.isfile(agent_results_file):
+        #         return False
+        # return True
+
     @classmethod
     def from_dict(cls, d : dict, overwrite : bool = False, level=logging.WARNING) -> 'Simulation':
         """ creates simulation instance from dictionary """
@@ -122,7 +195,6 @@ class Simulation:
         # unpack agent info
         scenario_duration : float = d['duration']  
         spacecraft_dict : List[dict] = d.get('spacecraft', None)
-        uav_dict        : List[dict] = d.get('uav', None)
         gstation_dict   : List[dict] = d.get('groundStation', None)
         gops_dict       : List[dict] = d.get('groundOperator', None)
         gsensor_dict    : List[dict] = d.get('groundSensor', None)
@@ -137,9 +209,6 @@ class Simulation:
         if spacecraft_dict: 
             agent_names.extend([spacecraft['name'] for spacecraft in spacecraft_dict])
             agent_ids.extend([spacecraft['@id'] for spacecraft in spacecraft_dict])
-        if uav_dict:
-            agent_names.extend([uav['name'] for uav in uav_dict])
-            agent_ids.extend([uav['@id'] for uav in uav_dict])
         if gops_dict:
             agent_names.extend([ground_operator['name'] for ground_operator in gops_dict])
             agent_ids.extend([ground_operator['@id'] for ground_operator in gops_dict])
@@ -160,7 +229,7 @@ class Simulation:
         if scenario_path is None: raise ValueError(f'`scenarioPath` not contained in input file.')
 
         # create results directory
-        results_path : str = Simulation.setup_results_directory(scenario_path, scenario_name, agent_names, overwrite)
+        results_path : str = Simulation.__setup_results_directory(scenario_path, scenario_name, agent_names, overwrite)
 
         # precompute orbit data
         orbitdata_dir = OrbitData.precompute(d) if spacecraft_dict is not None else None
@@ -172,7 +241,7 @@ class Simulation:
         # load events        
         grid_dict : dict = d.get('grid', None) # TODO for use in random event generation
         events_path : str = Simulation.generate_events(scenario_dict)
-        events : List[GeophysicalEvent] = Simulation.load_events(events_path, simulation_orbitdata)
+        events : List[GeophysicalEvent] = Simulation.__load_events(events_path, simulation_orbitdata)
 
         # setup logging
         logger = logging.getLogger(f'Simulation-{scenario_name}')
@@ -192,7 +261,7 @@ class Simulation:
             for spacecraft in spacecraft_dict:
 
                 # create satellite agent
-                agent = Simulation.spacecraft_agent_factory(spacecraft,
+                agent = Simulation.__spacecraft_agent_factory(spacecraft,
                                                             simulation_orbitdata,
                                                             simulation_missions,
                                                             results_path,
@@ -203,11 +272,11 @@ class Simulation:
                 # add to list of agents
                 agents.append(agent)
 
-        if isinstance(gops_dict, List):
+        if isinstance(gops_dict, list):
             for ground_operator in gops_dict:
                 
                 # create ground operator agent
-                agent = Simulation.ground_operator_agent_factory(ground_operator,
+                agent = Simulation.__ground_operator_agent_factory(ground_operator,
                                                                  simulation_orbitdata,
                                                                  simulation_missions,
                                                                  results_path,
@@ -217,11 +286,7 @@ class Simulation:
                 
                 # add to list of agents
                 agents.append(agent)
-        
-        if uav_dict is not None:
-            # TODO Implement UAV agents
-            raise NotImplementedError('UAV agents not yet implemented.')
-        
+                
         if gsensor_dict is not None:
             # TODO Implement Ground Sensor agents
             raise NotImplementedError('Ground Sensor agents not yet implemented.')
@@ -242,7 +307,8 @@ class Simulation:
                                             logger)
             
         # return initialized mission
-        return Simulation(scenario_duration,
+        return Simulation(scenario_name,
+                          scenario_duration,
                           results_path,
                           simulation_orbitdata,
                           simulation_missions,
@@ -251,7 +317,7 @@ class Simulation:
                           level)
 
     @staticmethod
-    def setup_results_directory(scenario_path : str, scenario_name : str, agent_names : List[str], overwrite : bool = True) -> str:
+    def __setup_results_directory(scenario_path : str, scenario_name : str, agent_names : List[str], overwrite : bool = True) -> str:
         """
         Creates an empty results directory within the current working directory
         """
@@ -326,7 +392,7 @@ class Simulation:
         raise NotImplementedError(f'Event generation of type `{events_type}` not yet implemented.')
     
     @staticmethod
-    def load_events(events_path : str, orbitdata : dict) -> List[GeophysicalEvent]:
+    def __load_events(events_path : str, orbitdata : dict) -> List[GeophysicalEvent]:
         """ Loads events present in the simulation """
         # checks if event path exists
         if events_path is None: return None
@@ -373,7 +439,7 @@ class Simulation:
         return events
     
     @staticmethod
-    def agent_factory(agent_dict : dict,
+    def __agent_factory(agent_dict : dict,
                       agent_specs : object,
                       initial_state : SimulationAgentState,
                       simulation_orbitdata : Dict[str, OrbitData],
@@ -391,7 +457,7 @@ class Simulation:
         planner_dict = agent_dict.get('planner', None)
         science_dict = agent_dict.get('science', None)
         
-        agent_mission = agent_dict.get('mission').lower()
+        agent_mission_name = agent_dict.get('mission').lower()
 
         # load orbitdata
         agent_orbitdata : OrbitData = simulation_orbitdata.get(agent_name, None)
@@ -399,20 +465,20 @@ class Simulation:
             raise ValueError(f'OrbitData for spacecraft agent `{agent_name}` not found in precomputed orbit data.')
 
         # load specific mission assigned to this satellite
-        mission : Mission = simulation_missions[agent_mission].copy()
+        agent_mission : Mission = simulation_missions[agent_mission_name].copy()
 
-        assert mission == simulation_missions[agent_mission], \
-            f"mission copy failed. {mission} != {simulation_missions[agent_mission]}"
-        assert mission is not simulation_missions[agent_mission], \
+        assert agent_mission == simulation_missions[agent_mission_name], \
+            f"mission copy failed. {agent_mission} != {simulation_missions[agent_mission_name]}"
+        assert agent_mission is not simulation_missions[agent_mission_name], \
             "mission deep copy failed."
         
         # initialize observation data processor 
         processor : DataProcessor = \
-            Simulation.load_data_processor(science_dict, agent_name, mission)
+            Simulation.__load_data_processor(science_dict, agent_name, agent_mission)
         
         # load planners
         preplanner, replanner = \
-                Simulation.load_planners(agent_name, 
+                Simulation.__load_planners(agent_name, 
                                          planner_dict, 
                                          orbitdata_dir, 
                                          agent_mission, 
@@ -425,7 +491,7 @@ class Simulation:
                                 agent_id,
                                 agent_specs,
                                 initial_state,
-                                mission,
+                                agent_mission,
                                 simulation_results_path,
                                 agent_orbitdata,
                                 processor,
@@ -435,7 +501,7 @@ class Simulation:
                                 logger)
 
     @staticmethod
-    def spacecraft_agent_factory(agent_dict : dict,
+    def __spacecraft_agent_factory(agent_dict : dict,
                                  simulation_orbitdata : Dict[str, OrbitData],
                                  simulation_missions : Dict[str, Mission],
                                  simulation_results_path : str,
@@ -470,7 +536,7 @@ class Simulation:
                                             time_step=dt) 
         
         # return created agent
-        return Simulation.agent_factory(agent_dict,
+        return Simulation.__agent_factory(agent_dict,
                                         agent_specs,
                                         initial_state,
                                         simulation_orbitdata,
@@ -482,7 +548,7 @@ class Simulation:
 
 
     @staticmethod
-    def ground_operator_agent_factory(agent_dict : dict,
+    def __ground_operator_agent_factory(agent_dict : dict,
                                       simulation_orbitdata : Dict[str, OrbitData],
                                       simulation_missions : Dict[str, Mission],
                                       simulation_results_path : str,
@@ -506,7 +572,7 @@ class Simulation:
         initial_state = GroundOperatorAgentState(agent_name, agent_id)
 
         # return created agent
-        return Simulation.agent_factory(agent_dict,
+        return Simulation.__agent_factory(agent_dict,
                                         agent_specs,
                                         initial_state,
                                         simulation_orbitdata,
@@ -518,7 +584,7 @@ class Simulation:
 
     
     @staticmethod
-    def load_data_processor(science_dict : dict, 
+    def __load_data_processor(science_dict : dict, 
                             agent_name : str,
                             mission : Mission
                         ) -> DataProcessor:
@@ -549,7 +615,7 @@ class Simulation:
         return None
     
     @staticmethod
-    def load_planners(agent_name : str, 
+    def __load_planners(agent_name : str, 
                       planner_dict : dict, 
                       orbitdata_dir : str, 
                       agent_mission : Mission, 
@@ -560,16 +626,16 @@ class Simulation:
         if planner_dict is None: return None, None
 
         # load preplanner
-        preplanner = Simulation.load_preplanner(planner_dict, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger)
+        preplanner = Simulation.__load_preplanner(planner_dict, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger)
 
         # load replanner
-        replanner = Simulation.load_replanner(planner_dict, logger)
+        replanner = Simulation.__load_replanner(planner_dict, logger)
 
         # return loaded planners
         return preplanner, replanner
     
     @staticmethod
-    def load_preplanner(planner_dict : dict, 
+    def __load_preplanner(planner_dict : dict, 
                         agent_mission : Mission, 
                         simulation_missions : Dict[str,Mission],
                         simulation_orbitdata : Dict[str, OrbitData],
@@ -695,7 +761,7 @@ class Simulation:
         raise NotImplementedError(f'preplanner of type `{preplanner_dict}` not yet supported.')
         
     @staticmethod
-    def load_replanner(planner_dict : dict, logger : logging.Logger) -> AbstractReactivePlanner:
+    def __load_replanner(planner_dict : dict, logger : logging.Logger) -> AbstractReactivePlanner:
         """ loads the replanner for the agent """
         # get replanner specs
         replanner_dict = planner_dict.get('replanner', None)

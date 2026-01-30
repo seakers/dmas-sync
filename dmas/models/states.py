@@ -18,7 +18,7 @@ class AbstractAgentState(ABC):
     Describes the state of an agent
     """
     @abstractmethod
-    def update_state(self, **kwargs) -> None:
+    def update(self, **kwargs) -> None:
         """
         Updates the current state
         """
@@ -98,7 +98,7 @@ class SimulationAgentState(AbstractAgentState):
         self.status : str = status
         self.t : float = t
 
-    def update_state(   self, 
+    def update(   self, 
                         t : Union[int, float], 
                         status : str = None, 
                         state : dict = None) -> None:
@@ -161,7 +161,7 @@ class SimulationAgentState(AbstractAgentState):
             - dt (`float`): time to be waited by the agent
         """
         if isinstance(action, IdleAction):
-            self.update_state(t, status=self.IDLING)
+            self.update(t, status=self.IDLING)
             if action.t_end > t:
                 dt = action.t_end - t
                 status = action.PENDING
@@ -497,7 +497,7 @@ class SatelliteAgentState(SimulationAgentState):
 
     def perform_travel(self, action: TravelAction, t: Union[int, float]) -> tuple:
         # update state
-        self.update_state(t, status=self.TRAVELING)
+        self.update(t, status=self.TRAVELING)
 
         # check if position was reached
         if self.comp_vectors(self.pos, action.final_pos) or t >= action.t_end:
@@ -513,7 +513,7 @@ class SatelliteAgentState(SimulationAgentState):
 
     def perform_maneuver(self, action: ManeuverAction, t: Union[int, float]) -> tuple:
         # update state
-        self.update_state(t, status=self.MANEUVERING)
+        self.update(t, status=self.MANEUVERING)
         
         if self.comp_vectors(self.attitude, action.final_attitude, eps = 1e-6):
             # if reached, return successful completion status
@@ -671,7 +671,7 @@ class UAVAgentState(SimulationAgentState):
         dt = t - self.t
 
         # update state
-        self.update_state(t, status=self.TRAVELING)
+        self.update(t, status=self.TRAVELING)
 
         # check completion
         if self.comp_vectors(self.pos, action.final_pos, self.eps):
@@ -711,7 +711,7 @@ class UAVAgentState(SimulationAgentState):
 
     def perform_maneuver(self, action: ManeuverAction, t: Union[int, float]) -> tuple:
         # update state
-        self.update_state(t, status=self.MANEUVERING)
+        self.update(t, status=self.MANEUVERING)
 
         # Cannot perform maneuvers
         return action.ABORTED, 0.0

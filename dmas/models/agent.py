@@ -152,7 +152,7 @@ class SimulationAgent(object):
 
     """
     ----------------------
-    Action cycle methods
+    SIMULATION CYCLE METHODS
     ----------------------
     """
     
@@ -166,25 +166,26 @@ class SimulationAgent(object):
     THINK METHOD
     """
     def think(self, senses : list) -> AgentAction:
-        ...
+        return [] # TODO
 
     """
     ACT METHOD
     """
     def act(self, action : AgentAction) -> list:
         ...
-    
+   
     """
     ----------------------
-    Utility Methods
+    UTILITY METHODS
     ----------------------
     """    
 
 
     """
     ----------------------
-    Results Logger
+    RESULTS HANDLING METHODS
     ----------------------
     """
-    def print_results(self) -> None:
+    def print_results(self) -> str:
+        # TODO 
         ...

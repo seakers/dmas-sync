@@ -2,17 +2,21 @@ import copy
 import logging
 import os
 from typing import Dict, List, Tuple
-from collections import deque
+from collections import defaultdict, deque
 
 import numpy as np
 from tqdm import tqdm
 
+from dmas.core.messages import SimulationMessage
 from dmas.core.orbitdata import OrbitData
 
 from execsatm.events import GeophysicalEvent
 from execsatm.utils import Interval
 
-from dmas.models.states import SimulationAgentTypes
+from dmas.models.actions import AgentAction
+from dmas.models.agent import SimulationAgent
+from dmas.models.states import SimulationAgentState, SimulationAgentTypes
+from dmas.utils.tools import SimulationRoles
 
 
 class SimulationEnvironment(object):
@@ -38,7 +42,7 @@ class SimulationEnvironment(object):
             ) -> None:
         ...
         # setup results folder:
-        env_results_path : str = os.path.join(results_path, self.get_element_name().lower())
+        env_results_path : str = os.path.join(results_path, SimulationRoles.ENVIRONMENT.value.lower())
 
         # assign parameters
         self._orbitdata : Dict[str,OrbitData] = scenario_orbitdata
@@ -46,7 +50,7 @@ class SimulationEnvironment(object):
         self._results_path : str = env_results_path
         self._scenario_results_path : str = results_path
         self._logger : logging.Logger = logger if logger is not None \
-                                            else logging.getLogger("SimulationEnvironment")
+                                            else logging.getLogger(SimulationRoles.ENVIRONMENT.value.lower())
         self._logger.setLevel(level)
 
         # load agent names and classify by type of agent
@@ -93,17 +97,49 @@ class SimulationEnvironment(object):
 
     """
     ----------------------
-    Simulation Cycle Methods
+    SIMULATION CYCLE METHODS
     ----------------------
     """
-    def update_environment(self, t : float) -> None:
+    def update_state(self, t : float) -> None:
         """ Updates the environment state at time `t` """
-        # check if connectivity needs to be updated
-        if t not in self.current_connectivity_interval:
+        
+        # check if connectivity needs to be update
+        if t not in self._current_connectivity_interval:
             # update current connectivity matrix and components
-            self.current_connectivity_interval, self.current_connectivity_matrix, \
-                self.current_connectivity_components = self.__get_agent_connectivity(t)
-            
+            self._current_connectivity_interval, self._current_connectivity_matrix, \
+                self._current_connectivity_components = self.__get_agent_connectivity(t)
+        
+        # INSERT ADDITIONAL ENVIRONMENT UPDATE LOGIC HERE
+
+        # end
+        return 
+    
+    def update_agent_states(self, 
+                            state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
+                            t : float) -> Dict[str, List]:
+        """Updates agent states based on the provided actions at time `t` """
+        # initiate state updates
+        senses : Dict[str, List] = defaultdict(list)
+        
+        # iterate through each agent state-action pair
+        for agent_id, (state, action) in state_action_pairs.items():
+            # udpate agent state
+            state.update(t)
+            pass
+
+
+        # return compiled senses
+        return senses
+
+    """
+    ----------------------
+    RESULTS HANDLING METHODS
+    ----------------------
+    """
+    def print_results(self) -> str:
+        # TODO 
+        ...
+
     """
     ---------------------------
     UTILITY METHODS
