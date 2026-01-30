@@ -1,0 +1,694 @@
+from collections import defaultdict, deque
+from logging import Logger
+import math
+from typing import List, Dict, Tuple
+from tqdm import tqdm
+
+from orbitpy.util import Spacecraft
+
+from execsatm.observations import ObservationOpportunity
+from execsatm.mission import Mission
+from execsatm.utils import Interval
+
+from dmas.models.planning.periodic import AbstractPeriodicPlanner
+from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.states import *
+from dmas.models.actions import *
+from dmas.models.science.requests import *
+from dmas.models.states import SimulationAgentState
+from dmas.core.orbitdata import OrbitData
+from dmas.core.messages import *
+from dmas.utils.tools import argmax
+
+class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
+    # models
+    DISCRETE = 'discrete'
+    CONTINUOUS = 'continuous'
+    EARLIEST = 'earliest'
+    MODELS = [DISCRETE, CONTINUOUS, EARLIEST]
+
+    def __init__(self, 
+                 horizon: float, 
+                 period : float, 
+                 model : str = EARLIEST,
+                 sharing : str = None,
+                 debug : bool = False,
+                 logger: Logger = None
+                 ) -> None:
+        super().__init__(horizon, 
+                         period, 
+                         sharing,
+                         debug, 
+                         logger)
+        
+        # validate inputs
+        assert model in self.MODELS, f'Invalid `model` type `{model}`. Must be one of {self.MODELS}.'
+
+        # set planner parameters
+        self.model = model
+        
+    
+    def _schedule_observations(self, 
+                               state : SimulationAgentState, 
+                               specs : object, 
+                               _ : ClockConfig, 
+                               orbitdata : OrbitData, 
+                               observation_opportunities : list,
+                               mission : Mission,
+                               observation_history : ObservationHistory
+                               ) -> List[ObservationAction]:
+        
+        if not isinstance(state, SatelliteAgentState):
+            raise NotImplementedError(f'Naive planner not yet implemented for agents of type `{type(state)}.`')
+        elif not isinstance(specs, Spacecraft):
+            raise ValueError(f'`specs` needs to be of type `{Spacecraft}` for agents with states of type `{SatelliteAgentState}`')
+        
+        # compile list of instruments available in payload
+        payload : dict = {instrument.name: instrument for instrument in specs.instrument}
+        
+        # compile instrument field of view specifications   
+        cross_track_fovs : dict = self._collect_fov_specs(specs)
+        
+        # get pointing agility specifications
+        max_slew_rate, max_torque = self._collect_agility_specs(specs)
+        assert max_slew_rate, 'ADCS `maxRate` specification missing from agent specs object.'
+        assert max_torque, 'ADCS `maxTorque` specification missing from agent specs object.'
+
+        # sort observation opportunities by start time
+        observation_opportunities : list[ObservationOpportunity] = sorted(observation_opportunities, key=lambda t: (t.accessibility.left, -t.get_priority(), -len(t.tasks)))
+
+        # call appropriate model to generate observation schedule
+        if self.model in [self.EARLIEST, self.DISCRETE]:
+            observations = self.__discrete_model(state, 
+                                          observation_opportunities, 
+                                          orbitdata, 
+                                          mission, 
+                                          observation_history, 
+                                          specs, 
+                                          payload,
+                                          cross_track_fovs, 
+                                          max_slew_rate, 
+                                          max_torque)    
+        
+        elif self.model == self.CONTINUOUS:
+            observations = self.__continuous_model(state, 
+                                          observation_opportunities, 
+                                          orbitdata, 
+                                          mission, 
+                                          observation_history, 
+                                          specs, 
+                                          payload,
+                                          cross_track_fovs, 
+                                          max_slew_rate, 
+                                          max_torque)
+            
+        else:
+            raise ValueError(f'Invalid `model` type `{self.model}`. Must be one of {[self.DISCRETE, self.CONTINUOUS]}.')
+
+        # check if all observation was scheduled are valid
+        assert all([isinstance(obs, ObservationAction) for obs in observations]), \
+            'Invalid observation sequence generated by DP. No observations scheduled.'
+
+        # extract sequence of observations sorted by start time
+        return sorted(observations, key=lambda o: o.t_start)
+
+    def __discrete_model(self, 
+                         state : SatelliteAgentState, 
+                         observation_opportunities : List[ObservationOpportunity], 
+                         orbitdata : OrbitData,
+                         mission : Mission, 
+                         observation_history : ObservationHistory,
+                         specs : Spacecraft, 
+                         payload : dict,
+                         cross_track_fovs : Dict[str, float],
+                         max_slew_rate : float, 
+                         max_torque : float,
+                        ) -> List[ObservationAction]:
+        """ schedules observations using an earliest-time dynamic programming approach """
+
+        # add dummy observation to represent initial state
+        instrument_names = list(payload.keys())
+        dummy_observation = ObservationOpportunity(set([]), instrument_names[0], Interval(state.t,state.t), 0.0, Interval(state.attitude[0],state.attitude[0]))
+        observation_opportunities.insert(0,dummy_observation)
+        
+        # initiate constants
+        d_imgs : list[float]        = [obs.min_duration for obs in observation_opportunities]
+        th_imgs : list[float]       = [np.average((obs.slew_angles.left, obs.slew_angles.right)) for obs in observation_opportunities]
+        slew_times : list[float]    = [[abs(th_imgs[i] - th_imgs[j]) / max_slew_rate if max_slew_rate else np.Inf
+                                        for j,_ in enumerate(observation_opportunities)]
+                                        for i,_ in enumerate(observation_opportunities)
+                                        ]        
+
+        # create time discretization pairs
+        observation_pairs : list[tuple] = self.__generate_discret_time_pairs(state, observation_opportunities, orbitdata)
+
+        # generate predecessor list
+        adjacency_dict : Dict[tuple,list] = self.__create_adjacency_dict(state, 
+                                                                        observation_opportunities, 
+                                                                        observation_pairs, 
+                                                                        d_imgs, 
+                                                                        slew_times)
+
+        # compute rewards for all observation-time pairs
+        rewards : Dict[tuple, float] = {(j,pair_j): self.estimate_observation_opportunity_value(observation_opportunities[j], 
+                                                            pair_j[1], 
+                                                            d_imgs[pair_j[0]], 
+                                                            specs, 
+                                                            cross_track_fovs, 
+                                                            orbitdata, 
+                                                            mission, 
+                                                            observation_history)
+                                    for j,pair_j in tqdm(enumerate(observation_pairs), 
+                                                        desc=f'{state.agent_name}-PLANNER: Estimating Observation Rewards',
+                                                        leave=False,
+                                                        total=len(observation_pairs))
+        }
+
+        # perform DAG DP pull to get optimal path
+        observation_sequence, _ = self.__dag_dp_pull(state, observation_opportunities, adjacency_dict, rewards, (0,observation_pairs[0]))
+
+        # return observations matching observation actions
+        return [ObservationAction(observation_opportunities[pair_k[0]].instrument_name,
+                                                    th_imgs[pair_k[0]],
+                                                    pair_k[1],
+                                                    d_imgs[pair_k[0]],
+                                                    observation_opportunities[pair_k[0]]
+                                                    )
+                                    for _,pair_k in observation_sequence]
+
+    def __get_graph_topography(self, preds_map : Dict[tuple, list] ) -> Tuple[list, dict]:
+        """Return a topological order given a predecessor map {v: [u1,u2,...]}."""
+        
+        # Collect all nodes
+        nodes = set(preds_map.keys())
+        for ps in preds_map.values():
+            nodes.update(ps)
+        
+        # Normalize nodes in predecessor map
+        preds = {v: list(preds_map.get(v, [])) for v in nodes}
+
+        # Build indegree and successors map
+        indeg = {v: len(ps) for v, ps in preds.items()}
+        succs = defaultdict(list)
+        for v, ps in preds.items():
+            for u in ps:
+                succs[u].append(v)
+
+        # Find topological order
+        q = deque([v for v, d in indeg.items() if d == 0])
+        order = []
+        while q:
+            u = q.popleft()
+            order.append(u)
+            for v in succs.get(u, []):
+                indeg[v] -= 1
+                if indeg[v] == 0:
+                    q.append(v)
+        
+        # Check for cycles
+        assert len(order) == len(nodes), \
+            'Graph has a cycle'
+
+        # Return topological order and normalized predecessor map
+        return order, preds
+    
+    def __dag_dp_pull(self, 
+                      state : SimulationAgentState, 
+                      observation_opportunities : List[ObservationOpportunity], 
+                      preds_map : Dict[tuple, list], 
+                      rewards : Dict[tuple, float], 
+                      src : tuple
+                    ) -> Tuple[list, float]:
+        """
+            preds_map: {node: [pred1, pred2, ...]}
+            rewards:    {node: float}  (precomputed once)
+            src:       node that must be included (your first observation-time pair)
+        """
+        # get topographical order and normalized predecessor map
+        topography_order, preds = self.__get_graph_topography(preds_map)
+
+        # initialize DP tables
+        cummulative_rewards : Dict[tuple, float] = {v: np.NINF  for v in preds}
+        cummulative_rewards[src] = rewards[src]  # only source is initialized; forces paths to include src
+        
+        preceeding_observations : Dict[tuple, list] = {v: None for v in preds}
+        
+        preceeding_observation_paths = {}  # node -> frozenset of chosen nodes on best path to node
+        preceeding_observation_paths[src] = frozenset({src})
+
+        # process nodes in topographical order
+        for v in tqdm(topography_order, 
+                      desc=f'{state.agent_name}-PLANNER: Finding best path',
+                      leave=False):
+            
+            # skip source
+            if v == src: continue
+
+            # get observation for v
+            tv : ObservationOpportunity = observation_opportunities[v[1][0]]
+
+            # initialize values for best predecessor search
+            best_val = np.NINF
+            best_u = None
+            best_sig = None
+            
+            # find best predecessor
+            # for u in preds[v]:
+            for u in tqdm(preds[v], 
+                      desc=f'{state.agent_name}-PLANNER: Evaluating predecessors for obs={v[1][0]} at t={v[1][1]:.2f}s',
+                      leave=False):
+                # check if unreachable from src
+                if np.isneginf(cummulative_rewards[u]): 
+                    continue
+
+                # calculate new cumulative reward
+                val = cummulative_rewards[u] + rewards[v]
+
+                # check if best cummulative reward so far
+                if val <= best_val: continue
+
+                # check if mutually exclusive with any in path to u
+                if any([tv.is_mutually_exclusive(observation_opportunities[k[1][0]]) 
+                        for k in preceeding_observation_paths[u]]): continue
+
+                # update best predecessor
+                best_val = val
+                best_u = u
+                best_sig = preceeding_observation_paths[u] | {v}
+
+            # update DP tables if best predecessor was found
+            if best_u is not None:
+                cummulative_rewards[v] = best_val
+                preceeding_observations[v] = best_u
+                preceeding_observation_paths[v]  = best_sig
+
+        # pick best terminal
+        end = max(cummulative_rewards, key=cummulative_rewards.get)
+        if np.isneginf(cummulative_rewards[end]): return [], 0.0  # nothing reachable from src
+        
+        # recover path
+        path, cur = [], end
+        while cur is not None:
+            path.append(cur)
+            cur = preceeding_observations.get(cur,None)
+        
+        # remove dummy observation from path
+        path.pop()  
+        
+        # reverse path to get correct order
+        path.reverse()
+
+        # return path and reward
+        return path, cummulative_rewards[end]
+
+    def __continuous_model(self, 
+                           state : SatelliteAgentState, 
+                           observation_opportunities : List[ObservationOpportunity], 
+                           orbitdata : OrbitData,
+                           mission : Mission, 
+                           observation_history : ObservationHistory,
+                           specs : Spacecraft, 
+                           payload : dict,
+                           cross_track_fovs : Dict[str, float],
+                           max_slew_rate : float, 
+                           max_torque : float,
+                        ) -> List[ObservationAction]:
+        """ schedules observations using a continuous-time dynamic programming approach """
+        # add dummy observation to represent initial state
+        instrument_names = list(payload.keys())
+        dummy_observation = ObservationOpportunity(set([]), instrument_names[0], Interval(state.t,state.t), 0.0, Interval(state.attitude[0],state.attitude[0]))
+        observation_opportunities.insert(0,dummy_observation)
+        
+        # initiate results arrays
+        t_imgs : list[Interval]             = [max(observation.accessibility.left, state.t) for observation in observation_opportunities]
+        d_imgs : list[float]                = [observation.min_duration for observation in observation_opportunities]
+        th_imgs : list[float]               = [np.average((observation.slew_angles.left, observation.slew_angles.right)) for observation in observation_opportunities]
+        rewards : list[float]               = [0.0 for _ in observation_opportunities]
+        cumulative_rewards : list[float]    = [0.0 for _ in observation_opportunities]
+        preceeding_observations : list[int] = [np.NAN for _ in observation_opportunities]
+        slew_times : list[float]            = [[abs(th_imgs[i] - th_imgs[j]) / max_slew_rate if max_slew_rate else np.Inf
+                                                for j,_ in enumerate(observation_opportunities)]
+                                               for i,_ in enumerate(observation_opportunities)
+                                               ]
+
+        # initialize observation actions list
+        earliest_observation_actions : list[ObservationAction] = [None for _ in observation_opportunities]
+        latest_observation_actions : list[ObservationAction] = [None for _ in observation_opportunities]
+        
+        # populate observation action list 
+        for i, obs_i in tqdm(enumerate(observation_opportunities), 
+                                desc=f'{state.agent_name}-PLANNER: Generating Observation Actions from Observation Opportunities',
+                                leave=False):
+            
+            # collect all targets and objectives
+            th_i = th_imgs[i]
+            d_imgs_i = d_imgs[i]
+
+            # estimate observation action for observation opportunity i
+            earliest_observation_i = ObservationAction(obs_i.instrument_name,
+                                                        th_i,
+                                                        obs_i.accessibility.left,
+                                                        d_imgs_i,
+                                                        obs_i
+                                                        )
+            latest_observation_i = ObservationAction(obs_i.instrument_name,
+                                                        th_i,
+                                                        obs_i.accessibility.right-d_imgs_i,
+                                                        d_imgs_i,
+                                                        obs_i
+                                                        )
+
+            # update observation action list
+            earliest_observation_actions[i] = earliest_observation_i
+            latest_observation_actions[i] = latest_observation_i
+
+        # initialize adjacency matrix
+        adjacency = [[False for _ in observation_opportunities] for _ in observation_opportunities]
+
+        # populate adjacency matrix 
+        for i in tqdm(range(len(observation_opportunities)), 
+                        desc=f'{state.agent_name}-PLANNER: Generating Adjacency Matrix',
+                        leave=False):
+            for j in range(i + 1, len(observation_opportunities)):
+                # check mutual exclusivity
+                if observation_opportunities[i].is_mutually_exclusive(observation_opportunities[j]):
+                    # observations i and j are mutually exclusive, cannot perform sequence i->j
+                    continue
+
+                # update adjacency matrix for sequence i->j
+                adjacency[i][j] = self.is_observation_path_valid(state, [earliest_observation_actions[i], latest_observation_actions[j]], max_slew_rate, max_torque)
+
+                if adjacency[i][j]:
+                    # if sequence i->j is valid; enforce acyclical behavior and skip j->i
+                    continue
+                
+                elif latest_observation_actions[i].t_end < earliest_observation_actions[j].t_start:
+                    # observation sequence j->i cannot be performed; skip
+                    continue
+                
+                # update adjacency matrix for sequence j->i
+                adjacency[j][i] = self.is_observation_path_valid(state, [earliest_observation_actions[j], latest_observation_actions[i]], max_slew_rate, max_torque)
+
+        # calculate optimal path and update results
+        for j in tqdm(range(len(observation_opportunities)), 
+                      desc=f'{state.agent_name}-PLANNER: Evaluating Path Reward',
+                      leave=False):
+            # get indeces of possible prior observations
+            prev_indices : list[int] = [i for i in range(0,j) if adjacency[i][j]]
+
+            # update cumulative reward
+            for i in prev_indices:
+                # reconstruct path leading to i
+                path_i = self.__get_path_to_index(preceeding_observations, i)
+
+                # check if new observation j conflicts with any in path leading to i
+                if any(observation_opportunities[j].is_mutually_exclusive(observation_opportunities[k]) for k in path_i):
+                    continue  # skip this candidate extension
+                
+                # calculate earliest imaging time for observation j assuming observation i is done before
+                t_img_j = max(t_imgs[i] + d_imgs[i] + slew_times[i][j], t_imgs[j]) 
+
+                # check if imaging time is valid
+                if not (t_img_j <= state.t + self.horizon                                   # imaging start time within planning horizon
+                    and t_img_j in observation_opportunities[j].accessibility               # imaging start time within observation availability
+                    and t_img_j + d_imgs[j] <= state.t + self.horizon                       # imaging end time within planning horizon
+                    and t_img_j + d_imgs[j] in observation_opportunities[j].accessibility): # imaging end time within observation availability
+                    continue
+
+                # estimate observation value of observation j if done after i
+                reward_j = self.estimate_observation_opportunity_value(observation_opportunities[j], 
+                                                    t_img_j, 
+                                                    d_imgs[j], 
+                                                    specs, 
+                                                    cross_track_fovs, 
+                                                    orbitdata, 
+                                                    mission, 
+                                                    observation_history)
+
+                # compare cumulative rewards
+                if cumulative_rewards[i] + reward_j > cumulative_rewards[j]:
+                    # update imaging time
+                    t_imgs[j] = t_img_j
+
+                    # update individual observation reward
+                    rewards[j] = reward_j
+
+                    # update cumulative reward
+                    cumulative_rewards[j] = cumulative_rewards[i] + rewards[j]
+                    
+                    # update preceeding observation 
+                    preceeding_observations[j] = i
+            
+        # extract sequence of observations from results
+        observation_sequence : List[int] = self.__extract_observation_sequence(preceeding_observations, cumulative_rewards)
+
+        # get matching observation actions
+        observations : list[ObservationAction] = [ObservationAction(observation_opportunities[j].instrument_name,
+                                                                    th_imgs[j],
+                                                                    t_imgs[j],
+                                                                    d_imgs[j],
+                                                                    observation_opportunities[j]
+                                                                    )
+                                                  for j in observation_sequence]
+          
+        # return observations
+        return observations  
+    
+    def __generate_discret_time_pairs(self, 
+                                      state: SatelliteAgentState, 
+                                      observation_opportunities: List[ObservationOpportunity],
+                                      orbitdata: OrbitData
+                                    ) -> List[tuple]:
+        # initialize time discretization pairs
+        observation_pairs : list[tuple] = [] # of the form (observation_index, t_img, reward)
+
+        # generate observation-time pairs
+        for i,obs_i in tqdm(enumerate(observation_opportunities), desc=f'{state.agent_name}-PLANNER: Generating Observation-Time Pairs', leave=False):
+            # set initial imaging time
+            t_img = obs_i.accessibility.left
+
+            if self.model == self.EARLIEST:
+                # add pair to list                
+                observation_pairs.append((i, t_img))
+                
+            elif self.model == self.DISCRETE:
+                # iterate through all possible imaging times for observation i with time step of orbitdata
+                while t_img + obs_i.min_duration <= min(obs_i.accessibility.right, state.t + self.horizon):
+                    # add pair to list                
+                    observation_pairs.append((i, t_img))
+
+                    # update imaging time
+                    t_img += orbitdata.time_step
+        
+        # sort pairs by start time, observation index and return
+        return sorted(observation_pairs, key=lambda x: (x[1], x[0]))
+
+    def __create_adjacency_dict(self, 
+                                state : SatelliteAgentState, 
+                                observation_opportunities : List[ObservationOpportunity],
+                                observation_pairs : List[tuple],
+                                d_imgs : List[float],
+                                slew_times : List[float],
+                            ) -> Dict[tuple,list]:
+        """ creates adjacency dict for DP graph """
+        try:
+            # initialize adjacency list
+            adjacency : Dict[tuple,list] = defaultdict(list)
+
+            # populate adjacency list
+            for j,pair_j in tqdm(enumerate(observation_pairs), 
+                                    desc=f'{state.agent_name}-PLANNER: Generating Adjacency Matrix',
+                                    leave=False,
+                                    total=len(observation_pairs)
+                                    ):
+                
+                # skip first observation-time pair
+                if j == 0: continue # dummy observation has no preceeding observations
+
+                # unpack observation-time pair j
+                idx_j,t_img_j = pair_j
+                obs_j : ObservationOpportunity = observation_opportunities[idx_j]
+
+                # find pairs that can preceed j
+                idx_prev = max(0, j-1)
+                preceeding_obs_pairs = [(i,(idx_i,t_img_i) )
+                                    for i,(idx_i,t_img_i) in enumerate(observation_pairs[:idx_prev])
+                                    if i < j
+                                    and idx_i != idx_j
+                                    and not obs_j.is_mutually_exclusive(observation_opportunities[idx_i])
+                                    and t_img_i + d_imgs[idx_i] + slew_times[idx_i][idx_j] <= t_img_j
+                                    ]
+                
+                # add to adjacency list if feasible and reachable from initial state
+                if (0,observation_pairs[0]) in preceeding_obs_pairs: 
+                    adjacency[(j,pair_j)] = preceeding_obs_pairs
+            
+            # return adjacency list
+            return adjacency
+        
+        finally:
+            # ensure acyclic graph
+            assert self.__is_acyclical(adjacency), \
+                'invalid sequence of observations generated by DP. Cycle detected in adjacency graph.'
+
+            # ensure all observations are reachable from initial state
+            assert all([(0,observation_pairs[0]) in adjacency.get((j,pair_j), []) 
+                        for j,pair_j in adjacency]), \
+                'invalid sequence of observations generated by DP. Some observations not reachable from initial state.'
+
+    def __is_acyclical(self, adjacency_dict : Dict[tuple,list]) -> bool:
+        """ checks if adjacency dict represents an acyclical graph """
+        for (j,pair_j),preceeding_pairs in adjacency_dict.items():
+            if any([(j,pair_j) in adjacency_dict.get((i,pair_i),[]) 
+                    for i,pair_i in preceeding_pairs]):
+                return False
+        return True
+
+    def __get_path_to_index(self, preceeding_observations : list, index : int) -> List[int]:
+        """ retrieves path of observation indices leading to given index """        
+        # initialize path
+        path = [index]
+
+        if np.isnan(preceeding_observations[index]): return path
+
+        # backtrack to get full path
+        k = index
+        while not np.isnan(preceeding_observations[k]):
+            # get preceeding observation
+            k = preceeding_observations[k]
+
+            # validate no cycles
+            assert k not in path, \
+                'invalid sequence of observations generated by DP. Cycle detected.'
+
+            # add to path
+            path.append(int(k))
+
+        # return path in correct order
+        return list(reversed(path))
+
+    def __extract_observation_sequence(self, preceeding_observations : list, cumulative_rewards : list) -> List[int]:
+        """ extracts observation index sequence from DP results """
+        # get observation with highest cummulative reward
+        best_observation_index = argmax(cumulative_rewards)
+
+        # extract sequence of observations from results
+        visited_observation_opportunities = set()
+        observation_sequence = [best_observation_index] if preceeding_observations else []
+
+        while (preceeding_observations 
+               and not np.isnan(preceeding_observations[observation_sequence[-1]])):
+            prev_observation_index = preceeding_observations[observation_sequence[-1]]
+            
+            assert prev_observation_index not in visited_observation_opportunities, \
+                'invalid sequence of observations generated by DP. Cycle detected.' 
+            
+            visited_observation_opportunities.add(prev_observation_index)
+            observation_sequence.append(prev_observation_index)
+
+        assert 0 in observation_sequence, \
+            'Invalid observation sequence generated by DP. No starting point found.'
+        
+        # reverse the sequence to start from the first observation
+        observation_sequence.reverse()
+
+        # remove dummy observation from sequence
+        observation_sequence.remove(0)
+
+        # return observation sequence
+        return observation_sequence
+
+    # 
+    # def populate_adjacency_matrix(self, 
+    #                               state : SimulationAgentState, 
+    #                               specs : object,
+    #                               access_opportunities : list, 
+    #                               ground_points : dict,
+    #                               adjacency : list,
+    #                               j : int
+    #                               ):
+               
+    #     # get satellite agility specifications
+    #     max_slew_rate, max_torque = self._collect_agility_specs(specs)
+    #     assert max_slew_rate, 'ADCS `maxRate` specification missing from agent specs object.'
+    #     assert max_torque, 'ADCS `maxTorque` specification missing from agent specs object.'
+
+    #     # get current observation
+    #     curr_opportunity : tuple = access_opportunities[j]
+    #     lat_curr,lon_curr = ground_points[curr_opportunity[0]][curr_opportunity[1]]
+    #     curr_target = [lat_curr,lon_curr,0.0]
+
+    #     # get any possibly prior observation
+    #     prev_opportunities : list[tuple] = [prev_opportunity 
+    #                                         for prev_opportunity in access_opportunities[:j]
+    #                                         if prev_opportunity[3].start <= curr_opportunity[3].end
+    #                                         and prev_opportunity != curr_opportunity
+    #                                         ]
+        
+    #     prev_opportunities_opt : list[tuple] = [prev_opportunity 
+    #                                         for prev_opportunity in access_opportunities[:j]
+    #                                         ]
+        
+    #     assert len(prev_opportunities_opt) == len(prev_opportunities) and all([opp in prev_opportunities for opp in prev_opportunities_opt])
+ 
+    #     # construct adjacency matrix
+    #     for prev_opportunity in prev_opportunities:
+    #         prev_opportunity : tuple
+
+    #         # get previous observation opportunity's target 
+    #         lat_prev,lon_prev = ground_points[prev_opportunity[0]][prev_opportunity[1]]
+    #         prev_target = [lat_prev,lon_prev,0.0]
+
+    #         # assume earliest observation time from previous observation
+    #         earliest_prev_observation = ObservationAction(prev_opportunity[2], 
+    #                                                     prev_target, 
+    #                                                     prev_opportunity[5][0], 
+    #                                                     prev_opportunity[4][0])
+            
+    #         # check if observation can be reached from THE previous observation
+    #         adjacent = self.is_observation_path_valid(state,  
+    #                                                       [earliest_prev_observation,
+    #                                                       ObservationAction(curr_opportunity[2], 
+    #                                                                         curr_target, 
+    #                                                                         curr_opportunity[5][-1], 
+    #                                                                         curr_opportunity[4][-1])],
+    #                                                     max_slew_rate,
+    #                                                     max_torque)     
+    #         mutually_exclusive = prev_opportunity[2].is_mutually_exclusive(curr_opportunity[2])
+
+    #         # update adjacency matrix
+    #         adjacency[access_opportunities.index(prev_opportunity)][j] = adjacent and not mutually_exclusive
+
+    
+    def _schedule_broadcasts(self, state: SimulationAgentState, observations: list, orbitdata: OrbitData) -> list:
+        # schedule measurement requests
+        broadcasts : list = super()._schedule_broadcasts(state, observations, orbitdata)
+
+        # # set earliest broadcast time to end of replanning period
+        # t_broadcast = self.plan.t+self.period
+        
+        # # gather observation plan to be sent out
+        # plan_out = [action.to_dict() for action in self.pending_observations_to_broadcast]
+
+        # # check if observations exist in plan
+        # if plan_out or self.sharing:
+        #     # find best path for broadcasts
+        #     path, t_start = self._create_broadcast_path(state, orbitdata, t_broadcast)
+
+        #     # check feasibility of path found
+        #     if t_start >= 0:
+                
+        #         # add performing action broadcast to plan
+        #         for action_dict in tqdm(plan_out, 
+        #                                 desc=f'{state.agent_name}-PLANNER: Pre-Scheduling Broadcasts', 
+        #                                 leave=False):
+        #             # update action dict to indicate completion
+        #             action_dict['status'] = AgentAction.COMPLETED
+                    
+        #             # create message
+        #             msg = ObservationPerformedMessage(state.agent_name, state.agent_name, action_dict, path=path)
+
+        #             # add message broadcast to plan
+        #             broadcasts.append(BroadcastMessageAction(msg.to_dict(),t_start))
+            
+        return broadcasts

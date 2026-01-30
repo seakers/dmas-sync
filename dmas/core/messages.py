@@ -2,12 +2,7 @@ from enum import Enum
 import uuid
 import json
 
-
-class SimulationElementRoles(Enum):
-    MANAGER = 'MANAGER'
-    MONITOR = 'MONITOR'
-    ENVIRONMENT = 'ENVIRONMENT'
-    NODE = 'NODE'
+from dmas.utils.tools import SimulationRoles
 
 class SimulationMessageTypes(Enum):
     MEASUREMENT_REQ = 'MEASUREMENT_REQ'
@@ -119,8 +114,8 @@ def message_from_dict(msg_type : str, **kwargs) -> SimulationMessage:
         return AgentConnectivityUpdate(**kwargs)
     elif msg_type == SimulationMessageTypes.MEASUREMENT_BID.value:
         return MeasurementBidMessage(**kwargs)
-    elif msg_type == SimulationMessageTypes.BID_RESULTS.value:
-        return BidResultsMessage(**kwargs)
+    # elif msg_type == SimulationMessageTypes.BID_RESULTS.value:
+    #     return BidResultsMessage(**kwargs)
     elif msg_type == SimulationMessageTypes.PLAN.value:
         return PlanMessage(**kwargs)
     elif msg_type == SimulationMessageTypes.SENSES.value:
@@ -173,7 +168,7 @@ class AgentConnectivityUpdate(SimulationMessage):
         - state (`dict`): dictionary discribing the state of the agent sending this message
     """
     def __init__(self, dst: str, target : str, connected : int, id: str = None, path: list = [], **_):
-        super().__init__(SimulationElementRoles.ENVIRONMENT.value, 
+        super().__init__(SimulationRoles.ENVIRONMENT.value, 
                          dst, 
                          SimulationMessageTypes.CONNECTIVITY_UPDATE.value, 
                          id,

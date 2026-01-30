@@ -13,10 +13,22 @@
             "console": "integratedTerminal"
         },
         {
-            "name": "TEST: DMAS Utilities",
+            "name": "TEST: Utilities",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceRoot}/tests/utils/utils_test.py",
+            "program": "${workspaceRoot}/tests/utils/tools_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Simulation Loading",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/simulation/load_test.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "cwd": "${workspaceRoot}",

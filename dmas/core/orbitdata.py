@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from orbitpy.mission import Mission
 from execsatm.utils import Interval
-from dmas.core.utils import TimeIndexedData,IntervalData
+from dmas.utils.data import TimeIndexedData,IntervalData
 
 class ConnectivityLevels(Enum):
     FULL = 'FULL'   # static fully connected network between all agents

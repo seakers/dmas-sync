@@ -13,7 +13,7 @@ from tqdm import tqdm
 import networkx as nx
 
 from orbitpy.mission import Mission
-from dmas.core.utils import print_scenario_banner
+from dmas.utils.tools import print_scenario_banner
 
 class Constellation(ABC):
     EARTH_RADIUS_KM = 6378 # Earth radius in km    
