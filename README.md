@@ -66,16 +66,22 @@ conda activate desired/path/to/virtual/environment
 ```
 make 
 ```
-> ### NOTES: 
+
+5. Run tests (optional)
+```
+make runtest
+```
+
+> ### NOTE: 
 > - **Installation instructions above are only supported in Mac or Linux systems.** For windows installation, use a Windows Subsystem for Linux (WSL) and follow the instructions above.
 > - Mac users are known to experience issues installing the `propcov` dependency contained within the `orbitpy` library during installation. See [`orbitpy`'s installation notes](https://github.com/EarthObservationSimulator/orbitpy/tree/master/propcov) for fixes.
 > - For development in Windows, Visual Studio Code's remote development feature in WSL was used. See [instructions for remote development in VSCode](https://code.visualstudio.com/docs/remote/wsl-tutorial) for more details on WSL installation and remote development environment set-up.
 
 ## License and Copyright
-
 Copyright (c) 2026 Systems Engineering Architecture and Knowledge Lab
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License, a permissive open-source license that allows
+use, modification, and distribution with minimal restrictions. See the [LICENSE](LICENSE) file for details.
 
 
 ## Acknowledgments
