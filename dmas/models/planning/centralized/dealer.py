@@ -15,7 +15,7 @@ from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import GridSpatialRequirement, SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement
 from execsatm.utils import Interval
 
-from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
+from dmas.models.actions import AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.tracker import ObservationHistory
@@ -173,14 +173,13 @@ class DealerPlanner(AbstractPeriodicPlanner):
     def generate_plan(  self, 
                         state : SimulationAgentState,
                         specs : object,
-                        clock_config : ClockConfig,
                         orbitdata : OrbitData,
                         mission : Mission,
                         tasks : List[GenericObservationTask],
                         observation_history : ObservationHistory,
                     ) -> Plan:
         # update plans for all client agents
-        self.client_plans : Dict[str, PeriodicPlan] = self._generate_client_plans(state, specs, clock_config, orbitdata, mission, tasks, observation_history)
+        self.client_plans : Dict[str, PeriodicPlan] = self._generate_client_plans(state, specs, orbitdata, mission, tasks, observation_history)
 
         # schedule plan broadcasts to be performed
         plan_broadcasts : list[BroadcastMessageAction] = self._schedule_broadcasts(state, orbitdata)
@@ -200,7 +199,6 @@ class DealerPlanner(AbstractPeriodicPlanner):
     def _generate_client_plans(self, 
                                state : SimulationAgentState, 
                                specs : object, 
-                               clock_config : ClockConfig, 
                                orbitdata : OrbitData, 
                                mission : Mission, 
                                tasks : List[GenericObservationTask], 
@@ -248,7 +246,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                 f'Generated observation path/sequence is not valid. Overlaps or mutually exclusive tasks detected.'
             
         # schedule maneuvers for each client
-        client_maneuvers : Dict[str, List[ManeuverAction]] = self._schedule_client_maneuvers(client_observations, clock_config)
+        client_maneuvers : Dict[str, List[ManeuverAction]] = self._schedule_client_maneuvers(client_observations)
         
         # validate maneuver paths for each client
         for client,maneuvers in client_maneuvers.items():
@@ -455,11 +453,10 @@ class DealerPlanner(AbstractPeriodicPlanner):
         """ schedules observations for all clients """        
     
     
-    def _schedule_client_maneuvers(self, client_observations : Dict[str, List[ObservationAction]], clock_config : ClockConfig) -> Dict[str, List[ManeuverAction]]:
+    def _schedule_client_maneuvers(self, client_observations : Dict[str, List[ObservationAction]]) -> Dict[str, List[ManeuverAction]]:
         return {client: self._schedule_maneuvers(self.client_states[client], 
                                                 self.client_specs[client], 
                                                 client_observations[client],
-                                                clock_config,
                                                 self.client_orbitdata[client])
                 for client in self.client_orbitdata }
 
@@ -618,7 +615,7 @@ class TestingDealer(DealerPlanner):
     A preplanner that generates plans for testing purposes.
     """
     
-    def _generate_client_plans(self, state, specs, clock_config, orbitdata, mission, tasks, observation_history):
+    def _generate_client_plans(self, state, specs, orbitdata, mission, tasks, observation_history):
         """
         Generates plans for each agent based on the provided parameters.
         """

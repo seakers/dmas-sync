@@ -1,10 +1,10 @@
-from dmas.agents import AgentAction
+from dmas.models.actions import AgentAction
 
-from chess3d.agents.actions import ObservationAction, action_from_dict
-from chess3d.agents.planning.plan import PeriodicPlan, Plan
-from chess3d.agents.planning.periodic import AbstractPeriodicPlanner
-from chess3d.agents.states import SimulationAgentState
-from chess3d.messages import PlanMessage
+from dmas.models.actions import ObservationAction, action_from_dict
+from dmas.models.planning.plan import PeriodicPlan, Plan
+from dmas.models.planning.periodic import AbstractPeriodicPlanner
+from dmas.models.states import SimulationAgentState
+from dmas.core.messages import PlanMessage
 
 
 class WorkerPlanner(AbstractPeriodicPlanner):

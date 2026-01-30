@@ -225,7 +225,7 @@ class TestSimulationLoading(unittest.TestCase):
         mission_specs = self.build_mission(connectivity='LOS')
 
         # initialize mission
-        # simulation : Simulation = Simulation.from_dict(mission_specs, overwrite=True)
+        simulation : Simulation = Simulation.from_dict(mission_specs, overwrite=True)
         x = 10  # placeholder to avoid empty test case
 
 

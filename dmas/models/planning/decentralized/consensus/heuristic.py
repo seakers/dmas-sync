@@ -1,6 +1,6 @@
-from abc import abstractmethod
 from collections import defaultdict, deque
 from typing import Dict, List, Set, Tuple
+import numpy as np
 from tqdm import tqdm
 
 from execsatm.tasks import DefaultMissionTask, GenericObservationTask
@@ -53,7 +53,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     state : SimulationAgentState,
                                     specs : object,
                                     current_plan : Plan,
-                                    _ : ClockConfig,
                                     orbitdata : OrbitData,
                                     mission : Mission,
                                     observation_history : ObservationHistory
@@ -145,7 +144,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                        specs : object,
                        _ : Plan,
                        tasks : List[GenericObservationTask],
-                       __ : ClockConfig,
                        orbitdata : OrbitData,
                        mission : Mission,
                        observation_history : ObservationHistory
@@ -258,70 +256,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         
         # return observation opportunities
         return observation_opportunities
-
-    # TEMP DEPRECATED
-    # 
-    # def _bundle_building_phase(self,
-    #                    state : SimulationAgentState,
-    #                    specs : object,
-    #                    _ : Plan,
-    #                    tasks : List[GenericObservationTask],
-    #                    __ : ClockConfig,
-    #                    orbitdata : OrbitData,
-    #                    mission : Mission,
-    #                    observation_history : ObservationHistory
-    #                 ) -> tuple:
-        
-    #     # compile instrument field of view specifications   
-    #     cross_track_fovs : dict = self._collect_fov_specs(specs)
-
-    #     # Outline planning horizon interval
-    #     t_next = max(self.preplan.t + self.preplan.horizon, state.t)
-    #     planning_horizon = Interval(state.t, t_next)
-        
-    #     # get only available tasks from existing plan and urgent tasks
-    #     available_tasks : list[GenericObservationTask] = self.get_available_tasks(tasks, planning_horizon)
-                
-    #     # calculate coverage opportunities for available tasks
-    #     access_opportunities : dict[tuple] = self.calculate_access_opportunities(state, planning_horizon, orbitdata)
-
-    #     # create and merge task observation opportunities from scheduled tasks and urgent tasks
-    #     observation_opportunities : List[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
-        
-    #     # extract already planned task observation opportunities from current plan
-    #     planned_observation_opportunities = [obs.obs_opp for obs in self.path if isinstance(obs,ObservationAction)]
-
-    #     # filter tasks that are already in the current plan
-    #     observation_opportunities = [obs_opp for obs_opp in observation_opportunities
-    #                                 if obs_opp not in planned_observation_opportunities]
-    
-    #     # generate new plan according to selected model
-    #     if self.heuristic == self.EARLIEST_ACCESS:
-    #         # use earliest-access heuristic
-    #         proposed_bundle, proposed_path, proposed_bids = \
-    #              self.earliest_access_heuristic_bundle_builder(state, specs, cross_track_fovs, observation_opportunities, orbitdata, mission, observation_history)
-        
-    #     elif self.heuristic == self.TASK_VALUE:
-    #         # use task-value heuristic
-    #         proposed_bundle, proposed_path, proposed_bids = \
-    #              self.task_value_heuristic_bundle_builder(state, specs, cross_track_fovs, observation_opportunities, orbitdata, mission, observation_history)
-        
-    #     elif self.heuristic == self.TASK_PRIORITY:
-    #         # use task-priority heuristic
-    #         proposed_bundle, proposed_path, proposed_bids = \
-    #              self.task_priority_heuristic_bundle_builder(state, specs, cross_track_fovs, observation_opportunities, orbitdata, mission, observation_history)
-    #     else:
-    #         # Fallback for unsupported heuristic
-    #         raise NotImplementedError(f"Heuristic '{self.heuristic}' not supported.")            
-
-    #     # -------------------------------
-    #     # DEBUG PRINTOUTS
-    #     # if self._debug:
-    #     #     if not self.is_observation_path_valid(state, proposed_path, None, None, specs):
-    #     #       x =1
-    #     # -------------------------------
-
-    #     return proposed_bundle, proposed_path, proposed_bids
     
     def get_available_tasks(self, tasks: List[GenericObservationTask], planning_horizon : Interval) -> list:
         """ Get only tasks that are available within the planning horizon. """

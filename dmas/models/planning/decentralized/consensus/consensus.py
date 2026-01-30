@@ -5,6 +5,8 @@ from typing import Dict, List, Set, Tuple
 
 import logging
 
+import numpy as np
+
 from dmas.core.messages import SimulationMessage
 from dmas.models.actions import AgentAction
 
@@ -18,6 +20,7 @@ from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.planning.tracker import ObservationHistory
 from dmas.models.planning.plan import Plan, PeriodicPlan, ReactivePlan
 from dmas.models.planning.decentralized.consensus.bids import Bid
+from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.core.messages import BusMessage, MeasurementBidMessage, MeasurementRequestMessage
 from dmas.core.orbitdata import OrbitData
@@ -1047,12 +1050,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
     BUNDLE-BUILDING PHASE
     ---------------------------
     """
-    @runtime_tracker
+    
     def generate_plan(self, 
                       state : SimulationAgentState,
                       specs : object,
                       current_plan : Plan,
-                      clock_config : ClockConfig,
                       orbitdata : OrbitData,
                       mission : Mission,
                       tasks : List[GenericObservationTask],
@@ -1066,10 +1068,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
                 #  generate new bundle and path according to replanning model
                 self.bundle, self.path = \
-                    self.__replan_observations(state, specs, current_plan, clock_config, orbitdata, mission, tasks, observation_history)
+                    self.__replan_observations(state, specs, current_plan, orbitdata, mission, tasks, observation_history)
             
                 # generate maneuver and travel actions from observations
-                maneuvers : list = self._schedule_maneuvers(state, specs, self.path, clock_config, orbitdata)
+                maneuvers : list = self._schedule_maneuvers(state, specs, self.path, orbitdata)
             
             elif isinstance(state, GroundOperatorAgentState):
                 # ground operator agents do not schedule maneuvers
@@ -1111,7 +1113,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                 state : SimulationAgentState,
                                 specs : object,
                                 current_plan : Plan,
-                                clock_config : ClockConfig,
                                 orbitdata : OrbitData,
                                 mission : Mission,
                                 tasks : List[GenericObservationTask],
@@ -1138,7 +1139,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             
             # build initial bundle from periodic preplan
             self.bundle, self.path, new_bids = \
-                self._build_bundle_from_preplan(state, specs, current_plan, clock_config, 
+                self._build_bundle_from_preplan(state, specs, current_plan, 
                                                 orbitdata, mission, observation_history)
             # TODO ensure bids that all observations that were able to be added to bundle match observations in preplan
            
@@ -1150,7 +1151,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # update bundle and path according to replanning model
         self.bundle, self.path, new_bids = \
-            self._bundle_building_phase(state, specs, current_plan, tasks, clock_config, 
+            self._bundle_building_phase(state, specs, current_plan, tasks, 
                                         orbitdata, mission, observation_history)
 
         # check if new path and bundle are valid
@@ -1197,7 +1198,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                     state : SimulationAgentState,
                                     specs : object,
                                     current_plan : Plan,
-                                    clock_config : ClockConfig,
                                     orbitdata : OrbitData,
                                     mission : Mission,
                                     observation_history : ObservationHistory
@@ -1210,7 +1210,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         specs : object,
                         current_plan : Plan,
                         tasks : List[GenericObservationTask],
-                        clock_config : ClockConfig,
                         orbitdata : OrbitData,
                         mission : Mission,
                         observation_history : ObservationHistory
@@ -1749,7 +1748,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
     """
     REPLAN SCHEDULING
     """
-    @runtime_tracker
+    
     def _schedule_periodic_replan(self, state : SimulationAgentState, prelim_plan : Plan, t_next : float) -> list:
         """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
 
