@@ -13,7 +13,7 @@ from tqdm import tqdm
 import networkx as nx
 
 from orbitpy.mission import Mission
-from dmas.core.utils import print_banner
+from dmas.core.utils import print_scenario_banner
 
 class Constellation(ABC):
     EARTH_RADIUS_KM = 6378 # Earth radius in km    
@@ -569,7 +569,7 @@ class WalkerStarConstellation(WalkerConstellation):
 if __name__ == "__main__":
 
     # terminal welcome message
-    print_banner(f'Walker Delta Constellation Example')
+    print_scenario_banner(f'Walker Delta Constellation Example')
     
     # example 1: Walker Delta Constellation
     

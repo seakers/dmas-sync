@@ -1,10 +1,12 @@
+from abc import ABC
 from enum import Enum
+import json
 from typing import Any, Union
+import uuid
 
 import numpy as np
 from execsatm.observations import ObservationOpportunity
-from chess3d.utils import CoordinateTypes
-from dmas.agents import AgentAction
+from dmas.core.utils import CoordinateTypes
    
 class ActionTypes(Enum):
     IDLE = 'IDLE'
@@ -15,24 +17,92 @@ class ActionTypes(Enum):
     OBSERVE = 'OBSERVE'
     REPLAN = 'REPLAN'
 
-def action_from_dict(action_type : str, **kwargs) -> AgentAction:
-    if action_type == ActionTypes.IDLE.value:
-        return IdleAction(**kwargs)
-    elif action_type == ActionTypes.TRAVEL.value:
-        return TravelAction(**kwargs)
-    elif action_type == ActionTypes.MANEUVER.value:
-        return ManeuverAction(**kwargs)
-    elif action_type == ActionTypes.BROADCAST.value:
-        if 'broadcast_type' in kwargs:
-            return FutureBroadcastMessageAction(**kwargs)
-        else:
-            return BroadcastMessageAction(**kwargs)
-    elif action_type == ActionTypes.WAIT.value:
-        return WaitAction(**kwargs)
-    elif action_type == ActionTypes.OBSERVE.value:
-        return ObservationAction(**kwargs)
-    else:
-        raise NotImplementedError(f'Action of type {action_type} not yet implemented.')
+class AgentAction(ABC):
+    """
+    ## Agent Action
+    
+    Describes an action to be performed by an agent
+
+    ### Attributes:
+        - action_type (`str`): type of action to be performed
+        - t_start (`float`): start time of this action in [s] from the beginning of the simulation
+        - t_end (`float`): end time of this this action in [s] from the beginning of the simulation
+        - status (`str`): completion status of the action
+        - id (`str`) : identifying number for this action in uuid format
+    """
+    PENDING = 'PENDING'
+    COMPLETED = 'COMPLETED'
+    ABORTED = 'ABORTED'
+    FAILED = 'FAILED'
+
+    def __init__(   self, 
+                    action_type : str,
+                    t_start : Union[float, int],
+                    t_end : Union[float, int] = np.Inf, 
+                    status : str = 'PENDING',
+                    id : str = None,
+                    **_
+
+                ) -> None:
+        """
+        Creates an instance of an agent action
+
+        ### Arguments:
+            - t_start (`float`): start time of the availability of this task in [s] from the beginning of the simulation
+            - t_end (`float`): end time of the availability of this task in [s] from the beginning of the simulation
+            - id (`str`) : identifying number for this task in uuid format
+        """
+        super().__init__()
+
+        # type and value checks
+        if not isinstance(t_start, float) and not isinstance(t_start, int):
+            raise AttributeError(f'`t_start` must be of type `float` or type `int`. is of type {type(t_start)}.')
+        elif t_start < 0:
+            raise ValueError(f'`t_start` must be a value higher than 0. is of value {t_start}.')
+        if not isinstance(t_end, float) and not isinstance(t_end, int):
+            raise AttributeError(f'`t_end` must be of type `float` or type `int`. is of type {type(t_end)}.')
+        elif t_end < 0:
+            raise ValueError(f'`t_end` must be a value higher than 0. is of value {t_end}.')
+        if t_start > t_end:
+            raise ValueError(f'`t_start must be lower or equal than `t_end` (t_start: {t_start}, t_end: {t_end}.')
+
+        # assign values 
+        self.action_type = action_type
+        self.t_start = t_start
+        self.t_end = t_end
+        self.status = status
+        self.id = str(uuid.UUID(id)) if id is not None else str(uuid.uuid1())
+
+    def __eq__(self, other) -> bool:
+        """
+        Compares two instances of a task. Returns True if they represent the same task.
+        """
+        assert isinstance(other, AgentAction), f"Can only compare with another `AgentAction`. is of type {type(other)}."
+        return self.to_dict() == other.to_dict()
+
+    def to_dict(self) -> dict:
+        """
+        Crates a dictionary containing all information contained in this task object
+        """
+        return dict(self.__dict__)
+    
+    def to_json(self) -> str:
+        """
+        Creates a json file from this task 
+        """
+        return json.dumps(self.to_dict())
+
+    def __str__(self) -> str:
+        """
+        Creates a string representing the contents of this task
+        """
+        return str(self.to_dict())
+    
+    def __hash__(self) -> int:
+        return hash(repr(self))
+    
+    def __repr__(self) -> str:
+        return f"{self.action_type}_{self.id.split('-')[0]}"
     
 class IdleAction(AgentAction):
     """
@@ -350,3 +420,23 @@ class TriggerReplan(AgentAction):
                 **_
             ) -> None:
         super().__init__(ActionTypes.REPLAN.value, t_start, t_start, status, id)
+
+
+def action_from_dict(action_type : str, **kwargs) -> AgentAction:
+    if action_type == ActionTypes.IDLE.value:
+        return IdleAction(**kwargs)
+    elif action_type == ActionTypes.TRAVEL.value:
+        return TravelAction(**kwargs)
+    elif action_type == ActionTypes.MANEUVER.value:
+        return ManeuverAction(**kwargs)
+    elif action_type == ActionTypes.BROADCAST.value:
+        if 'broadcast_type' in kwargs:
+            return FutureBroadcastMessageAction(**kwargs)
+        else:
+            return BroadcastMessageAction(**kwargs)
+    elif action_type == ActionTypes.WAIT.value:
+        return WaitAction(**kwargs)
+    elif action_type == ActionTypes.OBSERVE.value:
+        return ObservationAction(**kwargs)
+    else:
+        raise NotImplementedError(f'Action of type {action_type} not yet implemented.')

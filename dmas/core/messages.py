@@ -1,11 +1,7 @@
 from enum import Enum
-from typing import Dict, List
 import uuid
 import json
 
-from execsatm.tasks import GenericObservationTask
-
-from dmas.core.agents.planning.decentralized.consensus.bids import Bid
 
 class SimulationElementRoles(Enum):
     MANAGER = 'MANAGER'
@@ -299,27 +295,27 @@ class MeasurementBidMessage(SimulationMessage):
         super().__init__(src, dst, SimulationMessageTypes.MEASUREMENT_BID.value, id, path)
         self.bid = bid
 
-class BidResultsMessage(SimulationMessage):
-    """
-    ## Bid Results Message
+# class BidResultsMessage(SimulationMessage):
+#     """
+#     ## Bid Results Message
 
-    Informs another agents of the bid results information held by the sender
+#     Informs another agents of the bid results information held by the sender
 
-    ### Attributes:
-        - src (`str`): name of the simulation element sending this message
-        - dst (`str`): name of the intended simulation element to receive this message
-        - bid_results (`dict`): bid results information being shared
-        - msg_type (`str`): type of message being sent
-        - id (`str`) : Universally Unique IDentifier for this message
-    """
-    def __init__(self, 
-                src: str, 
-                dst: str, 
-                results: Dict[GenericObservationTask, List[Bid]], 
-                id: str = None,
-                path : list = [],
-                **_):
-        raise NotImplementedError("BidResultsMessage has been disabled.")
+#     ### Attributes:
+#         - src (`str`): name of the simulation element sending this message
+#         - dst (`str`): name of the intended simulation element to receive this message
+#         - bid_results (`dict`): bid results information being shared
+#         - msg_type (`str`): type of message being sent
+#         - id (`str`) : Universally Unique IDentifier for this message
+#     """
+#     def __init__(self, 
+#                 src: str, 
+#                 dst: str, 
+#                 results: Dict[GenericObservationTask, List[Bid]], 
+#                 id: str = None,
+#                 path : list = [],
+#                 **_):
+#         raise NotImplementedError("BidResultsMessage has been disabled.")
     #     """
     #     Creates an instance of a bid results message
 

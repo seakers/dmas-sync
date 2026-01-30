@@ -11,6 +11,18 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
-        }
+        },
+        {
+            "name": "TEST: DMAS Utilities",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/utils/utils_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
     ]
 }
