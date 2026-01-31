@@ -121,19 +121,19 @@ class TestSimulationLoading(unittest.TestCase):
                                 }
                             },
                             "planner" : {
-                                # "preplanner": {
-                                #     "@type": "heuristic",
-                                #     "debug": "False",
-                                #     # "period" : 250,
-                                # },
-                                    "replanner": {
-                                        "@type": "consensus",
-                                        "model": "heuristicInsertion",
-                                        "heuristic" : "taskPriority",
-                                        "replanThreshold": 1,
-                                        "optimisticBiddingThreshold": 1,
-                                        "debug": "False"
-                                }
+                                "preplanner": {
+                                    "@type": "heuristic",
+                                    "debug": "False",
+                                    # "period" : 250,
+                                },
+                                #     "replanner": {
+                                #         "@type": "consensus",
+                                #         "model": "heuristicInsertion",
+                                #         "heuristic" : "taskPriority",
+                                #         "replanThreshold": 1,
+                                #         "optimisticBiddingThreshold": 1,
+                                #         "debug": "False"
+                                # }
                             },
                             "groundStationNetwork" : self.GS_NETWORK_NAME,
                             "mission" : self.MISSION_NAME

@@ -14,7 +14,6 @@ from execsatm.events import GeophysicalEvent
 from execsatm.utils import Interval
 
 from dmas.models.actions import *
-from dmas.models.agent import SimulationAgent
 from dmas.models.states import SimulationAgentState, SimulationAgentTypes
 from dmas.utils.tools import SimulationRoles
 
@@ -118,8 +117,8 @@ class SimulationEnvironment(object):
         return 
     
     def update_agents(self, 
-                            state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
-                            t_curr : float) -> Dict[str, List]:
+                    state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
+                    t_curr : float) -> Dict[str, List]:
         """Updates agent states based on the provided actions at time `t` """
         # initialize agent update storage
         states = dict()
@@ -129,10 +128,13 @@ class SimulationEnvironment(object):
         observations : dict[str, List] = defaultdict(list)
         
         # iterate through each agent state-action pair
-        for agent_name, (state, action) in state_action_pairs.items():            
+        for agent_name, (state, action) in state_action_pairs.items():                
             # handle action 
             updated_state, updated_action_status, msgs_out, agent_observations \
                 = self.__handle_agent_action(state, action, t_curr)
+
+            assert abs(updated_state.get_time() - t_curr) < 1e-6, \
+                f"Agent `{agent_name}` state time {updated_state.get_time()}[s] does not match current time {t_curr}[s] after action handling."
 
             # store updated state and action status
             states[agent_name] = updated_state
@@ -148,7 +150,7 @@ class SimulationEnvironment(object):
 
             # store observations
             if agent_observations:
-                observations[agent_name].append(agent_observations)
+                observations[agent_name].extend(agent_observations)
 
         # compile senses per agent
         senses : Dict[str, tuple] = dict()
@@ -173,7 +175,7 @@ class SimulationEnvironment(object):
         if action is None:
             # no action; idle by default
             state.update(t_curr, status=SimulationAgentState.IDLING)
-            return state, ActionStatuses.COMPLETED.value, [], {}
+            return state, ActionStatuses.COMPLETED.value, [], []
 
         # check action start and end times
         if (action.t_start - t_curr) > 1e-6:
@@ -186,36 +188,36 @@ class SimulationEnvironment(object):
             or action.action_type == ActionTypes.TRAVEL.value
             or action.action_type == ActionTypes.MANEUVER.value): 
             # perform state-updating action
-            return self.perform_state_action(state, action, t_curr)
+            return self.__perform_state_action(state, action, t_curr)
 
         elif action.action_type == ActionTypes.BROADCAST.value:
             # perform message broadcast
-            return self.perform_broadcast(state, action, t_curr)
+            return self.__perform_broadcast(state, action, t_curr)
 
         elif action.action_type == ActionTypes.OBSERVE.value:                              
             # perform observation
-            return self.perform_observation(state, action, t_curr)
+            return self.__perform_observation(state, action, t_curr)
         
         elif action.action_type == ActionTypes.WAIT.value:
             # wait for incoming messages
-            return self.perform_wait(state, action, t_curr)
+            return self.__perform_wait(state, action, t_curr)
         
         # unknown action type; raise error
         raise ValueError(f"Unknown action type {action.action_type} for agent {state.agent_name}")
         
 
-    def perform_state_action(self,
+    def __perform_state_action(self,
                              state : SimulationAgentState,
                              action : AgentAction,
                              t_curr : float) -> Tuple[SimulationAgentState, str, list, list]:
-        """ Performs the given action on the agent state at time `t_curr` """
+        """ Performs the given action on the agent state at time `t_curr` """        
         # update agent state
         action.status,_ = state.perform_action(action, t_curr)
 
         # return updated state
         return state, action.status, [], []
 
-    def perform_broadcast(self, 
+    def __perform_broadcast(self, 
                           state : SimulationAgentState,
                           action : BroadcastMessageAction, 
                           t_curr : float
@@ -230,15 +232,33 @@ class SimulationEnvironment(object):
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []
     
-    def perform_observation(self, 
+    def __perform_observation(self, 
                             state : SimulationAgentState,
                             action : ObservationAction, 
                             t_curr : float
                         ) -> Tuple[SimulationAgentState, str, list, list]:
         """ Performs an observation action """
-        # TODO handle observation action parameters
-        # RETURN list of (instrument,observation_data) tuples for observations
-        raise NotImplementedError("Observation action handling not yet implemented.")
+        
+        # unpack message
+        agent_state_dict = action.req['agent_state']
+        instrument_dict = action.req['instrument']
+        t_start = max(action.req['t_start'], t_curr)
+        t_end = action.req['t_end']
+
+        assert t_end >= t_start, \
+            f"Invalid observation action times: t_start={action.req['t_start']}[s], t_end={t_end}[s], t_img={t_curr}[s]"
+
+        # find/generate measurement results
+        observation_data = self._query_measurement_data(agent_state_dict, instrument_dict, t_start, t_end)
+
+        # package observation data
+        obs_data : tuple = (instrument_dict['name'].lower(), observation_data)
+
+        # update state status
+        state.update(t_curr, status=SimulationAgentState.MEASURING)        
+
+        # return packaged results
+        return state, ActionStatuses.COMPLETED.value, [], [obs_data]
                 
         # own_observations : list[tuple] = [(msg.instrument['name'], msg.observation_data) 
         #                                   for msg in incoming_messages 
@@ -256,13 +276,16 @@ class SimulationEnvironment(object):
         # # log observation event
         # return state, ActionStatuses.COMPLETED.value, [], obs_data
     
-    def perform_wait(self, 
+    def __perform_wait(self, 
                      state : SimulationAgentState,
                      action : WaitAction, 
                      t_curr : float
                     ) -> Tuple[SimulationAgentState, str, list, list]:
         """ Performs a wait action for incoming messages """
         
+        if t_curr > 3206:
+            x = 1
+
         # update state
         state.update(t_curr, status=SimulationAgentState.WAITING)
         
@@ -279,6 +302,121 @@ class SimulationEnvironment(object):
     ORBITDATA QUERY METHODS
     ----------------------
     """
+
+    def _query_measurement_data( self,
+                                agent_state_dict : dict, 
+                                instrument_dict : dict,
+                                t_start : float,
+                                t_end : float
+                                ) -> dict:
+        """
+        Queries internal models or data and returns observation information being sensed by the agent
+        """
+
+        # if isinstance(agent_state, SatelliteAgentState):
+        if agent_state_dict['state_type'] == SimulationAgentTypes.SATELLITE.value:
+            # get orbit data for the agent
+            agent_orbitdata : OrbitData = self._orbitdata[agent_state_dict['agent_name']]
+
+            # get access data for the agent
+            raw_access_data : Dict[str, list] = agent_orbitdata.gp_access_data.lookup_interval(t_start, t_end)
+                        
+            # get satellite's off-axis angle
+            satellite_off_axis_angle = agent_state_dict['attitude'][0]
+            
+            # collect instrument information
+            instrument_name = instrument_dict["name"]
+            instruments = np.asarray(raw_access_data["instrument"], dtype=str)
+            ID_COLS = {'instrument', 'agent name', 'grid index', 'GP index',
+           'lat [deg]', 'lon [deg]', 'pnt-opt index'}
+            
+            # create instrument mask for data filtering
+            inst_mask = (instruments == instrument_name)
+
+            # collect data for every instrument model onboard
+            obs_data = []
+            for instrument_model in instrument_dict['mode']:
+                # get observation FOV from instrument model
+                if instrument_model['@type'] == 'Basic Sensor':
+                    instrument_off_axis_fov = instrument_model['fieldOfViewGeometry']['angleWidth'] / 2.0
+                elif instrument_model['@type'] == 'Passive Optical Scanner':
+                    instrument_off_axis_fov = instrument_model['fieldOfViewGeometry']['angleWidth'] / 2.0
+                else:
+                    raise NotImplementedError(f"measurement data query not yet suported for sensor models of type {instrument_model['model_type']}.")
+
+                # query coverage data of everything that is within the field of view of the agent
+                # TODO Add along-track angle checking. Currently assumes that only cross-track maneuverability is available
+
+                angles = np.asarray(raw_access_data["off-nadir axis angle [deg]"])
+                angles_inst = angles[inst_mask]            # smaller array
+
+                mask = np.abs(angles_inst - satellite_off_axis_angle) <= instrument_off_axis_fov
+
+                matching_data = {col: np.asarray(vals)[inst_mask][mask] 
+                                 for col, vals in tqdm(raw_access_data.items(), 
+                                                       desc=f"{SimulationRoles.ENVIRONMENT.value}-Filtering access data for instrument {instrument_name}...", 
+                                                       leave=False,
+                                                       disable=len(raw_access_data)<10)}
+                
+                # convert columns to arrays once
+                cols = {k: np.asarray(v) for k, v in matching_data.items()}
+                grid = cols['grid index'].astype(np.int64, copy=False)
+                gp   = cols['GP index'].astype(np.int64, copy=False)
+                time = cols['time [s]']
+
+                # check if there is any data to process
+                if len(time) == 0: continue
+
+                # ---- Build unique groups for (grid, gp) efficiently ----
+                # Stack into (n,2) and unique rows
+                pairs = np.column_stack((grid, gp))  # shape (n,2)
+                _, inv = np.unique(pairs, axis=0, return_inverse=True)
+                # inv[i] = group id of row i, groups are 0..G-1
+
+                # Sort rows by group id so each group is contiguous
+                order = np.argsort(inv, kind="mergesort")
+                inv_sorted = inv[order]
+
+                # Find group boundaries in the sorted order
+                # starts: indices in `order` where a new group begins
+                starts = np.r_[0, np.flatnonzero(inv_sorted[1:] != inv_sorted[:-1]) + 1]
+                ends   = np.r_[starts[1:], len(order)]
+
+                obs_data: list[dict] = []
+
+                # Iterate groups (G is usually much smaller than N)
+                for s,e in tqdm(zip(starts, ends), 
+                                desc=f"{SimulationRoles.ENVIRONMENT.value}-Merging observation data for instrument {instrument_name}...", 
+                                unit=' obs',
+                                disable=len(starts)<10,
+                                leave=False):
+                    idx = order[s:e]  # row indices for this group
+
+                    merged = {
+                        't_start': float(np.min(time[idx])),
+                        't_end':   float(np.max(time[idx])),
+                    }
+
+                    # For ID columns: take first value
+                    # For other columns: collect list (or scalar if length 1)
+                    for col, arr in cols.items():
+                        if col in ID_COLS:
+                            v = arr[idx[0]]
+                            merged[col] = v.item() if hasattr(v, "item") else v
+                        else:
+                            v = arr[idx]
+                            # Convert numpy scalars to Python types if needed
+                            lst = [x.item() if hasattr(x, "item") else x for x in v.tolist()]
+                            merged[col] = lst[0] if len(lst) == 1 else lst
+
+                    obs_data.append(dict(merged))
+
+            # return processed observation data
+            return obs_data
+
+        else:
+            raise NotImplementedError(f"Measurement results query not yet supported for agents with state of type {agent_state_dict['state_type']}")
+    
 
     """
     ----------------------
@@ -353,7 +491,10 @@ class SimulationEnvironment(object):
         events_per_interval : Dict[Interval, List[tuple]] \
             = {interval : [] for interval in connectivity_intervals}
         
-        for evt in tqdm(connectivity_events, desc='Grouping connectivity events by interval', unit=' events', leave=False):
+        for evt in tqdm(connectivity_events, 
+                        desc='Grouping connectivity events by interval', 
+                        unit=' events', 
+                        leave=False):
             # group by bisection search, asuuming `connectivity_intervals` is sorted
             low = 0
             high = len(connectivity_intervals) - 1
@@ -375,7 +516,10 @@ class SimulationEnvironment(object):
         interval_connectivities : List[tuple] = []
         
         # create adjacency matrix per interval
-        for interval in tqdm(connectivity_intervals, desc='Precomputing agent connectivity intervals', unit=' intervals', leave=False):
+        for interval in tqdm(connectivity_intervals, 
+                             desc='Precomputing agent connectivity intervals', 
+                             unit=' intervals', 
+                             leave=False):
             # copy previous connectivity state
             interval_connectivity_matrix \
                 = copy.deepcopy(prev_connectivity_matrix)                    

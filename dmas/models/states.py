@@ -113,6 +113,8 @@ class SimulationAgentState(AbstractAgentState):
             # update time and status
             self._t = t 
             self.status = status if status is not None else self.status
+        elif t - self._t < 0:
+            x = 1
         
     def propagate(self, tf : Union[int, float]) -> tuple:
         """

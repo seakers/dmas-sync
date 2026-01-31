@@ -354,6 +354,7 @@ class ObservationAction(AgentAction):
                     t_start: Union[float, int], 
                     duration: Union[float, int] = 0.0, 
                     obs_opp : ObservationOpportunity = None,
+                    req : dict = None,
                     status: str = 'PENDING', 
                     id: str = None, 
                     **_) -> None:
@@ -381,10 +382,12 @@ class ObservationAction(AgentAction):
         self.instrument_name = instrument_name
         self.look_angle = look_angle
         self.obs_opp : ObservationOpportunity = obs_opp
+        self.req : dict = req
 
     def to_dict(self):
         out = super().to_dict()
         out['obs_opp'] = self.obs_opp.to_dict() if self.obs_opp else 'None'
+        out['req'] = self.req
         return out
 
 class WaitAction(AgentAction):

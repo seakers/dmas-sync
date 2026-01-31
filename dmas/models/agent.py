@@ -4,13 +4,16 @@ import os
 from typing import List, Tuple
 import uuid
 from queue import Queue
+import numpy as np
+import pandas as pd
+
+from instrupy.base import Instrument
+from orbitpy.util import Spacecraft
 
 from execsatm.mission import Mission
 from execsatm.tasks import GenericObservationTask, DefaultMissionTask
 from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
-import numpy as np
-import pandas as pd
 
 from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, SimulationMessageTypes, message_from_dict
 from dmas.core.orbitdata import OrbitData
@@ -22,6 +25,7 @@ from dmas.models.science.processing import DataProcessor
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.science.requests import TaskRequest
 from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
+from dmas.utils.tools import SimulationRoles
 
 
 class SimulationAgent(object):
@@ -55,15 +59,24 @@ class SimulationAgent(object):
         assert isinstance(level, int), "Logging level must be an integer."
         assert logger is None or isinstance(logger, logging.Logger), "Logger must be a logging.Logger object or None."
 
+
         # assign parameters
         self.name : str = agent_name.lower()
         self._id : str = agent_id if agent_id is not None else str(uuid.uuid4())
         self._specs : object = specs
-        self._state : SimulationAgentState = initial_state
-        self._mission : Mission = mission
+        if isinstance(specs, Spacecraft):
+            self._payload = {instrument.name: instrument for instrument in specs.instrument}
+        elif isinstance(specs, dict):
+            self._payload = {instrument['name']: instrument for instrument in specs['instrument']} if 'instrument' in specs else dict()
+        else:
+            raise ValueError(f'`specs` must be of type `Spacecraft` or `dict`. Is of type `{type(specs)}`.')
+
         self._simulation_results_path : str = simulation_results_path
         self._results_path : str = agent_results_path
         self._orbitdata : OrbitData = orbitdata
+        self._state : SimulationAgentState = initial_state
+        self._mission : Mission = mission
+        
         self._processor : DataProcessor = processor
         self._preplanner : AbstractPeriodicPlanner = preplanner
         self._replanner : AbstractReactivePlanner = replanner
@@ -334,19 +347,45 @@ class SimulationAgent(object):
         # if 95.0 < state.t < 96.0:
         # if state.t > 96.0:
         if True:
-            self.__log_plan(plan_out, "NEXT ACTIONS", logging.WARNING)
+            # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
+            # self.__log_plan(plan_out, "NEXT ACTIONS", logging.WARNING)
             x = 1 # breakpoint
         # -------------------------------------        
 
         # change state to indicate new status (e.g., maneuvering, observing, waiting, etc.)
         # and save to state history
-        updated_state : SimulationAgentState = state.copy()
-        updated_status = self.__get_status_from_action(plan_out[0])
-        updated_state.update(state._t, status=updated_status)
-        self._state_history.append(updated_state.to_dict())
-
+        updated_state, action = self.__prepare_state(state, plan_out, state._t)
+        
         # return next actions to perform
-        return updated_state, plan_out[0]
+        return updated_state, action
+    
+    def __prepare_state(self, 
+                        state : SimulationAgentState, 
+                        plan_out : List[AgentAction], 
+                        t : float
+                    ) -> Tuple[SimulationAgentState, AgentAction]:
+        """ Update the agent state based on the next actions to perform. """
+        # create copy of current state
+        updated_state : SimulationAgentState = state.copy()
+
+        # get next action to perform
+        action = plan_out[0]
+
+        # determine new status from next action
+        if isinstance(action, ManeuverAction):
+            updated_state.perform_maneuver(action, t)
+        elif isinstance(action, ObservationAction):
+            # update state
+            updated_state.update(t, status=SimulationAgentState.MEASURING)
+        elif isinstance(action, BroadcastMessageAction):
+            # update state
+            updated_state.update(t, status=SimulationAgentState.MESSAGING)
+        elif isinstance(action, WaitAction):
+            # update state
+            updated_state.update(t, status=SimulationAgentState.WAITING)
+
+        # return updated state
+        return updated_state, action
 
     def _read_incoming_messages(self, 
                                 state : SimulationAgentState,
@@ -514,13 +553,46 @@ class SimulationAgent(object):
         try:
             # get list of next actions from plan
             plan_out : List[AgentAction] = self._plan.get_next_actions(state.get_time(), False)
+            
+            if len(plan_out) > 1:
+                x = 1
 
-            # check for future broadcast message actions in plan
+            # check for any observation actions in output plan
+            observation_actions = [action for action in plan_out
+                                   if isinstance(action, ObservationAction)]
+            
+            # attach observation requests to observation actions
+            for action in observation_actions:
+                # get current time and measurement duration
+                t = state.get_time()
+                dt = action.t_end - t
+
+                assert dt > 0, "Observation action must have a positive duration."
+                
+                # find relevant instrument information 
+                instrument : Instrument = self._payload[action.instrument_name]
+
+                # create observation data request for environment 
+                observation_req = ObservationResultsMessage(
+                                                self.name,
+                                                SimulationRoles.ENVIRONMENT.value,
+                                                state.to_dict(),
+                                                action.to_dict(),
+                                                instrument.to_dict(),
+                                                t,
+                                                action.t_end,
+                                                )
+                
+                # attach observation request to observation action
+                action.req = observation_req.to_dict()
+
+            # check for future broadcast message actions in output plan
             future_broadcasts = [action for action in plan_out
                                 if isinstance(action, FutureBroadcastMessageAction)]
-            
+
             # no future broadcasts; return plan as is
-            if not future_broadcasts: return plan_out
+            if not future_broadcasts: 
+                return plan_out
 
             # if there are future broadcast; compile broadcast information
             msgs : list[SimulationMessage] = []

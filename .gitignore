@@ -208,3 +208,27 @@ __marimo__/
 
 # License files
 *.lic
+
+# Data and Results
+*results*
+*orbit_data*
+*orbitdata*
+*plots*
+*results*
+**tests/study/experiments
+**tests/**/results
+*geodata*
+swifa/
+
+# Experiments
+**experiments/0_0_orbit_connectivity/orbits/**
+**experiments/1_0_cbba_stress_test/resources/grids/**/*.csv
+**experiments/1_0_cbba_stress_test/resources/trials/**/*.csv
+**experiments/1_0_cbba_stress_test/resources/events/**/*.csv
+
+*.parquet
+*.tar
+*.tar*
+*.tar.xz
+*.png
+*.zip

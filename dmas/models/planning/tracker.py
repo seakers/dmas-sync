@@ -53,7 +53,7 @@ class ObservationHistory:
         """
         self.history : dict[int, dict[int, ObservationTracker]] = {}
         self.grid_lookup : dict[tuple, tuple] = {}
-    
+
         for gp_index in range(len(orbitdata.grid_data)):
             grid : pd.DataFrame = orbitdata.grid_data[gp_index]
             
