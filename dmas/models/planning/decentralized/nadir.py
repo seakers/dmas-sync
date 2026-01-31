@@ -26,7 +26,7 @@ class NadirPointingPlanner(EarliestAccessPlanner):
         # Nadir pointing planner does not schedule maneuvers
         
         # TEMPORARY ASSERTION
-        assert state.attitude[0] <= 1e-3, f'Agent `{state.agent_name}` is not nadir pointing at time {state.t}. Current attitude: {state.attitude}'
+        assert state.attitude[0] <= 1e-3, f'Agent `{state.agent_name}` is not nadir pointing at time {state._t}. Current attitude: {state.attitude}'
 
         # Check if state is nadir pointing throughout the simulation
         if state.attitude[0] > 1e-3:
@@ -164,7 +164,7 @@ class NadirPointingPlanner(EarliestAccessPlanner):
 
                 else: # there was prior measurement
                     # use agent's current state as previous state
-                    t_i = state.t                
+                    t_i = state._t                
                
                 # check if desired instrument is contained within the satellite's specifications
                 if observation_j.instrument_name not in instruments:

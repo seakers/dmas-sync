@@ -6,7 +6,7 @@ import logging
 import os
 import shutil
 from time import time
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -19,6 +19,7 @@ from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
 from dmas.core.orbitdata import OrbitData
+from dmas.models import agent
 from dmas.models.actions import AgentAction
 from dmas.models.agent import SimulationAgent
 from dmas.models.environment import SimulationEnvironment
@@ -108,23 +109,44 @@ class Simulation:
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
             
+            # initialize state-action pairs
+            state_action_pairs = {
+                agent.name : (agent.get_state(), None)
+                for agent in self._agents
+            }
+
             # execute simulation loop
             with tqdm(total=tf, desc=f'{self._name}: Simulating', leave=True, mininterval=0.5, unit=' s') as pbar:
-                
+                # event-driven simulation loop
                 while t < tf:
                     # update environment
                     self._environment.update_state(t)
 
                     # update agent states
-                    senses = self._environment.update_agent_states({},t)
+                    senses : Dict[str, Tuple] \
+                        = self._environment.update_agents(state_action_pairs, t)
+
+                    # validate that all agents' states were updated
+                    assert all(agent.name in senses for agent in self._agents), \
+                        "Not all agents received senses from the environment."
                     
                     # agent think
+                    state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]] \
+                        = {agent.name : agent.think(*senses[agent.name])
+                            for agent in self._agents}
 
-                    # agent do
-                    agent_actions : Dict[str, AgentAction] = {}
-
+                    # validate that all agents generated actions
+                    assert all(agent.name in state_action_pairs for agent in self._agents), \
+                        "Not all agents generated actions during think phase."
+                    assert all(isinstance(state_action_pairs[agent.name][0], SimulationAgentState)
+                               for agent in self._agents), \
+                        "Not all agents generated valid states during think phase."
+                    assert all((state_action_pairs[agent.name][1] is None or isinstance(state_action_pairs[agent.name][1], AgentAction))
+                                 for agent in self._agents), \
+                        "Not all agents generated valid actions during think phase."
+                    
                     # determine next time 
-                    t_next_min = min([action.t_end for action in agent_actions.values()], 
+                    t_next_min = min([action.t_end for _,action in state_action_pairs.values()], 
                                      default=np.Inf) # base case for no agents
 
                     # update progress bar 

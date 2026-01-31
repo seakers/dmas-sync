@@ -28,9 +28,9 @@ class ActionTypes(Enum):
 
 class ActionStatuses(Enum):
     PENDING = 'PENDING'
-    IN_PROGRESS = 'IN_PROGRESS'
     COMPLETED = 'COMPLETED'
     ABORTED = 'ABORTED'
+    FAILED = 'FAILED'
 
 class AgentAction(ABC):
     """

@@ -1,5 +1,7 @@
+from collections import defaultdict
 import logging
 import os
+from typing import List, Tuple
 import uuid
 from queue import Queue
 
@@ -7,15 +9,19 @@ from execsatm.mission import Mission
 from execsatm.tasks import GenericObservationTask, DefaultMissionTask
 from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
+import numpy as np
+import pandas as pd
 
+from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, SimulationMessageTypes, message_from_dict
 from dmas.core.orbitdata import OrbitData
-from dmas.models.actions import AgentAction
+from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction, action_from_dict
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
+from dmas.models.planning.tracker import ObservationHistory, ObservationTracker
 from dmas.models.science.processing import DataProcessor
-from dmas.models.states import SimulationAgentState
+from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.science.requests import TaskRequest
-from dmas.models.planning.plan import PeriodicPlan, Plan
+from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
 
 
 class SimulationAgent(object):
@@ -76,6 +82,9 @@ class SimulationAgent(object):
         self._known_tasks : list[GenericObservationTask] \
             = SimulationAgent.__initialize_default_mission_tasks(mission, orbitdata)
         self._known_reqs : set[TaskRequest] = set() # TODO do we need this or is the task list enough?
+        
+        # initialize observation history
+        self._observation_history = ObservationHistory(orbitdata)
 
     @staticmethod
     def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> None:
@@ -165,27 +174,750 @@ class SimulationAgent(object):
     """
     THINK METHOD
     """
-    def think(self, senses : list) -> AgentAction:
-        return [] # TODO
+    def think(self, 
+              state : SimulationAgentState,
+              action : AgentAction,
+              action_status : str,
+              incoming_messages : List[SimulationMessage],
+              observations : list
+            ) -> Tuple[SimulationAgentState, AgentAction]:
+        """ 
+        Main thinking method for the agent; processes incoming messages and
+            generates next actions to perform.
+        """
+        # update state
+        self._state = state
 
-    """
-    ACT METHOD
-    """
-    def act(self, action : AgentAction) -> list:
-        ...
-   
+        # append state to history
+        self._state_history.append(state.to_dict())
+
+        # unpack and sort incoming senses
+        incoming_reqs, external_observations, \
+            external_states, external_action_statuses, misc_messages \
+                = self._read_incoming_messages(state, incoming_messages)
+
+        # process action completion
+        completed_actions, aborted_actions, pending_actions \
+            = self.__process_action_completion([(action, action_status)])
+                                                        
+        # --- FOR DEBUGGING PURPOSES ONLY: ---
+        # x = 1 # breakpoint
+        # -------------------------------------
+
+        # update plan completion
+        self.__update_plan_completion(completed_actions, 
+                                    aborted_actions, 
+                                    pending_actions, 
+                                    state._t)
+
+        # process performed observations
+        generated_reqs : List[TaskRequest] = self.__process_observations(incoming_reqs, observations)
+        incoming_reqs.extend(generated_reqs)
+                        
+        # TODO update mission objectives from requests
+
+        # update observation history
+        self.__update_observation_history(observations)
+
+        # update tasks from incoming requests
+        self.__update_tasks(state, incoming_reqs=incoming_reqs)
+
+        # update known requests
+        self.__update_reqs(state, incoming_reqs=incoming_reqs)
+
+        # --- Create plan ---
+        if self._preplanner is not None:
+            # there is a preplanner assigned to this planner
+            
+            # update preplanner precepts
+            self._preplanner.update_percepts(state,
+                                            self._plan, 
+                                            self._known_tasks,
+                                            incoming_reqs,
+                                            [],
+                                            misc_messages,
+                                            completed_actions,
+                                            aborted_actions,
+                                            pending_actions
+                                        )
+            
+            # check if there is a need to construct a new plan
+            if self._preplanner.needs_planning(state, 
+                                              self._specs, 
+                                              self._plan):  
+                
+                # update tasks for only tasks that are available
+                self.__update_tasks(state, available_only=True)
+                
+                # initialize plan      
+                self._plan : Plan = self._preplanner.generate_plan(state, 
+                                                            self._specs,
+                                                            self._orbitdata,
+                                                            self._mission,
+                                                            self._known_tasks,
+                                                            self._observation_history
+                                                            )
+
+                # save copy of plan for post-processing
+                plan_copy = [action for action in self._plan]
+                self._plan_history.append((state._t, plan_copy))
+                
+                # --- FOR DEBUGGING PURPOSES ONLY: ---
+                # if self._preplanner._debug: 
+                # if state.get_time() < 1:
+                if True:
+                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    x = 1 # breakpoint
+                # -------------------------------------
+
+        # --- Modify plan ---
+        # Check if replanning is needed
+        if self._replanner is not None:
+            # there is a replanner assigned to this planner
+
+            # update replanner precepts
+            self._replanner.update_percepts( state,
+                                            self._plan, 
+                                            self._known_tasks,
+                                            incoming_reqs,
+                                            [],
+                                            misc_messages,
+                                            completed_actions,
+                                            aborted_actions,
+                                            pending_actions
+                                        )
+            
+            if self._replanner.needs_planning(state, 
+                                             self._specs,
+                                             self._plan,
+                                             self._orbitdata):    
+                # --- FOR DEBUGGING PURPOSES ONLY: ---
+                # self.__log_plan(plan, "ORIGINAL PLAN", logging.WARNING)
+                # x = 1 # breakpoint
+                # -------------------------------------
+
+                # update tasks for only tasks that are available
+                self.__update_tasks(state, available_only=True)
+
+                # Modify current Plan      
+                self._plan : ReactivePlan = self._replanner.generate_plan(state, 
+                                                                self._specs,
+                                                                self._plan,
+                                                                self._orbitdata,
+                                                                self._mission,
+                                                                self._known_tasks,
+                                                                self._observation_history
+                                                                )
+
+                # update last time plan was updated
+                t_plan = state.get_time()
+
+                # save copy of plan for post-processing
+                plan_copy = [action for action in self._plan]
+                self._plan_history.append((t_plan, plan_copy))
+            
+                # clear pending actions
+                pending_actions = []
+
+                # --- FOR DEBUGGING PURPOSES ONLY: ---
+                if True:
+                # if 95.0 < state.t < 96.0:
+                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    x = 1 # breakpoint
+                # -------------------------------------
+
+        # get next actions to perform
+        plan_out = self.get_next_actions(state, True)
+        assert len(plan_out) > 0, "No next actions were returned from `get_next_actions()`."
+        
+        # --- FOR DEBUGGING PURPOSES ONLY: ---        
+        # if 95.0 < state.t < 96.0:
+        # if state.t > 96.0:
+        if True:
+            self.__log_plan(plan_out, "NEXT ACTIONS", logging.WARNING)
+            x = 1 # breakpoint
+        # -------------------------------------        
+
+        # change state to indicate new status (e.g., maneuvering, observing, waiting, etc.)
+        # and save to state history
+        updated_state : SimulationAgentState = state.copy()
+        updated_status = self.__get_status_from_action(plan_out[0])
+        updated_state.update(state._t, status=updated_status)
+        self._state_history.append(updated_state.to_dict())
+
+        # return next actions to perform
+        return updated_state, plan_out[0]
+
+    def _read_incoming_messages(self, 
+                                state : SimulationAgentState,
+                                incoming_messages : List[SimulationMessage]
+                                ) -> Tuple[List[TaskRequest], List[Tuple[str, list]], List[AgentStateMessage], List[AgentActionMessage], List[SimulationMessage]]:
+        """ Classify incoming messages into their respective types """
+
+        # check if there exist any bus messages in incoming messages
+        bus_messages : List[BusMessage] = [msg for msg in incoming_messages 
+                                           if isinstance(msg, BusMessage)]
+        
+        # unpack bus messages
+        for bus_msg in bus_messages: 
+            # add bus' contents to list of incoming messages
+            incoming_messages.extend([message_from_dict(**msg) 
+                                      for msg in bus_msg.msgs])
+            # remove original bus messages 
+            incoming_messages.remove(bus_msg)
+
+        # check for any measurement requests
+        incoming_reqs : List[TaskRequest] \
+            = [TaskRequest.from_dict(msg.req) 
+               for msg in incoming_messages 
+               if isinstance(msg, MeasurementRequestMessage)]
+
+        # check for any observation results messages
+        observation_msgs : List[ObservationResultsMessage] \
+            = [sense for sense in incoming_messages 
+                if isinstance(sense, ObservationResultsMessage)]
+        
+        # extract observation data from messages
+        external_observations : List[tuple] \
+            = [(msg.instrument, msg.observation_data) 
+                for msg in incoming_messages 
+                if isinstance(msg, ObservationResultsMessage)
+                and isinstance(msg.instrument, str)]
+
+
+        external_states : List[AgentStateMessage] \
+            = [SimulationAgentState.from_dict(sense.state) 
+                for sense in incoming_messages 
+                if isinstance(sense, AgentStateMessage)
+                and sense.src != state.agent_name]
+        
+        external_action_statuses : List[AgentActionMessage] \
+            = [sense for sense in incoming_messages
+                if isinstance(sense, AgentActionMessage)]
+                
+        # gather any other miscellaneous messages
+        misc_messages = set(incoming_messages)
+        misc_messages.difference_update(incoming_reqs)
+        misc_messages.difference_update(observation_msgs)
+        misc_messages.difference_update(external_states)
+        misc_messages.difference_update(external_action_statuses)
+
+        # return classified messages
+        return incoming_reqs, external_observations, \
+            external_states, external_action_statuses, list(misc_messages)
+    
+    def __process_action_completion(self, action_status_pairs : List[Tuple[AgentAction, str]]) -> tuple:
+        
+        # define classified action lists
+        completed_actions = [] # planned action completed
+        pending_actions = [] # planned action wasn't completed
+        aborted_actions = []# planned action aborted
+            
+        # classify by action completion
+        for action, status in action_status_pairs:
+            # skip if no action was performed
+            if action is None: continue
+
+            if status == ActionStatuses.COMPLETED.value:
+                completed_actions.append(action)
+            elif status == ActionStatuses.ABORTED.value:
+                aborted_actions.append(action)
+            elif status == ActionStatuses.PENDING.value:
+                pending_actions.append(action)
+            else:
+                raise ValueError(f"Unknown action status: {status}")
+
+        # return classified lists
+        return completed_actions, aborted_actions, pending_actions
+
+    def __update_plan_completion(self, 
+                                completed_actions : list, 
+                                aborted_actions : list, 
+                                pending_actions : list, 
+                                t : float) -> None:
+        """
+        Updates the plan completion based on the actions performed.
+        """
+        # update plan completion
+        self._plan.update_action_completion(completed_actions, 
+                                           aborted_actions, 
+                                           pending_actions, 
+                                           t)    
+
+    def __process_observations(self, 
+                               incoming_reqs : List[TaskRequest], 
+                               observations : List[Tuple[str, list]]
+                               ) -> List[TaskRequest]:
+        """
+        Processes observations and generates new requests based on the observations.
+        """
+        # check if there is a data processor assigned
+        if self._processor is None: return []
+
+        # process observations and return generated requests
+        return self._processor.process_observations(incoming_reqs, observations)
+
+    def __update_observation_history(self, observations : list) -> None:
+        """
+        Updates the observation history with the completed observations.
+        """
+        # update observation history
+        self._observation_history.update(observations)
+
+
+    def __update_tasks(self, 
+                       state : SimulationAgentState,
+                       incoming_reqs : list = [], 
+                       available_only : bool = False
+                       ) -> None:
+        """
+        Updates the list of tasks based on incoming requests and task availability.
+        """
+        # get tasks from incoming requests
+        event_tasks = [req.task
+                       for req in incoming_reqs
+                       if isinstance(req, TaskRequest)]
+        
+        # TODO filter tasks that can be performed by agent?
+        # valid_event_tasks = []
+        # payload_instrument_names = {instrument_name.lower() for instrument_name in self.payload.keys()}
+        # for event_task in event_tasks_flat:
+        #     if any([instrument in event_task.objective.valid_instruments 
+        #             for instrument in payload_instrument_names]):
+        #         valid_event_tasks.append(event_task)
+
+        # add tasks to task list
+        self._known_tasks.extend(event_tasks)
+        
+        # filter tasks to only include active tasks
+        if available_only: # only consider tasks that are active and available
+            self._known_tasks = [task for task in self._known_tasks 
+                          if not task.is_expired(state.get_time())]
+
+    def __update_reqs(self, 
+                      state : SimulationAgentState,
+                      incoming_reqs : List[TaskRequest] = [], 
+                      available_only : bool = True
+                    ) -> None:
+        """ Updates the known requests based on incoming requests and request availability. """
+        
+        # update known requests
+        self._known_reqs.update(incoming_reqs)
+
+        # filter for request availability
+        if available_only:
+            self._known_reqs = {req for req in self._known_reqs 
+                               if req.task.is_available(state.get_time())
+                               }
+
+    def get_next_actions(self, state : SimulationAgentState, earliest : bool = True) -> List[AgentAction]:
+        try:
+            # get list of next actions from plan
+            plan_out : List[AgentAction] = self._plan.get_next_actions(state.get_time(), False)
+
+            # check for future broadcast message actions in plan
+            future_broadcasts = [action for action in plan_out
+                                if isinstance(action, FutureBroadcastMessageAction)]
+            
+            # no future broadcasts; return plan as is
+            if not future_broadcasts: return plan_out
+
+            # if there are future broadcast; compile broadcast information
+            msgs : list[SimulationMessage] = []
+            for future_broadcast in future_broadcasts:
+                
+                # create appropriate broadcast message
+                if future_broadcast.broadcast_type == FutureBroadcastMessageAction.STATE:
+                    msgs.append(AgentStateMessage(state.agent_name, state.agent_name, state.to_dict()))
+                    
+                elif future_broadcast.broadcast_type == FutureBroadcastMessageAction.OBSERVATIONS:
+                    # compile latest observations from the observation history
+                    latest_observations : List[ObservationAction] = self.get_latest_observations(state)
+
+                    # index by instrument name
+                    instruments_used : set = {latest_observation['instrument'].lower() 
+                                            for latest_observation in latest_observations}
+                    indexed_observations = {instrument_used: [latest_observation for latest_observation in latest_observations
+                                                            if latest_observation['instrument'].lower() == instrument_used]
+                                            for instrument_used in instruments_used}
+
+                    # create ObservationResultsMessage for each instrument
+                    msgs.extend([ObservationResultsMessage(state.agent_name, 
+                                                    state.agent_name, 
+                                                    state.to_dict(), 
+                                                    {}, 
+                                                    {"name" : instrument},
+                                                    state.t,
+                                                    state.t,
+                                                    observations
+                                                    )
+                            for instrument, observations in indexed_observations.items()])
+                    
+                    # msg = BusMessage(state.agent_name, state.agent_name, [msg.to_dict() for msg in msgs])
+
+                elif future_broadcast.broadcast_type == FutureBroadcastMessageAction.REQUESTS:
+                    msgs.extend([MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict())
+                            for req in self._known_reqs
+                            if req.task.is_available(state.t)                   # only active or future events
+                            and (not future_broadcast.only_own_info
+                                 and (future_broadcast.desc is None 
+                                      or req.task in future_broadcast.desc))    # include requests from all agents if `only_own_info` is not set
+                            or (future_broadcast.only_own_info and 
+                                req.requester == state.agent_name)              # only requests created by myself if `only_own_info` is set
+                            ])
+
+                else: # unsupported broadcast type
+                    raise NotImplementedError(f'Future broadcast type {future_broadcast.broadcast_type} not yet supported.')
+            
+            # remove future message action from current plan
+            for future_broadcast in future_broadcasts: 
+                self._plan.remove(future_broadcast, state.t)
+
+            # check if requested information from future messages was found
+            if not msgs:
+                # get next actions from updated plan
+                plan_out : List[AgentAction] = self._plan.get_next_actions(state.get_time(), False)
+
+                # return next actions
+                return plan_out
+            
+            else:
+                # create bus message if there are messages to broadcast
+                msg = BusMessage(state.agent_name, state.agent_name, [msg.to_dict() for msg in msgs])
+
+                # create state broadcast message action
+                broadcast = BroadcastMessageAction(msg.to_dict(), future_broadcasts[0].t_start)
+
+                # get indices of future broadcast message actions in output plan
+                future_broadcast_indices = [i for i, action in enumerate(plan_out) if action in future_broadcasts]
+
+                # remove future message actions from output plan
+                for i in sorted(future_broadcast_indices, reverse=True): plan_out.pop(i)
+                
+                # add broadcast message action from current plan
+                self._plan.add(broadcast, state.get_time())
+                
+                # replace future message action with broadcast action in out plan
+                plan_out.insert(min(future_broadcast_indices), broadcast)    
+
+                # --- FOR DEBUGGING PURPOSES ONLY: ---
+                # self.__log_plan(self._plan, "UPDATED-REPLAN", logging.WARNING)
+                x = 1 # breakpoint
+                # -------------------------------------
+
+                return plan_out
+        
+        except Exception as e:
+            self.log(f'Error in `get_next_actions()`: {e}', logging.ERROR)
+            raise e
+
+        finally:
+            assert plan_out, \
+                "No actions were returned from `get_next_actions()`."
+            assert all([action.t_start <= state.get_time() + 1e-3 for action in plan_out]), \
+                "All returned actions must start at or before the current time."
+             # ensure no future broadcast message actions in output plan
+            assert all([not isinstance(action, FutureBroadcastMessageAction) for action in plan_out]), \
+                "No future broadcast message actions should be present in the output plan."
+            # ensure all output tasks have the same duration
+            assert all([((action.t_end - action.t_start) == (plan_out[0].t_end - plan_out[0].t_start)
+                        or abs(action.t_end - action.t_start) - (plan_out[0].t_end - plan_out[0].t_start) < 1e-6) 
+                        for action in plan_out]), \
+                "All returned actions must have the same duration."
+            
+            # if all actions are a broadcasting action, merge into a single broadcast
+            if len(plan_out) > 1 and all([isinstance(action, BroadcastMessageAction) for action in plan_out]):
+                # collect start and end times
+                t_start = min([action.t_start for action in plan_out]) # should be equal amongst all actions
+                t_end = max([action.t_end for action in plan_out])      # should be equal amongst all actions
+                
+                # collect all messages
+                msgs = []
+                for action in plan_out:
+                    if isinstance(action, BroadcastMessageAction) and action.msg['msg_type'] == SimulationMessageTypes.BUS.value:
+                        msgs.extend(action.msg.get('msgs', []))
+                    else:
+                        msgs.append(action.msg)
+                
+                # create bus message to hold all messages
+                bus_msg = BusMessage(  src=self.name,
+                                        dst=self.name,
+                                        msgs=msgs
+                                    )
+                # create single broadcast action
+                broadcast_action = BroadcastMessageAction(  t_start=t_start,
+                                                            t_end=t_end,
+                                                            msg=bus_msg.to_dict()
+                                                        )
+                # replace multiple broadcasts with single broadcast in original plan
+                for action in plan_out: self._plan.remove(action, state.get_time())
+                self._plan.add(broadcast_action, state.get_time())
+
+                # update plan out to only include single broadcast action
+                plan_out = [broadcast_action]
+
+                return plan_out
+    
+    def get_latest_observations(self, 
+                                state : SimulationAgentState,
+                                latest_plan_only : bool = True
+                                ) -> List[dict]:
+        return [observation_tracker.latest_observation
+                 for _,grid in self._observation_history.history.items()
+                for _, observation_tracker in grid.items()
+                if isinstance(observation_tracker, ObservationTracker)
+                # check if there is a latest observation
+                and observation_tracker.latest_observation is not None
+                # only include observations performed by myself 
+                and observation_tracker.latest_observation['agent name'] == state.agent_name
+                # only include observations performed for the current plan
+                and self._plan.t * int(latest_plan_only) <= observation_tracker.latest_observation['t_end'] <= state.get_time()
+            ]
+
+    def __get_status_from_action(self, action : AgentAction) -> str:
+        """
+        Determines the agent status based on the given action.
+        """
+        if isinstance(action, ManeuverAction):
+            return SimulationAgentState.MANEUVERING
+        elif isinstance(action, ObservationAction):
+            return SimulationAgentState.MEASURING
+        elif isinstance(action, BroadcastMessageAction):
+            return SimulationAgentState.MESSAGING
+        elif isinstance(action, WaitAction):
+            return SimulationAgentState.WAITING
+        
+        return SimulationAgentState.IDLING
+
     """
     ----------------------
     UTILITY METHODS
     ----------------------
     """    
 
+    def get_state(self) -> SimulationAgentState:
+        return self._state
+    
+    def log(self, msg : str, level=logging.DEBUG) -> None:
+        """
+        Logs a message to the desired level.
+        """
+        try:
+            t = self._state.get_time()
+            t = t if t is None else round(t,3)
+
+            if level is logging.DEBUG:
+                self._logger.debug(f'T={t}[s] | {self.name}: {msg}')
+            elif level is logging.INFO:
+                self._logger.info(f'T={t}[s] | {self.name}: {msg}')
+            elif level is logging.WARNING:
+                self._logger.warning(f'T={t}[s] | {self.name}: {msg}')
+            elif level is logging.ERROR:
+                self._logger.error(f'T={t}[s] | {self.name}: {msg}')
+            elif level is logging.CRITICAL:
+                self._logger.critical(f'T={t}[s] | {self.name}: {msg}')
+        
+        except Exception as e:
+            raise e
+    
+    def __log_plan(self, plan : Plan, title : str, level : int = logging.DEBUG) -> None:
+        try:
+            out = f'\n{title}\n'
+            if isinstance(plan, Plan):
+                out += str(plan)
+            
+            else:                
+                for action in plan:
+                    if isinstance(action, AgentAction):
+                        out += f"{action.id.split('-')[0]}, {action.action_type}, {action.t_start}, {action.t_end}\n"
+
+                    elif isinstance(action, dict):
+                        out += f"{action['id'].split('-')[0]}, {action['action_type']}, {action['t_start']}, {action['t_end']}\n"           
+
+            self.log(out, level)
+        except Exception as e:
+            print(e)
+            raise e
+        
+    def __repr__(self):
+        if isinstance(self._state, SatelliteAgentState):
+            return f"SatelliteAgent(name={self.name}, id={self._id})"
+        elif isinstance(self._state, GroundOperatorAgentState):
+            return f"GroundOperatorAgent(name={self.name}, id={self._id})"
+        else:
+            return f"SimulationAgent(name={self.name}, id={self._id})"
 
     """
     ----------------------
     RESULTS HANDLING METHODS
     ----------------------
     """
-    def print_results(self) -> str:
-        # TODO 
-        ...
+    def print_results(self):
+        try:
+            # log known default tasks
+            columns = ['id', 'task type', 'requester', 'parameter', 'lat [deg]', 'lon [deg]', 'grid index', 'gp index', 't start', 't end', 'priority']
+            data = [(task.id,task.task_type, self.name, task.parameter, task.location[0][0], task.location[0][1], task.location[0][2], task.location[0][3],
+                    task.availability.left, task.availability.right, task.priority)
+                for task in self._known_tasks
+                if isinstance(task, DefaultMissionTask)
+            ]
+            df = pd.DataFrame(data=data, columns=columns)        
+            df.to_parquet(f"{self._results_path}/known_tasks.parquet", index=False)
+
+            # log known and generated requests
+            columns = ['id','requester','lat [deg]','lon [deg]','severity','t start','t end','t corr','event type']
+            if self._processor is not None:
+                data_known = [(event.id, self._processor.event_requesters[event], event.location[0], event.location[1], event.severity, event.t_start, event.t_start+event.d_exp, np.Inf, event.event_type)
+                        for event in self._processor.known_events]
+                data_detected = [(event.id, self._processor.event_requesters[event], event.location[0], event.location[1], event.severity, event.t_start, event.t_start+event.d_exp, np.Inf, event.event_type)
+                        for event in self._processor.detected_events]
+            else:
+                data_known, data_detected = [], []
+                
+            df = pd.DataFrame(data=data_known, columns=columns)        
+            df.to_parquet(f"{self._results_path}/events_known.parquet", index=False)   
+
+            df = pd.DataFrame(data=data_detected, columns=columns)        
+            df.to_parquet(f"{self._results_path}/events_detected.parquet", index=False)
+        
+            # log plan history
+            headers = ['plan_index', 't_plan', 'desc', 't_start', 't_end']
+            data = []
+            
+            for i in range(len(self._plan_history)):
+                t_plan, plan = self._plan_history[i]
+                t_plan : float; plan : list[AgentAction]
+
+                for action in plan:
+                    desc = f'{action.action_type}'
+                    if isinstance(action, ObservationAction):
+                        desc += f'_{action.instrument_name}'
+                        
+                    line_data = [   i,
+                                    np.round(t_plan,3),
+                                    desc,
+                                    np.round(action.t_start,3 ),
+                                    np.round(action.t_end,3 )
+                                ]
+                    data.append(line_data)
+
+            df = pd.DataFrame(data, columns=headers)
+            df.to_parquet(f"{self._results_path}/planner_history.parquet", index=False)
+            
+            # log observation history
+            data = defaultdict(list)
+            for grid in self._observation_history.history.values():
+                grid : dict[int, ObservationTracker]
+                for observation_tracker in grid.values():
+                    observation_tracker : ObservationTracker
+                    if observation_tracker.n_obs == 0:
+                        # no observations for this grid point
+                        continue
+                    
+                    for key, value in observation_tracker.latest_observation.items():
+                        if isinstance(value, list):
+                            data[key].append(value[0])  # assuming single value lists
+                        else:
+                            data[key].append(value)
+            
+            df = pd.DataFrame(data)
+            df.to_parquet(f"{self._results_path}/observation_history.parquet", index=False)
+
+            # log performance stats
+            runtime_dir = os.path.join(self._results_path, "runtime")
+            if not os.path.isdir(runtime_dir): os.mkdir(runtime_dir)
+
+            # log performance stats
+            n_decimals = 5
+            headers = ['routine','t_avg','t_std','t_med', 't_max', 't_min', 'n', 't_total']
+            data = []
+
+            # for routine in self.stats:
+            #     n = len(self.stats[routine])
+            #     t_avg = np.round(np.mean(self.stats[routine]),n_decimals) if n > 0 else -1
+            #     t_std = np.round(np.std(self.stats[routine]),n_decimals) if n > 0 else 0.0
+            #     t_median = np.round(np.median(self.stats[routine]),n_decimals) if n > 0 else -1
+            #     t_max = np.round(max(self.stats[routine]),n_decimals) if n > 0 else -1
+            #     t_min = np.round(min(self.stats[routine]),n_decimals) if n > 0 else -1
+            #     t_total = t_avg * n
+
+            #     line_data = [ 
+            #                     routine,
+            #                     t_avg,
+            #                     t_std,
+            #                     t_median,
+            #                     t_max,
+            #                     t_min,
+            #                     n,
+            #                     t_total
+            #                     ]
+            #     data.append(line_data)
+
+            #     # save time-series
+            #     time_series = [[v] for v in self.stats[routine]]
+            #     routine_df = pd.DataFrame(data=time_series, columns=['dt'])
+            #     routine_dir = os.path.join(f"{self._results_path}/runtime", f"time_series-planner_{routine}.parquet")
+            #     routine_df.to_parquet(routine_dir,index=False)
+
+            # if isinstance(self._preplanner, AbstractPeriodicPlanner):
+            #     for routine in self._preplanner.stats:
+            #         n = len(self._preplanner.stats[routine])
+            #         t_avg = np.round(np.mean(self._preplanner.stats[routine]),n_decimals) if n > 0 else -1
+            #         t_std = np.round(np.std(self._preplanner.stats[routine]),n_decimals) if n > 0 else 0.0
+            #         t_median = np.round(np.median(self._preplanner.stats[routine]),n_decimals) if n > 0 else -1
+            #         t_max = np.round(max(self._preplanner.stats[routine]),n_decimals) if n > 0 else -1
+            #         t_min = np.round(min(self._preplanner.stats[routine]),n_decimals) if n > 0 else -1
+            #         t_total = t_avg * n
+
+            #         line_data = [ 
+            #                         f"preplanner/{routine}",
+            #                         t_avg,
+            #                         t_std,
+            #                         t_median,
+            #                         t_max,
+            #                         t_min,
+            #                         n,
+            #                         t_total
+            #                         ]
+            #         data.append(line_data)
+
+            #         # save time-series
+            #         time_series = [[v] for v in self._preplanner.stats[routine]]
+            #         routine_df = pd.DataFrame(data=time_series, columns=['dt'])
+            #         routine_dir = os.path.join(f"{self._results_path}/runtime", f"time_series-preplanner_{routine}.parquet")
+            #         routine_df.to_parquet(routine_dir,index=False)
+
+            # if isinstance(self._replanner, AbstractReactivePlanner):
+            #     for routine in self._replanner.stats:
+            #         n = len(self._replanner.stats[routine])
+            #         t_avg = np.round(np.mean(self._replanner.stats[routine]),n_decimals) if n > 0 else -1
+            #         t_std = np.round(np.std(self._replanner.stats[routine]),n_decimals) if n > 0 else 0.0
+            #         t_median = np.round(np.median(self._replanner.stats[routine]),n_decimals) if n > 0 else -1
+            #         t_max = np.round(max(self._replanner.stats[routine]),n_decimals) if n > 0 else -1
+            #         t_min = np.round(min(self._replanner.stats[routine]),n_decimals) if n > 0 else -1
+            #         t_total = t_avg * n
+
+            #         line_data = [ 
+            #                         f"replanner/{routine}",
+            #                         t_avg,
+            #                         t_std,
+            #                         t_median,
+            #                         t_max,
+            #                         t_min,
+            #                         n,
+            #                         t_total
+            #                         ]
+            #         data.append(line_data)
+
+            #         # save time-series
+            #         time_series = [[v] for v in self._replanner.stats[routine]]
+            #         routine_df = pd.DataFrame(data=time_series, columns=['dt'])
+            #         routine_dir = os.path.join(f"{self._results_path}/runtime", f"time_series-replanner_{routine}.parquet")
+            #         routine_df.to_parquet(routine_dir,index=False)
+
+            # stats_df = pd.DataFrame(data, columns=headers)
+            # stats_df.to_parquet(f"{self._results_path}/planner_runtime_stats.parquet", index=False)
+
+        except Exception as e:
+            print(f'AGENT TEARDOWN ERROR: {e}')
+            raise e

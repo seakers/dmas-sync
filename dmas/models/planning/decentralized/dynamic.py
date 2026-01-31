@@ -127,7 +127,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
 
         # add dummy observation to represent initial state
         instrument_names = list(payload.keys())
-        dummy_observation = ObservationOpportunity(set([]), instrument_names[0], Interval(state.t,state.t), 0.0, Interval(state.attitude[0],state.attitude[0]))
+        dummy_observation = ObservationOpportunity(set([]), instrument_names[0], Interval(state._t,state._t), 0.0, Interval(state.attitude[0],state.attitude[0]))
         observation_opportunities.insert(0,dummy_observation)
         
         # initiate constants
@@ -315,11 +315,11 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         """ schedules observations using a continuous-time dynamic programming approach """
         # add dummy observation to represent initial state
         instrument_names = list(payload.keys())
-        dummy_observation = ObservationOpportunity(set([]), instrument_names[0], Interval(state.t,state.t), 0.0, Interval(state.attitude[0],state.attitude[0]))
+        dummy_observation = ObservationOpportunity(set([]), instrument_names[0], Interval(state._t,state._t), 0.0, Interval(state.attitude[0],state.attitude[0]))
         observation_opportunities.insert(0,dummy_observation)
         
         # initiate results arrays
-        t_imgs : list[Interval]             = [max(observation.accessibility.left, state.t) for observation in observation_opportunities]
+        t_imgs : list[Interval]             = [max(observation.accessibility.left, state._t) for observation in observation_opportunities]
         d_imgs : list[float]                = [observation.min_duration for observation in observation_opportunities]
         th_imgs : list[float]               = [np.average((observation.slew_angles.left, observation.slew_angles.right)) for observation in observation_opportunities]
         rewards : list[float]               = [0.0 for _ in observation_opportunities]
@@ -408,9 +408,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                 t_img_j = max(t_imgs[i] + d_imgs[i] + slew_times[i][j], t_imgs[j]) 
 
                 # check if imaging time is valid
-                if not (t_img_j <= state.t + self.horizon                                   # imaging start time within planning horizon
+                if not (t_img_j <= state._t + self.horizon                                   # imaging start time within planning horizon
                     and t_img_j in observation_opportunities[j].accessibility               # imaging start time within observation availability
-                    and t_img_j + d_imgs[j] <= state.t + self.horizon                       # imaging end time within planning horizon
+                    and t_img_j + d_imgs[j] <= state._t + self.horizon                       # imaging end time within planning horizon
                     and t_img_j + d_imgs[j] in observation_opportunities[j].accessibility): # imaging end time within observation availability
                     continue
 
@@ -472,7 +472,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                 
             elif self.model == self.DISCRETE:
                 # iterate through all possible imaging times for observation i with time step of orbitdata
-                while t_img + obs_i.min_duration <= min(obs_i.accessibility.right, state.t + self.horizon):
+                while t_img + obs_i.min_duration <= min(obs_i.accessibility.right, state._t + self.horizon):
                     # add pair to list                
                     observation_pairs.append((i, t_img))
 

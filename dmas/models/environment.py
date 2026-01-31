@@ -1,19 +1,19 @@
 import copy
 import logging
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 from collections import defaultdict, deque
 
 import numpy as np
 from tqdm import tqdm
 
-from dmas.core.messages import SimulationMessage
+from dmas.core.messages import SimulationMessage, message_from_dict
 from dmas.core.orbitdata import OrbitData
 
 from execsatm.events import GeophysicalEvent
 from execsatm.utils import Interval
 
-from dmas.models.actions import AgentAction
+from dmas.models.actions import *
 from dmas.models.agent import SimulationAgent
 from dmas.models.states import SimulationAgentState, SimulationAgentTypes
 from dmas.utils.tools import SimulationRoles
@@ -79,7 +79,7 @@ class SimulationEnvironment(object):
 
         # setup agent connectivity
         self._connectivity_level : str = connectivity_level.upper()
-        self.__interval_connectivities : List[Tuple[Interval, Dict, List]]\
+        self.__interval_connectivities : List[Tuple[Interval, Dict, List, Dict]] \
             = SimulationEnvironment.__precompute_connectivity(scenario_orbitdata) # list of (interval, connectivity_matrix, components_list)
 
         # initialize parameters
@@ -92,8 +92,10 @@ class SimulationEnvironment(object):
         self._observation_history = []
         self._broadcasts_history = []
 
-        self._current_connectivity_interval, self._current_connectivity_matrix, self._current_connectivity_components\
+        self._current_connectivity_interval, self._current_connectivity_matrix, \
+            self._current_connectivity_components, self._current_connectivity_map \
             = self.__get_agent_connectivity(t=0.0) # serve as references for connectivity at current time
+        
 
     """
     ----------------------
@@ -107,29 +109,176 @@ class SimulationEnvironment(object):
         if t not in self._current_connectivity_interval:
             # update current connectivity matrix and components
             self._current_connectivity_interval, self._current_connectivity_matrix, \
-                self._current_connectivity_components = self.__get_agent_connectivity(t)
+                self._current_connectivity_components, self._current_connectivity_map \
+                    = self.__get_agent_connectivity(t)
         
         # INSERT ADDITIONAL ENVIRONMENT UPDATE LOGIC HERE
 
         # end
         return 
     
-    def update_agent_states(self, 
+    def update_agents(self, 
                             state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
-                            t : float) -> Dict[str, List]:
+                            t_curr : float) -> Dict[str, List]:
         """Updates agent states based on the provided actions at time `t` """
-        # initiate state updates
-        senses : Dict[str, List] = defaultdict(list)
+        # initialize agent update storage
+        states = dict()
+        actions = dict()
+        action_statuses = dict()
+        msgs : Dict[str, List] = defaultdict(list)
+        observations : dict[str, List] = defaultdict(list)
         
         # iterate through each agent state-action pair
-        for agent_id, (state, action) in state_action_pairs.items():
-            # udpate agent state
-            state.update(t)
-            pass
+        for agent_name, (state, action) in state_action_pairs.items():            
+            # handle action 
+            updated_state, updated_action_status, msgs_out, agent_observations \
+                = self.__handle_agent_action(state, action, t_curr)
 
+            # store updated state and action status
+            states[agent_name] = updated_state
+            actions[agent_name] = action
+            action_statuses[agent_name] = updated_action_status
+            
+            # store outgoing messages depending on current connectivity
+            for msg in msgs_out:
+                # determine recipients based on current connectivity
+                for receiver in self._current_connectivity_map[agent_name]:
+                    # add message to receiver's inbox
+                    msgs[receiver].append(msg)                  
+
+            # store observations
+            if agent_observations:
+                observations[agent_name].append(agent_observations)
+
+        # compile senses per agent
+        senses : Dict[str, tuple] = dict()
+        for agent_name in states.keys():
+            senses[agent_name] = (
+                states[agent_name],
+                actions[agent_name],
+                action_statuses[agent_name],
+                msgs[agent_name],
+                observations.get(agent_name, [])
+            )
 
         # return compiled senses
         return senses
+
+    def __handle_agent_action(self, 
+                              state : SimulationAgentState, 
+                              action : AgentAction, 
+                              t_curr : float
+                            ) -> Tuple[SimulationAgentState, AgentAction, List[SimulationMessage], List[dict]]:
+        """ Handles the effects of an agent action on the environment """
+        if action is None:
+            # no action; idle by default
+            state.update(t_curr, status=SimulationAgentState.IDLING)
+            return state, ActionStatuses.COMPLETED.value, [], {}
+
+        # check action start and end times
+        if (action.t_start - t_curr) > 1e-6:
+            raise RuntimeError(f"agent {state.agent_name} attempted to perform action of type {action.action_type} before it started (start time {action.t_start}[s]) at time {t_curr}[s]")
+        if (action.t_end - t_curr) < -1e-6:
+            raise RuntimeError(f"agent {state.agent_name} attempted to perform action of type {action.action_type} after it ended (start/end times {action.t_start}[s], {action.t_end}[s]) at time {t_curr}[s]")
+        
+        # handle action by type
+        if (action.action_type == ActionTypes.IDLE.value         
+            or action.action_type == ActionTypes.TRAVEL.value
+            or action.action_type == ActionTypes.MANEUVER.value): 
+            # perform state-updating action
+            return self.perform_state_action(state, action, t_curr)
+
+        elif action.action_type == ActionTypes.BROADCAST.value:
+            # perform message broadcast
+            return self.perform_broadcast(state, action, t_curr)
+
+        elif action.action_type == ActionTypes.OBSERVE.value:                              
+            # perform observation
+            return self.perform_observation(state, action, t_curr)
+        
+        elif action.action_type == ActionTypes.WAIT.value:
+            # wait for incoming messages
+            return self.perform_wait(state, action, t_curr)
+        
+        # unknown action type; raise error
+        raise ValueError(f"Unknown action type {action.action_type} for agent {state.agent_name}")
+        
+
+    def perform_state_action(self,
+                             state : SimulationAgentState,
+                             action : AgentAction,
+                             t_curr : float) -> Tuple[SimulationAgentState, str, list, list]:
+        """ Performs the given action on the agent state at time `t_curr` """
+        # update agent state
+        action.status,_ = state.perform_action(action, t_curr)
+
+        # return updated state
+        return state, action.status, [], []
+
+    def perform_broadcast(self, 
+                          state : SimulationAgentState,
+                          action : BroadcastMessageAction, 
+                          t_curr : float
+                        ) -> Tuple[SimulationAgentState, str, list, list]:
+        """ Performs a message broadcast action """
+        # extract message from action
+        msg_out : SimulationMessage = message_from_dict(**action.msg)
+
+        # mark state status as messaging
+        state.update(t_curr, status=SimulationAgentState.MESSAGING)
+
+        # log broadcast event
+        return state, ActionStatuses.COMPLETED.value, [msg_out], []
+    
+    def perform_observation(self, 
+                            state : SimulationAgentState,
+                            action : ObservationAction, 
+                            t_curr : float
+                        ) -> Tuple[SimulationAgentState, str, list, list]:
+        """ Performs an observation action """
+        # TODO handle observation action parameters
+        # RETURN list of (instrument,observation_data) tuples for observations
+        raise NotImplementedError("Observation action handling not yet implemented.")
+                
+        # own_observations : list[tuple] = [(msg.instrument['name'], msg.observation_data) 
+        #                                   for msg in incoming_messages 
+        #                                   if isinstance(msg, ObservationResultsMessage)
+        #                                   and isinstance(msg.instrument, dict)]
+
+        # simulate observation data collection
+        # obs_data : dict = {
+        #     'observation': f"Data collected by {state.agent_name} at time {t_curr}[s]"
+        # }
+
+        # # mark state status as measuring
+        # state.update(t_curr, status=SimulationAgentState.MEASURING)
+
+        # # log observation event
+        # return state, ActionStatuses.COMPLETED.value, [], obs_data
+    
+    def perform_wait(self, 
+                     state : SimulationAgentState,
+                     action : WaitAction, 
+                     t_curr : float
+                    ) -> Tuple[SimulationAgentState, str, list, list]:
+        """ Performs a wait action for incoming messages """
+        
+        # update state
+        state.update(t_curr, status=SimulationAgentState.WAITING)
+        
+        # check if task was completed
+        completed = t_curr > action.t_end or abs(t_curr - action.t_end) < 1e-6
+
+        # use completion to determine action status 
+        status = ActionStatuses.COMPLETED.value if completed else ActionStatuses.ABORTED.value
+
+        return state, status, [], []
+    
+    """
+    ----------------------
+    ORBITDATA QUERY METHODS
+    ----------------------
+    """
 
     """
     ----------------------
@@ -139,6 +288,25 @@ class SimulationEnvironment(object):
     def print_results(self) -> str:
         # TODO 
         ...
+
+    def __print_connectivity_matrix(self, conn_matrix : Dict[str, Dict[str, int]]) -> None:
+        """ Prints connectivity matrix to console """
+        agent_names = list(conn_matrix.keys())
+        header = "\t\t" + "  ".join([f"{name:>5}" for name in agent_names])
+        print(header)
+        for sender in agent_names:
+            row = f"{sender:>5}\t"
+            if len(sender) < 8:
+                row += "\t"
+            for receiver in agent_names:
+                row += f"{conn_matrix[sender][receiver]:>3}\t"
+            print(row)
+
+    def __print_connected_components(self, components : List[Set[str]]) -> None:
+        """ Prints connected components to console """
+        print("Connected Components:")
+        for i,comp in enumerate(sorted(components)):
+            print(f" - Component {i}: " + ", ".join(comp))
 
     """
     ---------------------------
@@ -201,12 +369,7 @@ class SimulationEnvironment(object):
                 if evt[0] < interval.left:
                     high = mid - 1
                 else:
-                    low = mid + 1
-
-            # for interval,interval_events in events_per_interval.items():
-            #     if evt[0] in interval:
-            #         interval_events.append(evt)
-            #         break            
+                    low = mid + 1  
         
         # initialize interval-connectivity list
         interval_connectivities : List[tuple] = []
@@ -228,8 +391,19 @@ class SimulationEnvironment(object):
             # create component list from connectivity matrix
             interval_components = SimulationEnvironment.get_connected_components(interval_connectivity_matrix)
 
+            # convert components to dict for easier lookup
+            interval_component_map : Dict[str, List[str]] \
+                = { sender : [] for sender in interval_connectivity_matrix.keys() }
+
+            for component in interval_components:
+                for sender in component:
+                    for receiver in component:
+                        if sender != receiver:
+                            interval_component_map[sender].append(receiver)
+
             # store interval connectivity data
-            interval_connectivities.append( (interval, interval_connectivity_matrix, interval_components) )
+            interval_connectivities.append( (interval, interval_connectivity_matrix, 
+                                             interval_components, interval_component_map) )
 
             # set previous connectivity to current for next iteration
             prev_connectivity_matrix = interval_connectivity_matrix
@@ -306,11 +480,11 @@ class SimulationEnvironment(object):
             mid = (low + high) // 2
 
             # unpack interval data
-            interval, connectivity, components \
+            interval, connectivity, components, components_map \
                 = self.__interval_connectivities[mid]
 
             # return if time t is in the interval
-            if t in interval: return interval, connectivity, components
+            if t in interval: return interval, connectivity, components, components_map
             
             # if not, adjust search bounds
             if t < interval.left:

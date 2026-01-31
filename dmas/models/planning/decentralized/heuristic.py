@@ -118,7 +118,7 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
         else:
             # no prior observation exists; compare with current state
             th_prev = state.attitude[0]
-            t_prev = state.t
+            t_prev = state._t
             d_prev = 0.0
         
         # get next earliest scheduled observation

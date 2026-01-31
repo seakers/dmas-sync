@@ -46,13 +46,13 @@ class WorkerPlanner(AbstractPeriodicPlanner):
                                        for action in self.plan_message.plan]
         
         # only keep actions that start after the current time
-        actions = [action for action in actions if action.t_start >= state.t]
+        actions = [action for action in actions if action.t_start >= state._t]
 
         # DEBUG SECTION -----
         observations = sorted([action for action in actions if isinstance(action, ObservationAction)], key=lambda a: a.t_start)
         if observations:
             dth = abs(observations[0].look_angle - state.attitude[0])
-            dt = observations[0].t_start - state.t
+            dt = observations[0].t_start - state._t
             if dt <= dth + 1e-3:
                 # f"Observation angle {dth} must be less than or equal to time difference {dt}"
                 x = 1

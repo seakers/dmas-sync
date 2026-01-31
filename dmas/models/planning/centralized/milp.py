@@ -133,10 +133,10 @@ class DealerMILPPlanner(DealerPlanner):
                                                 for task_idx,_ in enumerate(schedulable_client_tasks[client])]
         
         # Initialize constants
-        t_start   = [[task.accessibility.left-state.t 
+        t_start   = [[task.accessibility.left-state._t 
                               for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
                               for client in indexed_clients]
-        t_end     = [[task.accessibility.right-state.t 
+        t_end     = [[task.accessibility.right-state._t 
                               for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
                               for client in indexed_clients]
         d         = [[task.min_duration 
@@ -203,8 +203,8 @@ class DealerMILPPlanner(DealerPlanner):
         # generate and return dummy task
         return ObservationOpportunity(set(),                                                   # empty set of parent tasks
                                             instrument,                                         # some default instrument
-                                            Interval(self.client_states[client].t,
-                                                     self.client_states[client].t),             # accessibility set to current time only
+                                            Interval(self.client_states[client]._t,
+                                                     self.client_states[client]._t),             # accessibility set to current time only
                                             0.0,                                                # zero duration
                                             Interval(self.client_states[client].attitude[0],
                                                      self.client_states[client].attitude[0]))   # set slew angle to current attitude angle
@@ -364,7 +364,7 @@ class DealerMILPPlanner(DealerPlanner):
         y_array = [[int(y[s,j].X) 
                              for j,_ in enumerate(schedulable_tasks[client])] 
                             for s,client in enumerate(indexed_clients)]
-        t_array = [[float(t[s,j].X)+state.t 
+        t_array = [[float(t[s,j].X)+state._t 
                              for j,_ in enumerate(schedulable_tasks[client])] 
                             for s,client in enumerate(indexed_clients)]
 
@@ -482,7 +482,7 @@ class DealerMILPPlanner(DealerPlanner):
         y_array = [[int(y[s,j].X) 
                         for j,_ in enumerate(schedulable_tasks[client])] 
                     for s,client in enumerate(indexed_clients)]
-        t_array = [[float(t[s,j].X)+state.t 
+        t_array = [[float(t[s,j].X)+state._t 
                         for j,_ in enumerate(schedulable_tasks[client])] 
                     for s,client in enumerate(indexed_clients)]
         z_array = [[[int(z[s,j,j_p].X) if (s,j,j_p) in z.keys() else 0

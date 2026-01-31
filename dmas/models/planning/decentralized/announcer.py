@@ -82,13 +82,13 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         # currently assumes omnidirectional antennas
 
         # generate plan from actions
-        self.plan : PeriodicPlan = PeriodicPlan(broadcasts, t=state.t, horizon=self.horizon, t_next=state.t+self.period)    
+        self.plan : PeriodicPlan = PeriodicPlan(broadcasts, t=state._t, horizon=self.horizon, t_next=state._t+self.period)    
         
         # wait for next planning period to start
-        replan : list = self._schedule_periodic_replan(state, self.plan, state.t + self.period)
+        replan : list = self._schedule_periodic_replan(state, self.plan, state._t + self.period)
         
         # add replan actions to plan
-        self.plan.add_all(replan, t=state.t)
+        self.plan.add_all(replan, t=state._t)
 
         # return plan and save local copy
         return self.plan.copy()
@@ -103,7 +103,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
 
         # get list of future events
         future_events : List[GeophysicalEvent] = [event for event in tqdm(self.events, desc=f'{state.agent_name}-PREPLANNER: Collecting future events', leave=False) 
-                                                  if event.is_available(state.t)]
+                                                  if event.is_available(state._t)]
 
         # create requests for each event
         task_requests : List[Tuple[GeophysicalEvent, TaskRequest]] = []
@@ -138,13 +138,13 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
 
         # get all future access times within planning horizon
         for target in orbitdata.comms_links.keys():
-            access_intervals : List[Interval] = orbitdata.get_next_agent_accesses(target, state.t, include_current=True)
+            access_intervals : List[Interval] = orbitdata.get_next_agent_accesses(target, state._t, include_current=True)
             t_access_starts.update([access.left for access in access_intervals if not access.is_empty()])
 
         # check if no comms links are available
         if len(orbitdata.comms_links.keys()) == 0: 
             # set broadcast time to immediate if no comms links available
-            t_access_starts.add(state.t)
+            t_access_starts.add(state._t)
 
         # create broadcasts for each request
         for event,task_req,task_request_msg in tqdm(task_requests, 

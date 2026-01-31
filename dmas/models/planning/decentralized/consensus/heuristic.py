@@ -154,11 +154,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         cross_track_fovs : dict = self._collect_fov_specs(specs)
 
         # Outline planning horizon interval
-        t_next = max(self.preplan.t + self.preplan.horizon, state.t)
-        planning_horizon = Interval(state.t, t_next)
+        t_next = max(self.preplan.t + self.preplan.horizon, state._t)
+        planning_horizon = Interval(state._t, t_next)
         
         # check if observation opportunities need to be created/recreated
-        if self.__need_to_create_observation_opportunities(state, planning_horizon, state.t):
+        if self.__need_to_create_observation_opportunities(state, planning_horizon, state._t):
             # calculate observation opportunities
             self.observation_opportunities : List[ObservationOpportunity] \
                 = self.__calc_observation_opportunities(state, tasks, planning_horizon, cross_track_fovs, orbitdata)
@@ -544,7 +544,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         # observation was modified; update bids
                         updated_proposed_bids[task][n_obs] = best_bids[obs][task].copy()
 
-                        assert abs(updated_proposed_bids[task][n_obs].t_bid - state.t) < self.EPS, \
+                        assert abs(updated_proposed_bids[task][n_obs].t_bid - state._t) < self.EPS, \
                             "Bid time in updated proposed bids does not match current state time."
                     else:
                         # observation was not modified; retain existing proposed bids
@@ -662,7 +662,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                            if obs is not None], key=lambda obs: obs.t_start)
 
         # set current state as a dummy previous observation
-        obs_prev = ObservationAction(new_obs.instrument_name,  state.attitude[0], state.t)
+        obs_prev = ObservationAction(new_obs.instrument_name,  state.attitude[0], state._t)
 
         # check if gaps between observations can accommodate new task
         for obs_next in conflicting_observations: 
@@ -707,7 +707,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             m = abs(th_img - state.attitude[0]) / max_slew_rate
             
             # schedule at earliest maneuverable observation time
-            t_img = max(new_obs.accessibility.left, state.t + m)
+            t_img = max(new_obs.accessibility.left, state._t + m)
 
             # check observation time feasibility
             if t_img not in new_obs.accessibility or t_img + new_obs.min_duration not in new_obs.accessibility:
@@ -753,7 +753,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     if action.t_start <= new_obs.accessibility.right]
 
         # add a dummy observation at the initial state
-        preceeding_observations.insert(0, (-1, ObservationAction(new_obs.instrument_name, state.attitude[0], state.t)))
+        preceeding_observations.insert(0, (-1, ObservationAction(new_obs.instrument_name, state.attitude[0], state._t)))
 
         # initialize feasible path insertion index and observation time
         i_insert, t_img = None, None
@@ -882,7 +882,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # get preceeding observation action
             if conflict_idx == 0:
                 # set previous observation as dummy action at current state
-                obs_prev = ObservationAction(new_task.instrument_name, state.attitude[0], state.t)
+                obs_prev = ObservationAction(new_task.instrument_name, state.attitude[0], state._t)
             else:
                 # select previous observation from path
                 obs_prev = new_path[conflict_idx-1]
@@ -1202,7 +1202,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         "Previous observation time is not defined for observation number greater than zero."
 
                     # generate new bids for this observation if it is part of path changes
-                    new_bid = Bid(task, state.agent_name, n_obs, val, val, state.agent_name, t_img, state.t, None, obs.instrument_name)
+                    new_bid = Bid(task, state.agent_name, n_obs, val, val, state.agent_name, t_img, state._t, None, obs.instrument_name)
                     new_bids[obs.obs_opp][task] = new_bid
 
                     # assign best observation number and previous observation time

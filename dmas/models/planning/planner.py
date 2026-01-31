@@ -887,7 +887,7 @@ class AbstractPlanner(ABC):
             raise NotImplementedError(f'Broadcast routing path not yet supported for agents of type `{type(state)}`')
         
         # get earliest desired broadcast time 
-        t_init = state.t if t_init is None or t_init < state.t else t_init
+        t_init = state._t if t_init is None or t_init < state._t else t_init
 
         # populate list of all agents except the parent agent
         target_agents = [target_agent 
@@ -944,7 +944,7 @@ class AbstractPlanner(ABC):
                                     and receiver_agent != state.agent_name
                                     ]:
                 # query next access interval to children nodes
-                t_access : float = state.t + path_cost
+                t_access : float = state._t + path_cost
 
                 access_interval : Interval = orbitdata.get_next_agent_access(receiver_agent, t_access)
                 
@@ -952,15 +952,15 @@ class AbstractPlanner(ABC):
                     new_path = [path_element for path_element in current_path]
                     new_path.append(receiver_agent)
 
-                    new_cost = access_interval.left - state.t
+                    new_cost = access_interval.left - state._t
 
                     new_times = [path_time for path_time in current_times]
-                    new_times.append(new_cost + state.t)
+                    new_times.append(new_cost + state._t)
 
                     q.put((receiver_agent, new_path, new_times, new_cost))
 
         # check if earliest broadcast time is valid
-        if min_times: assert state.t <= min_times[0]
+        if min_times: assert state._t <= min_times[0]
 
         # return path and broadcast start time
         return (min_path, min_times[0]) if min_path else ([], np.Inf)
@@ -1031,7 +1031,7 @@ class AbstractPlanner(ABC):
 
             # estimate previous state
             if i == 0:
-                t_prev = state.t
+                t_prev = state._t
                 prev_state : SatelliteAgentState = state.copy()
                 
             else:
@@ -1045,7 +1045,7 @@ class AbstractPlanner(ABC):
                 prev_state : SatelliteAgentState
                 
                 dth_req = abs(curr_observation.look_angle - prev_state.attitude[0])
-                dth_max = (curr_observation.t_start - prev_state.t) * max_slew_rate
+                dth_max = (curr_observation.t_start - prev_state._t) * max_slew_rate
 
                 if dth_req > dth_max and abs(dth_req - dth_max) >= 1e-6: 
                     # maneuver impossible within timeframe
@@ -1219,7 +1219,7 @@ class AbstractPlanner(ABC):
                     else: # there was no prior measurement
                         # use agent's current state as previous state
                         th_i = state.attitude[0]
-                        t_i = state.t
+                        t_i = state._t
                         d_i = 0.0
 
                     observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate))

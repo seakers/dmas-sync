@@ -51,9 +51,9 @@ class ObservationHistory:
         """
         Class to track the observation history of the agent.
         """
-        self.history = {}
-        self.grid_lookup = {}
-
+        self.history : dict[int, dict[int, ObservationTracker]] = {}
+        self.grid_lookup : dict[tuple, tuple] = {}
+    
         for gp_index in range(len(orbitdata.grid_data)):
             grid : pd.DataFrame = orbitdata.grid_data[gp_index]
             

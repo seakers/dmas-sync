@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from typing import Union
 from enum import Enum
-from dmas.models.actions import AgentAction, IdleAction, TravelAction, ManeuverAction
+from dmas.models.actions import ActionStatuses, AgentAction, IdleAction, TravelAction, ManeuverAction
 from orbitpy.util import OrbitState
 import propcov
 
@@ -61,15 +61,12 @@ class SimulationAgentState(AbstractAgentState):
     """
     Describes the state of a 3D-CHESS agent
     """
-    
+    WAITING = 'WAITING'
     IDLING = 'IDLING'
-    MESSAGING = 'MESSAGING'
     TRAVELING = 'TRAVELING'
+    MESSAGING = 'MESSAGING'
     MANEUVERING = 'MANEUVERING'
     MEASURING = 'MEASURING'
-    SENSING = 'SENSING'
-    THINKING = 'THINKING'
-    LISTENING = 'LISTENING'
 
     def __init__(   self, 
                     agent_name : str,
@@ -96,14 +93,14 @@ class SimulationAgentState(AbstractAgentState):
         self.attitude : list = attitude
         self.attitude_rates : list = attitude_rates
         self.status : str = status
-        self.t : float = t
+        self._t : float = t
 
     def update(   self, 
-                        t : Union[int, float], 
-                        status : str = None, 
-                        state : dict = None) -> None:
+                    t : Union[int, float], 
+                    status : str = None, 
+                    state : dict = None) -> None:
 
-        if t - self.t >= 0:
+        if t - self._t >= 0:
             # update position and velocity
             if state is None:
                 self.pos, self.vel, self.attitude, self.attitude_rates = self.kinematic_model(t)
@@ -114,7 +111,7 @@ class SimulationAgentState(AbstractAgentState):
                 self.attitude_rates = state['attitude_rates']
 
             # update time and status
-            self.t = t 
+            self._t = t 
             self.status = status if status is not None else self.status
         
     def propagate(self, tf : Union[int, float]) -> tuple:
@@ -129,9 +126,10 @@ class SimulationAgentState(AbstractAgentState):
         """
         propagated : SimulationAgentState = self.copy()
         
-        propagated.pos, propagated.vel, propagated.attitude, propagated.attitude_rates = propagated.kinematic_model(tf)
+        propagated.pos, propagated.vel, \
+            propagated.attitude, propagated.attitude_rates = propagated.kinematic_model(tf)
 
-        propagated.t = tf
+        propagated._t = tf
 
         return propagated
 
@@ -164,10 +162,10 @@ class SimulationAgentState(AbstractAgentState):
             self.update(t, status=self.IDLING)
             if action.t_end > t:
                 dt = action.t_end - t
-                status = action.PENDING
+                status = ActionStatuses.PENDING.value
             else:
                 dt = 0.0
-                status = action.COMPLETED
+                status = ActionStatuses.COMPLETED.value
             return status, dt
 
         elif isinstance(action, TravelAction):
@@ -176,7 +174,7 @@ class SimulationAgentState(AbstractAgentState):
         elif isinstance(action, ManeuverAction):
             return self.perform_maneuver(action, t)
         
-        return action.ABORTED, 0.0
+        return ActionStatuses.ABORTED.value, 0.0
 
     def comp_vectors(self, v1 : list, v2 : list, eps : float = 1e-6):
         """
@@ -219,9 +217,10 @@ class SimulationAgentState(AbstractAgentState):
             - dt (`float`): time to be waited by the agent
         """
         pass
-
+    
+    @abstractmethod
     def __repr__(self) -> str:
-        return str(self.to_dict())
+        """ Creates a string representing the contents of this agent state """
 
     def __str__(self):
         return str(dict(self.__dict__))
@@ -242,6 +241,12 @@ class SimulationAgentState(AbstractAgentState):
         #     return UAVAgentState(**d)
         else:
             raise NotImplementedError(f"Agent states of type {d['state_type']} not yet supported.")
+        
+    def get_time(self) -> float:
+        """
+        Returns the current time of the agent state
+        """
+        return self._t
 
 class GroundOperatorAgentState(SimulationAgentState):
     """
@@ -283,11 +288,14 @@ class GroundOperatorAgentState(SimulationAgentState):
 
     def perform_travel(self, action: TravelAction, _: Union[int, float]) -> tuple:
         # agent cannot travel
-        return action.FAILED, 0.0 # ground operators cannot displace
+        return ActionStatuses.FAILED.value, 0.0 # ground operators cannot displace
 
     def perform_maneuver(self, action: ManeuverAction, _: Union[int, float]) -> tuple:
         # agent cannot maneuver
-        return action.FAILED, 0.0 # ground operators cannot perform maneuvers
+        return ActionStatuses.FAILED.value, 0.0 # ground operators cannot perform maneuvers
+    
+    def __repr__(self):
+        return f"GroundOperatorAgentState(agent_name={self.agent_name}, status={self.status}, t={round(self._t,3)})"
 
 class GroundSensorAgentState(SimulationAgentState):
     """
@@ -369,11 +377,14 @@ class GroundSensorAgentState(SimulationAgentState):
 
     def perform_travel(self, action: TravelAction, _: Union[int, float]) -> tuple:
         # agent cannot travel
-        return action.FAILED, 0.0 # ground sensors cannot displace
+        return ActionStatuses.FAILED.value, 0.0 # ground sensors cannot displace
 
     def perform_maneuver(self, action: ManeuverAction, _: Union[int, float]) -> tuple:
         # agent cannot maneuver
-        return action.FAILED, 0.0 # ground sensors cannot perform maneuvers
+        return ActionStatuses.FAILED.value, 0.0 # ground sensors cannot perform maneuvers
+    
+    def __repr__(self):
+        return f"GroundSensorAgentState(agent_name={self.agent_name}, status={self.status}, t={round(self._t,3)})"
 
 class SatelliteAgentState(SimulationAgentState):
     """
@@ -434,7 +445,7 @@ class SatelliteAgentState(SimulationAgentState):
 
     def kinematic_model(self, tf: Union[int, float], update_keplerian : bool = True) -> tuple:
         # propagates orbit
-        dt = tf - self.t
+        dt = tf - self._t
         if abs(dt) < 1e-6:
             return self.pos, self.vel, self.attitude, self.attitude_rates
 
@@ -500,16 +511,16 @@ class SatelliteAgentState(SimulationAgentState):
         self.update(t, status=self.TRAVELING)
 
         # check if position was reached
-        if self.comp_vectors(self.pos, action.final_pos) or t >= action.t_end:
+        if self.comp_vectors(self.pos, action.final_pos) or t >= action.t_end - self.eps:
             # if reached, return successful completion status
-            return action.COMPLETED, 0.0
+            return ActionStatuses.COMPLETED.value, 0.0
         else:
             # else, wait until position is reached
             if action.t_end == np.Inf:
                 dt = self.time_step if self.time_step else 60.0
             else:
                 dt = action.t_end - t
-            return action.PENDING, dt
+            return ActionStatuses.PENDING.value, dt
 
     def perform_maneuver(self, action: ManeuverAction, t: Union[int, float]) -> tuple:
         # update state
@@ -518,12 +529,12 @@ class SatelliteAgentState(SimulationAgentState):
         if self.comp_vectors(self.attitude, action.final_attitude, eps = 1e-6):
             # if reached, return successful completion status
             self.attitude_rates = [0,0,0]
-            return action.COMPLETED, 0.0
+            return ActionStatuses.COMPLETED.value, 0.0
         
-        elif t >= action.t_end:
+        elif t > action.t_end + self.eps:
             # could not complete action before action end time
             self.attitude_rates = [0,0,0]
-            return action.ABORTED, 0.0
+            return ActionStatuses.ABORTED.value, 0.0
 
         else:
             # update attitude angular rates
@@ -536,16 +547,13 @@ class SatelliteAgentState(SimulationAgentState):
                 dt = (action.final_attitude[i] - self.attitude[i]) / self.attitude_rates[i] if self.attitude_rates[i] > 1e-3 else np.NAN
                 dts.append(dt)
 
-            if not dts:
-                x = 1
-
             dt_maneuver = min(dts)
             
             assert dt_maneuver >= 0.0, \
                 f"negative time-step of {dt_maneuver} [s] for attitude maneuver."
 
             # return status
-            return action.PENDING, dt_maneuver
+            return ActionStatuses.PENDING.value, dt_maneuver
             
     def __calc_eps(self, init_pos : list):
         """
@@ -604,26 +612,9 @@ class SatelliteAgentState(SimulationAgentState):
         # print( '\n\n', v1, v2, dv, self.eps, dv < self.eps, '\n')
 
         return dv < eps
-
-    def calc_maneuver_duration(self, final_state : AbstractAgentState) -> float:
-        """ 
-        Estimates the time required to perform a maneuver from the current state to a desired final state
-
-        Returns `None` if the maneuver is unfeasible.
-        
-        """
-        if self.t > final_state.t:
-            # cannot maneuver into a previous time
-            return None
-
-        # compute off-nadir angle
-        dth = abs(final_state.attitude[0] - self.attitude[0])
-
-        # estimate maneuver duration
-        dt = dth / self.max_slew_rate # TODO fix to non-fixed slew maneuver
-
-        # check feasibility
-        return dt if self.t + dt <= final_state else None
+    
+    def __repr__(self):
+        return f"SatelliteAgentState(agent_name={self.agent_name}, status={self.status}, t={round(self._t,3)})"
 
 class UAVAgentState(SimulationAgentState):
     """
@@ -652,7 +643,7 @@ class UAVAgentState(SimulationAgentState):
         self.eps = eps        
 
     def kinematic_model(self, tf: Union[int, float]) -> tuple:
-        dt = tf - self.t
+        dt = tf - self._t
 
         if dt < 0:
             raise RuntimeError(f"cannot propagate UAV state with non-negative time-step of {dt} [s].")
@@ -667,8 +658,8 @@ class UAVAgentState(SimulationAgentState):
         return pos, self.vel.copy(), self.attitude, self.attitude_rates
 
     def perform_travel(self, action: TravelAction, t: Union[int, float]) -> tuple:
-        
-        dt = t - self.t
+        # calculate time step
+        dt = t - self._t
 
         # update state
         self.update(t, status=self.TRAVELING)
@@ -677,12 +668,12 @@ class UAVAgentState(SimulationAgentState):
         if self.comp_vectors(self.pos, action.final_pos, self.eps):
             # if reached, return successful completion status
             self.vel = [0.0,0.0,0.0]
-            return action.COMPLETED, 0.0
+            return ActionStatuses.COMPLETED.value, 0.0
         
-        elif t > action.t_end:
+        elif t > action.t_end - self.eps:
             # could not complete action before action end time
             self.vel = [0.0,0.0,0.0]
-            return action.ABORTED, 0.0
+            return ActionStatuses.ABORTED.value, 0.0
 
         # else, wait until position is reached
         else:
@@ -707,14 +698,14 @@ class UAVAgentState(SimulationAgentState):
 
             dt = min(action.t_end - t, norm / self.max_speed)
 
-            return action.PENDING, dt
+            return ActionStatuses.PENDING.value, dt
 
     def perform_maneuver(self, action: ManeuverAction, t: Union[int, float]) -> tuple:
         # update state
         self.update(t, status=self.MANEUVERING)
 
         # Cannot perform maneuvers
-        return action.ABORTED, 0.0
+        return ActionStatuses.ABORTED.value, 0.0
 
     def is_failure(self) -> None:
         return False
