@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from dmas.core.orbitdata import OrbitData
 
 class ObservationTracker:
@@ -64,7 +65,7 @@ class ObservationHistory:
         cols = ["lat [deg]", "lon [deg]", "grid index", "GP index"]
 
         # parse through the grid data
-        for df in orbitdata.grid_data:
+        for df in tqdm(orbitdata.grid_data, desc="Initializing Observation History", unit=" gp", leave=False):
             # get unique grid points
             sub : pd.DataFrame = df[cols].drop_duplicates(subset=["grid index", "GP index"])
 
@@ -95,7 +96,6 @@ class ObservationHistory:
                 
                 tracker : ObservationTracker = self.trackers[(grid_index, gp_index)]
                 tracker.update(observation)
-
 
     def get_observation_history(self, grid_index : int, gp_index : int) -> ObservationTracker:
         key = (grid_index, gp_index)

@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from enum import Enum
 from typing import Any, Callable, Dict, Union
 
@@ -7,13 +6,29 @@ import numpy as np
 from execsatm.tasks import GenericObservationTask
 
 
+REQUIRED_KEYS = ['task', 'n_obs', 
+                 'owner', 'owner_bid', 
+                 'winner', 'winning_bid', 't_img', 't_bid', 't_stamps', "main_measurement",
+                 'performed']
+
 def bid_comparison_input_checks( func : Callable ) -> Callable:
     """ Decorator to validate inputs for bid comparison methods """
     def checker(self, other : object, *args) -> Any:
         # validate inputs
-        assert isinstance(self, Bid) and isinstance(other, Bid), f'can only compare bids to other bids.'
-        assert self.task == other.task, f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other.task.id})'
-        assert self.n_obs == other.n_obs, f'cannot compare bids intended for different image numbers (expected image number: {self.n_obs}, given image number: {other.n_obs})'
+        assert isinstance(self, Bid) and isinstance(other, (Bid,dict)), \
+            f'can only compare bids to other bids or dictionary representation of bids.'
+        
+        if isinstance(other, dict):
+            # ensure all required keys are present
+            assert all(key in other for key in REQUIRED_KEYS), \
+                f'Bid dictionary is missing required keys. Required keys: {REQUIRED_KEYS}'
+            assert self.task.to_dict() == other['task'], \
+                f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other["task"]["id"]})'
+            assert self.n_obs == other['n_obs'], \
+                f'cannot compare bids intended for different image numbers (expected image number: {self.n_obs}, given image number: {other["n_obs"]})'
+        else:
+            assert self.task == other.task, f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other.task.id})'
+            assert self.n_obs == other.n_obs, f'cannot compare bids intended for different image numbers (expected image number: {self.n_obs}, given image number: {other.n_obs})'
 
         # perform comparison
         return func(self, other, *args)
@@ -120,31 +135,7 @@ class Bid:
         out = dict(self.__dict__)
         out['task'] = self.task.to_dict()   
         out['t_stamps'] = {key : val for key, val in self.t_stamps.items()}
-        return out
-    
-        # try:
-        #     bid_dict = {
-        #         'task': self.task.to_dict(),
-        #         'owner': self.owner,
-        #         'n_obs': self.n_obs,
-        #         'owner_bid': self.owner_bid,
-        #         'winning_bid': self.winning_bid,
-        #         'winner': self.winner,
-        #         't_img': self.t_img,
-        #         't_bid': self.t_bid,
-        #         't_stamps': {key : val for key, val in self.t_stamps.items()},
-        #         'main_measurement': self.main_measurement,
-        #         'performed': self.performed
-        #     }
-        #     return bid_dict
-        # finally:
-        #     # check if all required keys are present
-        #     required_keys = ['task', 'main_measurement', 'owner', 'owner_bid', 
-        #                      'winner', 'winning_bid', 't_img', 'n_obs', 
-        #                      't_bid', 't_stamps', 'performed']
-        #     assert all(key in bid_dict for key in required_keys), \
-        #         f'Bid dictionary is missing required keys. Required keys: {required_keys}'
-            
+        return out            
 
     @classmethod
     def from_dict(cls, bid_dict: dict) -> 'Bid':
@@ -193,74 +184,116 @@ class Bid:
     """
 
     @bid_comparison_input_checks
-    def __lt__(self, other : 'Bid') -> bool:       
+    def __lt__(self, other : Union['Bid', dict]) -> bool:       
         # check if equal
-        if abs(other.winning_bid - self.winning_bid) < self.EPS:
-            # if there's a tie, use tie-breaker        
-            return not self.__wins_tie_breaker(other)
+        if isinstance(other, dict):
+            if abs(other['winning_bid'] - self.winning_bid) < self.EPS:
+                # if there's a tie, use tie-breaker        
+                return not self.__wins_tie_breaker(other)
 
-        # compare bids
-        return other.winning_bid > self.winning_bid
+            # compare bids
+            return other['winning_bid'] > self.winning_bid
+        
+        else:
+            if abs(other.winning_bid - self.winning_bid) < self.EPS:
+                # if there's a tie, use tie-breaker        
+                return not self.__wins_tie_breaker(other)
 
-    @bid_comparison_input_checks
-    def __gt__(self, other : 'Bid') -> bool:
-        # check if equal
-        if abs(other.winning_bid - self.winning_bid) < self.EPS:
-            # if there's a tie, use tie-breaker        
-            return self.__wins_tie_breaker(other)
-
-        # compare bids
-        return other.winning_bid < self.winning_bid
-
-    @bid_comparison_input_checks
-    def __eq__(self, other : 'Bid') -> bool:        
-        # compare bids
-        return abs(other.winning_bid - self.winning_bid) < self.EPS    # same bid value
+            # compare bids
+            return other.winning_bid > self.winning_bid
 
     @bid_comparison_input_checks
-    def __ne__(self, other : 'Bid') -> bool:        
-        # compare bids
-        return abs(other.winning_bid - self.winning_bid) > self.EPS    # different bid value
+    def __gt__(self, other : Union['Bid', dict]) -> bool:
+        if isinstance(other, dict):
+            # check if equal
+            if abs(other['winning_bid'] - self.winning_bid) < self.EPS:
+                # if there's a tie, use tie-breaker        
+                return self.__wins_tie_breaker(other)
+
+            # compare bids
+            return other['winning_bid'] < self.winning_bid
+        else:
+            # check if equal
+            if abs(other.winning_bid - self.winning_bid) < self.EPS:
+                # if there's a tie, use tie-breaker        
+                return self.__wins_tie_breaker(other)
+
+            # compare bids
+            return other.winning_bid < self.winning_bid
 
     @bid_comparison_input_checks
-    def __le__(self, other : 'Bid') -> bool:
+    def __eq__(self, other : Union['Bid', dict]) -> bool:        
         # compare bids
-        return other.winning_bid >= self.winning_bid or abs(other.winning_bid - self.winning_bid) < self.EPS
+        if isinstance(other, dict):
+            return abs(other['winning_bid'] - self.winning_bid) < self.EPS    # same bid value
+        else:
+            return abs(other.winning_bid - self.winning_bid) < self.EPS    # same bid value
+
+    @bid_comparison_input_checks
+    def __ne__(self, other : Union['Bid', dict]) -> bool:        
+        if isinstance(other, dict):
+            # compare bids
+            return abs(other['winning_bid'] - self.winning_bid) > self.EPS    # different bid value
+        else:
+            # compare bids
+            return abs(other.winning_bid - self.winning_bid) > self.EPS    # different bid value
+
+    @bid_comparison_input_checks
+    def __le__(self, other : Union['Bid', dict]) -> bool:
+        # compare bids
+        if isinstance(other, dict):
+            return other['winning_bid'] >= self.winning_bid or abs(other['winning_bid'] - self.winning_bid) < self.EPS
+        else:
+            return other.winning_bid >= self.winning_bid or abs(other.winning_bid - self.winning_bid) < self.EPS
     
     @bid_comparison_input_checks
-    def __ge__(self, other : 'Bid') -> bool:
+    def __ge__(self, other : Union['Bid', dict]) -> bool:
         # compare bids
-        return other.winning_bid <= self.winning_bid or abs(other.winning_bid - self.winning_bid) < self.EPS
+        if isinstance(other, dict):
+            return other['winning_bid'] <= self.winning_bid or abs(other['winning_bid'] - self.winning_bid) < self.EPS
+        else:
+            return other.winning_bid <= self.winning_bid or abs(other.winning_bid - self.winning_bid) < self.EPS
 
-    def __wins_tie_breaker(self, other: 'Bid') -> bool:
+    def __wins_tie_breaker(self, other: Union['Bid', dict]) -> bool:
         """ Returns True if, when bids are tied, we should prefer `self` over `other`. """
         return self is self.__tie_breaker(self, other)
 
-    def __tie_breaker(self, bid1 : 'Bid', bid2 : 'Bid') -> 'Bid':
+    def __tie_breaker(self, bid1 : 'Bid', bid2 : Union['Bid', dict]) -> 'Bid':
         """
         Tie-breaking criteria for determining which bid is GREATER in case winning bids are equal. 
         Uses winning bidder names to determine winner, goes by alphabetical order of winning bidder names.
         """
         # validate inputs
-        assert isinstance(bid1, Bid) and isinstance(bid2, Bid), f'cannot calculate tie breaker. Both objects must be bids.'
+        assert isinstance(bid1, Bid) and isinstance(bid2, (Bid, dict)), f'cannot calculate tie breaker. Both objects must be bids.'
 
-        # compare bids
-        ## Check for NONE winning bidders
-        if bid2.winner == self.NONE and bid1.winner != self.NONE:
-            return bid2
-        elif bid2.winner != self.NONE and bid1.winner == self.NONE:
-            return bid1
-
-        ## Compare bidders alphabetically
-        return min(bid1, bid2, key=lambda b: b.winner)
-
-    def has_different_winner_values(self, other : 'Bid') -> bool:
-        """ Checks if this bid is different from another bid (i.e., any of the winning bid attributes differ) """
+        if isinstance(bid2, dict):
+            # compare bids
+            ## Check for NONE winning bidders
+            if bid2['winner'] == self.NONE and bid1.winner != self.NONE:
+                return bid2
+            elif bid2['winner'] != self.NONE and bid1.winner == self.NONE:
+                return bid1
+            
+            ## Compare bidders alphabetically
+            name_pairs = {bid1.winner : bid1, bid2['winner'] : bid2}
+            min_name = min(name_pairs.keys())
+            return name_pairs[min_name]
         
-        # validate inputs
-        assert isinstance(other, Bid), f'can only compare bids to other bids.'
-        assert self.task == other.task and self.n_obs == other.n_obs, f'can only compare bids for the same task and observation number (expected task id: {self.task.id}, given id: {other.task.id})'
-                
+        else:
+            # compare bids
+            ## Check for NONE winning bidders
+            if bid2.winner == self.NONE and bid1.winner != self.NONE:
+                return bid2
+            elif bid2.winner != self.NONE and bid1.winner == self.NONE:
+                return bid1
+
+            ## Compare bidders alphabetically
+            return min(bid1, bid2, key=lambda b: b.winner)
+
+    @bid_comparison_input_checks
+    def has_different_winner_values(self, other : Union['Bid', dict]) -> bool:
+        """ Checks if this bid is different from another bid (i.e., any of the winning bid attributes differ) """
+                        
         # Compare winning bid information
         if (
             self.winner != other.winner             # different winning bidder
@@ -288,10 +321,10 @@ class Bid:
         - A. Aguilar, D. Fornos, and D. Selva, "Decentralized Task Planning and Scheduling for Multi-Agent Systems under Communication Constraints", IN PREP.
 
     """
-    @abstractmethod
-    def rule_comparison(self, other : 'Bid') -> BidComparisonResults:
+    @bid_comparison_input_checks
+    def rule_comparison(self, other : Union['Bid', dict]) -> BidComparisonResults:
         """ 
-        Compares bid with another and indicates whether the bid shouls be updated, left, or reset.
+        Compares bid with another and indicates whether the bid should be updated, left, or reset.
         Also returns whether the bid should be rebroadcasted to neighboring agents.
 
         ### Arguments:
@@ -302,7 +335,7 @@ class Bid:
         """
         try:
             # convert other bid to `Bid` class type if necessary
-            other : Bid = Bid.from_dict(other) if isinstance(other, dict) else other
+            # other : Bid = Bid.from_dict(other) if isinstance(other, dict) else other
 
             # validate inputs
             assert isinstance(other, Bid), f'can only compare bids to other bids.'
