@@ -1,5 +1,6 @@
 
 from concurrent.futures import ProcessPoolExecutor, as_completed
+import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -317,6 +318,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
 
 def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_segment, task_arrival_rate, target_distribution)
                   cfg: RunConfig,
+                  pbar_pos: int
                 ) -> Dict:
     t0 = time.time()
     scenario_id, num_sats, gnd_segment, task_arrival_rate, target_distribution = trial_row
@@ -350,51 +352,66 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                 "elapsed_s": time.time() - t0,
             }
 
-        # Only initialize/load mission if needed
-        if (not os.path.isfile(results_summary_path)) or cfg.overwrite or cfg.reevaluate:
-            mission: Simulation = Simulation.from_dict(
+        # Verify results_dir exists
+        assert os.path.isdir(results_dir), \
+            f"Results directory not properly initialized at: {results_dir}"
+
+        # define conditions to execute mission
+        execute_conditions = [
+            # there is no results directory generated yet
+            not os.path.isdir(results_dir),
+            any(
+                (   # or one of the agents does not have a results directory
+                    not os.path.isdir(os.path.join(results_dir, d)) or
+                    # or the agent's results directory is incomplete
+                    len(os.listdir(os.path.join(results_dir, d))) <= 2
+                )
+                for d in os.listdir(results_dir)
+                if '.csv' not in d
+            ),
+            # or an overwrite flag was set
+            cfg.overwrite
+        ]
+
+        # execute mission  if any of the conditions are met
+        if any(execute_conditions):
+            # create mission instance
+            mission = Simulation.from_dict(
                 mission_specs,
                 overwrite=cfg.overwrite,
                 level=cfg.level
             )
-        else:
-            # If summary exists and no reevaluate/overwrite, we might still need to verify completeness
-            mission = None
 
-        # Verify results_dir exists
-        assert os.path.isdir(results_dir), f"Results directory not properly initialized at: {results_dir}"
+            # execute mission
+            mission.execute(pbar_pos, pbar_leave=False)
 
-        execute_conditions = [
-            not os.path.isdir(results_dir),
-            any(
-                (len(os.listdir(os.path.join(results_dir, d))) <= 2)
-                for d in os.listdir(results_dir)
-            ),
-            cfg.overwrite
-        ]
-
-        if any(execute_conditions):
-            # if mission wasn't created above (because summary existed), create it now
-            if mission is None:
-                mission = Simulation.from_dict(
-                    mission_specs,
-                    overwrite=cfg.overwrite,
-                    level=cfg.level
-                )
-            mission.execute()
+            # set status
             status = "executed"
         else:
+            # skip execution
+            mission = None
+
+            # set status
             status = "skipped_existing"
 
-        # print results if it hasn't been performed yet or if results need to be reevaluated
-        if not os.path.isfile(results_summary_path) or cfg.reevaluate: 
-            print(' - Printing simulation results...')
-            mission.process_results()
+        # TODO : Re-enable result processing
+        # # print results if it hasn't been performed yet or if results need to be reevaluated
+        # if not os.path.isfile(results_summary_path) or cfg.reevaluate: 
+        #     print(' - Printing simulation results...')
+        #     if mission is None:
+        #         # load mission to process results if not already loaded
+        #         mission = Simulation.from_dict(
+        #                 mission_specs,
+        #                 overwrite=cfg.overwrite,
+        #                 level=cfg.level
+        #             )
+            
+        #     # process results
+        #     mission.process_results()
 
-        # ensure if summary file was properly generated at the end of the simulation
-        assert os.path.isfile(results_summary_path), \
-            f"Results summary file not found at: {results_summary_path}"
-
+        # # ensure if summary file was properly generated at the end of the simulation
+        # assert os.path.isfile(results_summary_path), \
+        #     f"Results summary file not found at: {results_summary_path}"
 
         return {
             "scenario_id": scenario_id,
@@ -419,26 +436,61 @@ def parallel_run_trials(trials_df : pd.DataFrame, cfg: RunConfig, max_workers: i
     trial_rows = list(trials_df.itertuples(index=False, name=None))
 
     if max_workers is None:
-        max_workers = min(os.cpu_count() or 1, 4)
+        max_workers = min(os.cpu_count() or 1, 4, len(trial_rows))
 
     results = []
-    with tqdm(total=len(trial_rows), desc='Performing study', leave=True, mininterval=0.5, unit=' trial') as pbar:
-        with ProcessPoolExecutor(max_workers=max_workers) as ex:
-            fut_map = {ex.submit(run_one_trial, row, cfg): row for row in trial_rows}
+    try:
+        # run trials with progress bar
+        # with tqdm(total=len(trial_rows), desc='Performing study', leave=True, mininterval=0.5, unit=' trial') as pbar:
+        with tqdm(total=len(trial_rows),
+                    desc="Performing study",
+                    leave=True,
+                    mininterval=0.5,
+                    unit=" trial",
+                    dynamic_ncols=True,
+                    file=sys.stderr,
+                    position=0
+                ) as pbar:
+                        
+            # create process pool executor
+            with ProcessPoolExecutor(max_workers=max_workers) as ex:
+                # submit all trials for execution
+                fut_map = {ex.submit(run_one_trial, row, cfg, (i % max_workers) + 1): row for i,row in enumerate(trial_rows)}
 
-            for fut in as_completed(fut_map):
-                row = fut_map[fut]
-                res = fut.result()
-                results.append(res)
+                # collect results as they complete
+                for fut in as_completed(fut_map):
+                    row = fut_map[fut]
+                    res = fut.result()
+                    results.append(res)
 
-                sid = res.get("scenario_id", "???")
-                status = res.get("status")
-                elapsed = res.get("elapsed_s", None)
-                if status == "error":
-                    print(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
-                else:
-                    print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
-                pbar.update(1)
+                    sid = res.get("scenario_id", "???")
+                    status = res.get("status")
+                    elapsed = res.get("elapsed_s", None)
+                    
+                    # if status == "error":
+                    #     print(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                    # else:
+                    #     print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+                    
+                    if status == "error":
+                        tqdm.write(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                    else:
+                        tqdm.write(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+
+                    
+                    pbar.update(1)
+    
+    except KeyboardInterrupt as e:
+        ex.shutdown(wait=False)
+        raise e
+    
+    except Exception as e:
+        ex.shutdown(wait=False)
+        raise e
+
+    finally:
+        # ensure the executor is torn down before exiting scope
+        ex.shutdown(wait=True)
 
     # Optional: sort by scenario_id
     results.sort(key=lambda d: d.get("scenario_id", 0))
@@ -593,14 +645,15 @@ def main(trial_filename : str,
         else:
             print(' - Simulation data found! Skipping execution...')
 
-        # print results if it hasn't been performed yet or if results need to be reevaluated
-        if not os.path.isfile(results_summary_path) or reevaluate: 
-            print(' - Printing simulation results...')
-            mission.process_results()
+        # TODO : Re-enable result processing
+        # # print results if it hasn't been performed yet or if results need to be reevaluated
+        # if not os.path.isfile(results_summary_path) or reevaluate: 
+        #     print(' - Printing simulation results...')
+        #     mission.process_results()
 
-        # ensure if summary file was properly generated at the end of the simulation
-        assert os.path.isfile(results_summary_path), \
-            f"Results summary file not found at: {results_summary_path}"
+        # # ensure if summary file was properly generated at the end of the simulation
+        # assert os.path.isfile(results_summary_path), \
+        #     f"Results summary file not found at: {results_summary_path}"
 
     # study done
     return

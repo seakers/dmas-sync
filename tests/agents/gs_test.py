@@ -5,8 +5,8 @@ import unittest
 
 from tester import AgentTester
 
-from chess3d.simulation import Simulation
-from chess3d.utils import print_banner
+from dmas.core.simulation import Simulation
+from dmas.utils.tools import print_scenario_banner
 
 class TestGroundStationAgents(AgentTester, unittest.TestCase):
 
@@ -91,7 +91,7 @@ class TestGroundStationAgents(AgentTester, unittest.TestCase):
         spacecraft_2['planner']['replanner'] = {"@type": "worker", "dealerName" : gs_network}
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` AGENT TEST')
+        print_scenario_banner(f'`{scenario_name}` AGENT TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,

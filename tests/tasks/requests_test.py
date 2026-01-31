@@ -3,8 +3,8 @@ import unittest
 from execsatm.tasks import DefaultMissionTask, GenericObservationTask
 from execsatm.utils import Interval
 
-from chess3d.agents.science.requests import TaskRequest
-from chess3d.utils import print_banner
+from dmas.models.science.requests import TaskRequest
+from dmas.utils.tools import print_scenario_banner
 
 class TestTaskRequests(unittest.TestCase):
     def setUp(self):
@@ -116,7 +116,7 @@ class TestTaskRequests(unittest.TestCase):
 
 if __name__ == '__main__':
     # terminal welcome message
-    print_banner('Task Request Definitions Test')
+    print_scenario_banner('Task Request Definitions Test')
     
     # run tests
     unittest.main()

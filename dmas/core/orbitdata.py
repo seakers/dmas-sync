@@ -365,7 +365,7 @@ class OrbitData:
             if ground_ops_list: agents_to_load.extend(ground_ops_list)
 
             # load pre-computed data for each agent
-            for agent in tqdm(agents_to_load, desc='Loading and verifying orbit data', unit='agent'):
+            for agent in tqdm(agents_to_load, desc='Loading and verifying orbit data', unit='agent', leave=False):
                 agent_name = agent.get('name')
                 data[agent_name] = OrbitData.load(orbitdata_dir, agent_name, simulation_duration)
             
@@ -1002,16 +1002,16 @@ class OrbitData:
 
         if not changes_to_scenario and not overwrite:
             # if propagation data files already exist, load results
-            print('Orbit data found!')
+            tqdm.write('Orbit data found!')
         else:
             # if propagation data files do not exist, propagate and then load results
             if os.path.exists(data_dir):
-                print('Existing orbit data does not match scenario.')
+                tqdm.write('Existing orbit data does not match scenario.')
             else:
-                print('Orbit data not found.')
+                tqdm.write('Orbit data not found.')
 
             # clear files if they exist
-            print('Clearing \'orbitdata\' directory...')    
+            tqdm.write('Clearing \'orbitdata\' directory...')    
             if os.path.exists(data_dir):
                 for f in os.listdir(data_dir):
                     f_dir = os.path.join(data_dir, f)
@@ -1021,7 +1021,7 @@ class OrbitData:
                         os.rmdir(f_dir)
                     else:
                         os.remove(f_dir) 
-            print('\'orbitdata\' cleared!')
+            tqdm.write('\'orbitdata\' cleared!')
 
             # set grid 
             grid_dicts : list = scenario_specs.get("grid", None)

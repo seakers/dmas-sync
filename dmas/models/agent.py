@@ -198,11 +198,16 @@ class SimulationAgent(object):
         Main thinking method for the agent; processes incoming messages and
             generates next actions to perform.
         """
+        # ensure time has advanced
+        assert state.get_time() > self._state.get_time() or abs(state.get_time() - self._state.get_time()) < 1e-6, \
+            "State time must be greater than or equal to the previous state time."
+
         # update state
         self._state = state
 
-        # append state to history
-        self._state_history.append(state.to_dict())
+        # append state to history if time has advanced
+        if abs(state.get_time() - self._state.get_time()) > 1e-6:
+            self._state_history.append(state.to_dict())
 
         # unpack and sort incoming senses
         incoming_reqs, external_observations, \

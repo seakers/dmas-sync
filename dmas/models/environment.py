@@ -545,7 +545,7 @@ class SimulationEnvironment(object):
             
             for msg_dict in tqdm(self._observation_history, 
                             desc='Compiling observations results', 
-                            leave=True):
+                            leave=False):
                 msg = ObservationResultsMessage(**msg_dict)
                 observation_data : List[dict] = msg.observation_data
                 observer = msg.dst

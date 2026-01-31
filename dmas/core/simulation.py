@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import sys
 from time import time
 from typing import Dict, List, Tuple
 import numpy as np
@@ -112,7 +113,7 @@ class Simulation:
     """
     SIMULATION EXECUTION METHODS
     """
-    def execute(self) -> None:
+    def execute(self, pbar_pos : int = 0, pbar_leave=True) -> None:
         """ executes the simulation """
         try:
             # define start and end times in seconds
@@ -125,7 +126,15 @@ class Simulation:
             }
 
             # execute simulation loop
-            with tqdm(total=tf, desc=f'{self._name}: Simulating', leave=True, mininterval=0.5, unit=' s') as pbar:
+            with tqdm(total=tf, 
+                      desc=f'{self._name}: Simulating', 
+                      leave=pbar_leave, 
+                      mininterval=0.5, 
+                      unit=' s', 
+                      position=pbar_pos,
+                      file=sys.stderr
+                    ) as pbar:
+                
                 # event-driven simulation loop
                 while t < tf:
                     # update environment
@@ -164,21 +173,26 @@ class Simulation:
 
                     # update current time
                     t += dt_progress
-                    
-            # return true if execution completed successfully
-            return True
 
-        except Exception as e:
-            raise e
-
-        finally:
             # mark simulation as executed
             self.__executed = True
 
-            # print results for every member of the simulation
-            self._environment.print_results()
+            # simulation completed; print results for every agent
             for agent in self._agents: agent.print_results()
             self.print_results()
+
+            # return execution status
+            return self.__executed
+
+        except Exception as e:
+            # mark simulation as false
+            self.__executed = False 
+            raise e
+
+        finally:
+            # print results for the simulation environment and simulation itself
+            self._environment.print_results()
+
 
     def print_results(self) -> str:
         """ prints simulation results after execution """
@@ -426,6 +440,7 @@ class Simulation:
                         shutil.rmtree(file_path)
                 except Exception as e:
                     print('Failed to delete %s. Reason: %s' % (file_path, e))
+                    raise e
 
         # create a results directory for all agents
         for agent_name in agent_names:
@@ -493,18 +508,19 @@ class Simulation:
             raise ValueError('`events_path` must point to an existing file.')
         
         # load events as a dataframe
-        print(f'Loading events from `{events_path}`...')
+        # tqdm.write(f'Loading events from `{events_path}`...')
         events_df : pd.DataFrame = pd.read_csv(events_path)
 
         # parse events
         events = []
         for _,row in tqdm(events_df.iterrows(), 
                           desc='Loading Events', 
-                        #   total=len(events_df), 
+                          total=len(events_df), 
                           leave=False, 
                           mininterval=0.5,
-                        # disable=len(events_df) < 10
-                          ):
+                          disable=len(events_df) < 10,
+                          file=sys.stderr,
+                        ):
             # convert event to GeophysicalEvent
             if row['start time [s]'] > sim_duration:
                 # event is not in the simulation time frame

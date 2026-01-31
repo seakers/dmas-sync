@@ -54,42 +54,42 @@
 
 
 ### Trial Simulation Commands
-Example commands to be used for running simulations in from a `Unix` terminal. Paths are listed for the local directories of the machine used to develop this tool. Substitute `cd ~/Documents/GitHub/3dchess` with `cd path/to/repository/3dchess` when implementing in your own machine. 
+Example commands to be used for running simulations in from a `Unix` terminal. Paths are listed for the local directories of the machine used to develop this tool. Substitute `cd ~/Documents/GitHub/dmas-sync` with `cd path/to/repository/3dchess` when implementing in your own machine. 
 
 #### Full Factorial Trials
 *Runs simulations from full list of combinations from test matrix*
 
 Simulate all cases:
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials
 ```
 
 Only propagate orbits for all cases:
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -p
 ```
 
 Generate processed results for all cases:
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -r 
 ```
 
 Simulate cases from trial interval `[LOWER, UPPER)`:
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -l LOWER -u UPPER
 ```
 
 Generate processed results for selected case from trial interval `[LOWER, UPPER)`:
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -r -l LOWER -u UPPER
 ```
@@ -101,34 +101,34 @@ python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -r -
 
 Simulate all cases:
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n lhs_trials-2_samples-1000_seed
 ```
 
 Simulate cases from trial interval `[LOWER, UPPER)`:
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n lhs_trials-2_samples-1000_seed -l LOWER -u UPPER
 ```
 
 Propagate only cases
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n lhs_trials-2_samples-1000_seed -p 
 ```
 
 In case you want to run the cases from full factorial that are not considered in the LHS cases:
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_no_lhs -l LOWER -u UPPER
 ```
 
 ```
-cd ~/Documents/GitHub/3dchess
+cd ~/Documents/GitHub/dmas-sync
 conda activate ./.venv
 python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_no_lhs -p 
 ```
