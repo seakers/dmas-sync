@@ -5,6 +5,9 @@ import time
 import traceback
 from dataclasses import dataclass
 
+import cProfile
+import pstats
+
 import argparse
 import copy
 import json
@@ -568,7 +571,7 @@ def main(trial_filename : str,
     print(f" - Loaded experiment templates from `resources/templates/`")
 
     # set simulation duration and step size
-    duration = 10000 / 3600 / 24.0 if debug else 1.0 # [days]
+    duration = 2500 / 3600 / 24.0 if debug else 1.0 # [days]
     duration = min(duration, 1.0)                   # cap at 1 day for sanity
     step_size = 10                                  # [s]
 
@@ -578,6 +581,7 @@ def main(trial_filename : str,
         gnd_segment = 'None' if not isinstance(gnd_segment, str) else gnd_segment
         
         if scenario_id > 0: print_scenario_banner(f'CBBA Stress Test Study - {trial_filename}')
+        if debug: print("DEBUG MODE ENABLED: Running a single short experiment for debugging purposes")
         print(f"\n--- Running Trial Scenario ID: {scenario_id} ---")
         print(f" - Num Sats: {num_sats}")
         print(f" - Ground Segment: {gnd_segment}")
@@ -595,8 +599,7 @@ def main(trial_filename : str,
         )
 
         ## define results output file name
-        results_dir = os.path.join(base_path, 'results', f"{trial_filename}_scenario_{scenario_id}")
-        results_summary_path = os.path.join(results_dir, 'summary.csv')
+        results_dir = os.path.join(base_path, 'results', f"{trial_filename}_scenario_{scenario_id}")        
 
         # check if propagation-only toggle was selected
         if propagate_only:
@@ -646,8 +649,9 @@ def main(trial_filename : str,
             print(' - Simulation data found! Skipping execution...')
             mission = None
         
-        # TODO : Re-enable result processing
+        # # TODO : Re-enable result processing
         # # print results if it hasn't been performed yet or if results need to be reevaluated
+        # results_summary_path = os.path.join(results_dir, 'summary.csv')
         # if not os.path.isfile(results_summary_path) or reevaluate: 
         #     if reevaluate:
         #         print(' - Reevaluation flag detected; re-processing simulation results...')
@@ -740,6 +744,12 @@ if __name__ == "__main__":
     debug : bool = args.debug
     level : int = LEVELS.get(args.level)
 
+    if debug:        
+        # initialize profiler
+        pr = cProfile.Profile()
+        # enable profiler
+        pr.enable()
+
     # run main study
     if upper_bound - lower_bound <= 1:
         # if only one trial is being run; use non-parallelized version
@@ -751,3 +761,14 @@ if __name__ == "__main__":
     # print outro
     print('\n' + '='*54)
     print('STUDY COMPLETE!')
+
+    if debug:
+        print(" - Printing debug profiling results...")
+        # disable profiler
+        pr.disable()
+        # print profiling results
+        pstats.Stats(pr).sort_stats("cumtime").print_stats(20)
+        # save to file
+        pr.dump_stats("./experiments/1_0_cbba_stress_test/results/profile.out")
+
+        print("DEBUG MODE COMPLETE")

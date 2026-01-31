@@ -97,7 +97,7 @@ class SimulationAgent(object):
         self._known_reqs : set[TaskRequest] = set() # TODO do we need this or is the task list enough?
         
         # initialize observation history
-        self._observation_history = ObservationHistory(orbitdata)
+        self._observation_history = ObservationHistory.from_orbitdata(orbitdata)
 
     @staticmethod
     def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> None:
@@ -402,6 +402,9 @@ class SimulationAgent(object):
                                 incoming_messages : List[SimulationMessage]
                                 ) -> Tuple[List[TaskRequest], List[Tuple[str, list]], List[AgentStateMessage], List[AgentActionMessage], List[SimulationMessage]]:
         """ Classify incoming messages into their respective types """
+
+        if incoming_messages:
+            x = 1 # breakpoint
 
         # check if there exist any bus messages in incoming messages
         bus_messages : List[BusMessage] = [msg for msg in incoming_messages 
@@ -742,7 +745,7 @@ class SimulationAgent(object):
                                 latest_plan_only : bool = True
                                 ) -> List[dict]:
         return [observation_tracker.latest_observation
-                 for _,grid in self._observation_history.history.items()
+                 for _,grid in self._observation_history.trackers.items()
                 for _, observation_tracker in grid.items()
                 if isinstance(observation_tracker, ObservationTracker)
                 # check if there is a latest observation
@@ -870,19 +873,15 @@ class SimulationAgent(object):
             
             # log observation history
             data = defaultdict(list)
-            for grid in self._observation_history.history.values():
-                grid : dict[int, ObservationTracker]
-                for observation_tracker in grid.values():
-                    observation_tracker : ObservationTracker
-                    if observation_tracker.n_obs == 0:
-                        # no observations for this grid point
-                        continue
-                    
-                    for key, value in observation_tracker.latest_observation.items():
-                        if isinstance(value, list):
-                            data[key].append(value[0])  # assuming single value lists
-                        else:
-                            data[key].append(value)
+            for observation_tracker in self._observation_history.trackers.values():
+                if observation_tracker.n_obs == 0:
+                    # no observations for this grid point
+                    continue                
+                for key, value in observation_tracker.latest_observation.items():
+                    if isinstance(value, list):
+                        data[key].append(value[0])  # assuming single value lists
+                    else:
+                        data[key].append(value)
             
             df = pd.DataFrame(data)
             df.to_parquet(f"{self._results_path}/observation_history.parquet", index=False)
@@ -890,97 +889,6 @@ class SimulationAgent(object):
             # log performance stats
             runtime_dir = os.path.join(self._results_path, "runtime")
             if not os.path.isdir(runtime_dir): os.mkdir(runtime_dir)
-
-            # log performance stats
-            n_decimals = 5
-            headers = ['routine','t_avg','t_std','t_med', 't_max', 't_min', 'n', 't_total']
-            data = []
-
-            # for routine in self.stats:
-            #     n = len(self.stats[routine])
-            #     t_avg = np.round(np.mean(self.stats[routine]),n_decimals) if n > 0 else -1
-            #     t_std = np.round(np.std(self.stats[routine]),n_decimals) if n > 0 else 0.0
-            #     t_median = np.round(np.median(self.stats[routine]),n_decimals) if n > 0 else -1
-            #     t_max = np.round(max(self.stats[routine]),n_decimals) if n > 0 else -1
-            #     t_min = np.round(min(self.stats[routine]),n_decimals) if n > 0 else -1
-            #     t_total = t_avg * n
-
-            #     line_data = [ 
-            #                     routine,
-            #                     t_avg,
-            #                     t_std,
-            #                     t_median,
-            #                     t_max,
-            #                     t_min,
-            #                     n,
-            #                     t_total
-            #                     ]
-            #     data.append(line_data)
-
-            #     # save time-series
-            #     time_series = [[v] for v in self.stats[routine]]
-            #     routine_df = pd.DataFrame(data=time_series, columns=['dt'])
-            #     routine_dir = os.path.join(f"{self._results_path}/runtime", f"time_series-planner_{routine}.parquet")
-            #     routine_df.to_parquet(routine_dir,index=False)
-
-            # if isinstance(self._preplanner, AbstractPeriodicPlanner):
-            #     for routine in self._preplanner.stats:
-            #         n = len(self._preplanner.stats[routine])
-            #         t_avg = np.round(np.mean(self._preplanner.stats[routine]),n_decimals) if n > 0 else -1
-            #         t_std = np.round(np.std(self._preplanner.stats[routine]),n_decimals) if n > 0 else 0.0
-            #         t_median = np.round(np.median(self._preplanner.stats[routine]),n_decimals) if n > 0 else -1
-            #         t_max = np.round(max(self._preplanner.stats[routine]),n_decimals) if n > 0 else -1
-            #         t_min = np.round(min(self._preplanner.stats[routine]),n_decimals) if n > 0 else -1
-            #         t_total = t_avg * n
-
-            #         line_data = [ 
-            #                         f"preplanner/{routine}",
-            #                         t_avg,
-            #                         t_std,
-            #                         t_median,
-            #                         t_max,
-            #                         t_min,
-            #                         n,
-            #                         t_total
-            #                         ]
-            #         data.append(line_data)
-
-            #         # save time-series
-            #         time_series = [[v] for v in self._preplanner.stats[routine]]
-            #         routine_df = pd.DataFrame(data=time_series, columns=['dt'])
-            #         routine_dir = os.path.join(f"{self._results_path}/runtime", f"time_series-preplanner_{routine}.parquet")
-            #         routine_df.to_parquet(routine_dir,index=False)
-
-            # if isinstance(self._replanner, AbstractReactivePlanner):
-            #     for routine in self._replanner.stats:
-            #         n = len(self._replanner.stats[routine])
-            #         t_avg = np.round(np.mean(self._replanner.stats[routine]),n_decimals) if n > 0 else -1
-            #         t_std = np.round(np.std(self._replanner.stats[routine]),n_decimals) if n > 0 else 0.0
-            #         t_median = np.round(np.median(self._replanner.stats[routine]),n_decimals) if n > 0 else -1
-            #         t_max = np.round(max(self._replanner.stats[routine]),n_decimals) if n > 0 else -1
-            #         t_min = np.round(min(self._replanner.stats[routine]),n_decimals) if n > 0 else -1
-            #         t_total = t_avg * n
-
-            #         line_data = [ 
-            #                         f"replanner/{routine}",
-            #                         t_avg,
-            #                         t_std,
-            #                         t_median,
-            #                         t_max,
-            #                         t_min,
-            #                         n,
-            #                         t_total
-            #                         ]
-            #         data.append(line_data)
-
-            #         # save time-series
-            #         time_series = [[v] for v in self._replanner.stats[routine]]
-            #         routine_df = pd.DataFrame(data=time_series, columns=['dt'])
-            #         routine_dir = os.path.join(f"{self._results_path}/runtime", f"time_series-replanner_{routine}.parquet")
-            #         routine_df.to_parquet(routine_dir,index=False)
-
-            # stats_df = pd.DataFrame(data, columns=headers)
-            # stats_df.to_parquet(f"{self._results_path}/planner_runtime_stats.parquet", index=False)
 
         except Exception as e:
             print(f'AGENT TEARDOWN ERROR: {e}')

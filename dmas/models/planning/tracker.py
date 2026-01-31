@@ -47,37 +47,42 @@ class ObservationTracker:
         return f"ObservationTracker(grid_index={self.grid_index}, gp_index={self.gp_index}, lat={self.lat}, lon={self.lon}, t_last={self.t_last}, n_obs={self.n_obs})"
 
 class ObservationHistory:
-    def __init__(self, orbitdata : OrbitData):
+    def __init__(self, trackers : dict, grid_lookup : dict):
         """
         Class to track the observation history of the agent.
         """
-        self.history : dict[int, dict[int, ObservationTracker]] = {}
-        self.grid_lookup : dict[tuple, tuple] = {}
+        self.trackers : dict[tuple[int,int], ObservationTracker] = trackers
+        self.grid_lookup : dict[tuple[float,float], tuple[int,int]] = grid_lookup
+        
+    @classmethod
+    def from_orbitdata(cls, orbitdata : OrbitData) -> 'ObservationHistory':
+        # Create an ObservationHistory instance from OrbitData
+        trackers: dict[tuple[int,int], ObservationTracker] = {}
+        grid_lookup: dict[tuple[float,float], tuple[int,int]] = {}
 
-        for gp_index in range(len(orbitdata.grid_data)):
-            grid : pd.DataFrame = orbitdata.grid_data[gp_index]
-            
-            for _,row in grid.iterrows():
-                lat = row["lat [deg]"]
-                lon = row["lon [deg]"]
-                grid_index = int(row["grid index"])
-                gp_index = int(row["GP index"])
+        # columns to extract
+        cols = ["lat [deg]", "lon [deg]", "grid index", "GP index"]
 
-                # create a new entry for the grid point
-                if grid_index not in self.history:
-                    self.history[grid_index] = {}
-                
-                # create a new entry for the grid point
-                if gp_index not in self.history[grid_index]:
-                    self.history[grid_index][gp_index] = ObservationTracker(lat, lon, grid_index, gp_index) 
-                
-                # create a lookup table for the grid points
-                lat_key = round(row["lat [deg]"], 6)
-                lon_key = round(row["lon [deg]"], 6)
-                self.grid_lookup[(lat_key, lon_key)] = (
-                    int(row["grid index"]),
-                    int(row["GP index"])
-                )
+        # parse through the grid data
+        for df in orbitdata.grid_data:
+            # get unique grid points
+            sub : pd.DataFrame = df[cols].drop_duplicates(subset=["grid index", "GP index"])
+
+            # iterate through the unique grid points
+            for lat, lon, grid_idx, gp_idx in sub.itertuples(index=False, name=None):
+                grid_idx = int(grid_idx)
+                gp_idx = int(gp_idx)
+                lat = float(lat); lon = float(lon)
+
+                key = (grid_idx, gp_idx)
+                if key not in trackers:
+                    trackers[key] = ObservationTracker(lat, lon, grid_idx, gp_idx)
+
+                lat_key = int(round(lat * 1_000_000))
+                lon_key = int(round(lon * 1_000_000))
+                grid_lookup[(lat_key, lon_key)] = key
+
+        return cls(trackers, grid_lookup)
 
     def update(self, observations : list) -> None:
         """
@@ -88,23 +93,14 @@ class ObservationHistory:
                 grid_index = observation['grid index']
                 gp_index = observation['GP index']
                 
-                tracker : ObservationTracker = self.history[grid_index][gp_index]
+                tracker : ObservationTracker = self.trackers[(grid_index, gp_index)]
                 tracker.update(observation)
-
-                # grid_index = observation['grid index']
-                # gp_index = observation['GP index']
-                # t_end = observation['t_end']
-                
-                # tracker : ObservationTracker = self.history[grid_index][gp_index]
-
-                # tracker.t_last = t_end
-                # tracker.n_obs += 1
-                # tracker.latest_observation = observation
 
 
     def get_observation_history(self, grid_index : int, gp_index : int) -> ObservationTracker:
-        if grid_index in self.history and gp_index in self.history[grid_index]:
-            return self.history[grid_index][gp_index]
+        key = (grid_index, gp_index)
+        if key in self.trackers:
+            return self.trackers[key]
         else:
             raise ValueError(f"Observation history for grid index {grid_index} and ground point index {gp_index} not found.")
 

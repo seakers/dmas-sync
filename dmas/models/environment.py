@@ -488,46 +488,6 @@ class SimulationEnvironment(object):
             # print connectivity hisotry
             self.__print_connectivity_history()
 
-            # # log performance stats
-            # runtime_dir = os.path.join(self._results_path, "runtime")
-            # if not os.path.isdir(runtime_dir): os.mkdir(runtime_dir)
-
-            # columns = ['routine','t_avg','t_std','t_med','t_max','t_min','n','t_total']
-            # data = []
-
-            # n_decimals = 5
-            # for routine in tqdm(self.stats, desc="ENVIRONMENT: Compiling runtime statistics", leave=False):
-            #     # compile stats
-            #     n = len(self.stats[routine])
-            #     t_avg = np.round(np.mean(self.stats[routine]),n_decimals) if n > 0 else -1
-            #     t_std = np.round(np.std(self.stats[routine]),n_decimals) if n > 0 else 0.0
-            #     t_median = np.round(np.median(self.stats[routine]),n_decimals) if n > 0 else -1
-            #     t_max = np.round(max(self.stats[routine]),n_decimals) if n > 0 else -1
-            #     t_min = np.round(min(self.stats[routine]),n_decimals) if n > 0 else -1
-            #     t_total = np.round(sum(self.stats[routine]),n_decimals) if n > 0 else 0
-
-            #     line_data = [ 
-            #                     routine,
-            #                     t_avg,
-            #                     t_std,
-            #                     t_median,
-            #                     t_max,
-            #                     t_min,
-            #                     n,
-            #                     t_total
-            #                     ]
-            #     data.append(line_data)
-
-            #     # save time-series
-            #     time_series = [[v] for v in self.stats[routine]]
-            #     routine_df = pd.DataFrame(data=time_series, columns=['dt'])
-            #     routine_dir = os.path.join(runtime_dir, f"time_series-{routine}.parquet")
-            #     routine_df.to_parquet(routine_dir,index=False)
-
-            # stats_df = pd.DataFrame(data, columns=columns)
-            # self.log(f'\nENVIRONMENT RUN-TIME STATS\n{str(stats_df)}\n', level=logging.WARNING)
-            # stats_df.to_parquet(f"{self._results_path}/runtime_stats.parquet", index=False)
-        
         except Exception as e:
             print('\n','\n','\n')
             print(e)
