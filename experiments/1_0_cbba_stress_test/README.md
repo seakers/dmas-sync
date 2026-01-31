@@ -45,12 +45,12 @@
 
 ### Commandline Arguments and Parameters
 - `-n` or `--name` : (`str`) filename of `.csv` file outlining simulation trial cases to be ran,
-- `-p` or `--propagate` : (`bool`) only performs orbit propagation of trial cases, does not simulate satellite mission.
 - `-l` or `--lower-bound` : (`int`) lower bound of simulation trial indeces to be run (inclusive).
 - `-u` or `--upper-bound` : (`int`) upper bound of simulation trial indeces to be run (non-inclusive).
-- `-o` or `--overwrite` : (`bool`) results overwrite toggle. Will skip simulating a  false and simulation has been run previously.
-- `-r` or `--reevaluate` : (`bool`) toggles the reprocessing and overwritting of results from simulations that were previously executed.
-- `-d` or ```debug` : (`bool`) toggles the use of reduced complexity simulation trials for debugging purposes.
+- `-p` or `--propagate` : (`flag`) only performs orbit propagation of trial cases, does not simulate satellite mission. 
+- `-o` or `--overwrite` : (`flag`) runs simulation trials and overwrites existing results. If not flagged, trials with existing results will not be simulated.
+- `-r` or `--reevaluate` : (`flag`) runs processing of simulation results and overwrites existing results. If not flagged, trials with existing results will not be reevaluated.
+- `-d` or `--debug` : (`flag`) toggles the use of reduced complexity simulation trials for debugging purposes.
 
 
 ### Trial Simulation Commands
@@ -70,14 +70,14 @@ Only propagate orbits for all cases:
 ```
 cd ~/Documents/GitHub/3dchess
 conda activate ./.venv
-python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -p True
+python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -p
 ```
 
 Generate processed results for all cases:
 ```
 cd ~/Documents/GitHub/3dchess
 conda activate ./.venv
-python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -r True 
+python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -r 
 ```
 
 Simulate cases from trial interval `[LOWER, UPPER)`:
@@ -91,7 +91,7 @@ Generate processed results for selected case from trial interval `[LOWER, UPPER)
 ```
 cd ~/Documents/GitHub/3dchess
 conda activate ./.venv
-python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -r True -l LOWER -u UPPER
+python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_trials -r -l LOWER -u UPPER
 ```
 
 
@@ -117,20 +117,20 @@ Propagate only cases
 ```
 cd ~/Documents/GitHub/3dchess
 conda activate ./.venv
-python ./experiments/1_0_cbba_stress_test/study.py -n lhs_trials-2_samples-1000_seed -o False -p True
+python ./experiments/1_0_cbba_stress_test/study.py -n lhs_trials-2_samples-1000_seed -p 
 ```
 
 In case you want to run the cases from full factorial that are not considered in the LHS cases:
 ```
 cd ~/Documents/GitHub/3dchess
 conda activate ./.venv
-python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_no_lhs -o False -l LOWER -u UPPER
+python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_no_lhs -l LOWER -u UPPER
 ```
 
 ```
 cd ~/Documents/GitHub/3dchess
 conda activate ./.venv
-python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_no_lhs -o False -p True
+python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_no_lhs -p 
 ```
 <!-- ### Mission Definition
 #### Mission 1 - Reactive Event Scheduling

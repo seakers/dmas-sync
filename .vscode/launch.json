@@ -244,9 +244,9 @@
             "args": [
                 // "-n", "full_factorial_trials",
                 "-n", "lhs_trials-2_samples-1000_seed",
-                "-o", "True",
-                "-d", "True",
-                // "-p", "True",
+                "-o", 
+                "-d", 
+                // "-p", 
                 "-l", "3",
                 "-u", "4"
             ]
@@ -265,11 +265,11 @@
             "args": [
                 // "-n", "full_factorial_trials",
                 "-n", "lhs_trials-2_samples-1000_seed",
-                "-o", "False",
-                // "-d", "True",
-                // "-p", "True",
+                // "-o", 
+                // "-d",
+                // "-p",
                 "-l", "0",
-                "-u", "2"
+                "-u", "1"
             ]
         },
     ]

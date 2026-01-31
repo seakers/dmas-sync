@@ -369,7 +369,6 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             any(
                 (len(os.listdir(os.path.join(results_dir, d))) <= 2)
                 for d in os.listdir(results_dir)
-                if os.path.isdir(os.path.join(results_dir, d)) and 'manager' not in d
             ),
             cfg.overwrite
         ]
@@ -386,6 +385,16 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             status = "executed"
         else:
             status = "skipped_existing"
+
+        # print results if it hasn't been performed yet or if results need to be reevaluated
+        if not os.path.isfile(results_summary_path) or cfg.reevaluate: 
+            print(' - Printing simulation results...')
+            mission.process_results()
+
+        # ensure if summary file was properly generated at the end of the simulation
+        assert os.path.isfile(results_summary_path), \
+            f"Results summary file not found at: {results_summary_path}"
+
 
         return {
             "scenario_id": scenario_id,
@@ -410,7 +419,7 @@ def parallel_run_trials(trials_df : pd.DataFrame, cfg: RunConfig, max_workers: i
     trial_rows = list(trials_df.itertuples(index=False, name=None))
 
     if max_workers is None:
-        max_workers = min(os.cpu_count() or 1, 8)
+        max_workers = min(os.cpu_count() or 1, 4)
 
     results = []
     with tqdm(total=len(trial_rows), desc='Performing study', leave=True, mininterval=0.5, unit=' trial') as pbar:
@@ -480,7 +489,7 @@ def main_parallellized(trial_filename : str,
     )
 
     # run trials in parallel
-    run_results = parallel_run_trials(trials, cfg, max_workers=8)
+    run_results = parallel_run_trials(trials, cfg)
 
     # study done
     return run_results
@@ -584,14 +593,14 @@ def main(trial_filename : str,
         else:
             print(' - Simulation data found! Skipping execution...')
 
-        # # print results if it hasn't been performed yet or if results need to be reevaluated
-        # if not os.path.isfile(results_summary_path) or reevaluate: 
-        #     print(' - Printing simulation results...')
-        #     mission.process_results()
+        # print results if it hasn't been performed yet or if results need to be reevaluated
+        if not os.path.isfile(results_summary_path) or reevaluate: 
+            print(' - Printing simulation results...')
+            mission.process_results()
 
-        # # ensure if summary file was properly generated at the end of the simulation
-        # assert os.path.isfile(results_summary_path), \
-        #     f"Results summary file not found at: {results_summary_path}"
+        # ensure if summary file was properly generated at the end of the simulation
+        assert os.path.isfile(results_summary_path), \
+            f"Results summary file not found at: {results_summary_path}"
 
     # study done
     return
@@ -629,22 +638,19 @@ if __name__ == "__main__":
                         type=bool) 
     parser.add_argument('-o', 
                         '--overwrite',
-                        default=False,
                         help='results overwrite toggle',
-                        required=False,
-                        type=bool) 
+                        action='store_true',
+                        required=False)
     parser.add_argument('-r', 
                         '--reevaluate',
                         help=' results reevaluation toggle',
-                        default=False,
-                        required=False,
-                        type=bool) 
+                        action='store_true',
+                        required=False)
     parser.add_argument('-d', 
                         '--debug',
                         help='toggles to run just one experiment for debugging purposes',
-                        default=False,
-                        required=False,
-                        type=bool) 
+                        action='store_true',
+                        required=False)
     parser.add_argument('-L', 
                         '--level',
                         choices=['DEBUG', 'INFO', 'WARNING', 'CRITICAL', 'ERROR'],
@@ -657,14 +663,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # extract arguments
-    trial_filename = args.trial_filename
-    lower_bound = args.lower_bound
-    upper_bound = args.upper_bound
-    level = LEVELS.get(args.level)
-    propagate_only = args.propagate_only
-    overwrite = args.overwrite
-    reevaluate = args.reevaluate
-    debug = args.debug
+    trial_filename : str = args.trial_filename
+    lower_bound : int = args.lower_bound
+    upper_bound : int = args.upper_bound
+    propagate_only : bool = args.propagate_only
+    overwrite : bool = args.overwrite
+    reevaluate : bool = args.reevaluate
+    debug : bool = args.debug
+    level : int = LEVELS.get(args.level)
 
     # run main study
     if upper_bound - lower_bound <= 1:
