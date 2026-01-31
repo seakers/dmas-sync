@@ -333,9 +333,9 @@ class SimulationAgent(object):
                 pending_actions = []
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
-                # if True:
+                if True:
                 # if 95.0 < state.t < 96.0:
-                if state.get_time() > 19 and "1" in state.agent_name:
+                # if state.get_time() > 19 and "1" in state.agent_name:
                     self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
@@ -349,7 +349,7 @@ class SimulationAgent(object):
         # if 95.0 < state.t < 96.0:
         # if state.t > 96.0:
         if True:
-            self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
+            # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
             self.__log_plan(plan_out, "NEXT ACTIONS", logging.WARNING)
             x = 1 # breakpoint
         # -------------------------------------        
@@ -370,7 +370,7 @@ class SimulationAgent(object):
         # create copy of current state
         action_state : SimulationAgentState = state.copy()
         
-        assert action_state.get_time() == t, \
+        assert abs(action_state.get_time() - t) < 1e-6, \
             "State time must match the provided time."
 
         # get next action to perform

@@ -128,9 +128,6 @@ class Simulation:
             with tqdm(total=tf, desc=f'{self._name}: Simulating', leave=True, mininterval=0.5, unit=' s') as pbar:
                 # event-driven simulation loop
                 while t < tf:
-                    if t > 19:
-                        x= 1 # breakpoint
-
                     # update environment
                     self._environment.update_state(t)
 

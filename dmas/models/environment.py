@@ -206,7 +206,7 @@ class SimulationEnvironment(object):
 
         elif action.action_type == ActionTypes.OBSERVE.value:                              
             # perform observation
-            return self.__perform_observation(state, action, t_curr)
+            return self.__handle_observation(state, action, t_curr)
         
         elif action.action_type == ActionTypes.WAIT.value:
             # wait for incoming messages
@@ -242,7 +242,7 @@ class SimulationEnvironment(object):
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []
     
-    def __perform_observation(self, 
+    def __handle_observation(self, 
                             state : SimulationAgentState,
                             action : ObservationAction, 
                             t_curr : float
@@ -265,7 +265,12 @@ class SimulationEnvironment(object):
         obs_data : tuple = (instrument_dict['name'].lower(), observation_data)
 
         # update state status
-        state.update(t_curr, status=SimulationAgentState.MEASURING)        
+        state.update(t_curr, status=SimulationAgentState.MEASURING)    
+
+        # save observation to history
+        resp = action.req.copy()
+        resp['observation_data'] = observation_data
+        self._observation_history.append(resp)    
 
         # return packaged results
         return state, ActionStatuses.COMPLETED.value, [], [obs_data]
