@@ -278,9 +278,9 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
-                if True:
-                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                    x = 1 # breakpoint
+                # if True:
+                #     self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                #     x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
@@ -335,13 +335,14 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 if True:
                 # if 95.0 < state.t < 96.0:
-                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
         # get next actions to perform
         plan_out = self.get_next_actions(state, True)
-        assert len(plan_out) > 0, "No next actions were returned from `get_next_actions()`."
+        assert len(plan_out) > 0, \
+            "No next actions were returned from `get_next_actions()`."
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         # if 95.0 < state.t < 96.0:
@@ -354,10 +355,10 @@ class SimulationAgent(object):
 
         # change state to indicate new status (e.g., maneuvering, observing, waiting, etc.)
         # and save to state history
-        updated_state, action = self.__prepare_state(state, plan_out, state._t)
+        action_state, action = self.__prepare_state(state, plan_out, state._t)
         
         # return next actions to perform
-        return updated_state, action
+        return action_state, action
     
     def __prepare_state(self, 
                         state : SimulationAgentState, 
@@ -366,26 +367,26 @@ class SimulationAgent(object):
                     ) -> Tuple[SimulationAgentState, AgentAction]:
         """ Update the agent state based on the next actions to perform. """
         # create copy of current state
-        updated_state : SimulationAgentState = state.copy()
+        action_state : SimulationAgentState = state.copy()
 
         # get next action to perform
         action = plan_out[0]
 
         # determine new status from next action
         if isinstance(action, ManeuverAction):
-            updated_state.perform_maneuver(action, t)
+            action_state.perform_maneuver(action, t)
         elif isinstance(action, ObservationAction):
             # update state
-            updated_state.update(t, status=SimulationAgentState.MEASURING)
+            action_state.update(t, status=SimulationAgentState.MEASURING)
         elif isinstance(action, BroadcastMessageAction):
             # update state
-            updated_state.update(t, status=SimulationAgentState.MESSAGING)
+            action_state.update(t, status=SimulationAgentState.MESSAGING)
         elif isinstance(action, WaitAction):
             # update state
-            updated_state.update(t, status=SimulationAgentState.WAITING)
+            action_state.update(t, status=SimulationAgentState.WAITING)
 
         # return updated state
-        return updated_state, action
+        return action_state, action
 
     def _read_incoming_messages(self, 
                                 state : SimulationAgentState,
@@ -554,9 +555,6 @@ class SimulationAgent(object):
             # get list of next actions from plan
             plan_out : List[AgentAction] = self._plan.get_next_actions(state.get_time(), False)
             
-            if len(plan_out) > 1:
-                x = 1
-
             # check for any observation actions in output plan
             observation_actions = [action for action in plan_out
                                    if isinstance(action, ObservationAction)]
@@ -745,21 +743,6 @@ class SimulationAgent(object):
                 # only include observations performed for the current plan
                 and self._plan.t * int(latest_plan_only) <= observation_tracker.latest_observation['t_end'] <= state.get_time()
             ]
-
-    def __get_status_from_action(self, action : AgentAction) -> str:
-        """
-        Determines the agent status based on the given action.
-        """
-        if isinstance(action, ManeuverAction):
-            return SimulationAgentState.MANEUVERING
-        elif isinstance(action, ObservationAction):
-            return SimulationAgentState.MEASURING
-        elif isinstance(action, BroadcastMessageAction):
-            return SimulationAgentState.MESSAGING
-        elif isinstance(action, WaitAction):
-            return SimulationAgentState.WAITING
-        
-        return SimulationAgentState.IDLING
 
     """
     ----------------------

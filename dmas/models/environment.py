@@ -1,19 +1,23 @@
 import copy
 import logging
 import os
+import time
 from typing import Dict, List, Set, Tuple
 from collections import defaultdict, deque
 
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
-from dmas.core.messages import SimulationMessage, message_from_dict
+from dmas.core.messages import ObservationResultsMessage, SimulationMessage, message_from_dict
 from dmas.core.orbitdata import OrbitData
 
+from execsatm.tasks import EventObservationTask
 from execsatm.events import GeophysicalEvent
 from execsatm.utils import Interval
 
 from dmas.models.actions import *
+from dmas.models.science.requests import TaskRequest
 from dmas.models.states import SimulationAgentState, SimulationAgentTypes
 from dmas.utils.tools import SimulationRoles
 
@@ -85,6 +89,7 @@ class SimulationEnvironment(object):
         self._connectivity_relays : bool = connectivity_relays
         self._t_0 = None
         self._t_f = None
+        self._t_curr = np.NINF
         self._agent_state_update_times = {}
         self._task_reqs : list[dict] = list()        
 
@@ -104,6 +109,11 @@ class SimulationEnvironment(object):
     def update_state(self, t : float) -> None:
         """ Updates the environment state at time `t` """
         
+        # update current time
+        assert t >= self._t_curr, \
+            f"Environment time cannot move backwards (current time {self._t_curr}[s], new time {t}[s])"
+        self._t_curr = t
+
         # check if connectivity needs to be update
         if t not in self._current_connectivity_interval:
             # update current connectivity matrix and components
@@ -282,10 +292,6 @@ class SimulationEnvironment(object):
                      t_curr : float
                     ) -> Tuple[SimulationAgentState, str, list, list]:
         """ Performs a wait action for incoming messages """
-        
-        if t_curr > 3206:
-            x = 1
-
         # update state
         state.update(t_curr, status=SimulationAgentState.WAITING)
         
@@ -423,11 +429,228 @@ class SimulationEnvironment(object):
     RESULTS HANDLING METHODS
     ----------------------
     """
-    def print_results(self) -> str:
-        # TODO 
-        ...
+    def log(self, msg : str, level=logging.DEBUG) -> None:
+        """
+        Logs a message to the desired level.
+        """
+        try:
+            t = self._t_curr
+            t = t if t is None else round(t,3)
 
-    def __print_connectivity_matrix(self, conn_matrix : Dict[str, Dict[str, int]]) -> None:
+            if level is logging.DEBUG:
+                self._logger.debug(f'T={t}[s] | {SimulationRoles.ENVIRONMENT.value}: {msg}')
+            elif level is logging.INFO:
+                self._logger.info(f'T={t}[s] | {SimulationRoles.ENVIRONMENT.value}: {msg}')
+            elif level is logging.WARNING:
+                self._logger.warning(f'T={t}[s] | {SimulationRoles.ENVIRONMENT.value}: {msg}')
+            elif level is logging.ERROR:
+                self._logger.error(f'T={t}[s] | {SimulationRoles.ENVIRONMENT.value}: {msg}')
+            elif level is logging.CRITICAL:
+                self._logger.critical(f'T={t}[s] | {SimulationRoles.ENVIRONMENT.value}: {msg}')
+        
+        except Exception as e:
+            raise e
+
+    def print_results(self) -> None:
+        try:
+            # set final simulation time
+            self.t_f = time.perf_counter()
+
+            # log results compilation start
+            self.log('Compiling results...',level=logging.WARNING)
+
+            # compile observations performed
+            observations_performed : pd.DataFrame = self.compile_observations()
+
+            # log and save results
+            # self.log(f"MEASUREMENTS RECEIVED:\n{len(observations_performed.values)}\n\n", level=logging.WARNING)
+            observations_performed.to_parquet(f"{self._results_path}/measurements.parquet", index=False)
+            
+            # commpile list of broadcasts performed
+            broadcasts_performed : pd.DataFrame = self.compile_broadcasts()
+
+            # log and save results
+            # self.log(f"BROADCASTS RECEIVED:\n{len(broadcasts_performed.values)}\n\n", level=logging.WARNING)
+            broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
+
+            # compile list of measurement requests 
+            measurement_reqs : pd.DataFrame = self.compile_requests()
+
+            # log and save results
+            # self.log(f"MEASUREMENT REQUESTS RECEIVED:\n{len(measurement_reqs.values)}\n\n", level=logging.WARNING)
+            measurement_reqs.to_parquet(f"{self._results_path}/requests.parquet", index=False)
+
+            # print connectivity hisotry
+            self.__print_connectivity_history()
+
+            # # log performance stats
+            # runtime_dir = os.path.join(self._results_path, "runtime")
+            # if not os.path.isdir(runtime_dir): os.mkdir(runtime_dir)
+
+            # columns = ['routine','t_avg','t_std','t_med','t_max','t_min','n','t_total']
+            # data = []
+
+            # n_decimals = 5
+            # for routine in tqdm(self.stats, desc="ENVIRONMENT: Compiling runtime statistics", leave=False):
+            #     # compile stats
+            #     n = len(self.stats[routine])
+            #     t_avg = np.round(np.mean(self.stats[routine]),n_decimals) if n > 0 else -1
+            #     t_std = np.round(np.std(self.stats[routine]),n_decimals) if n > 0 else 0.0
+            #     t_median = np.round(np.median(self.stats[routine]),n_decimals) if n > 0 else -1
+            #     t_max = np.round(max(self.stats[routine]),n_decimals) if n > 0 else -1
+            #     t_min = np.round(min(self.stats[routine]),n_decimals) if n > 0 else -1
+            #     t_total = np.round(sum(self.stats[routine]),n_decimals) if n > 0 else 0
+
+            #     line_data = [ 
+            #                     routine,
+            #                     t_avg,
+            #                     t_std,
+            #                     t_median,
+            #                     t_max,
+            #                     t_min,
+            #                     n,
+            #                     t_total
+            #                     ]
+            #     data.append(line_data)
+
+            #     # save time-series
+            #     time_series = [[v] for v in self.stats[routine]]
+            #     routine_df = pd.DataFrame(data=time_series, columns=['dt'])
+            #     routine_dir = os.path.join(runtime_dir, f"time_series-{routine}.parquet")
+            #     routine_df.to_parquet(routine_dir,index=False)
+
+            # stats_df = pd.DataFrame(data, columns=columns)
+            # self.log(f'\nENVIRONMENT RUN-TIME STATS\n{str(stats_df)}\n', level=logging.WARNING)
+            # stats_df.to_parquet(f"{self._results_path}/runtime_stats.parquet", index=False)
+        
+        except Exception as e:
+            print('\n','\n','\n')
+            print(e)
+            raise e       
+
+    async def teardown(self) -> None:
+        # print final time
+        print('\n')
+        self.log(f'successfully shutdown', level=logging.WARNING)
+                    
+    def compile_observations(self) -> pd.DataFrame:
+        try:
+            columns = None
+            data = []
+            
+            for msg_dict in tqdm(self._observation_history, 
+                            desc='Compiling observations results', 
+                            leave=True):
+                msg = ObservationResultsMessage(**msg_dict)
+                observation_data : List[dict] = msg.observation_data
+                observer = msg.dst
+
+                for obs in observation_data:
+                    
+                    # find column names 
+                    if columns is None:
+                        columns = sorted([key for key in obs])
+                        columns.insert(0, 'observer')
+                        # columns.insert(2, 't_img')
+                        # columns.remove('t_start')
+                        # columns.remove('t_end')
+
+                    # add observation to data list
+                    obs['observer'] = observer.lower()
+                    for key in columns:
+                        val = obs.get(key, None)
+                        if isinstance(val, list):
+                            obs[key] = val[0]
+                            # if len(val) == 1:
+                            #     obs[key] = val[0]
+                            # else:
+                            #     obs[key] = [val[0], val[-1]]
+
+                    # obs['t_img'] = [obs['t_start'], obs['t_end']]
+                    # obs.pop('t_start')
+                    # obs.pop('t_end')
+
+                    data.append([obs[key] for key in columns])
+
+            observations_df = pd.DataFrame(data=data, columns=columns)
+            observations_df = observations_df.sort_index(axis=1)
+
+            return observations_df
+        
+        except Exception as e:
+            print(e.with_traceback())
+            raise e
+    
+    def compile_broadcasts(self) -> pd.DataFrame:
+        columns = ['t_msg', 'sender', 'message type', 
+                #    'Message'
+                   ]
+
+        data = [[msg['t_msg'], 
+                 msg['src'], 
+                 msg['msg_type'],
+                 #  json.dumps(msg)
+                 ]
+                for msg in self._broadcasts_history]
+            
+        return pd.DataFrame(data=data, columns=columns)
+    
+    def compile_requests(self) -> pd.DataFrame:
+        # convert measurement request dictionaries to Task Requests
+        self._task_reqs : list[TaskRequest] = list({
+            TaskRequest.from_dict(req_dict)
+            for req_dict in self._task_reqs})
+
+        columns = ['request id', 'requester', 'event id', 'parameter', 't_req', 'mission name']
+        data = [[req.id,
+                 req.requester,
+                 req.task.event.id,
+                 req.task.parameter,
+                 req.t_req,
+                 req.mission_name,
+                 ] 
+                 for req in self._task_reqs
+                 if isinstance(req.task, EventObservationTask)]
+        
+        assert all(isinstance(req.task, EventObservationTask) for req in self._task_reqs), \
+            'Only `EventObservationTask` measurement requests are currently supported in the results compilation.'
+
+        return pd.DataFrame(data=data, columns=columns)    
+
+    def __print_connectivity_history(self) -> None:
+        filename = 'connectivity.md'
+        filepath = os.path.join(self._results_path, filename)
+        with open(filepath, 'w') as f:
+            f.write(f"# Agent Connectivity History\n")
+            f.write(f"- Connectivity Level: **{self._connectivity_level}**\n\n")
+            f.write(f"- Connectivity Relays Enabled: **{self._connectivity_relays}**\n\n")
+
+            for interval, conn_matrix, components, _ in self.__interval_connectivities:
+                f.write('---\n')
+                f.write(f"**Interval:** {interval} [s]\n\n")
+                
+                # print connectivity matrix
+                f.write("**Connectivity Matrix:**\n\n")
+                ## print table header 
+                agent_names = list(conn_matrix.keys())
+                header = "||" + "  |".join([f"`{name:>5}`" for name in agent_names]) + "|\n"
+                f.write(header)
+                f.write("|-|" + "-|"*len(agent_names) + "\n")
+                
+                ## print matrix rows
+                for sender in agent_names:
+                    row = f"|`{sender:>5}`|"
+                    for receiver in agent_names:
+                        row += f"{conn_matrix[sender][receiver]:>3}|"
+                    f.write(row + "\n")
+
+                f.write("\n**Connected Components:**\n")
+                for i,comp in enumerate(sorted(components)):
+                    f.write(f" - Component {i}: [`" + "`, `".join(comp) + "`]\n\n")
+                f.write("\n\n")
+
+    @staticmethod
+    def __display_connectivity_matrix(conn_matrix : Dict[str, Dict[str, int]]) -> None:
         """ Prints connectivity matrix to console """
         agent_names = list(conn_matrix.keys())
         header = "\t\t" + "  ".join([f"{name:>5}" for name in agent_names])
@@ -440,7 +663,8 @@ class SimulationEnvironment(object):
                 row += f"{conn_matrix[sender][receiver]:>3}\t"
             print(row)
 
-    def __print_connected_components(self, components : List[Set[str]]) -> None:
+    @staticmethod
+    def __display_connected_components(components : List[Set[str]]) -> None:
         """ Prints connected components to console """
         print("Connected Components:")
         for i,comp in enumerate(sorted(components)):
@@ -555,9 +779,9 @@ class SimulationEnvironment(object):
             # DEBUG PRINTOUTS -------------
             # print(F"Connectivity during interval {interval}:")
             # print('-'*50)
-            # self.__print_connectivity_matrix(interval_connectivity_matrix)
+            # SimulationEnvironment.__display_connectivity_matrix(interval_connectivity_matrix)
             # print('-'*50)
-            # self.__print_connected_components(interval_components)
+            # SimulationEnvironment.__display_connected_components(interval_components)
             # print('='*50 + '\n')
             # x = 1 # breakpoint
             # -------------------------------

@@ -249,8 +249,13 @@ class TestSimulationLoading(unittest.TestCase):
         # execute simulation
         val = simulation.execute()
 
-        # ensure 
+        # ensure simulation termination 
         self.assertTrue(val)
+
+        # evaluate outputs
+        x = 1
+
+        # evaluate internal checks
     
 
 if __name__ == '__main__':
