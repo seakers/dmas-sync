@@ -284,7 +284,7 @@ class Simulation:
         return True
 
     @classmethod
-    def from_dict(cls, d : dict, overwrite : bool = False, level=logging.WARNING) -> 'Simulation':
+    def from_dict(cls, d : dict, overwrite : bool = False, printouts : bool = True, level=logging.WARNING) -> 'Simulation':
         """ creates simulation instance from dictionary """
 
         # unpack agent info
@@ -327,7 +327,7 @@ class Simulation:
         results_path : str = Simulation.__setup_results_directory(scenario_path, scenario_name, agent_names, overwrite)
 
         # precompute orbit data
-        orbitdata_dir = OrbitData.precompute(d) if spacecraft_dict is not None else None
+        orbitdata_dir = OrbitData.precompute(d, printouts=printouts) if spacecraft_dict is not None else None
         simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, scenario_duration) if orbitdata_dir is not None else {}
         
         # load missions
@@ -336,7 +336,7 @@ class Simulation:
         # load events        
         grid_dict : dict = d.get('grid', None) # TODO for use in random event generation
         events_path : str = Simulation.generate_events(scenario_dict)
-        events : List[GeophysicalEvent] = Simulation.__load_events(events_path, simulation_orbitdata)
+        events : List[GeophysicalEvent] = Simulation.__load_events(events_path, simulation_orbitdata, printouts)
 
         # setup logging
         logger = logging.getLogger(f'Simulation-{scenario_name}')
@@ -489,7 +489,7 @@ class Simulation:
         raise NotImplementedError(f'Event generation of type `{events_type}` not yet implemented.')
     
     @staticmethod
-    def __load_events(events_path : str, orbitdata : dict) -> List[GeophysicalEvent]:
+    def __load_events(events_path : str, orbitdata : dict, printouts : bool) -> List[GeophysicalEvent]:
         """ Loads events present in the simulation """
         # checks if event path exists
         if events_path is None: return None
@@ -508,7 +508,7 @@ class Simulation:
             raise ValueError('`events_path` must point to an existing file.')
         
         # load events as a dataframe
-        # tqdm.write(f'Loading events from `{events_path}`...')
+        if printouts: tqdm.write(f'Loading events from `{events_path}`...')
         events_df : pd.DataFrame = pd.read_csv(events_path)
 
         # parse events

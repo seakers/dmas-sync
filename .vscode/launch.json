@@ -226,32 +226,6 @@
         //              EXPERIMENTS
         //=============================================
         {
-            "name": "EXPERIMENT 1: CBBA Stress Test (DEBUG)",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceRoot}/experiments/1_0_cbba_stress_test/study.py",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "cwd": "${workspaceRoot}",
-            "env": {
-                "PYTHONPATH": "${workspaceRoot}"
-            },
-            // "args": [
-            //     "-n", "toy_trials",
-            //     "-o", "False",
-            //     "-d", "True"
-            // ]
-            "args": [
-                // "-n", "full_factorial_trials",
-                "-n", "lhs_trials-2_samples-1000_seed",
-                "-o", 
-                "-d", 
-                // "-p", 
-                "-l", "3",
-                "-u", "4"
-            ]
-        },
-        {
             "name": "EXPERIMENT 1: CBBA Stress Test",
             "type": "debugpy",
             "request": "launch",
@@ -263,13 +237,13 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                "-n", "full_factorial_trials",
-                // "-n", "lhs_trials-2_samples-1000_seed",
+                // "-n", "full_factorial_trials",
+                "-n", "lhs_trials-2_samples-1000_seed",
                 // "-o", 
                 // "-d",
                 // "-p",
-                "-l", "0",
-                "-u", "2"
+                "-l", "5",
+                "-u", "6"
             ]
         },
     ]

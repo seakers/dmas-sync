@@ -379,6 +379,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             mission = Simulation.from_dict(
                 mission_specs,
                 overwrite=cfg.overwrite,
+                printouts=False,
                 level=cfg.level
             )
 
@@ -403,6 +404,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         #         mission = Simulation.from_dict(
         #                 mission_specs,
         #                 overwrite=cfg.overwrite,
+        #                 printouts=False,
         #                 level=cfg.level
         #             )
             
@@ -467,17 +469,12 @@ def parallel_run_trials(trials_df : pd.DataFrame, cfg: RunConfig, max_workers: i
                     status = res.get("status")
                     elapsed = res.get("elapsed_s", None)
                     
-                    # if status == "error":
-                    #     print(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
-                    # else:
-                    #     print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
-                    
                     if status == "error":
                         tqdm.write(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
                     else:
                         tqdm.write(f"[scenario {sid}] {status} in {elapsed:.1f}s")
 
-                    
+                    # update progress bar                
                     pbar.update(1)
     
     except KeyboardInterrupt as e:
@@ -613,10 +610,6 @@ def main(trial_filename : str,
 
         # initialize simulation mission
         print(" - Running full simulation...\n")
-        
-        # check if results do not exist or overwrite/reevaluate is set
-        if not os.path.isfile(results_summary_path) or overwrite or reevaluate:
-            mission : Simulation = Simulation.from_dict(mission_specs, overwrite=overwrite, level=level)
 
         # check if output directory was properly initalized
         assert os.path.isdir(results_dir), \
@@ -640,15 +633,37 @@ def main(trial_filename : str,
 
         # execute mission if any of the conditions are met
         if any(execute_conditions): 
+            if execute_conditions[-1]:
+                print(' - Overwrite flag detected; re-running simulation mission...')
+            else:
+                print(' - Incomplete or missing results detected; running simulation mission...')
+            print(' - Initializing simulation mission...')
+            mission : Simulation = Simulation.from_dict(mission_specs, overwrite=overwrite, level=level)
+            
             print (' - Executing simulation mission...')
             mission.execute()
         else:
             print(' - Simulation data found! Skipping execution...')
-
+            mission = None
+        
         # TODO : Re-enable result processing
         # # print results if it hasn't been performed yet or if results need to be reevaluated
         # if not os.path.isfile(results_summary_path) or reevaluate: 
-        #     print(' - Printing simulation results...')
+        #     if reevaluate:
+        #         print(' - Reevaluation flag detected; re-processing simulation results...')
+        #     else:
+        #         print(' - Results summary not found; processing simulation results...')
+        #     if mission is None:
+        #         # load mission to process results if not already loaded
+        #         print(' - Initializing simulation mission...')
+        #         mission = Simulation.from_dict(
+        #                 mission_specs,
+        #                 overwrite=overwrite,
+        #                 printouts=False,
+        #                 level=level
+        #             )
+
+        #     print(' - Evaluating simulation results...')
         #     mission.process_results()
 
         # # ensure if summary file was properly generated at the end of the simulation
@@ -727,8 +742,10 @@ if __name__ == "__main__":
 
     # run main study
     if upper_bound - lower_bound <= 1:
+        # if only one trial is being run; use non-parallelized version
         main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, reevaluate, debug)
     else:
+        # if more than one trial is being run; use parallelized version
         main_parallellized(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, reevaluate, debug)
 
     # print outro

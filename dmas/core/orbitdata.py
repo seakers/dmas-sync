@@ -977,7 +977,7 @@ class OrbitData:
         # return 
         return out
 
-    def precompute(scenario_specs : dict, overwrite : bool = False) -> str:
+    def precompute(scenario_specs : dict, overwrite : bool = False, printouts: bool = True) -> str:
         """
         Pre-calculates coverage and position data for a given scenario
         """
@@ -1002,16 +1002,20 @@ class OrbitData:
 
         if not changes_to_scenario and not overwrite:
             # if propagation data files already exist, load results
-            tqdm.write('Orbit data found!')
+            if printouts:
+                tqdm.write('Existing orbit data found and matches scenario. Loading existing data...')
         else:
             # if propagation data files do not exist, propagate and then load results
             if os.path.exists(data_dir):
-                tqdm.write('Existing orbit data does not match scenario.')
+                if printouts:
+                    tqdm.write('Existing orbit data does not match scenario.')
             else:
-                tqdm.write('Orbit data not found.')
+                if printouts:
+                    tqdm.write('Orbit data not found.')
 
             # clear files if they exist
-            tqdm.write('Clearing \'orbitdata\' directory...')    
+            if printouts:
+                tqdm.write('Clearing \'orbitdata\' directory...')    
             if os.path.exists(data_dir):
                 for f in os.listdir(data_dir):
                     f_dir = os.path.join(data_dir, f)
@@ -1021,7 +1025,8 @@ class OrbitData:
                         os.rmdir(f_dir)
                     else:
                         os.remove(f_dir) 
-            tqdm.write('\'orbitdata\' cleared!')
+            if printouts:
+                tqdm.write('\'orbitdata\' cleared!')
 
             # set grid 
             grid_dicts : list = scenario_specs.get("grid", None)
@@ -1100,6 +1105,7 @@ class OrbitData:
         # restore original duration value
         scenario_specs['duration'] = original_duration
 
+        # return orbit data directory
         return data_dir
     
     def _check_changes_to_scenario(scenario_dict : dict, orbitdata_dir : str) -> bool:

@@ -6,8 +6,8 @@ import unittest
 import pandas as pd
 from tqdm import tqdm
 
-from chess3d.orbitdata import OrbitData, ConnectivityLevels
-from chess3d.utils import print_banner
+from dmas.core.orbitdata import OrbitData, ConnectivityLevels
+from dmas.utils.tools import print_scenario_banner
 
 
 class TestAgentConnectivity(unittest.TestCase):
@@ -356,7 +356,7 @@ class TestAgentConnectivity(unittest.TestCase):
 
 if __name__ == '__main__':
     # print banner
-    print_banner("Connectivity Test Suite")
+    print_scenario_banner("Connectivity Test Suite")
 
     # run tests
     unittest.main()
