@@ -1,0 +1,991 @@
+{
+    "missions" : [
+        {
+            "name": "toy_mission_1",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_2",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_3",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "t_img [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0.0, 7200.0],
+                            "scores": [1.0, 0.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_4",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_5",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_6",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_7",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 2, 3],
+                            "scores": [0.1, 1.0, 0.001]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_8",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_9",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_10",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 2, 3],
+                            "scores": [0.1, 1.0, 0.001]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_11",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 2, 3],
+                            "scores": [0.1, 1.0, 0.001]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_12",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_13",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_14",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.4,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.6,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 100],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 0.2]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_15",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.4,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.6,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 100],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 0.2]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_16",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.4,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.6,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 100],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 0.2]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_17",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 100],
+                            "scores": [1.0, 0.1]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 1],
+                            "scores": [1, 0.1]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_18",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 4],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 500, 7200],
+                            "scores": [0.1, 1.0, 0.1]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_19",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.4,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 100],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.6,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 10],
+                            "scores": [0.5, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_20",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.4,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 100],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.6,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 10],
+                            "scores": [0.5, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_21",
+            "objectives" : [
+                
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 10],
+                            "scores": [0.5, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_22",
+            "objectives" : [
+                
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 10],
+                            "scores": [0.5, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_23",
+            "objectives" : [
+                
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 10],
+                            "scores": [0.5, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_24",
+            "objectives" : [
+                
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 10],
+                            "scores": [0.5, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_25",
+            "objectives" : [
+                
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 10],
+                            "scores": [0.5, 1.0]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "toy_mission_26",
+            "objectives" : [
+                
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 10],
+                            "scores": [0.5, 1.0]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

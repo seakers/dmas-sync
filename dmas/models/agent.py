@@ -21,7 +21,7 @@ from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAct
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.planning.tracker import ObservationHistory, ObservationTracker
-from dmas.models.science.processing import DataProcessor
+from dmas.models.science.processing import ObservationDataProcessor
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.science.requests import TaskRequest
 from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
@@ -37,7 +37,7 @@ class SimulationAgent(object):
                  mission : Mission,
                  simulation_results_path : str,
                  orbitdata : OrbitData,
-                 processor : DataProcessor = None, 
+                 processor : ObservationDataProcessor = None, 
                  preplanner : AbstractPeriodicPlanner = None,
                  replanner : AbstractReactivePlanner = None,
                  level : int = logging.INFO, 
@@ -53,7 +53,7 @@ class SimulationAgent(object):
         agent_results_path = os.path.join(simulation_results_path, agent_name.lower())
         assert os.path.exists(agent_results_path), f"Agent results path {agent_results_path} does not exist."
         assert isinstance(orbitdata, OrbitData), "Orbit data must be an OrbitData object."
-        assert processor is None or isinstance(processor, DataProcessor), "Processor must be a DataProcessor object or None."
+        assert processor is None or isinstance(processor, ObservationDataProcessor), "Processor must be a DataProcessor object or None."
         assert preplanner is None or isinstance(preplanner, AbstractPeriodicPlanner), "Preplanner must be an AbstractPeriodicPlanner object or None."
         assert replanner is None or isinstance(replanner, AbstractReactivePlanner), "Replanner must be an AbstractReactivePlanner object or None."
         assert isinstance(level, int), "Logging level must be an integer."
@@ -77,7 +77,7 @@ class SimulationAgent(object):
         self._state : SimulationAgentState = initial_state
         self._mission : Mission = mission
         
-        self._processor : DataProcessor = processor
+        self._processor : ObservationDataProcessor = processor
         self._preplanner : AbstractPeriodicPlanner = preplanner
         self._replanner : AbstractReactivePlanner = replanner
 

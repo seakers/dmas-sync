@@ -1,0 +1,3 @@
+lat [deg],lon [deg],start time [s],duration [s],severity,measurements
+1.0,0.0,0.0,6000.0,10.0,"[visible,sar,thermal]"
+-1.0,0.0,0.0,6000.0,10.0,"[visible,sar,thermal]"

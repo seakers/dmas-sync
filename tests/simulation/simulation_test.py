@@ -227,8 +227,7 @@ class TestSimulationLoading(unittest.TestCase):
         TEST CASES
     ============================================
     """
-    def test_simulation_loads_successfully(self):
-        
+    def test_simulation_loads_successfully(self):        
         # check that simulation is initialized
         self.assertIsInstance(self.simulation, Simulation)
         self.assertIsInstance(self.simulation._environment, SimulationEnvironment)
@@ -247,14 +246,20 @@ class TestSimulationLoading(unittest.TestCase):
         # evaluate internal checks
         self.assertTrue(self.simulation.is_executed())
 
-    # def test_simulation_results_processing(self):
-    #     # execute simulation
-    #     val = self.simulation.execute()
+    def test_simulation_results_processing(self):
+        # execute simulation
+        val = self.simulation.execute()
 
-    #     # ensure simulation termination 
-    #     self.assertTrue(val)
+        # ensure simulation termination 
+        self.assertTrue(val)
 
-    #     # TODO
+        # process results
+        results_summary : pd.DataFrame\
+              = self.simulation.process_results(display_summary=True, precision=4)
+        
+        # check that results summary is a dataframe
+        self.assertIsInstance(results_summary, pd.DataFrame)
+        self.assertGreaterEqual(len(results_summary), 1)
 
 if __name__ == '__main__':
     # just ensure it runs without error

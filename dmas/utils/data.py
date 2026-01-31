@@ -1,62 +1,77 @@
-from typing import Dict
+from collections import defaultdict
+import os
+from typing import Dict, List
 import numpy as np
 
-from execsatm.mission import Mission
-from execsatm.utils import Interval
-from dmas.core.orbitdata import OrbitData
+from tqdm import tqdm
+import pandas as pd
 
-class DataProcessor:
+from execsatm.mission import Mission
+from execsatm.events import GeophysicalEvent
+from execsatm.tasks import GenericObservationTask, DefaultMissionTask, EventObservationTask
+from execsatm.objectives import DefaultMissionObjective, EventDrivenObjective
+from execsatm.requirements import ExplicitCapabilityRequirement
+from execsatm.utils import Interval
+
+from dmas.models.science.requests import TaskRequest
+from dmas.core.orbitdata import OrbitData
+from dmas.utils.tools import SimulationRoles
+
+class ResultsProcessor:
+    @staticmethod
+    def process_results(results_path : str,
+                        compiled_orbitdata : Dict[str, OrbitData], 
+                        agent_missions : Dict[str, Mission], 
+                        events : List[GeophysicalEvent],
+                        printouts: bool = True, 
+                        precision: int = 3
+                    ) -> pd.DataFrame:
+        """ processes simulation results after execution """
+        
+        # collect results
+        if printouts: print('Collecting observations performed data...')
+        compiled_orbitdata, agent_missions, observations_performed, \
+            events, events_detected, task_reqs, tasks_known, agent_broadcasts_df \
+                = ResultsProcessor.__collect_results(results_path, compiled_orbitdata, agent_missions, events, printouts)          
+
+        # summarize results
+        if printouts: print('Generating results summary...')
+        results_summary : pd.DataFrame \
+            = ResultsProcessor.__summarize_results(compiled_orbitdata, agent_missions, observations_performed, \
+                                    events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, precision)
+        
+        # return results summary
+        return results_summary
 
     @staticmethod
-    def collect_results(orbitdata_dir : str, duration : float) -> tuple:
-        # collect results
-        print('Collecting orbit data...')
-        compiled_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, duration) \
-            if orbitdata_dir is not None else None
-        # collect missions
-        print('Collecting mission data...')
-        agent_missions : Dict[str, Mission] = {agent.get_element_name(): agent.mission 
-                                                for agent in self.agents}
+    def __collect_results(results_path : str,
+                          compiled_orbitdata : Dict[str, OrbitData], 
+                          agent_missions : Dict[str, Mission], 
+                          events : List[GeophysicalEvent],
+                          printouts : bool = True
+                        ) -> tuple:
+        # define results path for the environment
+        environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())
 
         # collect observations
-        print('Collecting observations performed data...')
         try:
-            observations_performed_path = os.path.join(self.environment.results_path, 'measurements.parquet')
+            observations_performed_path = os.path.join(environment_results_path, 'measurements.parquet')
             observations_performed = pd.read_parquet(observations_performed_path)
-            print('SUCCESS!')
+            if printouts: print('SUCCESS!')
 
         except pd.errors.EmptyDataError:
             columns = ['observer','t_img','lat','lon','range','look','incidence','zenith','instrument_name']
             observations_performed = pd.DataFrame(data=[],columns=columns)
-            print('No observations were performed during the simulation.')
-
-        # load all scenario events
-        print('Loading event data...')
-        events_df = pd.read_csv(self.environment.events_path)         
-
-        # filter out events that do not occur during this simulation
-        events_df = events_df[events_df['start time [s]'] <= self.duration*3600*24] 
-
-        # convert event to dataframe to list of GeophysicalEvent
-        events : list[GeophysicalEvent] = []
-        for _,row in events_df.iterrows():
-            event = GeophysicalEvent(
-                row['event type'],
-                (row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['gp_index']),
-                row['start time [s]'],
-                row['duration [s]'],
-                row['severity'],
-                row['start time [s]'],
-                row.get('id',None)
-            )
-            events.append(event)
+            if printouts: print('No observations were performed during the simulation.')
 
         # compile events detected
-        print('Collecting event detection data...')
+        if printouts: print('Collecting event detection data...')
         events_detected_df : pd.DataFrame = None
-        for agent in self.agents:
-            _,agent_name = agent.name.split('/')
-            events_detected_path = os.path.join(self.results_path, agent_name.lower(), 'events_detected.parquet')
+        for agent_name in compiled_orbitdata.keys():            
+            # define path to agent's detected events file
+            events_detected_path = os.path.join(results_path, agent_name.lower(), 'events_detected.parquet')
+            
+            # skip if file doesn't exist
             if not os.path.isfile(events_detected_path): continue
 
             # load detected events            
@@ -91,9 +106,9 @@ class DataProcessor:
             events_detected.append(event)
 
         # compile measurement requests
-        print('Collecting measurement request data...')
+        if printouts: print('Collecting measurement request data...')
         try:
-            task_reqs_df = pd.read_parquet((os.path.join(self.environment.results_path, 'requests.parquet')))
+            task_reqs_df = pd.read_parquet((os.path.join(environment_results_path, 'requests.parquet')))
         except pd.errors.EmptyDataError:
             columns = ['id','requester','lat [deg]','lon [deg]','severity','t start','t end','t corr','Measurment Types']
             task_reqs_df = pd.DataFrame(data=[],columns=columns)
@@ -142,9 +157,8 @@ class DataProcessor:
 
         # compile default tasks from every agent
         default_tasks_df : pd.DataFrame = None
-        for agent in self.agents:
-            _,agent_name = agent.name.split('/')
-            known_tasks_path = os.path.join(self.results_path, agent_name.lower(), 'known_tasks.parquet')
+        for agent_name in compiled_orbitdata.keys():
+            known_tasks_path = os.path.join(results_path, agent_name.lower(), 'known_tasks.parquet')
             if not os.path.isfile(known_tasks_path): continue
             
             # load default tasks
@@ -189,15 +203,15 @@ class DataProcessor:
                             if req.task not in tasks_known])
         
         # compile broadcast history
-        agent_broadcasts_df = pd.read_parquet((os.path.join(self.environment.results_path, 'broadcasts.parquet')))
+        agent_broadcasts_df = pd.read_parquet((os.path.join(environment_results_path, 'broadcasts.parquet')))
         # IDEA remove duplicates? 
         # agent_broadcasts_df = agent_broadcasts_df.drop_duplicates().reset_index(drop=True)
 
         # return collected results
         return compiled_orbitdata, agent_missions, observations_performed, events, events_detected, task_reqs, tasks_known, agent_broadcasts_df
 
-    def _summarize_results(self, 
-                            compiled_orbitdata : Dict[str, OrbitData], 
+    @staticmethod
+    def __summarize_results(compiled_orbitdata : Dict[str, OrbitData], 
                             agent_missions : Dict[str, Mission],
                             observations_performed : pd.DataFrame, 
                             events : List[GeophysicalEvent], 
@@ -216,12 +230,13 @@ class DataProcessor:
                     events_co_observable_fully, events_co_obs_fully, \
                         events_co_observable_partially, events_co_obs_partially, \
                                 tasks_observable, tasks_observed \
-                                    = self._classify_observations(compiled_orbitdata,
-                                                                observations_performed, 
-                                                                events, 
-                                                                events_detected,
-                                                                task_reqs,
-                                                                tasks_known)       
+                                    = ResultsProcessor.__classify_observations(compiled_orbitdata,
+                                                                               agent_missions,
+                                                                               observations_performed, 
+                                                                               events, 
+                                                                               events_detected,
+                                                                               task_reqs,
+                                                                               tasks_known)       
 
         # count observations performed
         # n_events, n_unique_event_obs, n_total_event_obs,
@@ -236,7 +251,7 @@ class DataProcessor:
                                         n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
                                             n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
                                                 n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
-                                                    = self._count_observations(  compiled_orbitdata, 
+                                                    = ResultsProcessor.__count_observations(  compiled_orbitdata, 
                                                                                 observations_performed, 
                                                                                 observations_per_gp,
                                                                                 events, 
@@ -269,7 +284,7 @@ class DataProcessor:
                                         p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
                                             p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, \
                                                 p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable \
-                                                    = self._calc_event_probabilities(compiled_orbitdata, 
+                                                    = ResultsProcessor.__calc_event_probabilities(compiled_orbitdata, 
                                                                                     gps_accessible,
                                                                                     observations_performed, 
                                                                                     observations_per_gp,
@@ -292,8 +307,8 @@ class DataProcessor:
                                                                                     tasks_observed)
         
         # calculate event revisit times
-        t_gp_reobservation = self._calc_groundpoint_coverage_metrics(observations_per_gp)
-        t_event_reobservation = self._calc_event_coverage_metrics(events_observed)
+        t_gp_reobservation = ResultsProcessor.__calc_groundpoint_coverage_metrics(observations_per_gp)
+        t_event_reobservation = ResultsProcessor.__calc_event_coverage_metrics(events_observed)
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -424,8 +439,9 @@ class DataProcessor:
 
         return pd.DataFrame(summary_data, columns=summary_headers)
                         
-    def _classify_observations(self, 
-                                compiled_orbitdata : Dict[str, OrbitData], 
+    @staticmethod
+    def __classify_observations(compiled_orbitdata : Dict[str, OrbitData], 
+                                agent_missions : Dict[str, Mission],
                                 observations_performed : pd.DataFrame,
                                 events : List[GeophysicalEvent], 
                                 events_detected : List[GeophysicalEvent], 
@@ -471,11 +487,12 @@ class DataProcessor:
                             leave=True):
             
             access_intervals, matching_detections, matching_requests, matching_observations \
-                = self.__collect_event_observation(event, 
-                                            compiled_orbitdata, 
-                                            events_detected, 
-                                            task_reqs, 
-                                            observations_per_gp)
+                = ResultsProcessor.__collect_event_observation(event, 
+                                                               agent_missions,
+                                                               compiled_orbitdata, 
+                                                               events_detected, 
+                                                               task_reqs, 
+                                                               observations_per_gp)
 
             if access_intervals: events_observable[event] = access_intervals
             if matching_detections: events_detected[event] = matching_detections
@@ -625,21 +642,32 @@ class DataProcessor:
             # compile observation requirements for this task
             instrument_capability_reqs : Dict[str, set] = defaultdict(set)
 
-            # group requirements by agents to avoid double counting
-            for _,mission in self.missions.items():
+            for agent_name, mission in agent_missions.items():
                 # find objectives matching this task
                 if task.objective not in mission: continue # skip if objective not in mission
 
-                # find agents belonging to this mission
-                agents = [agent for agent in self.agents if agent.mission == mission]
-                    
                 # collect instrument capability requirements
                 for req in task.objective:
                     # check if requirement is an instrument capability requirement
                     if (isinstance(req, ExplicitCapabilityRequirement) 
                         and req.attribute == 'instrument'):
-                        for agent in agents:
-                            instrument_capability_reqs[agent.get_element_name()].update({val.lower() for val in req.valid_values})
+                        instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
+
+            # # group requirements by agents to avoid double counting
+            # for _,mission in self.missions.items():
+            #     # find objectives matching this task
+            #     if task.objective not in mission: continue # skip if objective not in mission
+
+            #     # find agents belonging to this mission
+            #     agents = [agent for agent in self.agents if agent.mission == mission]
+                    
+            #     # collect instrument capability requirements
+            #     for req in task.objective:
+            #         # check if requirement is an instrument capability requirement
+            #         if (isinstance(req, ExplicitCapabilityRequirement) 
+            #             and req.attribute == 'instrument'):
+            #             for agent in agents:
+            #                 instrument_capability_reqs[agent.get_element_name()].update({val.lower() for val in req.valid_values})
 
             # find all accesses and observations that match this task
             task_observations = []
@@ -727,12 +755,14 @@ class DataProcessor:
                             events_co_observable_partially, events_co_obs_partially, \
                                 tasks_observable, tasks_observed
 
-    def __collect_event_observation(self, 
-                                event : GeophysicalEvent, 
-                                compiled_orbitdata : Dict[str, OrbitData],
-                                events_detected : List[GeophysicalEvent], 
-                                task_reqs :  List[TaskRequest], 
-                                observations_per_gp : Dict[tuple, pd.DataFrame]) -> tuple:
+    @staticmethod
+    def __collect_event_observation(event : GeophysicalEvent, 
+                                    agent_missions : Dict[str, Mission],
+                                    compiled_orbitdata : Dict[str, OrbitData],
+                                    events_detected : List[GeophysicalEvent], 
+                                    task_reqs :  List[TaskRequest], 
+                                    observations_per_gp : Dict[tuple, pd.DataFrame]
+                                ) -> tuple:
         """ Finds accesses, detections, requests, and observations that match a given event."""
 
         # unpackage event
@@ -746,11 +776,8 @@ class DataProcessor:
         instrument_capability_reqs : Dict[str, set] = defaultdict(set)
 
         # group requirements by agents to avoid double counting
-        for _,mission in self.missions.items():
+        for agent_name,mission in agent_missions.items():
             for objective in mission:
-                # find agents belonging to this mission
-                agents = [agent for agent in self.agents if agent.mission == mission]
-
                 # check if objective matches event type
                 if (isinstance(objective, EventDrivenObjective) 
                     and objective.event_type.lower() == event_type):
@@ -760,8 +787,24 @@ class DataProcessor:
                         # check if requirement is an instrument capability requirement
                         if (isinstance(req, ExplicitCapabilityRequirement) 
                             and req.attribute == 'instrument'):
-                            for agent in agents:
-                                instrument_capability_reqs[agent.get_element_name()].update({val.lower() for val in req.valid_values})
+                            instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
+                            
+        # for _,mission in self.missions.items():
+        #     for objective in mission:
+        #         # find agents belonging to this mission
+        #         agents = [agent for agent in self.agents if agent.mission == mission]
+
+        #         # check if objective matches event type
+        #         if (isinstance(objective, EventDrivenObjective) 
+        #             and objective.event_type.lower() == event_type):
+                    
+        #             # collect instrument capability requirements
+        #             for req in objective:
+        #                 # check if requirement is an instrument capability requirement
+        #                 if (isinstance(req, ExplicitCapabilityRequirement) 
+        #                     and req.attribute == 'instrument'):
+        #                     for agent in agents:
+        #                         instrument_capability_reqs[agent.get_element_name()].update({val.lower() for val in req.valid_values})
 
         if any([len(instrument_capability_reqs[agent_name]) == 0 
                     for agent_name in instrument_capability_reqs]):
@@ -841,16 +884,8 @@ class DataProcessor:
         # return classified data
         return access_intervals, matching_detections, matching_requests, matching_observations
 
-    def str2interval(self, s : str) -> Interval:
-        s = s.replace(']','')
-        s = s.replace('[','')
-        s = s.split(',')
-
-        vals = [float(val) for val in s]
-        return Interval(vals[0],vals[1])
-
-    def _count_observations(self, 
-                            orbitdata : dict, 
+    @staticmethod
+    def __count_observations(orbitdata : dict, 
                             observations_performed : pd.DataFrame, 
                             observations_per_gp : dict,
                             events : List[GeophysicalEvent],
@@ -1011,7 +1046,8 @@ class DataProcessor:
                                                 n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
                                                     n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved
 
-    def _calc_event_probabilities(self,
+    @staticmethod
+    def __calc_event_probabilities(
                                     orbitdata : dict, 
                                     gps_accessible : dict,
                                     observations_performed : pd.DataFrame, 
@@ -1047,7 +1083,7 @@ class DataProcessor:
                                         n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
                                             n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
                                                 n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
-                                                    = self._count_observations( orbitdata, 
+                                                    = ResultsProcessor.__count_observations( orbitdata, 
                                                                                 observations_performed, 
                                                                                 observations_per_gp,
                                                                                 events, 
@@ -1231,9 +1267,8 @@ class DataProcessor:
                                         p_task_observable, p_event_task_observable, p_default_task_observable, p_task_observed, p_event_task_observed, p_default_task_observed, p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
                                             p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable
 
-    def _calc_groundpoint_coverage_metrics(self,
-                                    observations_per_gp: Dict[tuple, pd.DataFrame]
-                                    ) -> tuple:
+    @staticmethod
+    def __calc_groundpoint_coverage_metrics(observations_per_gp: Dict[tuple, pd.DataFrame]) -> tuple:
         # event reobservation times
         t_reobservations : list = []
         for _,observations in observations_per_gp.items():
@@ -1269,7 +1304,8 @@ class DataProcessor:
 
         return t_reobservation
 
-    def _calc_event_coverage_metrics(self, events_observed : dict) -> tuple:
+    @staticmethod
+    def __calc_event_coverage_metrics(events_observed : dict) -> tuple:
         t_reobservations : list = []
         for event in events_observed:
             prev_observation = None

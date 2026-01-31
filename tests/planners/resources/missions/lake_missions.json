@@ -1,0 +1,170 @@
+{
+    "missions" : [
+        {
+            "name": "Algal bloom comprehensive",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.4,
+                    "requirements" : [
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [10, 30, 100],
+                            "scores": [1.0, 0.7, 0.1]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "spectral_resolution",
+                            "strategy" : "categorical",
+                            "preferences" : {
+                                "Hyperspectral": 1,
+                                "Multispectral": 0.5
+                            }
+                        },
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type" : "spatial",
+                            "attribute" : "location",
+                            "strategy" : "grid",
+                            "grid_name" : "lake_event_points",
+                            "grid_index" : 0,
+                            "grid_size" : 5001
+                        }                     
+                    ]
+                },
+
+                {
+                    "objective_type" : "event_driven",
+                    "event_type" : "algal bloom",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.6,
+                    "requirements" : [
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [10, 30, 100],
+                            "scores": [1.0, 0.7, 0.1]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "spectral_resolution",
+                            "strategy" : "categorical",
+                            "preferences" : {
+                                "Hyperspectral": 1,
+                                "Multispectral": 0.5
+                            }
+                        },
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type" : "spatial",
+                            "attribute" : "location",
+                            "strategy" : "grid",
+                            "grid_name" : "lake_event_points",
+                            "grid_index" : 0,
+                            "grid_size" : 5001
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Algal bloom response",
+            "objectives" : [                
+                {
+                    "objective_type" : "event_driven",
+                    "event_type" : "algal bloom",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "requirements" : [
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [10, 30, 100],
+                            "scores": [1.0, 0.7, 0.1]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "spectral_resolution",
+                            "strategy" : "categorical",
+                            "preferences" : {
+                                "Hyperspectral": 1,
+                                "Multispectral": 0.5
+                            }
+                        },
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type" : "spatial",
+                            "attribute" : "location",
+                            "strategy" : "grid",
+                            "grid_name" : "lake_event_points",
+                            "grid_index" : 0,
+                            "grid_size" : 5001
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Algal bloom monitoring",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "requirements" : [
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [10, 30, 100],
+                            "scores": [1.0, 0.7, 0.1]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "spectral_resolution",
+                            "strategy" : "categorical",
+                            "preferences" : {
+                                "Hyperspectral": 1,
+                                "Multispectral": 0.5
+                            }
+                        },
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type" : "spatial",
+                            "attribute" : "location",
+                            "strategy" : "grid",
+                            "grid_name" : "lake_event_points",
+                            "grid_index" : 0,
+                            "grid_size" : 5001
+                        }                     
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -36,7 +36,8 @@ from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPlann
 from dmas.models.planning.decentralized.nadir import NadirPointingPlanner
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
-from dmas.models.science.processing import DataProcessor, LookupProcessor
+from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
+from dmas.utils.data import ResultsProcessor
 from dmas.utils.tools import SimulationRoles
 
 class Simulation:
@@ -46,6 +47,7 @@ class Simulation:
                  results_path : str,
                  orbitdata : Dict[str, OrbitData],
                  missions : Dict[str, Mission],
+                 events : List[GeophysicalEvent],
                  environment : SimulationEnvironment,
                  agents : List[SimulationAgent],
                  level : int,
@@ -79,8 +81,14 @@ class Simulation:
         assert isinstance(name, str), "Simulation name must be a string."
         assert isinstance(duration, (int, float)) and duration > 0, "Duration must be a positive number."
         assert isinstance(results_path, str), "Results path must be a string."
-        assert isinstance(orbitdata, dict), "Orbit data must be a dictionary."
         assert isinstance(missions, dict), "Missions must be a dictionary."
+        assert all(isinstance(mission, Mission) for mission in missions.values()), \
+            "All values in missions must be Mission objects."
+        assert isinstance(orbitdata, dict), "Orbit data must be a dictionary."
+        assert all(isinstance(od, OrbitData) for od in orbitdata.values()), \
+            "All values in orbitdata must be OrbitData objects."
+        assert isinstance(events, list) and all(isinstance(event, GeophysicalEvent) for event in events), \
+            "Events must be a list of GeophysicalEvent objects."
         assert isinstance(environment, SimulationEnvironment), "Environment must be a SimulationEnvironment object."
         assert isinstance(agents, list) and all(isinstance(agent, SimulationAgent) for agent in agents), \
             "Agents must be a list of SimulationAgent objects."
@@ -93,6 +101,7 @@ class Simulation:
         self._results_path : str = results_path         
         self._orbitdata : Dict[str, OrbitData] = orbitdata
         self._missions : Dict[str, Mission] = missions
+        self._events : List[GeophysicalEvent] = events
         self._environment : SimulationEnvironment = environment
         self._agents : list[SimulationAgent] = agents
         self._level = level
@@ -206,16 +215,18 @@ class Simulation:
             results_summary : pd.DataFrame = pd.read_csv(summary_path)
 
         else:
-            # collect results
-            compiled_orbitdata, agent_missions, observations_performed, \
-                events, events_detected, task_reqs, tasks_known, agent_broadcasts_df \
-                      = self.__collect_results()           
+            # map agent names to their respective missions
+            agent_missions : Dict[str, Mission] = {agent.name : agent._mission
+                                        for agent in self._agents}
 
-            # summarize results
-            print('Generating results summary...')
+            # generate results summary
             results_summary : pd.DataFrame \
-                = self._summarize_results(compiled_orbitdata, agent_missions, observations_performed, \
-                                          events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, precision)
+                = ResultsProcessor.process_results(self._results_path,
+                                               self._orbitdata,
+                                               agent_missions,
+                                               self._events,
+                                               printouts=display_summary,
+                                               precision=precision)
 
         # log results summary
         if display_summary:
@@ -382,6 +393,7 @@ class Simulation:
                           results_path,
                           simulation_orbitdata,
                           simulation_missions,
+                          events,
                           environment,
                           agents,
                           level)
@@ -543,7 +555,7 @@ class Simulation:
             "mission deep copy failed."
         
         # initialize observation data processor 
-        processor : DataProcessor = \
+        processor : ObservationDataProcessor = \
             Simulation.__load_data_processor(science_dict, agent_name, agent_mission)
         
         # load planners
@@ -657,7 +669,7 @@ class Simulation:
     def __load_data_processor(science_dict : dict, 
                             agent_name : str,
                             mission : Mission
-                        ) -> DataProcessor:
+                        ) -> ObservationDataProcessor:
         if science_dict is not None:
             science_dict : dict
 

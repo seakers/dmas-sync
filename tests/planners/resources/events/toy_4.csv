@@ -1,0 +1,2 @@
+gp_index,lat [deg],lon [deg],start time [s],duration [s],severity,event type,decorrelation time [s],id
+0,0.0,0.0,5.0,7200.0,10.0,algal bloom,100.0,4e4286b4-2f77-11f0-ab21-b42e993745e8

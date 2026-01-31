@@ -14,7 +14,7 @@ from execsatm.tasks import EventObservationTask
 from dmas.core.messages import *
 from dmas.models.science.requests import TaskRequest
 
-class DataProcessor(ABC):
+class ObservationDataProcessor(ABC):
     """
     # Data Processor
     Processes observation data and provides ev
@@ -108,7 +108,7 @@ class DataProcessor(ABC):
         """ Processes incoming observation data and returns the characteristics of the event being detected if this exists """
 
     
-class LookupProcessor(DataProcessor):
+class LookupProcessor(ObservationDataProcessor):
     def __init__(self, events_path : str, parent_name : str, mission : Mission):
         """ 
         ## Lookuup Table Science Module

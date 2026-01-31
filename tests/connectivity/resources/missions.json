@@ -1,0 +1,37 @@
+{
+    "missions" : [
+        {
+            "name": "sample_mission",
+            "objectives" : [
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1.0,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 7200],
+                            "scores": [0.1, 1.0]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

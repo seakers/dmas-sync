@@ -1,0 +1,4 @@
+index,name,lat[deg],lon[deg],alt[km],minElevation[deg]
+0,GS_0,0.0,0.0,0.0,15.0
+1,GS_1,0.0,120.0,0.0,15.0
+2,GS_2,0.0,240.0,0.0,15.0
