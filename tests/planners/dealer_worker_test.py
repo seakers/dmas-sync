@@ -3,8 +3,8 @@ import copy
 
 import numpy as np
 
-from chess3d.simulation import Simulation
-from chess3d.utils import print_banner
+from dmas.core.simulation import Simulation
+from dmas.utils.tools import print_scenario_banner
 from tests.planners.tester import PlannerTester
 
 class TestDealerWorker(PlannerTester, unittest.TestCase):
@@ -93,7 +93,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         worker_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # hyperspectral imager instrument
         
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -154,7 +154,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         worker_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # hyperspectral imager instrument
         
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,

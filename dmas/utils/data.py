@@ -57,7 +57,7 @@ class ResultsProcessor:
         try:
             observations_performed_path = os.path.join(environment_results_path, 'measurements.parquet')
             observations_performed = pd.read_parquet(observations_performed_path)
-            if printouts: print('SUCCESS!')
+            # if printouts: print('SUCCESS!')
 
         except pd.errors.EmptyDataError:
             columns = ['observer','t_img','lat','lon','range','look','incidence','zenith','instrument_name']
@@ -638,7 +638,7 @@ class ResultsProcessor:
         tasks_observable : Dict[GenericObservationTask, list] = defaultdict(list)
         tasks_observed : Dict[GenericObservationTask, list] = defaultdict(list)
 
-        for task in known_tasks:
+        for task in tqdm(known_tasks, desc="Processing task observations", leave=True):
             # compile observation requirements for this task
             instrument_capability_reqs : Dict[str, set] = defaultdict(set)
 
@@ -673,23 +673,34 @@ class ResultsProcessor:
             task_observations = []
             task_access_windows = []
 
+            # get matching accesses for this task by time
+            task_accesses = []
+            for agent_name, agent_orbit_data in compiled_orbitdata.items():
+                # get access intervals for an agent observing this task's availability window
+                access_intervals = agent_orbit_data.gp_access_data.lookup_interval(task.availability.left, task.availability.right)
+                
+                # skip if no accesses found
+                if len(access_intervals['time [s]']) == 0: continue
+
+                for i in range(len(access_intervals['time [s]'])):
+                    row ={col : access_intervals[col][i] for col in access_intervals}
+                    # add to task accesses list
+                    task_accesses.append(row)
+                
             # check all task locations
             for location in task.location:
                 # unpack location
                 task_lat,task_lon,task_grid_idx, task_gp_idx = location
                 task_lat = round(task_lat,6)
-                task_lon = round(task_lon,6)
-                        
-                # find access times that overlook a given task's location
+                task_lon = round(task_lon,6)                
+                
                 matching_accesses = [
-                                (t, row['agent name'], row['instrument'])
-                                for agent_name, agent_orbit_data in compiled_orbitdata.items()
-                                for t,row in agent_orbit_data.gp_access_data
-                                if t in task.availability
-                                and abs(task_lat - row['lat [deg]']) < 1e-3 
-                                and abs(task_lon - row['lon [deg]']) < 1e-3
-                                and row['instrument'].lower() in instrument_capability_reqs[agent_name]
-                            ]
+                                    (access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
+                                    for access_interval in task_accesses
+                                    if abs(task_lat - access_interval['lat [deg]']) < 1e-3 
+                                    and abs(task_lon - access_interval['lon [deg]']) < 1e-3
+                                    and access_interval['instrument'].lower() in instrument_capability_reqs[agent_name]
+                                ]
                 
                 # initialize map of compiled access intervals
                 access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)

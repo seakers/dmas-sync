@@ -99,22 +99,27 @@ class SimulationAgentState(AbstractAgentState):
                     t : Union[int, float], 
                     status : str = None, 
                     state : dict = None) -> None:
+        # check time-step
+        if t - self._t < -1e-5: raise ValueError(f"cannot update agent state with negative time-step of {t - self._t} [s].")
+        
+        # update position and velocity
+        if state is None:
+            self.pos, self.vel, self.attitude, self.attitude_rates = self.kinematic_model(t)
+        else:
+            self.pos = state['pos']
+            self.vel = state['vel']
+            self.attitude = state['attitude']
+            self.attitude_rates = state['attitude_rates']
 
-        if t - self._t >= 0:
-            # update position and velocity
-            if state is None:
-                self.pos, self.vel, self.attitude, self.attitude_rates = self.kinematic_model(t)
-            else:
-                self.pos = state['pos']
-                self.vel = state['vel']
-                self.attitude = state['attitude']
-                self.attitude_rates = state['attitude_rates']
+        assert len(self.pos) == 3, "position vector must be of length 3."
+        assert len(self.vel) == 3, "velocity vector must be of length 3."
+        assert len(self.attitude) == 3, "attitude vector must be of length 3."
+        assert len(self.attitude_rates) == 3, "attitude rates vector must be of length 3."
 
-            # update time and status
-            self._t = t 
-            self.status = status if status is not None else self.status
-        elif t - self._t < 0:
-            x = 1
+        # update time and status
+        self._t = t 
+        self.status = status if status is not None else self.status
+        
         
     def propagate(self, tf : Union[int, float]) -> tuple:
         """
@@ -232,7 +237,9 @@ class SimulationAgentState(AbstractAgentState):
         return SimulationAgentState.from_dict( d )
 
     def to_dict(self) -> dict:
-        return dict(self.__dict__)
+        d = dict(self.__dict__)
+        d['t'] = d.pop('_t')
+        return d
 
     def from_dict(d : dict) -> object:
         if d['state_type'] == SimulationAgentTypes.GROUND_OPERATOR.value:
@@ -502,6 +509,9 @@ class SatelliteAgentState(SimulationAgentState):
         for i in range(len(self.attitude)):
             th = self.attitude[i] + dt * self.attitude_rates[i]
             attitude.append(th)
+
+            if th > 65.0:
+                x = 1
        
         return pos, vel, attitude, self.attitude_rates
 
@@ -618,96 +628,96 @@ class SatelliteAgentState(SimulationAgentState):
     def __repr__(self):
         return f"SatelliteAgentState(agent_name={self.agent_name}, status={self.status}, t={round(self._t,3)})"
 
-class UAVAgentState(SimulationAgentState):
-    """
-    Describes the state of a UAV Agent
-    """
-    def __init__(   self, 
-                    agent_name : str,
-                    pos: list, 
-                    max_speed: float,
-                    vel: list = [0.0,0.0,0.0], 
-                    eps : float = 1e-6,
-                    status: str = SimulationAgentState.IDLING, 
-                    t: Union[float, int] = 0, 
-                    **_
-                ) -> None:
+# class UAVAgentState(SimulationAgentState):
+#     """
+#     Describes the state of a UAV Agent
+#     """
+#     def __init__(   self, 
+#                     agent_name : str,
+#                     pos: list, 
+#                     max_speed: float,
+#                     vel: list = [0.0,0.0,0.0], 
+#                     eps : float = 1e-6,
+#                     status: str = SimulationAgentState.IDLING, 
+#                     t: Union[float, int] = 0, 
+#                     **_
+#                 ) -> None:
                 
-        super().__init__(   agent_name,
-                            SimulationAgentTypes.UAV.value, 
-                            pos, 
-                            vel, 
-                            [0.0,0.0,0.0], 
-                            [0.0,0.0,0.0], 
-                            status, 
-                            t)
-        self.max_speed = max_speed
-        self.eps = eps        
+#         super().__init__(   agent_name,
+#                             SimulationAgentTypes.UAV.value, 
+#                             pos, 
+#                             vel, 
+#                             [0.0,0.0,0.0], 
+#                             [0.0,0.0,0.0], 
+#                             status, 
+#                             t)
+#         self.max_speed = max_speed
+#         self.eps = eps        
 
-    def kinematic_model(self, tf: Union[int, float]) -> tuple:
-        dt = tf - self._t
+#     def kinematic_model(self, tf: Union[int, float]) -> tuple:
+#         dt = tf - self._t
 
-        if dt < 0:
-            raise RuntimeError(f"cannot propagate UAV state with non-negative time-step of {dt} [s].")
+#         if dt < 0:
+#             raise RuntimeError(f"cannot propagate UAV state with non-negative time-step of {dt} [s].")
 
-        pos = np.array(self.pos) + np.array(self.vel) * dt
-        pos = [
-                pos[0],
-                pos[1],
-                pos[2]
-            ]
+#         pos = np.array(self.pos) + np.array(self.vel) * dt
+#         pos = [
+#                 pos[0],
+#                 pos[1],
+#                 pos[2]
+#             ]
 
-        return pos, self.vel.copy(), self.attitude, self.attitude_rates
+#         return pos, self.vel.copy(), self.attitude, self.attitude_rates
 
-    def perform_travel(self, action: TravelAction, t: Union[int, float]) -> tuple:
-        # calculate time step
-        dt = t - self._t
+#     def perform_travel(self, action: TravelAction, t: Union[int, float]) -> tuple:
+#         # calculate time step
+#         dt = t - self._t
 
-        # update state
-        self.update(t, status=self.TRAVELING)
+#         # update state
+#         self.update(t, status=self.TRAVELING)
 
-        # check completion
-        if self.comp_vectors(self.pos, action.final_pos, self.eps):
-            # if reached, return successful completion status
-            self.vel = [0.0,0.0,0.0]
-            return ActionStatuses.COMPLETED.value, 0.0
+#         # check completion
+#         if self.comp_vectors(self.pos, action.final_pos, self.eps):
+#             # if reached, return successful completion status
+#             self.vel = [0.0,0.0,0.0]
+#             return ActionStatuses.COMPLETED.value, 0.0
         
-        elif t > action.t_end - self.eps:
-            # could not complete action before action end time
-            self.vel = [0.0,0.0,0.0]
-            return ActionStatuses.ABORTED.value, 0.0
+#         elif t > action.t_end - self.eps:
+#             # could not complete action before action end time
+#             self.vel = [0.0,0.0,0.0]
+#             return ActionStatuses.ABORTED.value, 0.0
 
-        # else, wait until position is reached
-        else:
-            # find new direction towards target
-            dr = np.array(action.final_pos) - np.array(self.pos)
-            norm = np.sqrt( dr.dot(dr) )
-            if norm > 0:
-                dr = np.array([
-                                dr[0] / norm,
-                                dr[1] / norm,
-                                dr[2] / norm
-                                ]
-                            )
+#         # else, wait until position is reached
+#         else:
+#             # find new direction towards target
+#             dr = np.array(action.final_pos) - np.array(self.pos)
+#             norm = np.sqrt( dr.dot(dr) )
+#             if norm > 0:
+#                 dr = np.array([
+#                                 dr[0] / norm,
+#                                 dr[1] / norm,
+#                                 dr[2] / norm
+#                                 ]
+#                             )
 
-            # chose new velocity 
-            vel = self.max_speed * dr
-            self.vel = [
-                        vel[0],
-                        vel[1],
-                        vel[2]
-                        ]
+#             # chose new velocity 
+#             vel = self.max_speed * dr
+#             self.vel = [
+#                         vel[0],
+#                         vel[1],
+#                         vel[2]
+#                         ]
 
-            dt = min(action.t_end - t, norm / self.max_speed)
+#             dt = min(action.t_end - t, norm / self.max_speed)
 
-            return ActionStatuses.PENDING.value, dt
+#             return ActionStatuses.PENDING.value, dt
 
-    def perform_maneuver(self, action: ManeuverAction, t: Union[int, float]) -> tuple:
-        # update state
-        self.update(t, status=self.MANEUVERING)
+#     def perform_maneuver(self, action: ManeuverAction, t: Union[int, float]) -> tuple:
+#         # update state
+#         self.update(t, status=self.MANEUVERING)
 
-        # Cannot perform maneuvers
-        return ActionStatuses.ABORTED.value, 0.0
+#         # Cannot perform maneuvers
+#         return ActionStatuses.ABORTED.value, 0.0
 
-    def is_failure(self) -> None:
-        return False
+#     def is_failure(self) -> None:
+#         return False

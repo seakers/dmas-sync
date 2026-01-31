@@ -36,5 +36,186 @@
                 "PYTHONPATH": "${workspaceRoot}"
             }
         },
+        {
+            "name": "TEST: Task Request Definition",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/tasks/requests_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Ground Station Agent Definition",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/agents/gs_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Agent Connectivity Levels",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/connectivity/connectivity_levels_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Agent Connectivity Levels",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/connectivity/connectivity_levels_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "PLANNER TEST: Heuristic Preplanner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/planners/heuristic_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "PLANNER TEST: Earliest Access Preplanner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/planners/earliest_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "PLANNER TEST: Nadir Preplanner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/planners/nadir_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "PLANNER TEST: Dynamic Programming Preplanner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/planners/dp_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        // TODO: re-enable MILP tests when fixed
+        // {
+        //     "name": "PLANNER TEST: Single-Sat MILP Preplanner",
+        //     "type": "debugpy",
+        //     "request": "launch",
+        //     "program": "${workspaceRoot}/tests/planners/single_milp_test.py",
+        //     "console": "integratedTerminal",
+        //     "justMyCode": true,
+        //     "cwd": "${workspaceRoot}",
+        //     "env": {
+        //         "PYTHONPATH": "${workspaceRoot}"
+        //     }
+        // },
+        {
+            "name": "PLANNER TEST: Dealer-Worker Preplanner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/planners/dealer_worker_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "PLANNER TEST: Event Announcer Preplanner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/planners/event_announcer_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Consensus Bids",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/tasks/bid_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Consensus Results",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/tasks/bid_results_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Output Metrics",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/simulation/metrics_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "PLANNER TEST: Consensus Replanner",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/planners/consensus_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        }
     ]
 }

@@ -6,8 +6,8 @@ from typing import List
 
 import pandas as pd
 
-from chess3d.simulation import Simulation
-from chess3d.utils import print_banner
+from dmas.core.simulation import Simulation
+from dmas.utils.tools import print_scenario_banner
 
 class PlannerTester(ABC):
     R = 6357.0 # Radius of the Earth [km]
@@ -367,7 +367,7 @@ class PlannerTester(ABC):
         # if 'replanner' in announcer_spacecraft['planner']: announcer_spacecraft["planner"].pop('replanner') # make announcer purely preplanner
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -435,7 +435,7 @@ class PlannerTester(ABC):
         ractive_spacecraft_2['orbitState']['state']['ta'] = announcer_spacecraft['orbitState']['state']['ta'] - 2.5 # phase offset by 2.5[deg]
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -480,7 +480,7 @@ class PlannerTester(ABC):
         spacecraft['planner'] = self.lakes_planner_config()
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -529,7 +529,7 @@ class PlannerTester(ABC):
         spacecraft_2['name'] = 'sat_2'
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,

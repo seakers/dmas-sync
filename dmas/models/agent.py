@@ -333,9 +333,10 @@ class SimulationAgent(object):
                 pending_actions = []
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
-                if True:
+                # if True:
                 # if 95.0 < state.t < 96.0:
-                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                if state.get_time() > 19 and "1" in state.agent_name:
+                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -348,8 +349,8 @@ class SimulationAgent(object):
         # if 95.0 < state.t < 96.0:
         # if state.t > 96.0:
         if True:
-            # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-            # self.__log_plan(plan_out, "NEXT ACTIONS", logging.WARNING)
+            self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
+            self.__log_plan(plan_out, "NEXT ACTIONS", logging.WARNING)
             x = 1 # breakpoint
         # -------------------------------------        
 
@@ -368,6 +369,9 @@ class SimulationAgent(object):
         """ Update the agent state based on the next actions to perform. """
         # create copy of current state
         action_state : SimulationAgentState = state.copy()
+        
+        assert action_state.get_time() == t, \
+            "State time must match the provided time."
 
         # get next action to perform
         action = plan_out[0]
@@ -617,8 +621,8 @@ class SimulationAgent(object):
                                                     state.to_dict(), 
                                                     {}, 
                                                     {"name" : instrument},
-                                                    state.t,
-                                                    state.t,
+                                                    state.get_time(),
+                                                    state.get_time(),
                                                     observations
                                                     )
                             for instrument, observations in indexed_observations.items()])
@@ -628,7 +632,7 @@ class SimulationAgent(object):
                 elif future_broadcast.broadcast_type == FutureBroadcastMessageAction.REQUESTS:
                     msgs.extend([MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict())
                             for req in self._known_reqs
-                            if req.task.is_available(state.t)                   # only active or future events
+                            if req.task.is_available(state.get_time())                   # only active or future events
                             and (not future_broadcast.only_own_info
                                  and (future_broadcast.desc is None 
                                       or req.task in future_broadcast.desc))    # include requests from all agents if `only_own_info` is not set
@@ -641,7 +645,7 @@ class SimulationAgent(object):
             
             # remove future message action from current plan
             for future_broadcast in future_broadcasts: 
-                self._plan.remove(future_broadcast, state.t)
+                self._plan.remove(future_broadcast, state.get_time())
 
             # check if requested information from future messages was found
             if not msgs:

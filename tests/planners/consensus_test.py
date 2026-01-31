@@ -5,8 +5,8 @@ import unittest
 
 import pandas as pd
 
-from chess3d.simulation import Simulation
-from chess3d.utils import print_banner
+from dmas.core.simulation import Simulation
+from dmas.utils.tools import print_scenario_banner
 from tests.planners.tester import PlannerTester
 
 
@@ -15,7 +15,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
     def setUp(self) -> None:
         super().setUp()
         # planner output toggle
-        self.planner_debug = True
+        self.planner_debug = False
 
         # test case toggles
         ## common cases
@@ -30,7 +30,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_3 = False  # two sats      no default mission  one event
         self.toy_4 = False  # two sats      no default mission  one event           optimistic bidding
         self.toy_5 = False  # two sats      no default mission  one event           comm delays
-        self.toy_6 = False  # two sats      no default mission  two targets         two events
+        self.toy_6 = True  # two sats      no default mission  two targets         two events
         self.toy_7 = False  # two sats      no default mission  two targets         two events at different times
         self.toy_8 = False  # single sat    default mission     multiple targets    no events
         self.toy_9 = False  # two sats      default mission     multiple targets    no events
@@ -289,7 +289,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = "toy_mission_1"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -383,7 +383,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = "toy_mission_2"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -495,7 +495,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_3"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -609,7 +609,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_4"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -722,7 +722,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_5"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -828,7 +828,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_6"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -939,7 +939,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_7"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -995,7 +995,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = "toy_mission_8"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1059,7 +1059,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_9"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1123,7 +1123,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = "toy_mission_10"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1197,7 +1197,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_11"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1252,7 +1252,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = "toy_mission_12"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1316,7 +1316,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_13"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1379,7 +1379,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = "toy_mission_14"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1453,7 +1453,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = "toy_mission_15"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1517,7 +1517,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = "toy_mission_16"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1725,7 +1725,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_3['mission'] = "toy_mission_17"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1822,7 +1822,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_3['mission'] = "toy_mission_18"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1889,7 +1889,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = "toy_mission_19"
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -1968,7 +1968,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -2029,7 +2029,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = mission_name
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -2111,7 +2111,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = mission_name
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -2232,7 +2232,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = mission_name
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -2417,7 +2417,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = mission_name
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -2482,7 +2482,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_1['mission'] = mission_name
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -2559,7 +2559,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['mission'] = mission_name
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
@@ -2646,7 +2646,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         spacecraft['science'] = self.setup_science_config(event_name)
 
         # terminal welcome message
-        print_banner(f'`{scenario_name}` PLANNER TEST')
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
 
         # Generate scenario
         scenario_specs = self.setup_scenario_specs(duration,
