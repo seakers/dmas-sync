@@ -138,6 +138,11 @@ class TestSimulationLoading(unittest.TestCase):
                             "groundStationNetwork" : self.GS_NETWORK_NAME,
                             "mission" : self.MISSION_NAME
                         }
+        # create mission specs with given connectivity
+        self.mission_specs = self.build_mission(connectivity='LOS')
+
+        # initialize mission
+        self.simulation : Simulation = Simulation.from_dict(self.mission_specs, overwrite=True)
 
     """
     ============================================
@@ -223,40 +228,33 @@ class TestSimulationLoading(unittest.TestCase):
     ============================================
     """
     def test_simulation_loads_successfully(self):
-
-       # create mission specs with given connectivity
-        mission_specs = self.build_mission(connectivity='LOS')
-
-        # initialize mission
-        simulation : Simulation = Simulation.from_dict(mission_specs, overwrite=True)
         
         # check that simulation is initialized
-        self.assertIsInstance(simulation, Simulation)
-        self.assertIsInstance(simulation._environment, SimulationEnvironment)
-        self.assertTrue(all(isinstance(agent, SimulationAgent) for agent in simulation._agents))
-        self.assertIsInstance(simulation._orbitdata, dict)
-        self.assertTrue(all(isinstance(orbitdata, OrbitData) for orbitdata in simulation._orbitdata.values()))
-        self.assertEqual(len(simulation._orbitdata), len(simulation._agents))
+        self.assertIsInstance(self.simulation, Simulation)
+        self.assertIsInstance(self.simulation._environment, SimulationEnvironment)
+        self.assertTrue(all(isinstance(agent, SimulationAgent) for agent in self.simulation._agents))
+        self.assertIsInstance(self.simulation._orbitdata, dict)
+        self.assertTrue(all(isinstance(orbitdata, OrbitData) for orbitdata in self.simulation._orbitdata.values()))
+        self.assertEqual(len(self.simulation._orbitdata), len(self.simulation._agents))
 
-    def test_simulation_runs_successfully(self):
-
-       # create mission specs with given connectivity
-        mission_specs = self.build_mission(connectivity='LOS')
-
-        # initialize mission
-        simulation : Simulation = Simulation.from_dict(mission_specs, overwrite=True)
-
+    def test_simulation_runs_successfully(self):       
         # execute simulation
-        val = simulation.execute()
+        val = self.simulation.execute()
 
         # ensure simulation termination 
         self.assertTrue(val)
-
-        # evaluate outputs
-        x = 1
-
+        
         # evaluate internal checks
-    
+        self.assertTrue(self.simulation.is_executed())
+
+    # def test_simulation_results_processing(self):
+    #     # execute simulation
+    #     val = self.simulation.execute()
+
+    #     # ensure simulation termination 
+    #     self.assertTrue(val)
+
+    #     # TODO
 
 if __name__ == '__main__':
     # just ensure it runs without error

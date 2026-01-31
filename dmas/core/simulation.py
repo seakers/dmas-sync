@@ -98,7 +98,7 @@ class Simulation:
         self._level = level
 
         # initialize execution flag
-        self.__executed : bool = self.__check_if_results_exist()
+        self.__executed : bool = False
 
     """
     SIMULATION EXECUTION METHODS
@@ -190,7 +190,45 @@ class Simulation:
                         precision : int = 5
                         ) -> pd.DataFrame:
         """ processes simulation results after execution """
-        raise NotImplementedError('results processing not yet implemented.')
+        # validate execution
+        if not self.is_executed(): raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
+        
+        # print divider
+        if display_summary: print(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
+
+        # define results summary filename
+        summary_path = os.path.join(f"{self._results_path}","summary.csv")
+
+        # check if results summary file exists 
+        if os.path.isfile(summary_path) and not reevaluate:
+            # file exists and reevaluate is False; skip results summary generation
+            print(f"Results summary already exists at: `{summary_path}`")
+            results_summary : pd.DataFrame = pd.read_csv(summary_path)
+
+        else:
+            # collect results
+            compiled_orbitdata, agent_missions, observations_performed, \
+                events, events_detected, task_reqs, tasks_known, agent_broadcasts_df \
+                      = self.__collect_results()           
+
+            # summarize results
+            print('Generating results summary...')
+            results_summary : pd.DataFrame \
+                = self._summarize_results(compiled_orbitdata, agent_missions, observations_performed, \
+                                          events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, precision)
+
+        # log results summary
+        if display_summary:
+            print(f"\n\n{'-'*80}\n")
+            print(f"\nSIMULATION RESULTS SUMMARY:\n")
+            print(results_summary.to_string(index=False))
+            print(f"\n{'='*80}\n")
+
+        # save summary to csv if needed
+        if print_to_csv: results_summary.to_csv(summary_path, index=False)
+
+        # return results summary
+        return results_summary
     
     """
     UTILITY METHODS
@@ -203,12 +241,22 @@ class Simulation:
     def __check_if_results_exist(self) -> bool:
         """ checks if the simulation has been executed by looking for result files """
         # check for existence of result files for all agents
-        return False # TODO
-        # for agent in self._agents:
-        #     agent_results_file = os.path.join(self._results_path, agent.name.lower(), 'results.csv')
-        #     if not os.path.isfile(agent_results_file):
-        #         return False
-        # return True
+        if not self.__executed:
+            print('WARNING: Simulation instance has not been executed yet. Evaluating existing scenario results...\n')
+
+        # ensure all simulation elements have populated their results directories
+        results_dirs = [os.path.join(self._results_path, agent.name.lower()) 
+                        for agent in self._agents]
+        results_dirs += [os.path.join(self._results_path, 'environment')]
+
+        for dir in results_dirs:
+            if not os.path.isdir(dir):
+                return False
+            if len(os.listdir(dir)) < 2:  # assuming at least 2 files indicate results exist
+                return False
+        
+        # all results directories exist and contain files
+        return True
 
     @classmethod
     def from_dict(cls, d : dict, overwrite : bool = False, level=logging.WARNING) -> 'Simulation':
