@@ -1,18 +1,40 @@
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import time
+import traceback
+from dataclasses import dataclass
 
 import argparse
 import copy
 import json
 import os
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 import pandas as pd
+from pyparsing import Dict
+from tqdm import tqdm
 
 from dmas.core.constellations import Constellation, WalkerDeltaConstellation
 from dmas.core.orbitdata import OrbitData
 from dmas.core.simulation import Simulation
 from dmas.utils.tools import LEVELS, print_scenario_banner
+
+
+@dataclass(frozen=True)
+class RunConfig:
+    duration: float
+    step_size: float
+    base_path: str
+    trial_filename: str
+    propagate_only: bool
+    overwrite: bool
+    reevaluate: bool
+    level: int
+    mission_specs_template: dict
+    spacecraft_specs_template: dict
+    instrument_specs: dict
+    ground_operator_specs_template: dict
 
 def get_base_path() -> str:
     # get current working directory
@@ -293,6 +315,176 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
     # return mission specifications
     return mission_specs
 
+def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_segment, task_arrival_rate, target_distribution)
+                  cfg: RunConfig,
+                ) -> Dict:
+    t0 = time.time()
+    scenario_id, num_sats, gnd_segment, task_arrival_rate, target_distribution = trial_row
+
+    # make gnd segment deterministic
+    gnd_segment = 'None' if not isinstance(gnd_segment, str) else gnd_segment
+
+    results_dir = os.path.join(cfg.base_path, 'results', f"{cfg.trial_filename}_scenario_{scenario_id}")
+    results_summary_path = os.path.join(results_dir, 'summary.csv')
+
+    # IMPORTANT: create the scenario directory *before* doing work to reduce races
+    os.makedirs(results_dir, exist_ok=True)
+
+    try:
+        # generate mission specs
+        mission_specs: dict = generate_scenario_mission_specs(
+            cfg.mission_specs_template, cfg.duration, cfg.step_size,
+            cfg.base_path, cfg.trial_filename, scenario_id,
+            num_sats, gnd_segment, target_distribution,
+            cfg.spacecraft_specs_template, cfg.instrument_specs,
+            cfg.ground_operator_specs_template
+        )
+
+        if cfg.propagate_only:
+            orbitdata_dir = OrbitData.precompute(mission_specs)
+            return {
+                "scenario_id": scenario_id,
+                "status": "propagated_only",
+                "orbitdata_dir": orbitdata_dir,
+                "results_dir": results_dir,
+                "elapsed_s": time.time() - t0,
+            }
+
+        # Only initialize/load mission if needed
+        if (not os.path.isfile(results_summary_path)) or cfg.overwrite or cfg.reevaluate:
+            mission: Simulation = Simulation.from_dict(
+                mission_specs,
+                overwrite=cfg.overwrite,
+                level=cfg.level
+            )
+        else:
+            # If summary exists and no reevaluate/overwrite, we might still need to verify completeness
+            mission = None
+
+        # Verify results_dir exists
+        assert os.path.isdir(results_dir), f"Results directory not properly initialized at: {results_dir}"
+
+        execute_conditions = [
+            not os.path.isdir(results_dir),
+            any(
+                (len(os.listdir(os.path.join(results_dir, d))) <= 2)
+                for d in os.listdir(results_dir)
+                if os.path.isdir(os.path.join(results_dir, d)) and 'manager' not in d
+            ),
+            cfg.overwrite
+        ]
+
+        if any(execute_conditions):
+            # if mission wasn't created above (because summary existed), create it now
+            if mission is None:
+                mission = Simulation.from_dict(
+                    mission_specs,
+                    overwrite=cfg.overwrite,
+                    level=cfg.level
+                )
+            mission.execute()
+            status = "executed"
+        else:
+            status = "skipped_existing"
+
+        return {
+            "scenario_id": scenario_id,
+            "status": status,
+            "results_dir": results_dir,
+            "results_summary_path": results_summary_path,
+            "elapsed_s": time.time() - t0,
+        }
+
+    except Exception as e:
+        return {
+            "scenario_id": scenario_id,
+            "status": "error",
+            "error": repr(e),
+            "traceback": traceback.format_exc(),
+            "results_dir": results_dir,
+            "elapsed_s": time.time() - t0,
+        }
+    
+def parallel_run_trials(trials_df : pd.DataFrame, cfg: RunConfig, max_workers: int = None):
+    # Convert to plain tuples to avoid pandas pickling quirks in workers
+    trial_rows = list(trials_df.itertuples(index=False, name=None))
+
+    if max_workers is None:
+        max_workers = min(os.cpu_count() or 1, 8)
+
+    results = []
+    with tqdm(total=len(trial_rows), desc='Performing study', leave=True, mininterval=0.5, unit=' trial') as pbar:
+        with ProcessPoolExecutor(max_workers=max_workers) as ex:
+            fut_map = {ex.submit(run_one_trial, row, cfg): row for row in trial_rows}
+
+            for fut in as_completed(fut_map):
+                row = fut_map[fut]
+                res = fut.result()
+                results.append(res)
+
+                sid = res.get("scenario_id", "???")
+                status = res.get("status")
+                elapsed = res.get("elapsed_s", None)
+                if status == "error":
+                    print(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                else:
+                    print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+                pbar.update(1)
+
+    # Optional: sort by scenario_id
+    results.sort(key=lambda d: d.get("scenario_id", 0))
+    return results
+
+def main_parallellized(trial_filename : str, 
+                      lower_bound : int, 
+                      upper_bound : int, 
+                      level : int, 
+                      propagate_only : bool,
+                      overwrite : bool, 
+                      reevaluate : bool, 
+                      debug : bool):
+    
+    # print welcome
+    print_scenario_banner(f'CBBA Stress Test Study (parallelized) - {trial_filename}')
+    
+    # get base path for experiment
+    base_path : str = get_base_path()
+    
+    # load trials
+    trials : pd.DataFrame = load_trials(base_path, trial_filename, lower_bound, upper_bound)
+    print(f" - Loaded {len(trials)} trials from `{trial_filename}.csv`:  [{lower_bound}:{upper_bound}) ")
+
+    # load templates
+    mission_specs_template, ground_operator_specs_template, \
+        spacecraft_specs_template, instrument_specs = load_templates(base_path)
+    print(f" - Loaded experiment templates from `resources/templates/`")
+
+    # set simulation duration and step size
+    duration = 10000 / 3600 / 24.0 if debug else 1.0 # [days]
+    duration = min(duration, 1.0)                   # cap at 1 day for sanity
+    step_size = 10                                  # [s]
+
+    cfg = RunConfig(
+        duration=duration,
+        step_size=step_size,
+        base_path=base_path,
+        trial_filename=trial_filename,
+        propagate_only=propagate_only,
+        overwrite=overwrite,
+        reevaluate=reevaluate,
+        level=level,
+        mission_specs_template=mission_specs_template,
+        spacecraft_specs_template=spacecraft_specs_template,
+        instrument_specs=instrument_specs,
+        ground_operator_specs_template=ground_operator_specs_template
+    )
+
+    # run trials in parallel
+    run_results = parallel_run_trials(trials, cfg, max_workers=8)
+
+    # study done
+    return run_results
+
 def main(trial_filename : str, 
          lower_bound : int, 
          upper_bound : int, 
@@ -475,7 +667,10 @@ if __name__ == "__main__":
     debug = args.debug
 
     # run main study
-    main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, reevaluate, debug)
+    if upper_bound - lower_bound <= 1:
+        main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, reevaluate, debug)
+    else:
+        main_parallellized(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, reevaluate, debug)
 
     # print outro
     print('\n' + '='*54)

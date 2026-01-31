@@ -244,7 +244,7 @@
             "args": [
                 // "-n", "full_factorial_trials",
                 "-n", "lhs_trials-2_samples-1000_seed",
-                "-o", "False",
+                "-o", "True",
                 "-d", "True",
                 // "-p", "True",
                 "-l", "3",
@@ -265,11 +265,11 @@
             "args": [
                 // "-n", "full_factorial_trials",
                 "-n", "lhs_trials-2_samples-1000_seed",
-                "-o", "True",
+                "-o", "False",
                 // "-d", "True",
                 // "-p", "True",
                 "-l", "0",
-                "-u", "1"
+                "-u", "2"
             ]
         },
     ]
