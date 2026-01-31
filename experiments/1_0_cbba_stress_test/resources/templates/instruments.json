@@ -1,0 +1,68 @@
+{
+    "IMG_A" : {
+        "name": "IMG_A",
+        "@id" : "imager_a",
+        "@type" : "VNIR",
+        "detectorWidth": 6.6e-6,
+        "focalLength": 3.6,  
+        "orientation": {
+            "referenceFrame": "NADIR_POINTING",
+            "convention": "REF_FRAME_ALIGNED"
+        },
+        "fieldOfViewGeometry": { 
+            "shape": "RECTANGULAR", 
+            "angleHeight": 2.5, 
+            "angleWidth": 2.5
+        },
+        "maneuver" : {
+            "maneuverType":"SINGLE_ROLL_ONLY",
+            "A_rollMin": -80,
+            "A_rollMax": 80
+        },
+        "spectral_resolution" : "Hyperspectral"
+    },
+    "IMG_B" : {
+        "name": "IMG_B",
+        "@id" : "imager_b",
+        "@type" : "VNIR",
+        "detectorWidth": 6.6e-6,
+        "focalLength": 3.6,  
+        "orientation": {
+            "referenceFrame": "NADIR_POINTING",
+            "convention": "REF_FRAME_ALIGNED"
+        },
+        "fieldOfViewGeometry": { 
+            "shape": "RECTANGULAR", 
+            "angleHeight": 2.5, 
+            "angleWidth": 2.5
+        },
+        "maneuver" : {
+            "maneuverType":"SINGLE_ROLL_ONLY",
+            "A_rollMin": -80,
+            "A_rollMax": 80
+        },
+        "spectral_resolution" : "Hyperspectral"
+    },
+    "IMG_C" : {
+        "name": "IMG_C",
+        "@id" : "imager_c",
+        "@type" : "VNIR",
+        "detectorWidth": 6.6e-6,
+        "focalLength": 3.6,  
+        "orientation": {
+            "referenceFrame": "NADIR_POINTING",
+            "convention": "REF_FRAME_ALIGNED"
+        },
+        "fieldOfViewGeometry": { 
+            "shape": "RECTANGULAR", 
+            "angleHeight": 2.5, 
+            "angleWidth": 2.5
+        },
+        "maneuver" : {
+            "maneuverType":"SINGLE_ROLL_ONLY",
+            "A_rollMin": -80,
+            "A_rollMax": 80
+        },
+        "spectral_resolution" : "Hyperspectral"
+    }
+}

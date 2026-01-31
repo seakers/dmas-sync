@@ -61,7 +61,7 @@ class SimulationAgent(object):
 
 
         # assign parameters
-        self.name : str = agent_name.lower()
+        self.name : str = agent_name
         self._id : str = agent_id if agent_id is not None else str(uuid.uuid4())
         self._specs : object = specs
         if isinstance(specs, Spacecraft):
@@ -336,7 +336,7 @@ class SimulationAgent(object):
                 if True:
                 # if 95.0 < state.t < 96.0:
                 # if state.get_time() > 19 and "1" in state.agent_name:
-                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -350,7 +350,7 @@ class SimulationAgent(object):
         # if state.t > 96.0:
         if True:
             # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-            self.__log_plan(plan_out, "NEXT ACTIONS", logging.WARNING)
+            # self.__log_plan(plan_out, "NEXT ACTIONS", logging.WARNING)
             x = 1 # breakpoint
         # -------------------------------------        
 

@@ -1,0 +1,334 @@
+{
+    "missions" : [
+        {
+            "name": "Algal blooms monitoring",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 1,
+                    "requirements" : [
+                        {
+                            "attribute": "horizontal_spatial_resolution",
+                            "requirement_type": "continuous",
+                            "thresholds": [10, 30, 100],
+                            "scores": [1.0, 0.7, 0.1]
+                        },
+                        {
+                            "requirement_type": "categorical",
+                            "attribute": "spectral_resolution",
+                            "thresholds": ["Hyperspectral", "Multispectral"],
+                            "scores": [1, 0.5]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Water temperature",
+                    "weight": 1,
+                    "requirements" : [
+                        {
+                            "attribute": "horizontal_spatial_resolution",
+                            "requirement_type": "continuous",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.3]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["TIR"]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Water level",
+                    "weight": 1,
+                    "requirements" : [
+                        {
+                            "attribute": "horizontal_spatial_resolution",
+                            "requirement_type": "continuous",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.5]
+                        },
+                        {
+                            "attribute": "accuracy",
+                            "requirement_type": "discrete",
+                            "thresholds": [1, 5, 10],
+                            "scores": [1.0, 0.5, 0.1]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["Altimeter"]
+                        }
+                    ]
+                },
+                
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 10,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [10, 30, 100],
+                            "scores": [1.0, 0.7, 0.1]
+                        },
+                        {
+                            "requirement_type": "categorical",
+                            "attribute": "spectral_resolution",
+                            "thresholds": ["Hyperspectral", "Multispectral"],
+                            "scores": [1, 0.5]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["VNIR hyper", "TIR"]
+                        },
+                        {
+                            "requirement_type": "temporal",
+                            "attribute": "revisit_time",
+                            "thresholds": [3600, 5000, 7200],
+                            "scores": [1.0, 0.5, 0.1]
+                        }
+                    ],
+                    "event_type" : "algal_blooms"
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Water temperature",
+                    "weight": 10,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.3]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["TIR"]
+                        },
+                        {
+                            "requirement_type": "temporal",
+                            "attribute": "revisit_time",
+                            "thresholds": [3600, 5000, 7200],
+                            "scores": [1.0, 0.5, 0.1]
+                        }
+                    ],
+                    "event_type" : "algal_blooms"
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Water level",
+                    "weight": 10,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.5]
+                        },
+                        {
+                            "requirement_type": "discrete",
+                            "attribute": "accuracy",
+                            "thresholds": [1, 5, 10],
+                            "scores": [1.0, 0.5, 0.1]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["Altimeter"]
+                        },
+                        {
+                            "requirement_type": "temporal",
+                            "attribute": "revisit_time",
+                            "thresholds": [3600, 5000, 7200],
+                            "scores": [1.0, 0.5, 0.1]
+                        }
+                    ],
+                    "event_type" : "algal_blooms"
+                }
+            ]
+        },
+        {
+            "name" : "Flood and sediment transport monitoring",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter" : "Water Level",
+                    "weight" : 1,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.5]
+                        },
+                        {
+                            "requirement_type": "discrete",
+                            "attribute": "accuracy",
+                            "thresholds": [1, 5, 10],
+                            "scores": [1.0, 0.5, 0.1]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["Altimeter"]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "default_mission",
+                    "parameter" : "Turbidity",
+                    "weight" : 1,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.3]
+                        },
+                        {
+                            "requirement_type": "categorical",
+                            "attribute": "spectral_resolution",
+                            "thresholds": ["Hyperspectral", "Multispectral"],
+                            "scores": [1, 0.5]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["VNIR multi"]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "default_mission",
+                    "parameter" : "TSS",
+                    "weight" : 1,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.3]
+                        },
+                        {
+                            "requirement_type": "categorical",
+                            "attribute": "spectral_resolution",
+                            "thresholds": ["Hyperspectral", "Multispectral"],
+                            "scores": [1, 0.5]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["VNIR multi"]
+                        }
+                    ]
+                },
+
+                {
+                    "objective_type" : "event_driven",
+                    "parameter" : "Water Level",
+                    "weight" : 10,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.5]
+                        },
+                        {
+                            "requirement_type": "discrete",
+                            "attribute": "accuracy",
+                            "thresholds": [1, 5, 10],
+                            "scores": [1.0, 0.5, 0.1]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["Altimeter"]
+                        },
+                        {
+                            "requirement_type": "temporal",
+                            "attribute": "revisit_time",
+                            "thresholds": [3600, 5000, 7200],
+                            "scores": [1.0, 0.5, 0.1]
+                        }
+                    ],
+                    "event_type" : "high_flow_event"
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter" : "Turbidity",
+                    "weight" : 10,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.3]
+                        },
+                        {
+                            "requirement_type": "categorical",
+                            "attribute": "spectral_resolution",
+                            "thresholds": ["Hyperspectral", "Multispectral"],
+                            "scores": [1, 0.5]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["VNIR multi"]
+                        },
+                        {
+                            "requirement_type": "temporal",
+                            "attribute": "revisit_time",
+                            "thresholds": [3600, 5000, 7200],
+                            "scores": [1.0, 0.5, 0.1]
+                        }
+                    ],
+                    "event_type" : "high_flow_event"
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter" : "TSS",
+                    "weight" : 10,
+                    "requirements" : [
+                        {
+                            "requirement_type": "continuous",
+                            "attribute": "horizontal_spatial_resolution",
+                            "thresholds": [30, 100],
+                            "scores": [1.0, 0.3]
+                        },
+                        {
+                            "requirement_type": "categorical",
+                            "attribute": "spectral_resolution",
+                            "thresholds": ["Hyperspectral", "Multispectral"],
+                            "scores": [1, 0.5]
+                        },
+                        {
+                            "requirement_type": "capability",
+                            "attribute": "instrument",
+                            "valid_values": ["VNIR multi"]
+                        },
+                        {
+                            "requirement_type": "temporal",
+                            "attribute": "revisit_time",
+                            "thresholds": [3600, 5000, 7200],
+                            "scores": [1.0, 0.5, 0.1]
+                        }
+                    ],
+                    "event_type" : "high_flow_event"
+                }
+            ]
+        }
+    ]
+}

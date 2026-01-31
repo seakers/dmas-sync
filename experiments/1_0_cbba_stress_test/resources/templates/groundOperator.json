@@ -1,0 +1,12 @@
+{
+    "name" : "NEN",
+    "@id" : "nen",
+    "planner" : {
+        "preplanner": {
+            "@type": "eventAnnouncer",
+            "debug": "False",                        
+            "eventsPath" : "PATH GOES HERE"
+        }
+    },
+    "mission" : "generic response mission"
+}

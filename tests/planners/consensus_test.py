@@ -34,7 +34,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_7 = False  # two sats      no default mission  two targets         two events at different times
         self.toy_8 = False  # single sat    default mission     multiple targets    no events
         self.toy_9 = False  # two sats      default mission     multiple targets    no events
-        self.toy_10 = True # single sat    no default mission  two targets         two expiring events 
+        self.toy_10 = False # single sat    no default mission  two targets         two expiring events 
         self.toy_11 = False # two sat       no default mission  two targets         two expiring events 
         self.toy_12 = False # single sat    default mission     multiple targets    no events           preplan + replan
         self.toy_13 = False # two sats      default mission     multiple targets    no events           preplan + replan
@@ -49,7 +49,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_22 = False # two sats      no default mission     multiple targets    two events announced by GS   replan
 
         self.toy_23 = False 
-        self.toy_24 = False
+        self.toy_24 = True
         self.toy_25 = False
         self.toy_26 = False
 

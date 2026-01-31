@@ -8,12 +8,19 @@ class SimulationRoles(Enum):
     ENVIRONMENT = 'ENVIRONMENT'
     AGENT = 'AGENT'
 
-class LEVELS(Enum):
-    DEBUG = logging.DEBUG
-    INFO = logging.INFO
-    WARNING = logging.WARNING
-    CRITICAL = logging.CRITICAL
-    ERROR = logging.ERROR
+# class LEVELS(Enum):
+#     DEBUG = logging.DEBUG
+#     INFO = logging.INFO
+#     WARNING = logging.WARNING
+#     CRITICAL = logging.CRITICAL
+#     ERROR = logging.ERROR
+
+LEVELS = {  'DEBUG' : logging.DEBUG, 
+            'INFO' : logging.INFO, 
+            'WARNING' : logging.WARNING, 
+            'CRITICAL' : logging.CRITICAL, 
+            'ERROR' : logging.ERROR
+        }
 
 def print_scenario_banner(scenario_name = None, clear : bool = True) -> str:
     # clear the console if specified

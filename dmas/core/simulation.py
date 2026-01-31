@@ -493,11 +493,18 @@ class Simulation:
             raise ValueError('`events_path` must point to an existing file.')
         
         # load events as a dataframe
+        print(f'Loading events from `{events_path}`...')
         events_df : pd.DataFrame = pd.read_csv(events_path)
 
         # parse events
         events = []
-        for _,row in events_df.iterrows():
+        for _,row in tqdm(events_df.iterrows(), 
+                          desc='Loading Events', 
+                        #   total=len(events_df), 
+                          leave=False, 
+                          mininterval=0.5,
+                        # disable=len(events_df) < 10
+                          ):
             # convert event to GeophysicalEvent
             if row['start time [s]'] > sim_duration:
                 # event is not in the simulation time frame
