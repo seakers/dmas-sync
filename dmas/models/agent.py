@@ -177,12 +177,6 @@ class SimulationAgent(object):
     SIMULATION CYCLE METHODS
     ----------------------
     """
-    
-    """
-    SENSE METHOD
-    """
-    def sense(self, status : AgentAction) -> list:
-        ...
 
     """
     THINK METHOD
