@@ -49,8 +49,10 @@
 - `-u` or `--upper-bound` : (`int`) upper bound of simulation trial indeces to be run (non-inclusive).
 - `-p` or `--propagate` : (`flag`) only performs orbit propagation of trial cases, does not simulate satellite mission. 
 - `-o` or `--overwrite` : (`flag`) runs simulation trials and overwrites existing results. If not flagged, trials with existing results will not be simulated.
-- `-r` or `--reevaluate` : (`flag`) runs processing of simulation results and overwrites existing results. If not flagged, trials with existing results will not be reevaluated.
+- `-e` or `--evaluate` : (`flag`) runs processing of simulation results and overwrites existing results. If not flagged, trials with existing results will not be reevaluated.
 - `-d` or `--debug` : (`flag`) toggles the use of reduced complexity simulation trials for debugging purposes.
+- `-r` or `--runtime-profiling` : (`flag`) toggles the profiling of each trial's runtime. Prints results to `results/[NAME_OF_SCENARIO]/profile.out`
+    > Visualization of runtime profile requires the `snakeviz` library. Use command `snakeviz results/[NAME_OF_SCENARIO]/profile.out` to open results in default browser
 
 
 ### Trial Simulation Commands

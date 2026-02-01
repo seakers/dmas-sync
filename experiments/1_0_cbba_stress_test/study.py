@@ -332,7 +332,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     results_dir = os.path.join(cfg.base_path, 'results', f"{cfg.trial_filename}_scenario_{scenario_id}")
     results_summary_path = os.path.join(results_dir, 'summary.csv')
 
-    # IMPORTANT: create the scenario directory *before* doing work to reduce races
+    # create the scenario directory if it doesnt exist already
     os.makedirs(results_dir, exist_ok=True)
 
     try:
@@ -503,11 +503,15 @@ def main_parallellized(trial_filename : str,
                       propagate_only : bool,
                       overwrite : bool, 
                       reevaluate : bool, 
-                      debug : bool):
+                      debug : bool,
+                      runtime_profiling : bool):
     
     # print welcome
     print_scenario_banner(f'CBBA Stress Test Study (parallelized) - {trial_filename}')
     
+    # TODO : Warn that runtime profiling is not supported in parallelized mode
+    if runtime_profiling: print("WARNING: Runtime profiling is not supported in parallelized mode and will be ignored.")
+
     # get base path for experiment
     base_path : str = get_base_path()
     
@@ -552,8 +556,9 @@ def main(trial_filename : str,
          level : int, 
          propagate_only : bool,
          overwrite : bool, 
-         reevaluate : bool, 
-         debug : bool):
+         evaluate : bool, 
+         debug : bool,
+         runtime_profiling : bool):
     
     # print welcome
     print_scenario_banner(f'CBBA Stress Test Study - {trial_filename}')
@@ -577,17 +582,25 @@ def main(trial_filename : str,
 
     # iterate through each trial
     for scenario_id,num_sats,gnd_segment,task_arrival_rate,target_distribution in trials.itertuples(index=False):
+        # check if runtime profiling toggle was selected
+        if runtime_profiling:        
+            # initialize profiler
+            pr = cProfile.Profile()
+            # enable profiler
+            pr.enable()
+        
         # handle nan ground segment case
         gnd_segment = 'None' if not isinstance(gnd_segment, str) else gnd_segment
         
-        if scenario_id > 0: print_scenario_banner(f'CBBA Stress Test Study - {trial_filename}')
-        if debug: print("DEBUG MODE ENABLED: Running a single short experiment for debugging purposes")
-        print(f"\n--- Running Trial Scenario ID: {scenario_id} ---")
-        print(f" - Num Sats: {num_sats}")
-        print(f" - Ground Segment: {gnd_segment}")
-        print(f" - Task Arrival Rate: {task_arrival_rate} [tasks/day]")
-        print(f" - Target Distribution: Lat=(-{target_distribution}°, +{target_distribution}°)")
-        print(f" - Propagation Duration: {round(duration*24*3600,3)} [seconds] ({round(duration, 3)} [days])")
+        # print scenario banner
+        if scenario_id > 0: tqdm.write(print_scenario_banner(f'CBBA Stress Test Study - {trial_filename}'))
+        if debug: tqdm.write("DEBUG MODE ENABLED: Running a single short experiment for debugging purposes")
+        tqdm.write(f"\n--- Running Trial Scenario ID: {scenario_id} ---")
+        tqdm.write(f" - Num Sats: {num_sats}")
+        tqdm.write(f" - Ground Segment: {gnd_segment}")
+        tqdm.write(f" - Task Arrival Rate: {task_arrival_rate} [tasks/day]")
+        tqdm.write(f" - Target Distribution: Lat=(-{target_distribution}°, +{target_distribution}°)")
+        tqdm.write(f" - Propagation Duration: {round(duration*24*3600,3)} [seconds] ({round(duration, 3)} [days])")        
 
         # generate mission specifications for the scenario
         mission_specs : dict = generate_scenario_mission_specs(
@@ -604,15 +617,15 @@ def main(trial_filename : str,
         # check if propagation-only toggle was selected
         if propagate_only:
             # if selected; only precompute orbit data
-            print(" - Propagating orbit data only...")
+            tqdm.write(" - Propagating orbit data only...")
             orbitdata_dir = OrbitData.precompute(mission_specs)
-            print (f" - Orbit data propagated and stored at: `{orbitdata_dir}`")
+            tqdm.write(f" - Orbit data propagated and stored at: `{orbitdata_dir}`")
             
             # skip to next trial
             continue 
 
         # initialize simulation mission
-        print(" - Running full simulation...\n")
+        tqdm.write(" - Running full simulation...\n")
 
         # check if output directory was properly initalized
         assert os.path.isdir(results_dir), \
@@ -637,29 +650,29 @@ def main(trial_filename : str,
         # execute mission if any of the conditions are met
         if any(execute_conditions): 
             if execute_conditions[-1]:
-                print(' - Overwrite flag detected; re-running simulation mission...')
+                tqdm.write(' - Overwrite flag detected; re-running simulation mission...')
             else:
-                print(' - Incomplete or missing results detected; running simulation mission...')
-            print(' - Initializing simulation mission...')
+                tqdm.write(' - Incomplete or missing results detected; running simulation mission...')
+            tqdm.write(' - Initializing simulation mission...')
             mission : Simulation = Simulation.from_dict(mission_specs, overwrite=overwrite, level=level)
             
-            print (' - Executing simulation mission...')
+            tqdm.write(' - Executing simulation mission...')
             mission.execute()
         else:
-            print(' - Simulation data found! Skipping execution...')
+            tqdm.write(' - Simulation data found! Skipping execution...')
             mission = None
         
         # # TODO : Re-enable result processing
-        # # print results if it hasn't been performed yet or if results need to be reevaluated
+        # # print results if it hasn't been performed yet or if results need to be evaluated
         # results_summary_path = os.path.join(results_dir, 'summary.csv')
-        # if not os.path.isfile(results_summary_path) or reevaluate: 
-        #     if reevaluate:
-        #         print(' - Reevaluation flag detected; re-processing simulation results...')
+        # if not os.path.isfile(results_summary_path) or evaluate: 
+        #     if evaluate:
+        #         tqdm.write(' - Evaluation flag detected; processing simulation results...')
         #     else:
-        #         print(' - Results summary not found; processing simulation results...')
+        #         tqdm.write(' - Results summary not found; processing simulation results...')
         #     if mission is None:
         #         # load mission to process results if not already loaded
-        #         print(' - Initializing simulation mission...')
+        #         tqdm.write(' - Initializing simulation mission...')
         #         mission = Simulation.from_dict(
         #                 mission_specs,
         #                 overwrite=overwrite,
@@ -667,15 +680,29 @@ def main(trial_filename : str,
         #                 level=level
         #             )
 
-        #     print(' - Evaluating simulation results...')
+        #     tqdm.write(' - Evaluating simulation results...')
         #     mission.process_results()
 
         # # ensure if summary file was properly generated at the end of the simulation
         # assert os.path.isfile(results_summary_path), \
         #     f"Results summary file not found at: {results_summary_path}"
 
+
+        if runtime_profiling:
+            tqdm.write(" - Printing runtime profiling results...")
+            # disable profiler
+            pr.disable()
+            # save to file
+            runtime_path = os.path.join(results_dir, "profile.out")
+            pr.dump_stats(runtime_path)
+
+            # ensure if summary file was properly generated at the end of the simulation
+            assert os.path.isfile(runtime_path), \
+                f"Results summary file not found at: `{runtime_path}`"
+            tqdm.write(f" - Profiling results saved to: `{runtime_path}`")
+
     # study done
-    return
+    return True
 
 if __name__ == "__main__":
     # create argument parser
@@ -710,12 +737,17 @@ if __name__ == "__main__":
                         type=bool) 
     parser.add_argument('-o', 
                         '--overwrite',
-                        help='results overwrite toggle',
+                        help='simulation results overwrite toggle',
+                        action='store_true',
+                        required=False)
+    parser.add_argument('-e', 
+                        '--evaluate',
+                        help='results evaluation overwrite toggle',
                         action='store_true',
                         required=False)
     parser.add_argument('-r', 
-                        '--reevaluate',
-                        help=' results reevaluation toggle',
+                        '--runtime-profiling',
+                        help='toggles to enable runtime profiling',
                         action='store_true',
                         required=False)
     parser.add_argument('-d', 
@@ -740,35 +772,20 @@ if __name__ == "__main__":
     upper_bound : int = args.upper_bound
     propagate_only : bool = args.propagate_only
     overwrite : bool = args.overwrite
-    reevaluate : bool = args.reevaluate
+    evaluate : bool = args.evaluate
+    runtime_profiling : bool = args.runtime_profiling
     debug : bool = args.debug
     level : int = LEVELS.get(args.level)
 
-    if debug:        
-        # initialize profiler
-        pr = cProfile.Profile()
-        # enable profiler
-        pr.enable()
-
     # run main study
-    if upper_bound - lower_bound <= 1:
-        # if only one trial is being run; use non-parallelized version
-        main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, reevaluate, debug)
-    else:
-        # if more than one trial is being run; use parallelized version
-        main_parallellized(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, reevaluate, debug)
+    main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
+    # if upper_bound - lower_bound <= 1:
+    #     # if only one trial is being run; use non-parallelized version
+    #     main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
+    # else:
+    #     # if more than one trial is being run; use parallelized version
+    #     main_parallellized(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
 
     # print outro
     print('\n' + '='*54)
     print('STUDY COMPLETE!')
-
-    if debug:
-        print(" - Printing debug profiling results...")
-        # disable profiler
-        pr.disable()
-        # print profiling results
-        pstats.Stats(pr).sort_stats("cumtime").print_stats(20)
-        # save to file
-        pr.dump_stats("./experiments/1_0_cbba_stress_test/results/profile.out")
-
-        print("DEBUG MODE COMPLETE")
