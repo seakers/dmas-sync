@@ -1,3 +1,4 @@
+import copy
 from enum import Enum
 from typing import Any, Callable, Dict, Union
 
@@ -13,7 +14,7 @@ REQUIRED_KEYS = ['task', 'n_obs',
 
 def bid_comparison_input_checks( func : Callable ) -> Callable:
     """ Decorator to validate inputs for bid comparison methods """
-    def checker(self, other : object, *args) -> Any:
+    def checker(self, other : object, *args, **kwargs) -> Any:
         # validate inputs
         assert isinstance(self, Bid) and isinstance(other, (Bid,dict)), \
             f'can only compare bids to other bids or dictionary representation of bids.'
@@ -31,7 +32,7 @@ def bid_comparison_input_checks( func : Callable ) -> Callable:
             assert self.n_obs == other.n_obs, f'cannot compare bids intended for different image numbers (expected image number: {self.n_obs}, given image number: {other.n_obs})'
 
         # perform comparison
-        return func(self, other, *args)
+        return func(self, other, *args, **kwargs)
         
     return checker
 
@@ -104,23 +105,23 @@ class Bid:
         assert isinstance(performed, bool), f'`performed` must be of type `bool`, got `{type(performed)}`'
 
         # Assign task and observation attributes
-        self.task = task
-        self.n_obs = n_obs
+        self.task : GenericObservationTask = task
+        self.n_obs : int = n_obs
 
         # Assign bid owner information
-        self.owner = owner
-        self.owner_bid = owner_bid
+        self.owner : str = owner
+        self.owner_bid : float = owner_bid
         
         # Assign winning bid information
-        self.winner = winner
-        self.winning_bid = winning_bid
-        self.t_img = t_img
-        self.t_bid = t_bid
-        self.t_stamps = t_stamps
-        self.main_measurement = main_measurement
+        self.winner : str = winner
+        self.winning_bid : float = winning_bid
+        self.t_img : float = t_img
+        self.t_bid : float = t_bid
+        self.t_stamps : Dict[str,float] = t_stamps
+        self.main_measurement : str = main_measurement
 
         # Other attributes
-        self.performed = performed
+        self.performed : bool = performed
 
     """
     ---------------------------
@@ -334,83 +335,129 @@ class Bid:
             - comparison (`str`): action to perform to this bid upon comparing this bid to the other bid
         """
         try:
-            # convert other bid to `Bid` class type if necessary
-            # other : Bid = Bid.from_dict(other) if isinstance(other, dict) else other
+            if isinstance(other, dict): # bid is of type `dict`
+                
+                # 0. Sending agent claims the bid has been performed.
+                if other['performed']:
+                    comp_result = self._case_other_thinks_bid_was_performed(other)
+                # 0.5. Receiving agent has marked bid as performed.
+                elif self.was_performed():
+                    # receiving agent has marked bid as performed → leave info as is
+                    comp_result = BidComparisonResults.LEAVE
 
-            # validate inputs
-            assert isinstance(other, Bid), f'can only compare bids to other bids.'
-            assert self.task == other.task, f'can only compare bids for the same task (expected task id: {self.task.id}, given id: {other.task.id})'
-            
-            # 0. Sending agent claims the bid has been performed.
-            if other.was_performed():
-                comp_result = self._case_other_thinks_bid_was_performed(other)
-            # 0.5. Receiving agent has marked bid as performed.
-            elif self.was_performed():
-                # receiving agent has marked bid as performed → leave info as is
-                comp_result = BidComparisonResults.LEAVE
+                # 1. Sending agent claims itself as winner of this bid.
+                elif other['winner'] == other['owner']:
+                    comp_result = self._case_other_thinks_is_winner(other)
+                
+                # 2. Sending agent claims I am the winner of this bid.
+                elif other['winner'] == self.owner:
+                    comp_result = self._case_other_thinks_im_winner(other)
+                
+                # 3. Sending agent claims some 3rd party as the winner of this bid.
+                elif other['winner'] not in {other['owner'], self.owner, self.NONE}:
+                    comp_result = self._case_other_thinks_third_party_winner(other)
+                
+                # 4. Sending agent has no winner for this bid.
+                elif other['winner'] == self.NONE:
+                    comp_result = self._case_other_has_no_winner(other)
+                
+                # 5. Fallback (should be unreachable)
+                else: 
+                    raise ValueError(f'could not compare bids. Unknown case encountered between bids from bidder `{self.owner}` and bidder `{other["owner"]}`.')
+                
+            else: # bid is of the same type (i.e., `Bid` class object)
 
-            # 1. Sending agent claims itself as winner of this bid.
-            elif other.believes_i_am_winning():
-                comp_result = self._case_other_thinks_is_winner(other)
+                # 0. Sending agent claims the bid has been performed.
+                if other.was_performed():
+                    comp_result = self._case_other_thinks_bid_was_performed(other)
+                # 0.5. Receiving agent has marked bid as performed.
+                elif self.was_performed():
+                    # receiving agent has marked bid as performed → leave info as is
+                    comp_result = BidComparisonResults.LEAVE
 
-            # 2. Sending agent claims I am the winner of this bid.
-            elif other.believes_other_is_winning(self):
-                comp_result = self._case_other_thinks_im_winner(other)
+                # 1. Sending agent claims itself as winner of this bid.
+                elif other.believes_i_am_winning():
+                    comp_result = self._case_other_thinks_is_winner(other)
 
-            # 3. Sending agent claims some 3rd party as the winner of this bid.
-            elif other.believes_third_party_is_winning(self):
-                comp_result = self._case_other_thinks_third_party_winner(other)
-            
-            # 4. Sending agent has no winner for this bid.
-            elif other.believes_no_winner():
-                comp_result = self._case_other_has_no_winner(other)
+                # 2. Sending agent claims I am the winner of this bid.
+                elif other.believes_other_is_winning(self):
+                    comp_result = self._case_other_thinks_im_winner(other)
 
-            # 5. Fallback (should be unreachable)
-            else: 
-                raise ValueError(f'could not compare bids. Unknown case encountered between bids from bidder `{self.owner}` and bidder `{other.owner}`.')
+                # 3. Sending agent claims some 3rd party as the winner of this bid.
+                elif other.believes_third_party_is_winning(self):
+                    comp_result = self._case_other_thinks_third_party_winner(other)
+                
+                # 4. Sending agent has no winner for this bid.
+                elif other.believes_no_winner():
+                    comp_result = self._case_other_has_no_winner(other)
+
+                # 5. Fallback (should be unreachable)
+                else: 
+                    raise ValueError(f'could not compare bids. Unknown case encountered between bids from bidder `{self.owner}` and bidder `{other.owner}`.')
+                
+            # check output type
+            assert isinstance(comp_result, BidComparisonResults), f'comparison result must be of type `BidComparisonResults`, got `{type(comp_result)}`'
 
             # return comparison result
             return comp_result
         
         except KeyError as e:
+            # catch key errors in case bid dictionaries are missing expected keys
             raise e
-        
-        finally:
-            # check output type
-            assert isinstance(comp_result, BidComparisonResults), f'comparison result must be of type `BidComparisonResults`, got `{type(comp_result)}`'
 
-    def _case_other_thinks_bid_was_performed(self, other : 'Bid') -> BidComparisonResults:
+    def _case_other_thinks_bid_was_performed(self, other : Union['Bid', dict]) -> BidComparisonResults:
         """ Case: Sending agent claims the bid has been performed. """
         
         # 1. Receiving agent also believes the bid was performed.
         if self.was_performed():
-            if self.winner == other.winner:
-                # both agents agree bid was performed and winner → leave info as is
-                return BidComparisonResults.LEAVE
-            elif abs(self.t_img - other.t_img) <= 1e-6 and not self.__wins_tie_breaker(other):
-                # both agents agree bid was performed and at what time but disagree on the winner;
-                #  sender wins the tie-breaker → update
-                return BidComparisonResults.UPDATE
-            elif abs(self.t_img - other.t_img) <= 1e-6 and self.__wins_tie_breaker(other):
-                # both agents agree bid was performed and at what time but disagree on the winner;
-                #  receiver wins the tie-breaker → leave info as is
-                return BidComparisonResults.LEAVE
-            elif self.t_img > other.t_img:
-                # both agents agree bid was performed but disagree on the winner and imaging time;
-                #  sender has an earlier imaging time → update
-                return BidComparisonResults.UPDATE
-            elif self.t_img < other.t_img:
-                # both agents agree bid was performed but disagree on the winner and imaging time;
-                #  receiver has an earlier imaging time → leave info as is
-                return BidComparisonResults.LEAVE
-            # elif self.t_stamps[self.winner] >= other.t_stamps[other.winner]:
-            #     # both agents agree bid was performed but disagree on the winner
-            #     #  receiver has the more recent bid → leave info as is
-            #     return BidComparisonResults.LEAVE
+            if isinstance(other, dict):
+                if self.winner == other['winner']:
+                    # both agents agree bid was performed and winner → leave info as is
+                    return BidComparisonResults.LEAVE
+                elif abs(self.t_img - other['t_img']) <= 1e-6 and not self.__wins_tie_breaker(other):
+                    # both agents agree bid was performed and at what time but disagree on the winner;
+                    #  sender wins the tie-breaker → update
+                    return BidComparisonResults.UPDATE
+                elif abs(self.t_img - other['t_img']) <= 1e-6 and self.__wins_tie_breaker(other):
+                    # both agents agree bid was performed and at what time but disagree on the winner;
+                    #  receiver wins the tie-breaker → leave info as is
+                    return BidComparisonResults.LEAVE
+                elif self.t_img > other['t_img']:
+                    # both agents agree bid was performed but disagree on the winner and imaging time;
+                    #  sender has an earlier imaging time → update
+                    return BidComparisonResults.UPDATE
+                elif self.t_img < other['t_img']:
+                    # both agents agree bid was performed but disagree on the winner and imaging time;
+                    #  receiver has an earlier imaging time → leave info as is
+                    return BidComparisonResults.LEAVE
+                else:
+                    # both agents agree bid was performed but disagree on the winner and imaging time;
+                    #  receiver has an earlier imaging time → leave info as is
+                    return BidComparisonResults.LEAVE
             else:
-                # both agents agree bid was performed but disagree on the winner and imaging time;
-                #  receiver has an earlier imaging time → leave info as is
-                return BidComparisonResults.LEAVE
+                if self.winner == other.winner:
+                    # both agents agree bid was performed and winner → leave info as is
+                    return BidComparisonResults.LEAVE
+                elif abs(self.t_img - other.t_img) <= 1e-6 and not self.__wins_tie_breaker(other):
+                    # both agents agree bid was performed and at what time but disagree on the winner;
+                    #  sender wins the tie-breaker → update
+                    return BidComparisonResults.UPDATE
+                elif abs(self.t_img - other.t_img) <= 1e-6 and self.__wins_tie_breaker(other):
+                    # both agents agree bid was performed and at what time but disagree on the winner;
+                    #  receiver wins the tie-breaker → leave info as is
+                    return BidComparisonResults.LEAVE
+                elif self.t_img > other.t_img:
+                    # both agents agree bid was performed but disagree on the winner and imaging time;
+                    #  sender has an earlier imaging time → update
+                    return BidComparisonResults.UPDATE
+                elif self.t_img < other.t_img:
+                    # both agents agree bid was performed but disagree on the winner and imaging time;
+                    #  receiver has an earlier imaging time → leave info as is
+                    return BidComparisonResults.LEAVE
+                else:
+                    # both agents agree bid was performed but disagree on the winner and imaging time;
+                    #  receiver has an earlier imaging time → leave info as is
+                    return BidComparisonResults.LEAVE
             
         # 0. Receiving agent does not believe the bid was performed.
         else:
@@ -419,179 +466,333 @@ class Bid:
 
     def _case_other_thinks_is_winner(self, other : 'Bid') -> BidComparisonResults:
         """ Case: Sending agent claims itself as winner of this bid. """
-        # 1. Receiving agent believes it is the winner too.
-        if self.believes_i_am_winning():
-            if other > self:  
-                # Sending agent's bid is higher → update info
-                return BidComparisonResults.UPDATE
-            elif other.t_img <= self.t_img:
-                # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+        
+        if isinstance(other, dict):
+            # 1. Receiving agent believes it is the winner too.
+            if self.believes_i_am_winning():
+                if other > self:  
+                    # Sending agent's bid is higher → update info
+                    return BidComparisonResults.UPDATE
+                elif other['t_img'] <= self.t_img:
+                    # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                    return BidComparisonResults.UPDATE
+            
+            # 2. Receiving agent believes other is the winner already.
+            if self.believes_other_is_winning(other):
+                # Both agents agree the sending agent is the winner → update info
                 return BidComparisonResults.UPDATE
             
-        # 2. Receiving agent believes other is the winner already.
-        if self.believes_other_is_winning(other):
-            # Both agents agree the sending agent is the winner → update info
-            return BidComparisonResults.UPDATE
-
-        # 3. Receiving agent believes some 3rd party is winner.
-        if self.believes_third_party_is_winning(other):
-            if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
-            # if other.t_bid > self.t_bid:
-                # Sending agent has more recent info on 3rd party winner → update info
+            # 3. Receiving agent believes some 3rd party is winner.
+            if self.believes_third_party_is_winning(other):
+                if other['t_stamps'].get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                # if other['t_bid'] > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → update info
+                    return BidComparisonResults.UPDATE
+                elif other > self:
+                    # Sending agent's bid is higher → update info
+                    return BidComparisonResults.UPDATE
+                elif other['t_img'] <= self.t_img:
+                    # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                    return BidComparisonResults.UPDATE
+                
+            # 4. Receiving agent bid has no winner.
+            if self.believes_no_winner():
+                # no known winner → update info
                 return BidComparisonResults.UPDATE
-            elif other > self:
-                # Sending agent's bid is higher → update info
-                return BidComparisonResults.UPDATE
-            elif other.t_img <= self.t_img:
-                # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+            
+            # 5. Fallback → leave info as is
+            return BidComparisonResults.LEAVE
+        
+        else:
+            # 1. Receiving agent believes it is the winner too.
+            if self.believes_i_am_winning():
+                if other > self:  
+                    # Sending agent's bid is higher → update info
+                    return BidComparisonResults.UPDATE
+                elif other.t_img <= self.t_img:
+                    # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                    return BidComparisonResults.UPDATE
+                
+            # 2. Receiving agent believes other is the winner already.
+            if self.believes_other_is_winning(other):
+                # Both agents agree the sending agent is the winner → update info
                 return BidComparisonResults.UPDATE
 
-        # 4. Receiving agent bid has no winner.
-        if self.believes_no_winner():
-            # no known winner → update info
-            return BidComparisonResults.UPDATE
+            # 3. Receiving agent believes some 3rd party is winner.
+            if self.believes_third_party_is_winning(other):
+                if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → update info
+                    return BidComparisonResults.UPDATE
+                elif other > self:
+                    # Sending agent's bid is higher → update info
+                    return BidComparisonResults.UPDATE
+                elif other.t_img <= self.t_img:
+                    # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                    return BidComparisonResults.UPDATE
 
-        # 5. Fallback → leave info as is
-        return BidComparisonResults.LEAVE
+            # 4. Receiving agent bid has no winner.
+            if self.believes_no_winner():
+                # no known winner → update info
+                return BidComparisonResults.UPDATE
+
+            # 5. Fallback → leave info as is
+            return BidComparisonResults.LEAVE
 
     def _case_other_thinks_im_winner(self, other : 'Bid') -> BidComparisonResults:
         """ Case: Sending agent claims I am the winner of this bid. """
-        # 1. Receiving agent believes it is the winner too.
-        if self.believes_i_am_winning():
-            # Receiving agent has more updated information about itself → leave info as is
-            return BidComparisonResults.LEAVE
-        
-        # 2. Receiving agent believes other is the winner already.
-        if self.believes_other_is_winning(other):
-            # Both agents think the other is winning and are in conflict → reset info
-            return BidComparisonResults.RESET
-
-        # 3. Receiving agent believes some 3rd party is winner.
-        if self.believes_third_party_is_winning(other):
-            if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
-            # if other.t_bid > self.t_bid:
-                # Sending agent has more recent info on 3rd party winner → reset info
+        if isinstance(other, dict):
+            # 1. Receiving agent believes it is the winner too.
+            if self.believes_i_am_winning():
+                # Receiving agent has more updated information about itself → leave info as is
+                return BidComparisonResults.LEAVE
+            
+            # 2. Receiving agent believes other is the winner already.
+            if self.believes_other_is_winning(other):
+                # Both agents think the other is winning and are in conflict → reset info
                 return BidComparisonResults.RESET
 
-        # 4. Receiving agent bid has no winner.
-        if self.believes_no_winner():
-            # Receiving agent would know if it was winning a bid → leave info as is
-            return BidComparisonResults.LEAVE
+            # 3. Receiving agent believes some 3rd party is winner.
+            if self.believes_third_party_is_winning(other):
+                if other['t_stamps'].get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → reset info
+                    return BidComparisonResults.RESET
 
-        # 5. Fallback → leave info as is
-        return BidComparisonResults.LEAVE
+            # 4. Receiving agent bid has no winner.
+            if self.believes_no_winner():
+                # Receiving agent would know if it was winning a bid → leave info as is
+                return BidComparisonResults.LEAVE
+
+            # 5. Fallback → leave info as is
+            return BidComparisonResults.LEAVE
+        
+        else:
+            # 1. Receiving agent believes it is the winner too.
+            if self.believes_i_am_winning():
+                # Receiving agent has more updated information about itself → leave info as is
+                return BidComparisonResults.LEAVE
+            
+            # 2. Receiving agent believes other is the winner already.
+            if self.believes_other_is_winning(other):
+                # Both agents think the other is winning and are in conflict → reset info
+                return BidComparisonResults.RESET
+
+            # 3. Receiving agent believes some 3rd party is winner.
+            if self.believes_third_party_is_winning(other):
+                if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → reset info
+                    return BidComparisonResults.RESET
+
+            # 4. Receiving agent bid has no winner.
+            if self.believes_no_winner():
+                # Receiving agent would know if it was winning a bid → leave info as is
+                return BidComparisonResults.LEAVE
+
+            # 5. Fallback → leave info as is
+            return BidComparisonResults.LEAVE
 
     def _case_other_thinks_third_party_winner(self, other : 'Bid') -> BidComparisonResults:        
         """ Handles the case where the other bid thinks a third party is the winner """
-        # 1. Receiving agent believes it is the winner too.
-        if self.believes_i_am_winning():
-            if other.t_stamps[other.winner] > self.t_stamps.get(other.winner, np.NINF):
-            # if other.t_bid > self.t_bid:
-                # Sending agent has more recent info on 3rd party winner 
-                if other > self:  
-                    # Sending agent's bid is higher and more updated → update info
+        if isinstance(other, dict):
+            # 1. Receiving agent believes it is the winner too.
+            if self.believes_i_am_winning():
+                if other['t_stamps'][other['winner']] > self.t_stamps.get(other['winner'], np.NINF):
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner 
+                    if other > self:  
+                        # Sending agent's bid is higher and more updated → update info
+                        return BidComparisonResults.UPDATE
+                    elif other['t_img'] <= self.t_img:
+                        # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                        return BidComparisonResults.UPDATE
+            
+            # 2. Receiving agent believes other is the winner already.
+            if self.believes_other_is_winning(other):
+                if other['t_stamps'][other['winner']] > self.t_stamps.get(other['winner'], np.NINF):
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → update info
                     return BidComparisonResults.UPDATE
-                elif other.t_img <= self.t_img:
-                    # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                else:
+                    # Receiving agent has more recent info on 3rd party winner → reset info and wait for sender to update
+                    return BidComparisonResults.RESET
+            
+            # 3. Receiving agent also believes some 3rd party is the winner.
+            if self.has_same_winner(other):
+                if other['t_stamps'].get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → update info
                     return BidComparisonResults.UPDATE
-        
-        # 2. Receiving agent believes other is the winner already.
-        if self.believes_other_is_winning(other):
-            if other.t_stamps[other.winner] > self.t_stamps.get(other.winner, np.NINF):
-            # if other.t_bid > self.t_bid:
-                # Sending agent has more recent info on 3rd party winner → update info
-                return BidComparisonResults.UPDATE
-            else:
-                # Receiving agent has more recent info on 3rd party winner → reset info and wait for sender to update
-                return BidComparisonResults.RESET
-        
-        # 3. Receiving agent also believes some 3rd party is the winner.
-        if self.has_same_winner(other):
-            if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
-            # if other.t_bid > self.t_bid:
-                # Sending agent has more recent info on 3rd party winner → update info
-                return BidComparisonResults.UPDATE
-        
-        # 4. Receiving agent believes some 4th party is the winner.
-        if self.believes_third_party_is_winning(other):
-            if other.t_stamps[other.winner] > self.t_stamps.get(other.winner, np.NINF):
-                if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
-                    # Sending agent's bids from all parties are more updated → update info
-                    return BidComparisonResults.UPDATE
-                
-                elif other > self:  
-                    # Sending agent's bid is higher and more updated → update info
-                    return BidComparisonResults.UPDATE
-                
-                elif other.t_img <= self.t_img:
-                    # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+            
+            # 4. Receiving agent believes some 4th party is the winner.
+            if self.believes_third_party_is_winning(other):
+                if other['t_stamps'][other['winner']] > self.t_stamps.get(other['winner'], np.NINF):
+                    if other['t_stamps'].get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                        # Sending agent's bids from all parties are more updated → update info
+                        return BidComparisonResults.UPDATE
+                    
+                    elif other > self:  
+                        # Sending agent's bid is higher and more updated → update info
+                        return BidComparisonResults.UPDATE
+                    
+                    elif other['t_img'] <= self.t_img:
+                        # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                        return BidComparisonResults.UPDATE
+
+                elif other['t_stamps'].get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                    # Sending agent has older info on 3rd party winner but newer info on receiving agent's winner → reset info
+                    return BidComparisonResults.RESET
+            
+            # 5. Receiving agent bid has no winner.
+            if self.believes_no_winner():
+                if other['t_stamps'][other['winner']] > self.t_stamps.get(other['winner'], np.NINF):
+                    # Sending agent has more recent info on 3rd party winner → update info
                     return BidComparisonResults.UPDATE
 
-            elif other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
-                # Sending agent has older info on 3rd party winner but newer info on receiving agent's winner → reset info
-                return BidComparisonResults.RESET
+            # 6. Fallback → leave info as is
+            return BidComparisonResults.LEAVE
         
-        # 5. Receiving agent bid has no winner.
-        if self.believes_no_winner():
-            # if other.t_bid > self.t_bid:
-            #     # Sending agent has more recent info on 3rd party winner → update info
-            #     return BidComparisonResults.UPDATE
-            try:
+        else:
+            # 1. Receiving agent believes it is the winner too.
+            if self.believes_i_am_winning():
+                if other.t_stamps[other.winner] > self.t_stamps.get(other.winner, np.NINF):
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner 
+                    if other > self:  
+                        # Sending agent's bid is higher and more updated → update info
+                        return BidComparisonResults.UPDATE
+                    elif other.t_img <= self.t_img:
+                        # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                        return BidComparisonResults.UPDATE
+            
+            # 2. Receiving agent believes other is the winner already.
+            if self.believes_other_is_winning(other):
+                if other.t_stamps[other.winner] > self.t_stamps.get(other.winner, np.NINF):
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → update info
+                    return BidComparisonResults.UPDATE
+                else:
+                    # Receiving agent has more recent info on 3rd party winner → reset info and wait for sender to update
+                    return BidComparisonResults.RESET
+            
+            # 3. Receiving agent also believes some 3rd party is the winner.
+            if self.has_same_winner(other):
+                if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                # if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → update info
+                    return BidComparisonResults.UPDATE
+            
+            # 4. Receiving agent believes some 4th party is the winner.
+            if self.believes_third_party_is_winning(other):
+                if other.t_stamps[other.winner] > self.t_stamps.get(other.winner, np.NINF):
+                    if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                        # Sending agent's bids from all parties are more updated → update info
+                        return BidComparisonResults.UPDATE
+                    
+                    elif other > self:  
+                        # Sending agent's bid is higher and more updated → update info
+                        return BidComparisonResults.UPDATE
+                    
+                    elif other.t_img <= self.t_img:
+                        # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                        return BidComparisonResults.UPDATE
+
+                elif other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                    # Sending agent has older info on 3rd party winner but newer info on receiving agent's winner → reset info
+                    return BidComparisonResults.RESET
+            
+            # 5. Receiving agent bid has no winner.
+            if self.believes_no_winner():
                 if other.t_stamps[other.winner] > self.t_stamps.get(other.winner, np.NINF):
                     # Sending agent has more recent info on 3rd party winner → update info
                     return BidComparisonResults.UPDATE
-            except KeyError as e:
-                x = 1
-                raise e
 
-        # 6. Fallback → leave info as is
-        return BidComparisonResults.LEAVE
+            # 6. Fallback → leave info as is
+            return BidComparisonResults.LEAVE
 
     def _case_other_has_no_winner(self, other : 'Bid') -> BidComparisonResults:
         """ Handles the case where the other bid has no winner """
-        # 1. Receiving agent believes it is the winner too.
-        if self.believes_i_am_winning():
-            # Receiving agent would know if it was winning a bid → leave info as is
-            return BidComparisonResults.LEAVE
-        
-        # 2. Receiving agent believes other is the winner already.
-        if self.believes_other_is_winning(other):
-            # Sending agent would know if it was winning a bid → update info
-            return BidComparisonResults.UPDATE
-        
-        # 3. Receiving agent believes some 3rd party is winner.
-        if self.believes_third_party_is_winning(other):
-            # if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
-            if other.t_bid > self.t_bid:
-                # Sending agent has more recent info on 3rd party winner → update info
+        if isinstance(other, dict):
+            # 1. Receiving agent believes it is the winner too.
+            if self.believes_i_am_winning():
+                # Receiving agent would know if it was winning a bid → leave info as is
+                return BidComparisonResults.LEAVE
+            
+            # 2. Receiving agent believes other is the winner already.
+            if self.believes_other_is_winning(other):
+                # Sending agent would know if it was winning a bid → update info
                 return BidComparisonResults.UPDATE
-        
-        # 4. Receiving agent bid has no winner.
-        if self.believes_no_winner():
-            # Neither bid has a winner → leave info as is
-            return BidComparisonResults.LEAVE
+            
+            # 3. Receiving agent believes some 3rd party is winner.
+            if self.believes_third_party_is_winning(other):
+                # if other['t_stamps'].get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                if other['t_bid'] > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → update info
+                    return BidComparisonResults.UPDATE
+            
+            # 4. Receiving agent bid has no winner.
+            if self.believes_no_winner():
+                # Neither bid has a winner → leave info as is
+                return BidComparisonResults.LEAVE
 
-        # 5. Fallback → leave info as is
-        return BidComparisonResults.LEAVE
+            # 5. Fallback → leave info as is
+            return BidComparisonResults.LEAVE
+        
+        else:
+            # 1. Receiving agent believes it is the winner too.
+            if self.believes_i_am_winning():
+                # Receiving agent would know if it was winning a bid → leave info as is
+                return BidComparisonResults.LEAVE
+            
+            # 2. Receiving agent believes other is the winner already.
+            if self.believes_other_is_winning(other):
+                # Sending agent would know if it was winning a bid → update info
+                return BidComparisonResults.UPDATE
+            
+            # 3. Receiving agent believes some 3rd party is winner.
+            if self.believes_third_party_is_winning(other):
+                # if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
+                if other.t_bid > self.t_bid:
+                    # Sending agent has more recent info on 3rd party winner → update info
+                    return BidComparisonResults.UPDATE
+            
+            # 4. Receiving agent bid has no winner.
+            if self.believes_no_winner():
+                # Neither bid has a winner → leave info as is
+                return BidComparisonResults.LEAVE
+
+            # 5. Fallback → leave info as is
+            return BidComparisonResults.LEAVE
 
     def believes_i_am_winning(self) -> bool:
         """ Checks if this bid is currently won by the bidder itself """
         return self.winner == self.owner
 
-    def believes_other_is_winning(self, other: 'Bid') -> bool:
+    def believes_other_is_winning(self, other: Union['Bid', dict]) -> bool:
         """ Checks if this bid is currently won by the other bidder """
-        return self.winner == other.owner
+        if isinstance(other, dict):
+            return self.winner == other['owner']
+        else:
+            return self.winner == other.owner
 
-    def believes_third_party_is_winning(self, other: 'Bid') -> bool:
+    def believes_third_party_is_winning(self, other: Union['Bid', dict]) -> bool:
         """ Checks if this bid is currenly won by a 3rd party (neither self nor other) """
-        return self.winner not in {self.owner, other.owner, self.NONE}
+        if isinstance(other, dict):
+            return self.winner not in {self.owner, other['owner'], self.NONE}
+        else:
+            return self.winner not in {self.owner, other.owner, self.NONE}
 
     def believes_no_winner(self) -> bool:
         """ Checks if this bid has no winner """
         return not self.has_winner()
     
     def has_same_winner(self, other: 'Bid') -> bool:
-        return self.winner == other.winner and self.has_winner() and other.has_winner()
+        """ Checks if this bid has the same winner as another bid """
+        if isinstance(other, dict):
+            return self.winner == other['winner'] and self.has_winner() and other['winner'] != self.NONE
+        else:
+            return self.winner == other.winner and self.has_winner() and other.has_winner()
     
     def has_winner(self) -> bool:    
         """ Checks if this bid has a winner """
@@ -673,7 +874,8 @@ class Bid:
         # update timestamp for this bidder
         self.t_stamps[self.winner] = t_update
 
-    def update(self, other : 'Bid', t_comp : float) -> 'Bid':
+    @bid_comparison_input_checks
+    def update(self, other : Union['Bid', dict], t_comp : float) -> 'Bid':
         """ 
         Compares this bid with another and returns a new bid instance with the appropriate updated information.
 
@@ -682,13 +884,11 @@ class Bid:
             - t_comp (`float`): time in which the comparison is being made
         """
         # validate inputs
-        assert isinstance(other, Bid), f'can only compare bids to other bids.'
-        assert self.task == other.task, f'cannot compare bids intended for different tasks (expected {self.task}, got {other.task})'
-        assert self.n_obs == other.n_obs, f'cannot compare bids intended for different image numbers (expected {self.n_obs}, got {other.n_obs})'
         assert t_comp >= 0, f'`t_comp` must be non-negative, got `{t_comp}`'
         
-        # create a deep copy of this bid
-        new_bid : Bid = self.copy()
+        # create a shallow copy of this bid
+        new_bid = copy.copy(self)
+        # new_bid = self.copy()
         
         # check comparison rules
         comp_result : BidComparisonResults = self.rule_comparison(other)
@@ -700,15 +900,19 @@ class Bid:
         else: raise ValueError(f'cannot perform update of type `{comp_result}`')
         
         # check proper update
-        assert abs(new_bid.t_stamps[other.owner] - t_comp) < 1e-6, \
-            f'timestamp for bidder `{other.owner}` was not properly updated to `{t_comp}` [s]'
+        if isinstance(other, dict):
+            assert abs(new_bid.t_stamps[other['owner']] - t_comp) < 1e-6, \
+                f'timestamp for bidder `{other["owner"]}` was not properly updated to `{t_comp}` [s]'
+        else:
+            assert abs(new_bid.t_stamps[other.owner] - t_comp) < 1e-6, \
+                f'timestamp for bidder `{other.owner}` was not properly updated to `{t_comp}` [s]'
         assert new_bid.t_bid <= new_bid.t_img or new_bid.t_img == np.NINF, \
             f'bid cannot be generated at a time `t_bid` `{new_bid.t_bid}` later than the desired imaging time `t_img` `{new_bid.t_img}`'
 
         # return updated bid
         return new_bid
     
-    def __update_info(self, other : 'Bid', t_comp : float) -> None:
+    def __update_info(self, other : Union['Bid', dict], t_comp : float) -> None:
         """
         Updates all of the variable bid information
 
@@ -716,42 +920,75 @@ class Bid:
             - other (`Bid`): equivalent bid being used to update information
             - t_comp (`float` or `int`): latest time when this bid was updated
         """
-        # check if other bid has valid values
-        # assert other.winner != self.NONE, f'cannot update bid information with a bid that has no winner.'
-        # assert other.winning_bid > 0, f'cannot update bid information with a bid that has non-positive winning bid value.'
-        assert other.winner == self.NONE or other.t_img in other.task.availability, \
-            f'`t_img` value `{other.t_img}` not in task availability interval `{other.task.availability}`'
-        assert other.t_bid <= other.t_img or other.t_img == np.NINF, \
-            f'bid cannot be generated at a time `t_bid` `{other.t_bid}` later than the desired imaging time `t_img` `{other.t_img}`'
+        if isinstance(other, dict):
+            # check if other bid has valid values
+            assert other['winner'] == self.NONE or (other['task']['availability']['left'] <= other['t_img'] <= other['task']['availability']['right']), \
+                f'`t_img` value `{other["t_img"]}` not in task availability interval `{other["task"]["availability"]}`'
+            assert other['t_bid'] <= other['t_img'] or other['t_img'] == np.NINF, \
+                f'bid cannot be generated at a time `t_bid` `{other["t_bid"]}` later than the desired imaging time `t_img` `{other["t_img"]}`'
 
-        # update winning bid information
-        self.winning_bid = other.winning_bid
-        self.winner = other.winner
-        
-        # update other bid information
-        self.t_img = other.t_img
-        self.t_bid = other.t_bid
-        self.main_measurement = other.main_measurement
-        self.performed = other.performed or self.performed
+            # update winning bid information
+            self.winning_bid = other['winning_bid']
+            self.winner = other['winner']
+            
+            # update other bid information
+            self.t_img = other['t_img']
+            self.t_bid = other['t_bid']
+            self.main_measurement = other['main_measurement']
+            self.performed = other['performed'] or self.performed
 
-        # check if bid came from the owner agent
-        if other.owner == self.owner:
-            # bid comes from the owner agent; carryover all timestamps
-            for key,t_other in other.t_stamps.items():
-                if key in [other.owner, other.winner]: 
-                    continue
+            # check if bid came from the owner agent
+            if other['owner'] == self.owner:
+                # bid comes from the owner agent; carryover all timestamps
+                for key,t_other in other['t_stamps'].items():
+                    if key in [other['owner'], other['winner']]: 
+                        continue
 
-                # ensure all timestamps are the most recent ones
-                self.t_stamps[key] = max(self.t_stamps.get(key, np.NINF), t_other)              
+                    # ensure all timestamps are the most recent ones
+                    self.t_stamps[key] = max(self.t_stamps.get(key, np.NINF), t_other)              
 
-        # update timestamp for the other bidder
-        self.t_stamps[other.owner] = max(self.t_stamps.get(other.owner, np.NINF), t_comp)
+            # update timestamp for the other bidder
+            self.t_stamps[other['owner']] = max(self.t_stamps.get(other['owner'], np.NINF), t_comp)
 
-        # if the winner is different from the owner, update timestamp for the winner as well
-        if other.owner != other.winner:
-            self.t_stamps[other.winner] = max(self.t_stamps.get(other.winner, np.NINF), other.t_bid)
+            # if the winner is different from the owner, update timestamp for the winner as well
+            if other['owner'] != other['winner']:
+                self.t_stamps[other['winner']] = max(self.t_stamps.get(other['winner'], np.NINF), other['t_bid'])
 
-    def reset(self, t_comp : float, other : 'Bid' = None) -> None:
+        else:
+            # check if other bid has valid values
+            assert other.winner == self.NONE or other.t_img in other.task.availability, \
+                f'`t_img` value `{other.t_img}` not in task availability interval `{other.task.availability}`'
+            assert other.t_bid <= other.t_img or other.t_img == np.NINF, \
+                f'bid cannot be generated at a time `t_bid` `{other.t_bid}` later than the desired imaging time `t_img` `{other.t_img}`'
+
+            # update winning bid information
+            self.winning_bid = other.winning_bid
+            self.winner = other.winner
+            
+            # update other bid information
+            self.t_img = other.t_img
+            self.t_bid = other.t_bid
+            self.main_measurement = other.main_measurement
+            self.performed = other.performed or self.performed
+
+            # check if bid came from the owner agent
+            if other.owner == self.owner:
+                # bid comes from the owner agent; carryover all timestamps
+                for key,t_other in other.t_stamps.items():
+                    if key in [other.owner, other.winner]: 
+                        continue
+
+                    # ensure all timestamps are the most recent ones
+                    self.t_stamps[key] = max(self.t_stamps.get(key, np.NINF), t_other)              
+
+            # update timestamp for the other bidder
+            self.t_stamps[other.owner] = max(self.t_stamps.get(other.owner, np.NINF), t_comp)
+
+            # if the winner is different from the owner, update timestamp for the winner as well
+            if other.owner != other.winner:
+                self.t_stamps[other.winner] = max(self.t_stamps.get(other.winner, np.NINF), other.t_bid)
+
+    def reset(self, t_comp : float, other : Union['Bid', dict] = None) -> None:
         """
         Resets the values of this bid while keeping track of lates update time
         
@@ -772,12 +1009,14 @@ class Bid:
         self.main_measurement = self.NONE
 
         # update timestamp for the other bidder if given
-        if other is not None:
-            self.t_stamps[other.owner] = t_comp
-        else:
+        if other is None:
             self.t_stamps[self.owner] = t_comp
+        elif isinstance(other, dict):
+            self.t_stamps[other['owner']] = t_comp
+        else:
+            self.t_stamps[other.owner] = t_comp
 
-    def __leave(self, other : 'Bid', t_comp : float) -> None:
+    def __leave(self, other : Union['Bid', dict], t_comp : float) -> None:
         """
         Leaves bid as is.
 
@@ -785,8 +1024,12 @@ class Bid:
             - other (`Bid`): equivalent bid being used to update information
             - t_comp (`float` or `int`): latest time when this bid was updated
         """
-        # update timestamp for the other bidder       
-        self.t_stamps[other.owner] = t_comp
+        if isinstance(other, dict):
+            # update timestamp for the other bidder       
+            self.t_stamps[other['owner']] = t_comp
+        else:
+            # update timestamp for the other bidder       
+            self.t_stamps[other.owner] = t_comp
 
         # update timestamp for self bidder
         self.t_stamps[self.owner] = max(self.t_stamps.get(self.owner, np.NINF), t_comp)
