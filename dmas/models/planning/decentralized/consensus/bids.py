@@ -294,16 +294,26 @@ class Bid:
     @bid_comparison_input_checks
     def has_different_winner_values(self, other : Union['Bid', dict]) -> bool:
         """ Checks if this bid is different from another bid (i.e., any of the winning bid attributes differ) """
-                        
-        # Compare winning bid information
-        if (
-            self.winner != other.winner             # different winning bidder
-            or abs(self.winning_bid - other.winning_bid) > self.EPS # different winning bid value
-            or abs(self.t_img - other.t_img) > self.EPS             # different imaging time
-            # or abs(self.t_bid - other.t_bid) > self.EPS             # different bid time
-            # or self.t_stamps != other.t_stamps                      # different time stamps
-            ):
-            return True
+        if isinstance(other, dict):
+            # Compare winning bid information
+            if (
+                self.winner != other['winner']             # different winning bidder
+                or abs(self.winning_bid - other['winning_bid']) > self.EPS # different winning bid value
+                or abs(self.t_img - other['t_img']) > self.EPS             # different imaging time
+                # or abs(self.[t_bid] - other['t_bid']) > self.EPS             # different bid time
+                # or self.t_stamps != other.t_stamps                      # different time stamps
+                ):
+                return True
+        else:
+            # Compare winning bid information
+            if (
+                self.winner != other.winner             # different winning bidder
+                or abs(self.winning_bid - other.winning_bid) > self.EPS # different winning bid value
+                or abs(self.t_img - other.t_img) > self.EPS             # different imaging time
+                # or abs(self.t_bid - other.t_bid) > self.EPS             # different bid time
+                # or self.t_stamps != other.t_stamps                      # different time stamps
+                ):
+                return True
 
         # # Compare other attributes
         # if self.performed != other.performed:                   # different performed status
@@ -888,7 +898,6 @@ class Bid:
         
         # create a shallow copy of this bid
         new_bid = copy.copy(self)
-        # new_bid = self.copy()
         
         # check comparison rules
         comp_result : BidComparisonResults = self.rule_comparison(other)
