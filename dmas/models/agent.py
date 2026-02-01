@@ -409,6 +409,19 @@ class SimulationAgent(object):
             # remove original bus messages 
             incoming_messages.remove(bus_msg)
 
+        # # extract tasks from incoming bids
+        # ## find unique tasks in incoming bids
+        # unique_reqs = list({self._task_key(bid['task']): bid['task']
+        #                         for bid in incoming_bids}.values())
+
+        # ## unpack unique bid tasks
+        # incoming_bid_tasks = set([GenericObservationTask.from_dict(task_dict) 
+        #                           for task_dict in unique_bid_tasks])
+        # ## filter active bid tasks
+        # active_bid_tasks = set([task for task in incoming_bid_tasks
+        #                         if task not in self.results
+        #                         and task.is_available(state._t)])
+
         # check for any measurement requests
         incoming_reqs : List[TaskRequest] \
             = [TaskRequest.from_dict(msg.req) 
@@ -755,6 +768,23 @@ class SimulationAgent(object):
 
     def get_state(self) -> SimulationAgentState:
         return self._state
+    
+    def _task_key(self, d : dict) -> tuple:
+        return (
+            d["task_type"],
+            d["parameter"],
+            d["priority"],
+            d["id"],
+        )
+    
+    def _req_key(self, d : dict) -> tuple:
+        return (
+            d["task"]["task_type"],
+            d["task"]["parameter"],
+            d["task"]["priority"],
+            d["task"]["id"],
+            # d["requester"],
+        )
     
     def log(self, msg : str, level=logging.DEBUG) -> None:
         """

@@ -341,7 +341,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         return new_task_added
     
 
-    def __task_key(self, d : dict) -> tuple:
+    def _task_key(self, d : dict) -> tuple:
         return (
             d["task_type"],
             d["parameter"],
@@ -367,11 +367,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # extract tasks from incoming bids
         ## find unique tasks in incoming bids
-        unique_bid_tasks = list({self.__task_key(bid['task']): bid['task']
+        unique_bid_tasks = list({self._task_key(bid['task']): bid['task']
                                 for bid in incoming_bids}.values())
 
         ## unpack unique bid tasks
-        incoming_bid_tasks = set([GenericObservationTask.from_dict(task_dict) for task_dict in unique_bid_tasks])
+        incoming_bid_tasks = set([GenericObservationTask.from_dict(task_dict) 
+                                  for task_dict in unique_bid_tasks])
         ## filter active bid tasks
         active_bid_tasks = set([task for task in incoming_bid_tasks
                                 if task not in self.results
@@ -661,7 +662,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         incoming_bid = incoming_bid.to_dict()
 
                     # get relevant task
-                    task = tasks_with_incoming_bids[self.__task_key(incoming_bid['task'])]
+                    task = tasks_with_incoming_bids[self._task_key(incoming_bid['task'])]
                         
                     # get current bid for this task and observation number
                     current_bid : Bid = self.results[task][incoming_bid['n_obs']]
@@ -748,12 +749,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
         for bid in sorted(incoming_bids, key=lambda b: (b['owner'], b['task']['id'], b['n_obs'])):
             try:
                 # get current bid for this task and observation number
-                current_bid : dict = grouped_bids[bid['owner']][self.__task_key(bid['task'])][bid['n_obs']]
+                current_bid : dict = grouped_bids[bid['owner']][self._task_key(bid['task'])][bid['n_obs']]
 
             except IndexError:
                 # ensure incoming bids are sorted by observation number within each task
                 n_obs_max : Set[int] = set(range(bid['n_obs']+1))
-                n_obs_curr : Set[int] = {grouped_bid['n_obs'] for grouped_bid in grouped_bids[bid['owner']][self.__task_key(bid['task'])]}
+                n_obs_curr : Set[int] = {grouped_bid['n_obs'] for grouped_bid in grouped_bids[bid['owner']][self._task_key(bid['task'])]}
 
                 assert len(n_obs_max) > len(n_obs_curr), \
                     "Incoming bids must be processed in order of observation number within each task."
@@ -782,19 +783,19 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     }
 
                     # add empty bid for missing observation number
-                    grouped_bids[bid['owner']][self.__task_key(bid['task'])].append(empty_bid)
+                    grouped_bids[bid['owner']][self._task_key(bid['task'])].append(empty_bid)
 
                 # sort bids by observation number
-                grouped_bids[bid['owner']][self.__task_key(bid['task'])] = sorted(grouped_bids[bid['owner']][self.__task_key(bid['task'])], key=lambda b: b['n_obs'])
+                grouped_bids[bid['owner']][self._task_key(bid['task'])] = sorted(grouped_bids[bid['owner']][self._task_key(bid['task'])], key=lambda b: b['n_obs'])
 
                 # get current bid for this task and observation number
-                current_bid : dict = grouped_bids[bid['owner']][self.__task_key(bid['task'])][bid['n_obs']]
+                current_bid : dict = grouped_bids[bid['owner']][self._task_key(bid['task'])][bid['n_obs']]
                 
             # compare incoming bid with existing bids for the same task
             updated_bid : dict = max(current_bid, bid, key=lambda b: b['t_bid'])
 
             # update grouped bids with modified bid
-            grouped_bids[bid['owner']][self.__task_key(bid['task'])][bid['n_obs']] = updated_bid
+            grouped_bids[bid['owner']][self._task_key(bid['task'])][bid['n_obs']] = updated_bid
         
         # sort incoming bids by observation number within each task
         for other_agent,incoming_results in grouped_bids.items():
