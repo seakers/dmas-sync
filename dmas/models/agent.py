@@ -397,13 +397,10 @@ class SimulationAgent(object):
                                 ) -> Tuple[List[TaskRequest], List[Tuple[str, list]], List[AgentStateMessage], List[AgentActionMessage], List[SimulationMessage]]:
         """ Classify incoming messages into their respective types """
 
-        if incoming_messages:
-            x = 1 # breakpoint
-
         # check if there exist any bus messages in incoming messages
         bus_messages : List[BusMessage] = [msg for msg in incoming_messages 
                                            if isinstance(msg, BusMessage)]
-        
+
         # unpack bus messages
         for bus_msg in bus_messages: 
             # add bus' contents to list of incoming messages

@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from collections import defaultdict
 from itertools import chain
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, Union
 
 import logging
 
@@ -116,7 +116,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         super().update_percepts(state, incoming_reqs, relay_messages, completed_actions)
 
         # collect bids from incoming messages to inbox
-        incoming_bids : List[Bid] = self.__collect_incoming_bids(misc_messages)  
+        incoming_bids : List[Union[Bid,dict]] \
+            = self.__collect_incoming_bids(misc_messages)  
 
         # collect performed observations from completed actions
         performed_observations : List[ObservationAction] = [action for action in completed_actions 
@@ -167,7 +168,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # 2) incoming bids modified tasks in my bundle
         self.bundle_changes_performed = len(bundle_updates) > 0
 
-    def __collect_incoming_bids(self, misc_messages : List[SimulationMessage]) -> List[Bid]:
+    def __collect_incoming_bids(self, misc_messages : List[SimulationMessage]) -> List[Union[Bid,dict]]:
         """ Collect bids from incoming messages and requests. """
         # TODO include support for BidResultsMessage when re-enabled?
         
@@ -175,6 +176,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
         incoming_bids = [Bid.from_dict(msg.bid) 
                             for msg in misc_messages 
                             if isinstance(msg, MeasurementBidMessage)]
+        # incoming_bids = [msg.bid
+        #                 for msg in misc_messages 
+        #                 if isinstance(msg, MeasurementBidMessage)]
+
         return incoming_bids
 
     def _consensus_phase(self,

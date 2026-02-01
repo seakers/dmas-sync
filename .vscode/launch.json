@@ -237,15 +237,15 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                // "-n", "full_factorial_trials",
-                "-n", "lhs_trials-2_samples-1000_seed",
+                "-n", "full_factorial_trials",
+                // "-n", "lhs_trials-2_samples-1000_seed",
                 "-o", 
-                // "-d",
+                "-d",
                 "-r",
                 // "-p",
-                "-l", "0",
+                "-l", "31",
+                "-u", "32"
                 // "-l", "5",
-                "-u", "2"
                 // "-u", "6"
             ]
         },

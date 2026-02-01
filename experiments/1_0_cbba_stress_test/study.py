@@ -593,7 +593,7 @@ def main(trial_filename : str,
         gnd_segment = 'None' if not isinstance(gnd_segment, str) else gnd_segment
         
         # print scenario banner
-        if scenario_id > 0: tqdm.write(print_scenario_banner(f'CBBA Stress Test Study - {trial_filename}'))
+        if scenario_id > 0: print_scenario_banner(f'CBBA Stress Test Study - {trial_filename}')
         if debug: tqdm.write("DEBUG MODE ENABLED: Running a single short experiment for debugging purposes")
         tqdm.write(f"\n--- Running Trial Scenario ID: {scenario_id} ---")
         tqdm.write(f" - Num Sats: {num_sats}")
@@ -627,25 +627,23 @@ def main(trial_filename : str,
         # initialize simulation mission
         tqdm.write(" - Running full simulation...\n")
 
-        # check if output directory was properly initalized
-        assert os.path.isdir(results_dir), \
-            f"Results directory not properly initialized at: {results_dir}"
-
         # define conditions to execute mission
-        execute_conditions = [
+        if os.path.isdir(results_dir):
+            # results directory was already generated
+            execute_conditions = [            
+                # there are incomplete results directories for any agent
+                any([len(os.listdir(os.path.join(results_dir, d))) <= 2 
+                        for d in os.listdir(results_dir)
+                        if os.path.isdir(os.path.join(results_dir, d))
+                        and 'manager' not in d]
+                    ),
+                
+                # overwrite flag was set
+                overwrite
+            ]
+        else:
             # there is no results directory generated yet
-            not os.path.isdir(results_dir), 
-            
-            # there are incomplete results directories for any agent
-            any([len(os.listdir(os.path.join(results_dir, d))) <= 2 
-                    for d in os.listdir(results_dir)
-                    if os.path.isdir(os.path.join(results_dir, d))
-                    and 'manager' not in d]
-                ),
-            
-            # overwrite flag was set
-            overwrite
-        ]
+            execute_conditions = [True]  # force execution if results directory does not exist
 
         # execute mission if any of the conditions are met
         if any(execute_conditions): 
@@ -655,6 +653,10 @@ def main(trial_filename : str,
                 tqdm.write(' - Incomplete or missing results detected; running simulation mission...')
             tqdm.write(' - Initializing simulation mission...')
             mission : Simulation = Simulation.from_dict(mission_specs, overwrite=overwrite, level=level)
+
+            # check if output directory was properly initalized
+            assert os.path.isdir(results_dir), \
+                f"Results directory not properly initialized at: {results_dir}"
             
             tqdm.write(' - Executing simulation mission...')
             mission.execute()
@@ -679,6 +681,10 @@ def main(trial_filename : str,
         #                 printouts=False,
         #                 level=level
         #             )
+                
+        #         # check if output directory was properly initalized
+        #         assert os.path.isdir(results_dir), \
+        #             f"Results directory not properly initialized at: {results_dir}"
 
         #     tqdm.write(' - Evaluating simulation results...')
         #     mission.process_results()
