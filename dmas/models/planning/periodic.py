@@ -88,7 +88,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         """ Determines whether a new plan needs to be initalized """    
 
         if (self.plan.t < 0                  # simulation just started
-            or state._t >= self.plan.t_next):    # or periodic planning period has been reached
+            or state.get_time() >= self.plan.t_next):    # or periodic planning period has been reached
             
             pending_actions = [action for action in current_plan
                                if action.t_start <= self.plan.t_next]
@@ -113,7 +113,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         max_slew_rate, max_torque = self._collect_agility_specs(specs)
 
         # Outline planning horizon interval
-        planning_horizon = Interval(state._t, state._t + self.horizon)
+        planning_horizon = Interval(state.get_time(), state.get_time() + self.horizon)
 
         # get only available tasks
         available_tasks : list[GenericObservationTask] = self.get_available_tasks(tasks, planning_horizon)
@@ -138,12 +138,11 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         # generate maneuver and travel actions from measurements
         maneuvers : list = self._schedule_maneuvers(state, specs, observations, orbitdata)
         
-        # generate plan from actions
-        self.plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, t=state._t, horizon=self.horizon, t_next=state._t+self.period)    
-        
         # wait for next planning period to start
-        replan : list = self._schedule_periodic_replan(state, self.plan, state._t+self.period)
-        self.plan.add_all(replan, t=state._t)
+        replan : list = self._schedule_periodic_replan(state, state.get_time()+self.period)
+        
+        # generate plan from actions
+        self.plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, replan, t=state.get_time(), horizon=self.horizon, t_next=state.get_time()+self.period)    
 
         # return plan and save local copy
         return self.plan.copy()
@@ -182,7 +181,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
 
             elif self.sharing == self.PERIODIC:        
                 # determine current time        
-                t_curr : float  = state._t if t is None else t                
+                t_curr : float  = state.get_time() if t is None else t                
 
                 # determine number of periods within the planning horizon
                 n_periods = int(self.horizon // self.period)
@@ -210,7 +209,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 
                 # get access intervals with the client agent within the planning horizon
                 for target in orbitdata.comms_links.keys():
-                    access_intervals : List[Interval] = orbitdata.get_next_agent_accesses(target, state._t, include_current=True)
+                    access_intervals : List[Interval] = orbitdata.get_next_agent_accesses(target, state.get_time(), include_current=True)
 
                     # collect access start times for future reference
                     t_access_starts.update([access.left for access in access_intervals if not access.is_empty()])
@@ -223,14 +222,14 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                         if next_access.is_empty(): continue
 
                         # if access opportunity is beyond the next planning period, skip scheduling    
-                        if next_access.right <= state._t + self.period: continue
+                        if next_access.right <= state.get_time() + self.period: continue
 
                         # get last access interval and calculate broadcast time
                         # t_broadcast : float = max(next_access.left, state.t+self.period-5e-3) # ensure broadcast happens before the end of the planning period
                         t_broadcast : float = max(
                                               min(next_access.left + 5*self.EPS,    # give buffer time for access to start
                                                   next_access.right),               # ensure broadcast is before access ends
-                                            state._t)                                # ensure broadcast is not in the past
+                                            state.get_time())                                # ensure broadcast is not in the past
 
                         # generate plan message to share state
                         state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
@@ -260,27 +259,32 @@ class AbstractPeriodicPlanner(AbstractPlanner):
             #     f'Broadcasts not scheduled correctly. Is of type `{type(broadcasts)}`.'
 
     
-    def _schedule_periodic_replan(self, state : SimulationAgentState, prelim_plan : Plan, t_next : float) -> list:
+    def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:
         """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
-
-        # find wait start time
-        if prelim_plan.is_empty():
-            t_wait_start = state._t 
+        # ensure next planning time is in the future
+        assert state.get_time() <= t_next, "Next planning time must be in the future."
+        # schedule wait action for next planning time
+        return [WaitAction(t_next,t_next)] if not np.isinf(t_next) else []
+    # def _schedule_periodic_replan(self, state : SimulationAgentState, prelim_plan : Plan, t_next : float) -> list:
+    #     """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
+        # # find wait start time
+        # if prelim_plan.is_empty():
+        #     t_wait_start = state.get_time() 
         
-        else:
-            actions_within_period = [action for action in prelim_plan 
-                                 if  isinstance(action, AgentAction)
-                                 and action.t_start < t_next]
+        # else:
+        #     actions_within_period = [action for action in prelim_plan 
+        #                          if  isinstance(action, AgentAction)
+        #                          and action.t_start < t_next]
 
-            if actions_within_period:
-                # last_action : AgentAction = actions_within_period.pop()
-                t_wait_start = min(max([action.t_end for action in actions_within_period]), t_next)
+        #     if actions_within_period:
+        #         # last_action : AgentAction = actions_within_period.pop()
+        #         t_wait_start = min(max([action.t_end for action in actions_within_period]), t_next)
                                 
-            else:
-                t_wait_start = state._t
+        #     else:
+        #         t_wait_start = state.get_time()
 
-        # create wait action
-        return [WaitAction(t_wait_start, t_next)] if t_wait_start < t_next else []
+        # # create wait action
+        # return [WaitAction(t_wait_start, t_next)] if t_wait_start < t_next else []
     
     
     def get_ground_points(self,

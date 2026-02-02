@@ -1142,7 +1142,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
             broadcasts : list = self._schedule_broadcasts(state, orbitdata)
 
             # determine next planning time        
-            # t_next = state.t + current_plan.horizon if isinstance(current_plan, PeriodicPlan) else current_plan.t_next
             t_next = self.preplan.t_next
 
             # schedule periodic replan
@@ -1758,27 +1757,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
     
     def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:
         """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
-        assert state.get_time() <= t_next, \
-            "Next planning time must be in the future."
-
-        # # find wait start time
-        # if prelim_plan.is_empty():
-        #     t_wait_start = state.get_time() 
-        
-        # else:
-        #     actions_within_period = [action for action in prelim_plan 
-        #                          if  isinstance(action, AgentAction)
-        #                          and action.t_start < t_next]
-
-        #     if actions_within_period:
-        #         # last_action : AgentAction = actions_within_period.pop()
-        #         t_wait_start = min(max([action.t_end for action in actions_within_period]), t_next)
-                                
-        #     else:
-        #         t_wait_start = state.get_time()
-
-        # # create wait action
-        # return [WaitAction(t_wait_start, t_next)] if t_wait_start < t_next else [] 
+        # ensure next planning time is in the future
+        assert state.get_time() <= t_next, "Next planning time must be in the future."
+        # schedule wait action for next planning time
         return [WaitAction(t_next,t_next)] if not np.isinf(t_next) else []
 
     """

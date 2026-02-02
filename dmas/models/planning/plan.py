@@ -61,7 +61,8 @@ class Plan(ABC):
         self.actions = []
 
         # add actions from iterable set of actions
-        for actions in tqdm(action_lists, desc='Adding action lists to plan', leave=False):
+        # for actions in tqdm(action_lists, desc='Adding action lists to plan', leave=False):
+        for actions in action_lists:
             # check argument types
             if not isinstance(actions, list):
                 raise ValueError(f'updated plan must be of type `list`.')

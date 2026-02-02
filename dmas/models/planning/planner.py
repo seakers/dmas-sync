@@ -70,7 +70,6 @@ class AbstractPlanner(ABC):
     @abstractmethod
     def generate_plan(self, **kwargs) -> Plan:
         """ Creates a plan for the agent to perform """
-
     
     def calculate_access_opportunities(self, 
                                        state : SimulationAgentState, 
@@ -89,7 +88,10 @@ class AbstractPlanner(ABC):
         coverage_idx_by_target : Dict[int, Dict[int, Dict[str, list]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
         for i,t in tqdm(enumerate(raw_coverage_data['time [s]']), 
                         desc=f'{state.agent_name}/PLANNER: Grouping access opportunities', 
-                        unit=' time-step', leave=False):
+                        unit=' time-step', 
+                        disable=len(raw_coverage_data['time [s]'])<10,
+                        mininterval=0.5, 
+                        leave=False):
             # extract relevant data
             grid_index = raw_coverage_data['grid index'][i]
             gp_index = raw_coverage_data['GP index'][i]
@@ -103,7 +105,12 @@ class AbstractPlanner(ABC):
 
         # merge access interval opportunities
         for grid_idx,gp_accesses in tqdm(coverage_idx_by_target.items(), 
-                                         desc=f'{state.agent_name}/PLANNER: Merging access opportunities', leave=False, mininterval=0.5):
+                                         desc=f'{state.agent_name}/PLANNER: Merging access opportunities', 
+                                         unit=' target',
+                                         disable=len(coverage_idx_by_target)<10,
+                                         leave=False, 
+                                         mininterval=0.5,
+                                        ):
             for gp_idx,instrument_accesses in gp_accesses.items():
                 for instrument,access_indices in instrument_accesses.items():
                     # initialize merged access intervals
