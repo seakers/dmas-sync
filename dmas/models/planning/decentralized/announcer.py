@@ -133,18 +133,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                 task_requests.append((event, task_request, task_request_msg.to_dict()))
 
         # initialize set of times when broadcasts are scheduled (sets to avoid duplicates)
-        t_access_starts = set() 
         t_broadcasts = set() 
-
-        # get all future access times within planning horizon
-        for target in orbitdata.comms_links.keys():
-            access_intervals : List[Interval] = orbitdata.get_next_agent_accesses(target, state._t, include_current=True)
-            t_access_starts.update([access.left for access in access_intervals if not access.is_empty()])
-
-        # check if no comms links are available
-        if len(orbitdata.comms_links.keys()) == 0: 
-            # set broadcast time to immediate if no comms links available
-            t_access_starts.add(state._t)
 
         # create broadcasts for each request
         for event,task_req,task_request_msg in tqdm(task_requests, 
@@ -164,14 +153,12 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                     # check if the task is available during the given access interval
                     if not event.availability.overlaps(next_access): continue
 
-                    # collect access start times for future reference
-                    t_access_starts.add(next_access.left)
-
                     # calculate broadcast time to earliest in this access interval
-                    t_broadcast : float = max(
-                                              min(next_access.left + 5*self.EPS,    # give buffer time for access to start
-                                                  next_access.right),               # ensure broadcast is before access ends
-                                            task_req.t_req)                                # ensure broadcast is not in the past
+                    t_broadcast : float = max(next_access.left, task_req.t_req)
+                    # t_broadcast : float = max(
+                    #                           min(next_access.left + 5*self.EPS,    # give buffer time for access to start
+                    #                               next_access.right),               # ensure broadcast is before access ends
+                    #                         task_req.t_req)                                # ensure broadcast is not in the past
                     
                     # add broadcast time to set of broadcast times
                     t_broadcasts.add(t_broadcast)
@@ -193,8 +180,4 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
             # create single broadcast action for all requests
             broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
            
-        # connection waits; allows for messages to be received right after access start times
-        waits = [WaitAction(t_access_start, t_access_start) for t_access_start in t_access_starts]
-        broadcasts.extend(waits)
-
         return sorted(broadcasts, key=lambda action: action.t_start)

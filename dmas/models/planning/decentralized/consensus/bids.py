@@ -21,8 +21,8 @@ def bid_comparison_input_checks( func : Callable ) -> Callable:
         
         if isinstance(other, dict):
             # ensure all required keys are present
-            assert all(key in other for key in REQUIRED_KEYS), \
-                f'Bid dictionary is missing required keys. Required keys: {REQUIRED_KEYS}'
+            # assert all(key in other for key in REQUIRED_KEYS), \
+            #     f'Bid dictionary is missing required keys. Required keys: {REQUIRED_KEYS}'
             # assert self.task.to_dict() == other['task'], \
             #     f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other["task"]["id"]})'
             assert self.task.id == other['task']['id'], \

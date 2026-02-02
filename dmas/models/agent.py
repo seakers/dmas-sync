@@ -333,7 +333,7 @@ class SimulationAgent(object):
                 if True:
                 # if 95.0 < state.t < 96.0:
                 # if state.get_time() > 19 and "1" in state.agent_name:
-                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -403,48 +403,66 @@ class SimulationAgent(object):
         for bus_msg in bus_messages: 
             # add bus' contents to list of incoming messages
             incoming_messages.extend([message_from_dict(**msg) 
+                                      if isinstance(msg, dict) 
+                                      else msg    
                                       for msg in bus_msg.msgs])
             # remove original bus messages 
             incoming_messages.remove(bus_msg)
 
-        # check for any measurement requests
-        incoming_reqs : list[MeasurementRequestMessage] \
-            = [msg for msg in incoming_messages 
-                if isinstance(msg, MeasurementRequestMessage)]
-        # incoming_reqs : List[TaskRequest] \
-        #     = [TaskRequest.from_dict(sense.req) 
-        #        for sense in incoming_messages 
-        #        if isinstance(sense, MeasurementRequestMessage)]
+        # define classified message lists
+        incoming_reqs, observation_msgs, \
+            external_observations, external_states, \
+                external_action_statuses, misc_messages \
+                    = [], [], [], [], [], []
 
-        # check for any observation results messages
-        observation_msgs : List[ObservationResultsMessage] \
-            = [msg for msg in incoming_messages 
-                if isinstance(msg, ObservationResultsMessage)]
+        # classify incoming messages
+        for msg in incoming_messages:
+            if isinstance(msg, MeasurementRequestMessage):
+                incoming_reqs.append(msg)
+            elif isinstance(msg, ObservationResultsMessage):
+                observation_msgs.append(msg)
+                if isinstance(msg.instrument, str):
+                    external_observations.append((msg.instrument, msg.observation_data))
+            elif isinstance(msg, AgentStateMessage) and msg.src != state.agent_name:
+                external_states.append(msg)
+            elif isinstance(msg, AgentActionMessage):
+                external_action_statuses.append(msg)
+            else:
+                misc_messages.append(msg)
+
+        # # check for any measurement requests
+        # incoming_reqs : list[MeasurementRequestMessage] \
+        #     = [msg for msg in incoming_messages 
+        #         if isinstance(msg, MeasurementRequestMessage)]
         
-        # extract observation data from messages
-        external_observations : List[tuple] \
-            = [(msg.instrument, msg.observation_data) 
-                for msg in incoming_messages 
-                if isinstance(msg, ObservationResultsMessage)
-                and isinstance(msg.instrument, str)]
-
-
-        external_states : List[AgentStateMessage] \
-            = [SimulationAgentState.from_dict(msg.state) 
-                for msg in incoming_messages 
-                if isinstance(msg, AgentStateMessage)
-                and msg.src != state.agent_name]
+        # # check for any observation results messages
+        # observation_msgs : List[ObservationResultsMessage] \
+        #     = [msg for msg in incoming_messages 
+        #         if isinstance(msg, ObservationResultsMessage)]
         
-        external_action_statuses : List[AgentActionMessage] \
-            = [msg for msg in incoming_messages
-                if isinstance(msg, AgentActionMessage)]
+        # # extract observation data from messages
+        # external_observations : List[tuple] \
+        #     = [(msg.instrument, msg.observation_data) 
+        #         for msg in incoming_messages 
+        #         if isinstance(msg, ObservationResultsMessage)
+        #         and isinstance(msg.instrument, str)]
+
+        # external_states : List[AgentStateMessage] \
+        #     = [SimulationAgentState.from_dict(msg.state) 
+        #         for msg in incoming_messages 
+                # if isinstance(msg, AgentStateMessage)
+                # and msg.src != state.agent_name]
+        
+        # external_action_statuses : List[AgentActionMessage] \
+        #     = [msg for msg in incoming_messages
+        #         if isinstance(msg, AgentActionMessage)]
                 
-        # gather any other miscellaneous messages
-        misc_messages = set(incoming_messages)
-        misc_messages.difference_update(incoming_reqs)
-        misc_messages.difference_update(observation_msgs)
-        misc_messages.difference_update(external_states)
-        misc_messages.difference_update(external_action_statuses)
+        # # gather any other miscellaneous messages
+        # misc_messages = set(incoming_messages)
+        # misc_messages.difference_update(incoming_reqs)
+        # misc_messages.difference_update(observation_msgs)
+        # misc_messages.difference_update(external_states)
+        # misc_messages.difference_update(external_action_statuses)
 
         # return classified messages
         return incoming_reqs, external_observations, \
