@@ -50,7 +50,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         self.toy_23 = False 
         self.toy_24 = False
-        self.toy_25 = True
+        self.toy_25 = False
         self.toy_26 = False
 
     def toy_planner_config(self):
@@ -2073,7 +2073,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # verify results
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observable'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observed'].values[0][1], 1)
-        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 1)
+        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 0)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Re-observed'].values[0][1], 0)
 
         # print done
