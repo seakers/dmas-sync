@@ -363,6 +363,10 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         execute_conditions = [
             # there is no results directory generated yet
             not os.path.isdir(results_dir),
+            
+            # or results directory is empty
+            len(os.listdir(results_dir)) == 0,
+
             any(
                 (   # or one of the agents does not have a results directory
                     not os.path.isdir(os.path.join(results_dir, d)) or
@@ -372,6 +376,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                 for d in os.listdir(results_dir)
                 if '.csv' not in d
             ),
+            
             # or an overwrite flag was set
             cfg.overwrite
         ]
@@ -632,6 +637,9 @@ def main(trial_filename : str,
         if os.path.isdir(results_dir):
             # results directory was already generated
             execute_conditions = [            
+                # results directory is empty
+                len(os.listdir(results_dir)) == 0,
+                
                 # there are incomplete results directories for any agent
                 any([len(os.listdir(os.path.join(results_dir, d))) <= 2 
                         for d in os.listdir(results_dir)
@@ -762,6 +770,11 @@ if __name__ == "__main__":
                         help='toggles to run just one experiment for debugging purposes',
                         action='store_true',
                         required=False)
+    parser.add_argument('-s', 
+                        '--single-threaded',
+                        help='toggles to run simulations in single-threaded mode',
+                        action='store_true',
+                        required=False)
     parser.add_argument('-L', 
                         '--level',
                         choices=['DEBUG', 'INFO', 'WARNING', 'CRITICAL', 'ERROR'],
@@ -782,14 +795,13 @@ if __name__ == "__main__":
     evaluate : bool = args.evaluate
     runtime_profiling : bool = args.runtime_profiling
     debug : bool = args.debug
+    single_threaded : bool = args.single_threaded
     level : int = LEVELS.get(args.level)
 
     # run main study
-    if debug:
-        # if in debug mode; run trials one at a time
-        main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
-    elif upper_bound - lower_bound <= 1:
-        # if only one trial is being run; use non-parallelized version
+    if debug or single_threaded or upper_bound - lower_bound <= 1:
+        # if in debug mode, single-threaded mode, or only one trial is being run; 
+        # run trials one at a time use non-parallelized version
         main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
     else:
         # if more than one trial is being run; use parallelized version

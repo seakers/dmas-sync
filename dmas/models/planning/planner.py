@@ -58,11 +58,14 @@ class AbstractPlanner(ABC):
                          completed_actions : list
                         ) -> None:
         """ Updates internal knowledge based on incoming percepts """
-        
-        # update latest observation opportunities measured by this agent
-        if completed_actions:
-            self.latest_performed_observations = {action.obs_opp for action in completed_actions
-                                                  if isinstance(action, ObservationAction)}
+        # check if observations are peformed in completed actions
+        performed_observations : Set[ObservationOpportunity] \
+            = {action.obs_opp for action in completed_actions
+                    if isinstance(action, ObservationAction)}
+
+        # if so, update latest observation opportunities measured by this agent
+        if performed_observations:
+            self.latest_performed_observations = performed_observations
 
     @abstractmethod
     def needs_planning(self, **kwargs) -> bool:

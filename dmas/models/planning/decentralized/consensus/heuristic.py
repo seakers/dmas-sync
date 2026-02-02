@@ -250,10 +250,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # extract already planned task observation opportunities from current plan
         planned_observation_opportunities = [obs.obs_opp for obs in self.path if isinstance(obs,ObservationAction)]
 
-        # filter tasks that are already in the current plan
+        # filter tasks that are already in the current plan or that were just performed
         observation_opportunities = [obs_opp for obs_opp in observation_opportunities
-                                    if obs_opp not in planned_observation_opportunities]
-        
+                                    if obs_opp not in planned_observation_opportunities
+                                    and obs_opp not in self.latest_performed_observations]
+             
         # return observation opportunities
         return observation_opportunities
     
