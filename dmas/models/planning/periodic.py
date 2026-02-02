@@ -1,4 +1,4 @@
-from typing import List
+from typing import Dict, List, Tuple
 import logging
 import numpy as np
 from abc import abstractmethod
@@ -69,16 +69,15 @@ class AbstractPeriodicPlanner(AbstractPlanner):
     def update_percepts(self, 
                         state : SimulationAgentState,
                         current_plan : Plan,
-                        tasks : List[GenericObservationTask],
-                        incoming_reqs: list, 
-                        relay_messages: list, 
+                        tasks : Dict[Tuple,GenericObservationTask],
+                        incoming_reqs: Dict[Tuple,Dict], 
                         misc_messages : list,
                         completed_actions: list,
                         aborted_actions : list,
                         pending_actions : list
                         ) -> None:
         # update percepts
-        super().update_percepts(state, incoming_reqs, relay_messages, completed_actions)
+        super().update_percepts(completed_actions)
     
     
     def needs_planning( self, 
@@ -152,8 +151,8 @@ class AbstractPeriodicPlanner(AbstractPlanner):
     
     def get_available_tasks(self, tasks : list, planning_horizon : Interval) -> list:
         """ Returns a list of tasks that are available at the given time """
-        if not isinstance(tasks, list):
-            raise ValueError(f'`tasks` needs to be of type `list`. Is of type `{type(tasks)}`.')
+        # if not isinstance(tasks, list):
+        #     raise ValueError(f'`tasks` needs to be of type `list`. Is of type `{type(tasks)}`.')
         
         # TODO add check for capability of the agent to perform the task?      
 

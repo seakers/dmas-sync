@@ -576,19 +576,13 @@ def main(trial_filename : str,
     print(f" - Loaded experiment templates from `resources/templates/`")
 
     # set simulation duration and step size
-    duration = 2500 / 3600 / 24.0 if debug else 1.0 # [days]
+    duration = 1100 / 3600 / 24.0 if debug else 1.0 # [days]
     duration = min(duration, 1.0)                   # cap at 1 day for sanity
     step_size = 10                                  # [s]
 
     # iterate through each trial
     for scenario_id,num_sats,gnd_segment,task_arrival_rate,target_distribution in trials.itertuples(index=False):
-        # check if runtime profiling toggle was selected
-        if runtime_profiling:        
-            # initialize profiler
-            pr = cProfile.Profile()
-            # enable profiler
-            pr.enable()
-        
+                
         # handle nan ground segment case
         gnd_segment = 'None' if not isinstance(gnd_segment, str) else gnd_segment
         
@@ -613,6 +607,13 @@ def main(trial_filename : str,
 
         ## define results output file name
         results_dir = os.path.join(base_path, 'results', f"{trial_filename}_scenario_{scenario_id}")        
+
+        # check if runtime profiling toggle was selected
+        # if runtime_profiling:        
+        #     # initialize profiler
+        #     pr = cProfile.Profile()
+        #     # enable profiler
+        #     pr.enable()
 
         # check if propagation-only toggle was selected
         if propagate_only:
@@ -658,6 +659,12 @@ def main(trial_filename : str,
             assert os.path.isdir(results_dir), \
                 f"Results directory not properly initialized at: {results_dir}"
             
+            if runtime_profiling:        
+                # initialize profiler
+                pr = cProfile.Profile()
+                # enable profiler
+                pr.enable()
+
             tqdm.write(' - Executing simulation mission...')
             mission.execute()
         else:
@@ -695,10 +702,10 @@ def main(trial_filename : str,
 
 
         if runtime_profiling:
-            tqdm.write(" - Printing runtime profiling results...")
             # disable profiler
             pr.disable()
             # save to file
+            tqdm.write(" - Printing runtime profiling results...")
             runtime_path = os.path.join(results_dir, "profile.out")
             pr.dump_stats(runtime_path)
 

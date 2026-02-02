@@ -46,9 +46,8 @@ class AbstractPlanner(ABC):
             raise ValueError(f'`logger` must be of type `Logger`. Is of type `{type(logger)}`.')
 
         # initialize attributes
-        self.known_reqs : set[TaskRequest] = set()                                # set of known measurement requests
-        self.stats : dict = defaultdict(list)                                     # collector for runtime performance statistics
-        self.last_performed_observations : List[ObservationOpportunity] = list()  # list of last performed observations
+        self.last_performed_observations : List[ObservationOpportunity] \
+            = list()  # list of last performed observations
         
         # set attribute parameters
         self._debug = debug                 # toggles debugging features
@@ -56,19 +55,10 @@ class AbstractPlanner(ABC):
 
     @abstractmethod
     def update_percepts( self,
-                         state : SimulationAgentState,
-                         incoming_reqs : list,
-                         relay_messages : list,
                          completed_actions : list
                         ) -> None:
         """ Updates internal knowledge based on incoming percepts """
         
-        # check parameters
-        assert all([isinstance(req, TaskRequest) for req in incoming_reqs])
-
-        # update list of known requests
-        self.known_reqs.update(incoming_reqs)
-
         # update latest observation opportunities measured by this agent
         self.last_performed_observations = list({action.obs_opp for action in completed_actions
                                             if isinstance(action, ObservationAction)})

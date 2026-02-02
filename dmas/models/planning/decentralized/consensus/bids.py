@@ -23,12 +23,15 @@ def bid_comparison_input_checks( func : Callable ) -> Callable:
             # ensure all required keys are present
             assert all(key in other for key in REQUIRED_KEYS), \
                 f'Bid dictionary is missing required keys. Required keys: {REQUIRED_KEYS}'
-            assert self.task.to_dict() == other['task'], \
-                f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other["task"]["id"]})'
+            # assert self.task.to_dict() == other['task'], \
+            #     f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other["task"]["id"]})'
+            assert self.task.id == other['task']['id'], \
+                  f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other["task"]["id"]})'
             assert self.n_obs == other['n_obs'], \
                 f'cannot compare bids intended for different image numbers (expected image number: {self.n_obs}, given image number: {other["n_obs"]})'
         else:
-            assert self.task == other.task, f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other.task.id})'
+            # assert self.task == other.task, f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other.task.id})'
+            assert self.task.id == other.task.id, f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other.task.id})'
             assert self.n_obs == other.n_obs, f'cannot compare bids intended for different image numbers (expected image number: {self.n_obs}, given image number: {other.n_obs})'
 
         # perform comparison

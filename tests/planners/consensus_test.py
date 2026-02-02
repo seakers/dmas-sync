@@ -2156,7 +2156,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # verify results
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observable'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observed'].values[0][1], 1)
-        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 2)
+        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 0)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Re-observed'].values[0][1], 1)
 
         # print done

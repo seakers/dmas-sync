@@ -1,7 +1,7 @@
 from collections import defaultdict
 import logging
 import os
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import uuid
 from queue import Queue
 import numpy as np
@@ -92,21 +92,21 @@ class SimulationAgent(object):
         self._plan : Plan = PeriodicPlan(t=-1.0)
         self._plan_history = []
         self._state_history : list = []
-        self._known_tasks : list[GenericObservationTask] \
+        self._known_tasks : Dict[Tuple, GenericObservationTask] \
             = SimulationAgent.__initialize_default_mission_tasks(mission, orbitdata)
-        self._known_reqs : set[TaskRequest] = set() # TODO do we need this or is the task list enough?
+        self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
         # initialize observation history
         self._observation_history = ObservationHistory.from_orbitdata(orbitdata)
 
     @staticmethod
-    def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> None:
+    def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> Dict[Tuple, GenericObservationTask]:
         """ 
         Creates default observation tasks for each default mission objective
          based on the spatial requirements of each objective.
         """
         # initialize task list
-        tasks = []
+        tasks = dict()
 
         # gather targets for each default mission objective
         objective_targets = { objective : [] for objective in mission 
@@ -167,7 +167,8 @@ class SimulationAgent(object):
                     ]
             
             # add to list of known tasks
-            tasks.extend(objective_tasks)
+            tasks.update({SimulationAgent._task_key(task.to_dict()) : task
+                          for task in objective_tasks})
 
         # return list of created tasks
         return tasks
@@ -203,10 +204,10 @@ class SimulationAgent(object):
         if abs(state.get_time() - self._state.get_time()) > 1e-6:
             self._state_history.append(state.to_dict())
 
-        # unpack and sort incoming senses
+        # unpack and classify incoming messages
         incoming_reqs, external_observations, \
             external_states, external_action_statuses, misc_messages \
-                = self._read_incoming_messages(state, incoming_messages)
+                = self.__classify_incoming_messages(state, incoming_messages)
 
         # process action completion
         completed_actions, aborted_actions, pending_actions \
@@ -216,6 +217,9 @@ class SimulationAgent(object):
         # x = 1 # breakpoint
         # -------------------------------------
 
+        # update known tasks and requests from incoming tasks requests
+        new_reqs, new_tasks = self.__update_requests_and_tasks(incoming_reqs)
+
         # update plan completion
         self.__update_plan_completion(completed_actions, 
                                     aborted_actions, 
@@ -223,19 +227,13 @@ class SimulationAgent(object):
                                     state._t)
 
         # process performed observations
-        generated_reqs : List[TaskRequest] = self.__process_observations(incoming_reqs, observations)
-        incoming_reqs.extend(generated_reqs)
+        generated_reqs : List[TaskRequest] = self.__process_observations(new_reqs, observations)
+        new_reqs.extend(generated_reqs)
                         
-        # TODO update mission objectives from requests
-
         # update observation history
         self.__update_observation_history(observations)
 
-        # update tasks from incoming requests
-        self.__update_tasks(state, incoming_reqs=incoming_reqs)
-
-        # update known requests
-        self.__update_reqs(state, incoming_reqs=incoming_reqs)
+        # TODO update mission objectives from requests
 
         # --- Create plan ---
         if self._preplanner is not None:
@@ -244,9 +242,9 @@ class SimulationAgent(object):
             # update preplanner precepts
             self._preplanner.update_percepts(state,
                                             self._plan, 
-                                            self._known_tasks,
-                                            incoming_reqs,
-                                            [],
+                                            self._known_tasks.values(),
+                                            # incoming_reqs,
+                                            new_reqs,
                                             misc_messages,
                                             completed_actions,
                                             aborted_actions,
@@ -259,14 +257,14 @@ class SimulationAgent(object):
                                               self._plan):  
                 
                 # update tasks for only tasks that are available
-                self.__update_tasks(state, available_only=True)
+                self.__update_tasks(state)
                 
                 # initialize plan      
                 self._plan : Plan = self._preplanner.generate_plan(state, 
                                                             self._specs,
                                                             self._orbitdata,
                                                             self._mission,
-                                                            self._known_tasks,
+                                                            self._known_tasks.values(),
                                                             self._observation_history
                                                             )
 
@@ -277,9 +275,9 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
-                # if True:
+                if True:
                 #     self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                #     x = 1 # breakpoint
+                    x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
@@ -290,9 +288,9 @@ class SimulationAgent(object):
             # update replanner precepts
             self._replanner.update_percepts( state,
                                             self._plan, 
-                                            self._known_tasks,
-                                            incoming_reqs,
-                                            [],
+                                            self._known_tasks.values(),
+                                            # incoming_reqs,
+                                            new_reqs,
                                             misc_messages,
                                             completed_actions,
                                             aborted_actions,
@@ -309,7 +307,7 @@ class SimulationAgent(object):
                 # -------------------------------------
 
                 # update tasks for only tasks that are available
-                self.__update_tasks(state, available_only=True)
+                self.__update_tasks(state)
 
                 # Modify current Plan      
                 self._plan : ReactivePlan = self._replanner.generate_plan(state, 
@@ -317,7 +315,7 @@ class SimulationAgent(object):
                                                                 self._plan,
                                                                 self._orbitdata,
                                                                 self._mission,
-                                                                self._known_tasks,
+                                                                self._known_tasks.values(),
                                                                 self._observation_history
                                                                 )
 
@@ -391,10 +389,10 @@ class SimulationAgent(object):
         # return updated state
         return action_state, action
 
-    def _read_incoming_messages(self, 
-                                state : SimulationAgentState,
-                                incoming_messages : List[SimulationMessage]
-                                ) -> Tuple[List[TaskRequest], List[Tuple[str, list]], List[AgentStateMessage], List[AgentActionMessage], List[SimulationMessage]]:
+    def __classify_incoming_messages(self, 
+                                     state : SimulationAgentState,
+                                     incoming_messages : List[SimulationMessage]
+                                    ) -> Tuple[List[MeasurementRequestMessage], List[Tuple[str, list]], List[AgentStateMessage], List[AgentActionMessage], List[SimulationMessage]]:
         """ Classify incoming messages into their respective types """
 
         # check if there exist any bus messages in incoming messages
@@ -409,29 +407,19 @@ class SimulationAgent(object):
             # remove original bus messages 
             incoming_messages.remove(bus_msg)
 
-        # # extract tasks from incoming bids
-        # ## find unique tasks in incoming bids
-        # unique_reqs = list({self._task_key(bid['task']): bid['task']
-        #                         for bid in incoming_bids}.values())
-
-        # ## unpack unique bid tasks
-        # incoming_bid_tasks = set([GenericObservationTask.from_dict(task_dict) 
-        #                           for task_dict in unique_bid_tasks])
-        # ## filter active bid tasks
-        # active_bid_tasks = set([task for task in incoming_bid_tasks
-        #                         if task not in self.results
-        #                         and task.is_available(state._t)])
-
         # check for any measurement requests
-        incoming_reqs : List[TaskRequest] \
-            = [TaskRequest.from_dict(msg.req) 
-               for msg in incoming_messages 
-               if isinstance(msg, MeasurementRequestMessage)]
+        incoming_reqs : list[MeasurementRequestMessage] \
+            = [msg for msg in incoming_messages 
+                if isinstance(msg, MeasurementRequestMessage)]
+        # incoming_reqs : List[TaskRequest] \
+        #     = [TaskRequest.from_dict(sense.req) 
+        #        for sense in incoming_messages 
+        #        if isinstance(sense, MeasurementRequestMessage)]
 
         # check for any observation results messages
         observation_msgs : List[ObservationResultsMessage] \
-            = [sense for sense in incoming_messages 
-                if isinstance(sense, ObservationResultsMessage)]
+            = [msg for msg in incoming_messages 
+                if isinstance(msg, ObservationResultsMessage)]
         
         # extract observation data from messages
         external_observations : List[tuple] \
@@ -442,14 +430,14 @@ class SimulationAgent(object):
 
 
         external_states : List[AgentStateMessage] \
-            = [SimulationAgentState.from_dict(sense.state) 
-                for sense in incoming_messages 
-                if isinstance(sense, AgentStateMessage)
-                and sense.src != state.agent_name]
+            = [SimulationAgentState.from_dict(msg.state) 
+                for msg in incoming_messages 
+                if isinstance(msg, AgentStateMessage)
+                and msg.src != state.agent_name]
         
         external_action_statuses : List[AgentActionMessage] \
-            = [sense for sense in incoming_messages
-                if isinstance(sense, AgentActionMessage)]
+            = [msg for msg in incoming_messages
+                if isinstance(msg, AgentActionMessage)]
                 
         # gather any other miscellaneous messages
         misc_messages = set(incoming_messages)
@@ -511,7 +499,13 @@ class SimulationAgent(object):
         if self._processor is None: return []
 
         # process observations and return generated requests
-        return self._processor.process_observations(incoming_reqs, observations)
+        new_reqs = self._processor.process_observations(incoming_reqs, observations)
+
+        # add to known requests
+        self._known_reqs.update({self._req_key(req): req for req in new_reqs})
+
+        # return generated requests
+        return new_reqs
 
     def __update_observation_history(self, observations : list) -> None:
         """
@@ -520,51 +514,121 @@ class SimulationAgent(object):
         # update observation history
         self._observation_history.update(observations)
 
+    def __update_requests_and_tasks(self,
+                                    incoming_reqs : List[MeasurementRequestMessage] = []
+                                ) -> Tuple[List[TaskRequest], List[GenericObservationTask]]:
+        # DEBUG------
+        if incoming_reqs:
+            x = 1 # breakpoint
+        # ------------
 
-    def __update_tasks(self, 
-                       state : SimulationAgentState,
-                       incoming_reqs : list = [], 
-                       available_only : bool = False
-                       ) -> None:
-        """
-        Updates the list of tasks based on incoming requests and task availability.
-        """
-        # get tasks from incoming requests
-        event_tasks = [req.task
-                       for req in incoming_reqs
-                       if isinstance(req, TaskRequest)]
+        # find unique and new requests in incoming requests
+        unique_new_reqs = {self._req_key(msg.req): msg.req
+                          for msg in incoming_reqs
+                          if self._req_key(msg.req) not in self._known_reqs}
+
+        # unpack unique new task requests
+        new_reqs = {key : TaskRequest.from_dict(req_dict) 
+                    for key,req_dict in unique_new_reqs.items()}
         
-        # TODO filter tasks that can be performed by agent?
-        # valid_event_tasks = []
-        # payload_instrument_names = {instrument_name.lower() for instrument_name in self.payload.keys()}
-        # for event_task in event_tasks_flat:
-        #     if any([instrument in event_task.objective.valid_instruments 
-        #             for instrument in payload_instrument_names]):
-        #         valid_event_tasks.append(event_task)
+        # add new requests to known requests
+        self._known_reqs.update(new_reqs)
+
+        # find unique and new tasks in new requests
+        new_tasks = {self._task_key(req.task.to_dict()): req.task
+                                for req in new_reqs.values()
+                                if self._task_key(req.task.to_dict()) not in self._known_tasks}
+        
+        # find unique and new tasks in incoming requests
+        new_task_dicts = {self._task_key(msg.req['task']): msg.req['task']
+                                for msg in incoming_reqs
+                                if self._task_key(msg.req['task']) not in self._known_tasks
+                                and self._task_key(msg.req['task']) not in new_tasks}
+
+        # unpack unique bid tasks
+        new_tasks.update({key : GenericObservationTask.from_dict(d) 
+                            for key,d in new_task_dicts.items()})
 
         # add tasks to task list
-        self._known_tasks.extend(event_tasks)
-        
+        self._known_tasks.update(new_tasks)
+
+        # return new_reqs.values(), new_tasks.values()
+        return list(new_reqs.values()), list(new_tasks.values())
+
+    def __update_tasks(self, state : SimulationAgentState) -> None:
+        """ Updates the list of tasks to only include active tasks. """
         # filter tasks to only include active tasks
-        if available_only: # only consider tasks that are active and available
-            self._known_tasks = [task for task in self._known_tasks 
-                          if not task.is_expired(state.get_time())]
-
-    def __update_reqs(self, 
-                      state : SimulationAgentState,
-                      incoming_reqs : List[TaskRequest] = [], 
-                      available_only : bool = True
-                    ) -> None:
-        """ Updates the known requests based on incoming requests and request availability. """
+        self._known_tasks = {key : task for key,task in self._known_tasks.items() 
+                                if task.is_available(state.get_time())}
         
-        # update known requests
-        self._known_reqs.update(incoming_reqs)
-
+    def __update_requests(self, state : SimulationAgentState) -> None:
+        """ Updates the known requests to only include active requests. """
         # filter for request availability
-        if available_only:
-            self._known_reqs = {req for req in self._known_reqs 
-                               if req.task.is_available(state.get_time())
-                               }
+        self._known_reqs = {key : req for key,req in self._known_reqs.items() 
+                           if req.task.is_available(state.get_time())}
+
+    # def __update_tasks(self, 
+    #                    state : SimulationAgentState,
+    #                    incoming_reqs : List[MeasurementRequestMessage] = [], 
+    #                    available_only : bool = False
+    #                    ) -> None:
+    #     """
+    #     Updates the list of tasks based on incoming requests and task availability.
+    #     """
+    #     # get tasks from incoming requests
+    #     # event_tasks = [req.task
+    #     #                for req in incoming_reqs]
+    #     if incoming_reqs:
+    #         x = 1 # breakpoint
+        # # extract tasks from incoming requests
+        # ## find unique and new tasks in incoming requests
+        # unique_new_req_tasks = {self._task_key(msg.req['task']): msg.req['task']
+        #                         for msg in incoming_reqs
+        #                         if self._task_key(msg.req['task']) not in self._known_tasks}
+
+        # ## unpack unique bid tasks
+        # event_tasks = {key : GenericObservationTask.from_dict(task_dict) 
+        #                 for key,task_dict in unique_new_req_tasks.items()}
+        
+    #     # TODO filter tasks that can be performed by agent?
+    #     # valid_event_tasks = []
+    #     # payload_instrument_names = {instrument_name.lower() for instrument_name in self.payload.keys()}
+    #     # for event_task in event_tasks_flat:
+    #     #     if any([instrument in event_task.objective.valid_instruments 
+    #     #             for instrument in payload_instrument_names]):
+    #     #         valid_event_tasks.append(event_task)
+
+    #     # add tasks to task list
+    #     self._known_tasks.update(event_tasks)
+        
+    #     # filter tasks to only include active tasks
+    #     if available_only: # only consider tasks that are active and available
+    #         self._known_tasks = {key : task for key,task in self._known_tasks.items() 
+    #                                 if not task.is_expired(state.get_time())}
+
+    # def __update_reqs(self, 
+    #                   state : SimulationAgentState,
+    #                   incoming_reqs : List[MeasurementRequestMessage] = [], 
+    #                   available_only : bool = True
+    #                 ) -> None:
+    #     """ Updates the known requests based on incoming requests and request availability. """
+        
+    #     if incoming_reqs:
+    #         x = 1 # breakpoint
+    #     # extract tasks from incoming requests
+    #     ## find unique and new tasks in incoming requests
+    #     unique_new_req_tasks = {self._req_key(msg.req): msg.req['task']
+    #                             for msg in incoming_reqs
+    #                             if self._req_key(msg.req) not in self._known_reqs}
+    
+    #     # update known requests
+    #     self._known_reqs.update(unique_new_req_tasks)
+
+    #     # filter for request availability
+    #     if available_only:
+    #         self._known_reqs = {key : req for key,req in self._known_reqs.items() 
+    #                            if req['task']['availability']['left'] <= state.get_time() <= req['task']['availability']['right']
+    #                            }
 
     def get_next_actions(self, state : SimulationAgentState, earliest : bool = True) -> List[AgentAction]:
         try:
@@ -607,6 +671,9 @@ class SimulationAgent(object):
             # no future broadcasts; return plan as is
             if not future_broadcasts: 
                 return plan_out
+            
+            # update known tasks and requests to only include active ones
+            self.__update_requests(state)
 
             # if there are future broadcast; compile broadcast information
             msgs : list[SimulationMessage] = []
@@ -643,8 +710,8 @@ class SimulationAgent(object):
 
                 elif future_broadcast.broadcast_type == FutureBroadcastMessageAction.REQUESTS:
                     msgs.extend([MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict())
-                            for req in self._known_reqs
-                            if req.task.is_available(state.get_time())                   # only active or future events
+                            for req in self._known_reqs.values()
+                            if state.get_time() in req.task.availability           # only active or future events
                             and (not future_broadcast.only_own_info
                                  and (future_broadcast.desc is None 
                                       or req.task in future_broadcast.desc))    # include requests from all agents if `only_own_info` is not set
@@ -769,7 +836,8 @@ class SimulationAgent(object):
     def get_state(self) -> SimulationAgentState:
         return self._state
     
-    def _task_key(self, d : dict) -> tuple:
+    @staticmethod
+    def _task_key(d : dict) -> tuple:
         return (
             d["task_type"],
             d["parameter"],
@@ -777,13 +845,14 @@ class SimulationAgent(object):
             d["id"],
         )
     
-    def _req_key(self, d : dict) -> tuple:
+    @staticmethod
+    def _req_key(d : dict) -> tuple:
         return (
             d["task"]["task_type"],
             d["task"]["parameter"],
             d["task"]["priority"],
             d["task"]["id"],
-            # d["requester"],
+            d["requester"],
         )
     
     def log(self, msg : str, level=logging.DEBUG) -> None:
