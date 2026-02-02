@@ -268,7 +268,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                     ) -> tuple:
         """ Update latest preplan if new plan is available. """
         # check if new periodic plan is available
-        if not isinstance(current_plan, PeriodicPlan) or abs(state._t - current_plan.t) > self.EPS:
+        if not isinstance(current_plan, PeriodicPlan) or abs(state.get_time() - current_plan.t) > self.EPS:
             # no new preplan available; return no updates
             return [], []
     
@@ -298,7 +298,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 bid_to_reset : Bid = self.results[task][n_obs]
 
                 # reset bid to empty bid
-                bid_to_reset.reset(state._t)
+                bid_to_reset.reset(state.get_time())
 
                 # add empty bid to results
                 self.results[task][n_obs] = bid_to_reset
@@ -338,7 +338,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             self.id_to_tasks[task.id] = task
 
             # create empty bid for new task and add to list of changes
-            new_task_added.append(Bid(task, state.agent_name, t_bid=state._t))
+            new_task_added.append(Bid(task, state.agent_name, t_bid=state.get_time()))
 
         # return list of new task bids added to results
         return new_task_added    
@@ -355,10 +355,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # get new and active incoming tasks
         # active_req_tasks = set([req.task for req in incoming_reqs 
-        #                     if req.task.is_available(state._t)])
+        #                     if req.task.is_available(state.get_time())])
         active_req_tasks = set([req.task for req in incoming_reqs 
                             if req.task not in self.results
-                            and req.task.is_available(state._t)])
+                            and req.task.is_available(state.get_time())])
         
         # extract tasks from incoming bids
         ## find unique tasks in incoming bids
@@ -372,14 +372,14 @@ class ConsensusPlanner(AbstractReactivePlanner):
         ## filter active bid tasks
         active_bid_tasks = set([task for task in incoming_bid_tasks
                                 if task not in self.results
-                                and task.is_available(state._t)])
+                                and task.is_available(state.get_time())])
         
         # merge active tasks from requests and bids
         active_tasks = active_req_tasks.union(active_bid_tasks)
 
         # active_bid_tasks = set([bid.task for bid in incoming_bids
         #                         if bid.task not in self.results
-        #                         and bid.task.is_available(state._t)])
+        #                         and bid.task.is_available(state.get_time())])
         # active_tasks = active_req_tasks.union(active_bid_tasks)
 
         # update urgent tasks
@@ -419,7 +419,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             self.id_to_tasks[task.id] = task
 
             # create empty bid for new task and add to list of changes
-            new_task_added.append(Bid(task, state.agent_name, t_bid=state._t))
+            new_task_added.append(Bid(task, state.agent_name, t_bid=state.get_time()))
 
         # DEBUG PRINTOUTS --------
         #     if self._debug:
@@ -437,7 +437,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # identify expired tasks
         expired_tasks = [task for task in self.results 
-                         if not task.is_available(state._t)]
+                         if not task.is_available(state.get_time())]
 
         # initialize list of removed bids
         expired_bids = []
@@ -500,7 +500,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     bid_to_reset : Bid = self.results[task][bid_idx]
 
                     # reset bid
-                    bid_to_reset.reset(state._t)
+                    bid_to_reset.reset(state.get_time())
 
                     # update results
                     self.results[task][bid_idx] = bid_to_reset
@@ -545,7 +545,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 bid_to_perform : Bid = self.results[task][n_obs]
 
                 # mark bid as performed
-                bid_to_perform.set_performed(state._t, performed=True)
+                bid_to_perform.set_performed(state.get_time(), performed=True)
 
                 # update results
                 self.results[task][n_obs] = bid_to_perform
@@ -597,7 +597,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
 
         # ensure elements in path are yet to be performed
-        assert all(obs_action.t_start >= state._t for obs_action in revised_path), \
+        assert all(obs_action.t_start >= state.get_time() for obs_action in revised_path), \
             "Revised path contains observation actions that have already been performed."
                 
         # return revised bundle and list of performed bids
@@ -692,7 +692,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     current_bid : Bid = self.results[task][incoming_bid['n_obs']]
                     
                     # compare incoming bid with existing bids for the same task
-                    updated_bid : Bid = current_bid.update(incoming_bid, state._t)
+                    updated_bid : Bid = current_bid.update(incoming_bid, state.get_time())
 
                     # update results with modified bid
                     current_bids[incoming_bid['n_obs']] = updated_bid
@@ -734,7 +734,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         if loser_bid.n_obs >= len(current_bids):
                             # add empty bid to results for new observation number
                             current_bids.append(
-                                Bid(loser_bid.task, state.agent_name, loser_bid.n_obs, t_bid=state._t)
+                                Bid(loser_bid.task, state.agent_name, loser_bid.n_obs, t_bid=state.get_time())
                             )
 
                             # initialize optimistic bidding counter for new bid
@@ -850,7 +850,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     continue # already marked or has no winner; skip
                 
                 # check if imaging time has passed
-                if np.NINF < bid.t_img < state._t:
+                if np.NINF < bid.t_img < state.get_time():
                     # assume bid has a winner different from this agent
                     assert bid.has_winner(), \
                         "Cannot mark bid as performed if it has no winner."
@@ -858,7 +858,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         "Bid should have been marked as performed by parent agent in previous steps."
                     
                     # mark bid as performed
-                    bid.set_performed(state._t, performed=True, performer=bid.winner)
+                    bid.set_performed(state.get_time(), performed=True, performer=bid.winner)
 
                     # update results
                     self.results[task][n_obs] = bid
@@ -937,7 +937,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     bid_to_reset : Bid = self.results[task][bid_idx]
 
                     # reset bid
-                    bid_to_reset.reset(state._t)
+                    bid_to_reset.reset(state.get_time())
 
                     # update results
                     self.results[task][bid_idx] = bid_to_reset
@@ -1031,7 +1031,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 bid_to_reset : Bid = bids.pop(-1)
 
                 # reset bid
-                reset_bid = bid_to_reset.reset(state._t)
+                reset_bid = bid_to_reset.reset(state.get_time())
 
                 # add to violations list
                 bids_in_violation.append(reset_bid) 
@@ -1076,7 +1076,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 bid_to_reset : Bid = bids.pop(invalid_bid_idx)
 
                 # reset bid
-                reset_bid = bid_to_reset.reset(state._t)
+                reset_bid = bid_to_reset.reset(state.get_time())
 
                 # add to violations list
                 bids_in_violation.append(reset_bid)                
@@ -1144,15 +1144,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # determine next planning time        
             # t_next = state.t + current_plan.horizon if isinstance(current_plan, PeriodicPlan) else current_plan.t_next
             t_next = self.preplan.t_next
-            
-            # compile and generate plan
-            prelim_plan = ReactivePlan(maneuvers, self.path, broadcasts, t=state._t, t_next=t_next)
 
             # schedule periodic replan
-            preplan_waits : list = self._schedule_periodic_replan(state, prelim_plan, t_next)
-
-            # compile final plan
-            self.plan = ReactivePlan(prelim_plan.actions, preplan_waits, t=state._t, t_next=t_next)
+            preplan_waits : list = self._schedule_periodic_replan(state, t_next)
+            
+            # compile and generate plan
+            self.plan = ReactivePlan(maneuvers, self.path, broadcasts, preplan_waits, t=state.get_time(), t_next=t_next)
 
             # return final plan
             return self.plan.copy()
@@ -1189,7 +1186,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             return self.bundle, self.path                
     
         # check if a new periodic plan was generated by parent agent
-        if isinstance(current_plan, PeriodicPlan) and abs(state._t - current_plan.t) <= self.EPS:
+        if isinstance(current_plan, PeriodicPlan) and abs(state.get_time() - current_plan.t) <= self.EPS:
             # ensure current bundle and path were reset during consensus phase
             assert len(self.bundle) == 0, "Current bundle not empty during preplan-based bundle building."
             assert len(self.path) == 0, "Current path not empty during preplan-based bundle building."        
@@ -1233,11 +1230,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
         """ check if new path is valid """
         assert len(self.bundle) == len(self.path), \
             "New bundle and path lengths do not match."
-        assert all([obs_action.t_start >= state._t for obs_action in self.path]), \
+        assert all([obs_action.t_start >= state.get_time() for obs_action in self.path]), \
             "New observation path contains actions scheduled in the past."        
         assert self.is_observation_path_valid(state, self.path, None, None, specs), \
             "New observation path is not valid."   
-        if self._debug: assert all(bid.t_bid <= state._t for bids in new_bids.values() for bid in bids.values()), \
+        if self._debug: assert all(bid.t_bid <= state.get_time() for bids in new_bids.values() for bid in bids.values()), \
             "New bids must be assigned the correct bid time."
 
         # ensure every task in the path has a matching bundle entry
@@ -1340,7 +1337,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             bid_to_reset : Bid = self.results[task][n_obs]
 
             # reset bid
-            bid_to_reset.reset(state._t)
+            bid_to_reset.reset(state.get_time())
 
             # update results
             self.results[task][n_obs] = bid_to_reset
@@ -1695,7 +1692,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             t_broadcasts = set()
 
             # outline planning horizon interval
-            t_next = max(self.preplan.t + self.preplan.horizon, state._t)
+            t_next = max(self.preplan.t + self.preplan.horizon, state.get_time())
             
             # check if shareble bids to share exist
             if any([isinstance(task, EventObservationTask) for task in self.results]):
@@ -1703,7 +1700,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 for target in orbitdata.comms_links.keys():
 
                     # get access intervals with target agent
-                    next_access_interval : Interval = orbitdata.get_next_agent_access(target, state._t, t_max=t_next, include_current=True)
+                    next_access_interval : Interval = orbitdata.get_next_agent_access(target, state.get_time(), t_max=t_next, include_current=True)
                     
                     # if no access opportunities in this planning horizon, skip scheduling
                     if next_access_interval is not None:
@@ -1759,27 +1756,30 @@ class ConsensusPlanner(AbstractReactivePlanner):
     REPLAN SCHEDULING
     """
     
-    def _schedule_periodic_replan(self, state : SimulationAgentState, prelim_plan : Plan, t_next : float) -> list:
+    def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:
         """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
+        assert state.get_time() <= t_next, \
+            "Next planning time must be in the future."
 
-        # find wait start time
-        if prelim_plan.is_empty():
-            t_wait_start = state._t 
+        # # find wait start time
+        # if prelim_plan.is_empty():
+        #     t_wait_start = state.get_time() 
         
-        else:
-            actions_within_period = [action for action in prelim_plan 
-                                 if  isinstance(action, AgentAction)
-                                 and action.t_start < t_next]
+        # else:
+        #     actions_within_period = [action for action in prelim_plan 
+        #                          if  isinstance(action, AgentAction)
+        #                          and action.t_start < t_next]
 
-            if actions_within_period:
-                # last_action : AgentAction = actions_within_period.pop()
-                t_wait_start = min(max([action.t_end for action in actions_within_period]), t_next)
+        #     if actions_within_period:
+        #         # last_action : AgentAction = actions_within_period.pop()
+        #         t_wait_start = min(max([action.t_end for action in actions_within_period]), t_next)
                                 
-            else:
-                t_wait_start = state._t
+        #     else:
+        #         t_wait_start = state.get_time()
 
-        # create wait action
-        return [WaitAction(t_wait_start, t_next)] if t_wait_start < t_next else []  
+        # # create wait action
+        # return [WaitAction(t_wait_start, t_next)] if t_wait_start < t_next else [] 
+        return [WaitAction(t_next,t_next)] if not np.isinf(t_next) else []
 
     """
     UTILITIES
@@ -1802,7 +1802,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                      results : Dict[GenericObservationTask, List[Bid]],
                      level=logging.DEBUG, 
                      n_tasks : int = 20) -> None:
-        out = f'\nT{np.round(state._t,3)}[s]:\t\'{state.agent_name}\'\n{dsc}\n'
+        out = f'\nT{np.round(state.get_time(),3)}[s]:\t\'{state.agent_name}\'\n{dsc}\n'
         line = 'Task ID\t n_obs\tins\t\twinner\tbid\tt_img\tt_bid\tv_opt\tperformed\n'
         
         # count characters in line for formatting
@@ -1890,7 +1890,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                   state : SimulationAgentState, 
                   observation_path : List[ObservationAction], 
                   level=logging.DEBUG) -> None:
-        out = f'\nT{np.round(state._t,3)}[s]:\t\'{state.agent_name}\'\n{dsc}\n'
+        out = f'\nT{np.round(state.get_time(),3)}[s]:\t\'{state.agent_name}\'\n{dsc}\n'
         line = 'i\tt_img\t Task IDs\n'
         
         # count characters in line for formatting
@@ -1940,7 +1940,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     n_rows : int = 15,
                     n_tasks : int = 3,
                     level=logging.DEBUG) -> None:
-        out = f'\nT{np.round(state._t,3)}[s]:\t\'{state.agent_name}\'\n{dsc}\n'
+        out = f'\nT{np.round(state.get_time(),3)}[s]:\t\'{state.agent_name}\'\n{dsc}\n'
         line = 'i\t Task IDs\n'
         
         # count characters in line for formatting

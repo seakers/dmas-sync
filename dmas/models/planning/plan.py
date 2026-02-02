@@ -1,5 +1,6 @@
 from abc import ABC
 import copy
+from typing import List
 import uuid
 import numpy as np
 from tqdm import tqdm
@@ -80,7 +81,7 @@ class Plan(ABC):
         # check feasibility of new plan
         assert self.__is_feasible(self.actions)
         
-    def add_all(self, actions : list, t : float) -> None:
+    def add_all(self, actions : List[AgentAction], t : float) -> None:
         """ adds a set of actions to plan """
         
         # sort new set of actions by start time 
@@ -233,8 +234,6 @@ class Plan(ABC):
                         
                         # add new action to plan
                         self.actions.insert(self.actions.index(concurrent_action), shortened_action)
-                    else:
-                        x = 1
 
                 # check if there is still time left in the action
                 if abs(action.t_end - action.t_start) >= 1e-6:   
@@ -256,7 +255,7 @@ class Plan(ABC):
 
         finally:
             # sort actions chronollogically 
-            self.actions.sort(key=lambda a : a.t_start)
+            self.actions.sort(key=lambda a : (a.t_start, a.t_end-a.t_start))
             
             # update latest update time
             self.t = t  
