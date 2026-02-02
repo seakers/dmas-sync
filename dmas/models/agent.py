@@ -276,7 +276,7 @@ class SimulationAgent(object):
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
                 if True:
-                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -333,7 +333,7 @@ class SimulationAgent(object):
                 if True:
                 # if 95.0 < state.t < 96.0:
                 # if state.get_time() > 19 and "1" in state.agent_name:
-                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
