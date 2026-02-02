@@ -743,117 +743,76 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return result changes
         return results_updates
     
-
     def __group_incoming_bids(self,
                               incoming_bids : List[Bid]
                               ) -> Dict[str, Dict[GenericObservationTask, List[dict]]]:
-        """ Groups incoming bids by bidding agent and task. """
-        # initialize grouped bids dictionary
-        grouped_bids : Dict[str, Dict[GenericObservationTask, List[dict]]] \
-              = defaultdict(lambda: defaultdict(list))
-        
-        for bid in sorted(incoming_bids, key=lambda b: (b['owner'], b['task']['id'], b['n_obs'])):
-            try:
-                # get current bid for this task and observation number
-                current_bid : dict = grouped_bids[self.__task_key(bid['task'])][bid['owner']][bid['n_obs']]
+        """
+        Groups incoming bids by task_key and owner, keeping the max t_bid per n_obs,
+        and filling missing n_obs with empty bids once per (task, owner).
+        """
+        # task_key -> owner -> {n_obs: bid_dict}
+        best = defaultdict(lambda: defaultdict(dict))
 
-            except IndexError:
-                # ensure incoming bids are sorted by observation number within each task
-                n_obs_max : Set[int] = set(range(bid['n_obs']+1))
-                n_obs_curr : Set[int] = {grouped_bid['n_obs'] for grouped_bid in grouped_bids[self.__task_key(bid['task'])][bid['owner']]}
+        # local bindings (faster than repeated attribute lookups)
+        task_key_fn = self.__task_key
 
-                assert len(n_obs_max) > len(n_obs_curr), \
-                    "Incoming bids must be processed in order of observation number within each task."
+        # Pass 1: keep best bid per (task, owner, n_obs)
+        for bid in incoming_bids:
+            task = bid["task"]
+            owner = bid["owner"]
+            n_obs = bid["n_obs"]
+            t_bid = bid["t_bid"]
 
-                # determine missing observation numbers
-                missing_n_obs : Set[int] = n_obs_max - n_obs_curr
+            tk = task_key_fn(task)
+            prev = best[tk][owner].get(n_obs)
+            if prev is None or t_bid > prev["t_bid"]:
+                best[tk][owner][n_obs] = bid
 
-                # add empty bids as needed to fill in missing observation numbers
-                for n_obs in missing_n_obs:
-                    # create empty bid for missing observation number
-                    # bid_task = GenericObservationTask.from_dict(bid['task'])
-                    # empty_bid = Bid(bid_task, bid['owner'], n_obs, t_bid=np.NINF).to_dict()
-                    empty_bid = {
-                        'task': bid['task'],
-                        'owner': bid['owner'],
-                        'n_obs': n_obs,
+        # Pass 2: materialize dense lists and fill gaps
+        grouped_bids = defaultdict(lambda: defaultdict(list))
 
-                        'owner_bid': np.NaN,
-                        'winning_bid': 0,
-                        'winner': Bid.NONE,
-                        't_img': np.NINF,
-                        't_bid': np.NINF,
-                        't_stamps': None,
-                        'main_measurement': Bid.NONE,
-                        'performed': False
-                    }
+        for tk, owners_map in best.items():
+            
+            # find maximum n_obs for this task across all owners
+            max_n = max(len(bids_map.keys()) for bids_map in owners_map.values()) 
+            
+            # iterate through each owner and fill in missing bids
+            for owner, bids_map in owners_map.items():
+                if not bids_map:
+                    grouped_bids[tk][owner] = []
+                    continue
 
-                    # add empty bid for missing observation number
-                    grouped_bids[self.__task_key(bid['task'])][bid['owner']].append(empty_bid)
+                # choose a representative task dict for empties
+                any_bid = next(iter(bids_map.values()))
+                task_dict = any_bid["task"]
 
-                # sort bids by observation number
-                grouped_bids[self.__task_key(bid['task'])][bid['owner']] = sorted(grouped_bids[self.__task_key(bid['task'])][bid['owner']], key=lambda b: b['n_obs'])
-
-                # get current bid for this task and observation number
-                current_bid : dict = grouped_bids[self.__task_key(bid['task'])][bid['owner']][bid['n_obs']]
+                # create list of bids of the maximum size for this task
+                bids_list = [self.__make_empty_bid_dict(task_dict, owner, i) for i in range(max_n)]
                 
-            # compare incoming bid with existing bids for the same task
-            updated_bid : dict = max(current_bid, bid, key=lambda b: b['t_bid'])
+                # fill in known bids
+                for n_obs, bid in bids_map.items(): bids_list[n_obs] = bid
 
-            # update grouped bids with modified bid
-            grouped_bids[self.__task_key(bid['task'])][bid['owner']][bid['n_obs']] = updated_bid
+                # optional sanity check (now O(k))
+                # assert all(i == b["n_obs"] for i, b in enumerate(bids_list))
+
+                # store completed bids list
+                grouped_bids[tk][owner] = bids_list
+
+        return grouped_bids
+    
+        # # initialize grouped bids dictionary
+        # grouped_bids : Dict[str, Dict[GenericObservationTask, List[dict]]] \
+        #       = defaultdict(lambda: defaultdict(list))
         
-        # sort incoming bids by observation number within each task
-        for incoming_results in grouped_bids.values():
-            for other_agent,bids in incoming_results.items():
-                # ensure incoming bids are sorted by observation number within each task
-                n_obs_max : Set[int] = set(range(max(bid['n_obs'] for bid in bids)+1))
-                n_obs_curr : Set[int] = {bid['n_obs'] for bid in bids}
-
-                # determine missing observation numbers
-                missing_n_obs : Set[int] = n_obs_max - n_obs_curr
-
-                # add empty bids as needed to fill in missing observation numbers
-                for n_obs in missing_n_obs:
-                    # create empty bid for missing observation number
-                    empty_bid = {
-                        'task': bids[0]['task'],
-                        'owner': other_agent,
-                        'n_obs': n_obs,
-
-                        'owner_bid': np.NaN,
-                        'winning_bid': 0,
-                        'winner': Bid.NONE,
-                        't_img': np.NINF,
-                        't_bid': np.NINF,
-                        't_stamps': None,
-                        'main_measurement': Bid.NONE,
-                        'performed': False
-                    }
-
-                    # add empty bid for missing observation number
-                    bids.append(empty_bid)
-
-                # sort bids by observation number
-                incoming_results[other_agent] = sorted(bids, key=lambda b: b['n_obs'])
-
-                # ensure bid order matches their observation numbers
-                assert all(n_obs == bid['n_obs'] for n_obs,bid in enumerate(incoming_results[other_agent])), \
-                    "Incoming bids must be sorted by observation number within each task."
-        
-        # -------------------------------
-
-        # TODO Original implementation below; needs to be re-enabled after testing
-        # # iterate through incoming bids and group them
-        # for bid in sorted(incoming_bids, key=lambda b: (b.owner, b.task.id, b.n_obs)):
+        # for bid in sorted(incoming_bids, key=lambda b: (b['owner'], b['task']['id'], b['n_obs'])):
         #     try:
         #         # get current bid for this task and observation number
-        #         current_bid : Bid = grouped_bids[bid.owner][bid.task][bid.n_obs]
+        #         current_bid : dict = grouped_bids[self.__task_key(bid['task'])][bid['owner']][bid['n_obs']]
 
         #     except IndexError:
         #         # ensure incoming bids are sorted by observation number within each task
-        #         n_obs_max : Set[int] = set(range(bid.n_obs+1))
-        #         n_obs_curr : Set[int] = {grouped_bid.n_obs for grouped_bid in grouped_bids[bid.owner][bid.task]}
+        #         n_obs_max : Set[int] = set(range(bid['n_obs']+1))
+        #         n_obs_curr : Set[int] = {grouped_bid['n_obs'] for grouped_bid in grouped_bids[self.__task_key(bid['task'])][bid['owner']]}
 
         #         assert len(n_obs_max) > len(n_obs_curr), \
         #             "Incoming bids must be processed in order of observation number within each task."
@@ -863,48 +822,96 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         #         # add empty bids as needed to fill in missing observation numbers
         #         for n_obs in missing_n_obs:
+        #             # create empty bid for missing observation number
+        #             # bid_task = GenericObservationTask.from_dict(bid['task'])
+        #             # empty_bid = Bid(bid_task, bid['owner'], n_obs, t_bid=np.NINF).to_dict()
+        #             empty_bid = {
+        #                 'task': bid['task'],
+        #                 'owner': bid['owner'],
+        #                 'n_obs': n_obs,
+
+        #                 'owner_bid': np.NaN,
+        #                 'winning_bid': 0,
+        #                 'winner': Bid.NONE,
+        #                 't_img': np.NINF,
+        #                 't_bid': np.NINF,
+        #                 't_stamps': None,
+        #                 'main_measurement': Bid.NONE,
+        #                 'performed': False
+        #             }
+
         #             # add empty bid for missing observation number
-        #             grouped_bids[bid.owner][bid.task].append(Bid(bid.task, bid.owner, n_obs, t_bid=np.NINF))
+        #             grouped_bids[self.__task_key(bid['task'])][bid['owner']].append(empty_bid)
 
         #         # sort bids by observation number
-        #         grouped_bids[bid.owner][bid.task] = sorted(grouped_bids[bid.owner][bid.task], key=lambda b: b.n_obs)
+        #         grouped_bids[self.__task_key(bid['task'])][bid['owner']] = sorted(grouped_bids[self.__task_key(bid['task'])][bid['owner']], key=lambda b: b['n_obs'])
 
         #         # get current bid for this task and observation number
-        #         current_bid : Bid = grouped_bids[bid.owner][bid.task][bid.n_obs]
+        #         current_bid : dict = grouped_bids[self.__task_key(bid['task'])][bid['owner']][bid['n_obs']]
                 
-        #     # determine comparison time between incoming bids
-        #     t_comp = max(current_bid.t_bid, bid.t_bid)
-
         #     # compare incoming bid with existing bids for the same task
-        #     updated_bid : Bid = current_bid.update(bid, t_comp)
+        #     updated_bid : dict = max(current_bid, bid, key=lambda b: b['t_bid'])
 
         #     # update grouped bids with modified bid
-        #     grouped_bids[bid.owner][bid.task][bid.n_obs] = updated_bid
-
+        #     grouped_bids[self.__task_key(bid['task'])][bid['owner']][bid['n_obs']] = updated_bid
+        
         # # sort incoming bids by observation number within each task
-        # for other_agent,incoming_results in grouped_bids.items():
-        #     for task,bids in incoming_results.items():
+        # for incoming_results in grouped_bids.values():
+        #     for other_agent,bids in incoming_results.items():
         #         # ensure incoming bids are sorted by observation number within each task
-        #         n_obs_max : Set[int] = set(range(max(bid.n_obs for bid in bids)+1))
-        #         n_obs_curr : Set[int] = {bid.n_obs for bid in bids}
+        #         n_obs_max : Set[int] = set(range(max(bid['n_obs'] for bid in bids)+1))
+        #         n_obs_curr : Set[int] = {bid['n_obs'] for bid in bids}
 
         #         # determine missing observation numbers
         #         missing_n_obs : Set[int] = n_obs_max - n_obs_curr
 
         #         # add empty bids as needed to fill in missing observation numbers
         #         for n_obs in missing_n_obs:
+        #             # create empty bid for missing observation number
+        #             empty_bid = {
+        #                 'task': bids[0]['task'],
+        #                 'owner': other_agent,
+        #                 'n_obs': n_obs,
+
+        #                 'owner_bid': np.NaN,
+        #                 'winning_bid': 0,
+        #                 'winner': Bid.NONE,
+        #                 't_img': np.NINF,
+        #                 't_bid': np.NINF,
+        #                 't_stamps': None,
+        #                 'main_measurement': Bid.NONE,
+        #                 'performed': False
+        #             }
+
         #             # add empty bid for missing observation number
-        #             bids.append(Bid(task, other_agent, n_obs, t_bid=np.NINF))
+        #             bids.append(empty_bid)
 
         #         # sort bids by observation number
-        #         incoming_results[task] = sorted(bids, key=lambda b: b.n_obs)
+        #         incoming_results[other_agent] = sorted(bids, key=lambda b: b['n_obs'])
 
         #         # ensure bid order matches their observation numbers
-        #         assert all(n_obs == bid.n_obs for n_obs,bid in enumerate(incoming_results[task])), \
+        #         assert all(n_obs == bid['n_obs'] for n_obs,bid in enumerate(incoming_results[other_agent])), \
         #             "Incoming bids must be sorted by observation number within each task."
         
-        # return grouped bids
-        return grouped_bids
+        # # return grouped bids
+        # return grouped_bids
+
+    # helper to create empty bids (avoid repeating dict literal everywhere)
+    @staticmethod
+    def __make_empty_bid_dict(task_dict : dict, owner : str, n_obs : int) -> dict:
+        return {
+            "task": task_dict,
+            "owner": owner,
+            "n_obs": n_obs,
+            "owner_bid": np.NaN,
+            "winning_bid": 0,
+            "winner": Bid.NONE,
+            "t_img": np.NINF,
+            "t_bid": np.NINF,
+            "t_stamps": None,
+            "main_measurement": Bid.NONE,
+            "performed": False,
+        }
     
     def __update_performed_bids(self, state : SimulationAgentState) -> List[Bid]:
         """ Assumes tasks who were won by other agents and whose imaging time has passed were performed by those agents. """
