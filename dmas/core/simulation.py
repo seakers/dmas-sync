@@ -41,6 +41,11 @@ from dmas.models.science.processing import ObservationDataProcessor, LookupProce
 from dmas.utils.data import ResultsProcessor
 from dmas.utils.tools import SimulationRoles
 
+class SimulationClockType(Enum):
+    # TODO add support for fixed time-step simulations
+    FIXED_TIME_STEP = 1
+    EVENT_DRIVEN = 2
+
 class Simulation:
     def __init__(self,
                  name : str,
@@ -121,7 +126,8 @@ class Simulation:
             
             # initialize state-action pairs
             state_action_pairs = {
-                agent.name : (agent.get_state(), None)
+                # agents start at their initial state and do nothing
+                agent.name : (agent.get_state(), None) 
                 for agent in self._agents
             }
 
@@ -137,20 +143,18 @@ class Simulation:
                 
                 # event-driven simulation loop
                 while t < tf:
-                    # update environment
-                    self._environment.update_state(t)
 
-                    # update agent states
-                    senses : Dict[str, Tuple] \
-                        = self._environment.update_agents(state_action_pairs, t)
+                    # update simulation states
+                    agent_percepts : Dict[str, Tuple] \
+                        = self._environment.step(state_action_pairs, t)
 
                     # validate that all agents' states were updated
-                    assert all(agent.name in senses for agent in self._agents), \
+                    assert all(agent.name in agent_percepts for agent in self._agents), \
                         "Not all agents received senses from the environment."
                     
                     # agent think
                     state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]] \
-                        = {agent.name : agent.think(*senses[agent.name])
+                        = {agent.name : agent.decide_action(*agent_percepts[agent.name])
                             for agent in self._agents}
 
                     # validate that all agents generated actions
@@ -165,7 +169,7 @@ class Simulation:
                     
                     # determine next time 
                     t_next_min = min([action.t_end for _,action in state_action_pairs.values()], 
-                                     default=np.Inf) # base case for no agents
+                                     default=tf) # base case for no agents ends simulation
 
                     # update progress bar 
                     dt_progress = min(t_next_min - t, tf - t)
@@ -205,7 +209,6 @@ class Simulation:
     """
     DATA PROCESSING METHODS
     """
-
     def process_results(self, 
                         reevaluate : bool = False, 
                         display_summary : bool = True,
@@ -508,7 +511,7 @@ class Simulation:
             raise ValueError('`events_path` must point to an existing file.')
         
         # load events as a dataframe
-        if printouts: tqdm.write(f'Loading events from `{events_path}`...')
+        if printouts: tqdm.write(f' - Loading events from `{events_path}`...')
         events_df : pd.DataFrame = pd.read_csv(events_path)
 
         # parse events

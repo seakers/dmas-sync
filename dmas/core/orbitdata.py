@@ -1003,19 +1003,19 @@ class OrbitData:
         if not changes_to_scenario and not overwrite:
             # if propagation data files already exist, load results
             if printouts:
-                tqdm.write('Existing orbit data found and matches scenario. Loading existing data...')
+                tqdm.write(' - Existing orbit data found and matches scenario. Loading existing data...')
         else:
             # if propagation data files do not exist, propagate and then load results
             if os.path.exists(data_dir):
                 if printouts:
-                    tqdm.write('Existing orbit data does not match scenario.')
+                    tqdm.write(' - Existing orbit data does not match scenario.')
             else:
                 if printouts:
-                    tqdm.write('Orbit data not found.')
+                    tqdm.write(' - Orbit data not found.')
 
             # clear files if they exist
             if printouts:
-                tqdm.write('Clearing \'orbitdata\' directory...')    
+                tqdm.write(' - Clearing \'orbitdata\' directory...')    
             if os.path.exists(data_dir):
                 for f in os.listdir(data_dir):
                     f_dir = os.path.join(data_dir, f)
@@ -1026,7 +1026,7 @@ class OrbitData:
                     else:
                         os.remove(f_dir) 
             if printouts:
-                tqdm.write('\'orbitdata\' cleared!')
+                tqdm.write(' - \'orbitdata\' cleared!')
 
             # set grid 
             grid_dicts : list = scenario_specs.get("grid", None)

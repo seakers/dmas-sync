@@ -419,7 +419,7 @@ class BusMessage(SimulationMessage):
         if not isinstance(msgs, list):
             raise AttributeError(f'`msgs` must be of type `list`; is of type {type(msgs)}')
         for msg in msgs:
-            if not isinstance(msg, dict):
-                raise AttributeError(f'elements of the list `msgs` must be of type `dict`; contains elements of type {type(msg)}')
+            if not isinstance(msg, (dict, SimulationMessage)):
+                raise AttributeError(f'elements of the list `msgs` must be of type `dict` or `SimulationMessage`; contains elements of type {type(msg)}')
 
         self.msgs = msgs

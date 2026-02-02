@@ -46,8 +46,8 @@ class AbstractPlanner(ABC):
             raise ValueError(f'`logger` must be of type `Logger`. Is of type `{type(logger)}`.')
 
         # initialize attributes
-        self.last_performed_observations : List[ObservationOpportunity] \
-            = list()  # list of last performed observations
+        self.latest_performed_observations : Set[ObservationOpportunity] \
+            = set()  # set of last performed observations
         
         # set attribute parameters
         self._debug = debug                 # toggles debugging features
@@ -60,8 +60,9 @@ class AbstractPlanner(ABC):
         """ Updates internal knowledge based on incoming percepts """
         
         # update latest observation opportunities measured by this agent
-        self.last_performed_observations = list({action.obs_opp for action in completed_actions
-                                            if isinstance(action, ObservationAction)})
+        if completed_actions:
+            self.latest_performed_observations = {action.obs_opp for action in completed_actions
+                                                  if isinstance(action, ObservationAction)}
 
     @abstractmethod
     def needs_planning(self, **kwargs) -> bool:
@@ -187,8 +188,8 @@ class AbstractPlanner(ABC):
         filtered_observation_opps : list[ObservationOpportunity] \
             = [obs for obs in observation_opps 
                if all(not obs.is_mutually_exclusive(performed_obs) 
-                      for performed_obs in self.last_performed_observations)] \
-                if self.last_performed_observations else observation_opps
+                      for performed_obs in self.latest_performed_observations)] \
+                if self.latest_performed_observations else observation_opps
         
         # check if tasks are clusterable
         task_adjacency : Dict[str, set[ObservationOpportunity]] \

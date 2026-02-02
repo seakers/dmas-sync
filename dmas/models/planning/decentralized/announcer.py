@@ -80,16 +80,13 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         
         # TODO add maneuvers for pointing-dependent transmissions
         # currently assumes omnidirectional antennas
-
-        # generate plan from actions
-        self.plan : PeriodicPlan = PeriodicPlan(broadcasts, t=state._t, horizon=self.horizon, t_next=state._t+self.period)    
         
         # wait for next planning period to start
-        replan : list = self._schedule_periodic_replan(state, self.plan, state._t + self.period)
-        
-        # add replan actions to plan
-        self.plan.add_all(replan, t=state._t)
+        replan : list = self._schedule_periodic_replan(state, state._t + self.period)
 
+        # generate plan from actions
+        self.plan : PeriodicPlan = PeriodicPlan(broadcasts, replan, t=state._t, horizon=self.horizon, t_next=state._t+self.period)    
+        
         # return plan and save local copy
         return self.plan.copy()
     

@@ -182,7 +182,7 @@ class SimulationAgent(object):
     """
     THINK METHOD
     """
-    def think(self, 
+    def decide_action(self, 
               state : SimulationAgentState,
               action : AgentAction,
               action_status : str,
@@ -755,9 +755,11 @@ class SimulationAgent(object):
             else:
                 # create bus message if there are messages to broadcast
                 msg = BusMessage(state.agent_name, state.agent_name, [msg.to_dict() for msg in msgs])
+                # msg = BusMessage(state.agent_name, state.agent_name, [msg for msg in msgs])
 
                 # create state broadcast message action
                 broadcast = BroadcastMessageAction(msg.to_dict(), future_broadcasts[0].t_start)
+                # broadcast = BroadcastMessageAction(msg, future_broadcasts[0].t_start)
 
                 # get indices of future broadcast message actions in output plan
                 future_broadcast_indices = [i for i, action in enumerate(plan_out) if action in future_broadcasts]

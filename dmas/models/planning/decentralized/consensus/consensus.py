@@ -132,8 +132,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
 
         # perform consensus phase for incoming task bids
-        task_updates, results_updates, bundle_updates, self.last_performed_observations \
+        task_updates, results_updates, bundle_updates, performed_bundle_observations \
               = self._consensus_phase(state, incoming_reqs, incoming_bids, tasks, current_plan, performed_observations)
+
+        # update latest observations performed 
+        self.latest_performed_observations.update(performed_bundle_observations)
 
         # assume bundle and results are now consistent
         assert len(self.bundle) == len(self.path), \
@@ -256,11 +259,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 break # no more updates; exit loop       
         
         # collect performed observation opportunities
-        performed_observation_opportunities : List[ObservationOpportunity] \
+        performed_bundle_observations : List[ObservationOpportunity] \
             = [obs_opp for obs_opp,_ in performed_bundle_updates]
                 
         # return lists of updates
-        return task_updates, results_updates, bundle_updates, performed_observation_opportunities   
+        return task_updates, results_updates, bundle_updates, performed_bundle_observations   
 
     def __update_bundle_from_preplan(self, 
                                      state : SimulationAgentState, 
@@ -1433,8 +1436,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         # Constraint 1: Observation number must be consecutive
                         prev_bid.n_obs + 1 == bid.n_obs,
                         # Constraint 2: Imaging time must be after previous imaging time
-                        (prev_bid.t_img <= bid.t_img and bid.winner != state.agent_name) \
-                            or (prev_bid.t_img < bid.t_img and bid.winner == state.agent_name)
+                        (prev_bid.t_img <= bid.t_img and prev_bid.winner != state.agent_name) \
+                            or (prev_bid.t_img < bid.t_img and prev_bid.winner == state.agent_name)
                     ]
                     
                 # DEBUG PRINTOUTS --------

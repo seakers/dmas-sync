@@ -106,12 +106,13 @@ class SimulationEnvironment(object):
     SIMULATION CYCLE METHODS
     ----------------------
     """
-    def update_state(self, t : float) -> None:
+    def __update_state(self, t : float) -> None:
         """ Updates the environment state at time `t` """
-        
-        # update current time
+        # check time progression
         assert t >= self._t_curr, \
             f"Environment time cannot move backwards (current time {self._t_curr}[s], new time {t}[s])"
+        
+        # update current time
         self._t_curr = t
 
         # check if connectivity needs to be update
@@ -126,10 +127,14 @@ class SimulationEnvironment(object):
         # end
         return 
     
-    def update_agents(self, 
-                    state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
-                    t_curr : float) -> Dict[str, List]:
+    def step(self, 
+             state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
+             t_curr : float
+            ) -> Dict[str, List]:
         """Updates agent states based on the provided actions at time `t` """
+        # update internal time and state
+        self.__update_state(t_curr)
+        
         # initialize agent update storage
         states = dict()
         actions = dict()
@@ -163,9 +168,9 @@ class SimulationEnvironment(object):
                 observations[agent_name].extend(agent_observations)
 
         # compile senses per agent
-        senses : Dict[str, tuple] = dict()
+        agent_percepts : Dict[str, tuple] = dict()
         for agent_name in states.keys():
-            senses[agent_name] = (
+            agent_percepts[agent_name] = (
                 states[agent_name],
                 actions[agent_name],
                 action_statuses[agent_name],
@@ -174,7 +179,7 @@ class SimulationEnvironment(object):
             )
 
         # return compiled senses
-        return senses
+        return agent_percepts
 
     def __handle_agent_action(self, 
                               state : SimulationAgentState, 

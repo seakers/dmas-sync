@@ -441,7 +441,7 @@ def parallel_run_trials(trials_df : pd.DataFrame, cfg: RunConfig, max_workers: i
     trial_rows = list(trials_df.itertuples(index=False, name=None))
 
     if max_workers is None:
-        max_workers = min(os.cpu_count() or 1, 4, len(trial_rows))
+        max_workers = min(os.cpu_count() or 1, 3, len(trial_rows))
 
     results = []
     try:
@@ -609,11 +609,11 @@ def main(trial_filename : str,
         results_dir = os.path.join(base_path, 'results', f"{trial_filename}_scenario_{scenario_id}")        
 
         # check if runtime profiling toggle was selected
-        # if runtime_profiling:        
-        #     # initialize profiler
-        #     pr = cProfile.Profile()
-        #     # enable profiler
-        #     pr.enable()
+        if runtime_profiling:        
+            # initialize profiler
+            pr = cProfile.Profile()
+            # enable profiler
+            pr.enable()
 
         # check if propagation-only toggle was selected
         if propagate_only:
@@ -658,13 +658,7 @@ def main(trial_filename : str,
             # check if output directory was properly initalized
             assert os.path.isdir(results_dir), \
                 f"Results directory not properly initialized at: {results_dir}"
-            
-            if runtime_profiling:        
-                # initialize profiler
-                pr = cProfile.Profile()
-                # enable profiler
-                pr.enable()
-
+                        
             tqdm.write(' - Executing simulation mission...')
             mission.execute()
         else:
@@ -791,13 +785,15 @@ if __name__ == "__main__":
     level : int = LEVELS.get(args.level)
 
     # run main study
-    main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
-    # if upper_bound - lower_bound <= 1:
-    #     # if only one trial is being run; use non-parallelized version
-    #     main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
-    # else:
-    #     # if more than one trial is being run; use parallelized version
-    #     main_parallellized(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
+    if debug:
+        # if in debug mode; run trials one at a time
+        main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
+    elif upper_bound - lower_bound <= 1:
+        # if only one trial is being run; use non-parallelized version
+        main(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
+    else:
+        # if more than one trial is being run; use parallelized version
+        main_parallellized(trial_filename, lower_bound, upper_bound, level, propagate_only, overwrite, evaluate, debug, runtime_profiling)
 
     # print outro
     print('\n' + '='*54)
