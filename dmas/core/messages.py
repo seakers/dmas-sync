@@ -94,8 +94,8 @@ class SimulationMessage(object):
         """
         return str(self.to_dict())
 
-    def __repr__(self) -> str:
-        return str(self.to_dict())
+    # def __repr__(self) -> str:
+    #     return str(self.to_dict())
     
     def __hash__(self) -> int:
         return hash(repr(self))

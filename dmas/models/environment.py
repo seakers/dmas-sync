@@ -239,7 +239,10 @@ class SimulationEnvironment(object):
                         ) -> Tuple[SimulationAgentState, str, list, list]:
         """ Performs a message broadcast action """
         # extract message from action
-        msg_out : SimulationMessage = message_from_dict(**action.msg)
+        if isinstance(action.msg, dict):
+            msg_out : SimulationMessage = message_from_dict(**action.msg)
+        else:
+            msg_out : SimulationMessage = action.msg
 
         # mark state status as messaging
         state.update(t_curr, status=SimulationAgentState.MESSAGING)

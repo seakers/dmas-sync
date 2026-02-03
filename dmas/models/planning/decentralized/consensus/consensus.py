@@ -7,7 +7,7 @@ import logging
 
 import numpy as np
 
-from dmas.core.messages import SimulationMessage
+from dmas.core.messages import SimulationMessage, SimulationMessageTypes
 from dmas.models.actions import AgentAction
 
 from execsatm.tasks import DefaultMissionTask, EventObservationTask, GenericObservationTask
@@ -173,16 +173,17 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
     def __collect_incoming_bids(self, misc_messages : List[SimulationMessage]) -> List[dict]:
         """ Collect bids from incoming messages and requests. """
-        # TODO include support for BidResultsMessage when re-enabled?
+        # collect incoming bids from messages
+        incoming_bids : List[dict] = []
+        for msg in misc_messages:
+            if isinstance(msg, MeasurementBidMessage):
+                incoming_bids.append(msg.bid)
+            elif isinstance(msg, dict) and msg.get("msg_type") == SimulationMessageTypes.MEASUREMENT_BID.value:
+                incoming_bids.append(msg['bid'])
         
-        # TEMP use only MeasurementBidMessages. Disable after `BidResultsMessage` is supported?
-        # incoming_bids = [Bid.from_dict(msg.bid) 
-        #                     for msg in misc_messages 
-        #                     if isinstance(msg, MeasurementBidMessage)]
-        incoming_bids = [msg.bid
-                        for msg in misc_messages 
-                        if isinstance(msg, MeasurementBidMessage)]
+        # TODO include support for BidResultsMessage when re-enabled?
 
+        # return list of incoming bids
         return incoming_bids
 
     def _consensus_phase(self,
@@ -806,11 +807,18 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 any_bid = next(iter(bids_map.values()))
                 task_dict = any_bid["task"]
 
-                # create list of bids of the maximum size for this task
-                bids_list = [self.__make_empty_bid_dict(task_dict, owner, i) for i in range(max_n)]
+                # # create list of bids of the maximum size for this task
+                # bids_list = [self.__make_empty_bid_dict(task_dict, owner, i) for i in range(max_n)]
                 
-                # fill in known bids
-                for n_obs, bid in bids_map.items(): bids_list[n_obs] = bid
+                # # fill in known bids
+                # for n_obs, bid in bids_map.items(): bids_list[n_obs] = bid
+
+                bids_list = [None for _ in range(max_n)]
+                for i in range(max_n):
+                    if i in bids_map:
+                        bids_list[i] = bids_map[i]
+                    else:
+                        bids_list[i] = self.__make_empty_bid_dict(task_dict, owner, i)
 
                 # optional sanity check (now O(k))
                 # assert all(i == b["n_obs"] for i, b in enumerate(bids_list))

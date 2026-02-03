@@ -279,7 +279,7 @@ class BroadcastMessageAction(AgentAction):
         super().__init__(ActionTypes.BROADCAST.value, t_start, t_start, status=status, id=id)
         
         assert isinstance(msg, (dict, SimulationMessage)), f'`msg` must be of type `dict` or `SimulationMessage`. Is of type `{type(msg)}`.'
-        assert len(msg) > 0, '`msg` cannot be an empty dictionary.'
+        # assert len(msg) > 0, '`msg` cannot be an empty dictionary.'
 
         self.msg = msg
 
