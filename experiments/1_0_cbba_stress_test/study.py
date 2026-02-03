@@ -33,12 +33,13 @@ class RunConfig:
     trial_filename: str
     propagate_only: bool
     overwrite: bool
-    reevaluate: bool
+    evaluate: bool
     level: int
     mission_specs_template: dict
     spacecraft_specs_template: dict
     instrument_specs: dict
     ground_operator_specs_template: dict
+    runtime_profiling : bool
 
 def get_base_path() -> str:
     # get current working directory
@@ -541,12 +542,13 @@ def main_parallellized(trial_filename : str,
         trial_filename=trial_filename,
         propagate_only=propagate_only,
         overwrite=overwrite,
-        reevaluate=reevaluate,
+        evaluate=reevaluate,
         level=level,
         mission_specs_template=mission_specs_template,
         spacecraft_specs_template=spacecraft_specs_template,
         instrument_specs=instrument_specs,
-        ground_operator_specs_template=ground_operator_specs_template
+        ground_operator_specs_template=ground_operator_specs_template,
+        runtime_profiling=runtime_profiling
     )
 
     # run trials in parallel
