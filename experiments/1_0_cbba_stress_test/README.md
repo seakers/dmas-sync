@@ -146,3 +146,43 @@ python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_no_lhs -p
 4. Observation Number -->
 
 
+## HPC Commands
+*Commands for rnuning batch jobs at the TAMU's HPRC*
+
+### Submit Batch 
+#### Run Study
+Runs all cases for the LHS trials in a linear manner.
+```
+cd $SCRATCH/src/dmas-sync
+sbatch ./experiments/1_0_cbba_stress_test/cbba_study.slurm
+```
+
+#### Run Parallellized Study
+Runs all cases for the LHS trials in a parallellized process.
+```
+cd $SCRATCH/src/dmas-sync
+sbatch ./experiments/1_0_cbba_stress_test/cbba_study_parallel.slurm
+```
+
+#### Propagate Only
+Performs orbit data propagation for all cases within the LHS trials.
+```
+cd $SCRATCH/src/dmas-sync
+sbatch ./experiments/1_0_cbba_stress_test/cbba_study_propagate.slurm
+```
+
+### Monitor Batch Status
+Enlist all current jobs and their status.
+```
+squeue -u $USER          
+```
+
+Check status of a job with `<jobid>`
+```
+squeue --job <jobid>     
+```
+
+Check the efficiency after `<jobid>` finishes
+```
+seff <jobid>
+```             

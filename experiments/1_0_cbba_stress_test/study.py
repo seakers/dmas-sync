@@ -756,9 +756,8 @@ if __name__ == "__main__":
     parser.add_argument('-p', 
                         '--propagate-only',
                         help='toggles to only precompute orbit data without running full simulation',
-                        default=False,
-                        required=False,
-                        type=bool) 
+                        action='store_true',
+                        required=False) 
     parser.add_argument('-o', 
                         '--overwrite',
                         help='simulation results overwrite toggle',
