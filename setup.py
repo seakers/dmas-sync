@@ -12,7 +12,7 @@ setup(
     author_email='aguilaraj15@tamu.edu',
     packages=['dmas'],
     scripts=[],
-    install_requires=['matplotlib', 'neo4j', 'pyzmq', 'tqdm', 'instrupy', 'orbitpy', 'execsatm', 'networkx',
-                       'pytest', 'gurobipy', 'skyfield', 'pandas', 'numpy', 'pyarrow', 'fastparquet'],
+    install_requires=['tqdm', 'instrupy', 'orbitpy', 'execsatm', # 'networkx',
+                       'pytest', 'gurobipy', 'pandas', 'numpy', 'pyarrow', 'fastparquet'],
     long_description=readme(),
 )
