@@ -351,6 +351,10 @@ class SimulationAgent(object):
         
         # save copy to state history
         self._state_history.append(action_state.to_dict())
+
+        # reset message and observations inbox for next cycle
+        # incoming_messages, observations = [], []
+        incoming_messages.clear(); observations.clear()
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         if True:

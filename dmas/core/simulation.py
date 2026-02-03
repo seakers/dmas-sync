@@ -178,6 +178,9 @@ class Simulation:
                     # update current time
                     t += dt_progress
 
+                    # reset agent percepts for next cycle
+                    agent_percepts.clear()
+
             # mark simulation as executed
             self.__executed = True
 
