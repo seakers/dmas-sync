@@ -1,4 +1,4 @@
-?#!/bin/bash
+#!/bin/bash
 #SBATCH --job-name=cbba_stress
 #SBATCH --output=logs/cbba_stress_%j.out
 #SBATCH --error=logs/cbba_stress_%j.err
