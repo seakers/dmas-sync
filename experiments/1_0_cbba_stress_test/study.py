@@ -587,7 +587,7 @@ def main(trial_filename : str,
 
     # iterate through each trial
     for scenario_id,num_sats,gnd_segment,task_arrival_rate,target_distribution in trials.itertuples(index=False):
-                
+        
         # handle nan ground segment case
         gnd_segment = 'None' if not isinstance(gnd_segment, str) else gnd_segment
         
@@ -601,120 +601,127 @@ def main(trial_filename : str,
         tqdm.write(f" - Target Distribution: Lat=(-{target_distribution}°, +{target_distribution}°)")
         tqdm.write(f" - Propagation Duration: {round(duration*24*3600,3)} [seconds] ({round(duration, 3)} [days])")        
 
-        # generate mission specifications for the scenario
-        mission_specs : dict = generate_scenario_mission_specs(
-            mission_specs_template, duration, step_size, 
-            base_path, trial_filename, scenario_id,
-            num_sats, gnd_segment, target_distribution,
-            spacecraft_specs_template, instrument_specs,
-            ground_operator_specs_template
-        )
+        try:
 
-        ## define results output file name
-        results_dir = os.path.join(base_path, 'results', f"{trial_filename}_scenario_{scenario_id}")        
+            # generate mission specifications for the scenario
+            mission_specs : dict = generate_scenario_mission_specs(
+                mission_specs_template, duration, step_size, 
+                base_path, trial_filename, scenario_id,
+                num_sats, gnd_segment, target_distribution,
+                spacecraft_specs_template, instrument_specs,
+                ground_operator_specs_template
+            )
 
-        # check if runtime profiling toggle was selected
-        if runtime_profiling:        
-            # initialize profiler
-            pr = cProfile.Profile()
-            # enable profiler
-            pr.enable()
+            ## define results output file name
+            results_dir = os.path.join(base_path, 'results', f"{trial_filename}_scenario_{scenario_id}")        
 
-        # check if propagation-only toggle was selected
-        if propagate_only:
-            # if selected; only precompute orbit data
-            tqdm.write(" - Propagating orbit data only...")
-            orbitdata_dir = OrbitData.precompute(mission_specs)
-            tqdm.write(f" - Orbit data propagated and stored at: `{orbitdata_dir}`")
-            
-            # skip to next trial
-            continue 
+            # check if runtime profiling toggle was selected
+            if runtime_profiling:        
+                # initialize profiler
+                pr = cProfile.Profile()
+                # enable profiler
+                pr.enable()
 
-        # initialize simulation mission
-        tqdm.write(" - Running full simulation...\n")
-
-        # define conditions to execute mission
-        if os.path.isdir(results_dir):
-            # results directory was already generated
-            execute_conditions = [            
-                # results directory is empty
-                len(os.listdir(results_dir)) == 0,
+            # check if propagation-only toggle was selected
+            if propagate_only:
+                # if selected; only precompute orbit data
+                tqdm.write(" - Propagating orbit data only...")
+                orbitdata_dir = OrbitData.precompute(mission_specs)
+                tqdm.write(f" - Orbit data propagated and stored at: `{orbitdata_dir}`")
                 
-                # there are incomplete results directories for any agent
-                any([len(os.listdir(os.path.join(results_dir, d))) <= 2 
-                        for d in os.listdir(results_dir)
-                        if os.path.isdir(os.path.join(results_dir, d))
-                        and 'manager' not in d]
-                    ),
-                
-                # overwrite flag was set
-                overwrite
-            ]
-        else:
-            # there is no results directory generated yet
-            execute_conditions = [True]  # force execution if results directory does not exist
+                # skip to next trial
+                continue 
 
-        # execute mission if any of the conditions are met
-        if any(execute_conditions): 
-            if execute_conditions[-1]:
-                tqdm.write(' - Overwrite flag detected; re-running simulation mission...')
+            # initialize simulation mission
+            tqdm.write(" - Running full simulation...\n")
+
+            # define conditions to execute mission
+            if os.path.isdir(results_dir):
+                # results directory was already generated
+                execute_conditions = [            
+                    # results directory is empty
+                    len(os.listdir(results_dir)) == 0,
+                    
+                    # there are incomplete results directories for any agent
+                    any([len(os.listdir(os.path.join(results_dir, d))) <= 2 
+                            for d in os.listdir(results_dir)
+                            if os.path.isdir(os.path.join(results_dir, d))
+                            and 'manager' not in d]
+                        ),
+                    
+                    # overwrite flag was set
+                    overwrite
+                ]
             else:
-                tqdm.write(' - Incomplete or missing results detected; running simulation mission...')
-            tqdm.write(' - Initializing simulation mission...')
-            mission : Simulation = Simulation.from_dict(mission_specs, overwrite=overwrite, level=level)
+                # there is no results directory generated yet
+                execute_conditions = [True]  # force execution if results directory does not exist
 
-            # check if output directory was properly initalized
-            assert os.path.isdir(results_dir), \
-                f"Results directory not properly initialized at: {results_dir}"
-                        
-            tqdm.write(' - Executing simulation mission...')
-            mission.execute()
-        else:
-            tqdm.write(' - Simulation data found! Skipping execution...')
-            mission = None
+            # execute mission if any of the conditions are met
+            if any(execute_conditions): 
+                if execute_conditions[-1]:
+                    tqdm.write(' - Overwrite flag detected; re-running simulation mission...')
+                else:
+                    tqdm.write(' - Incomplete or missing results detected; running simulation mission...')
+                tqdm.write(' - Initializing simulation mission...')
+                mission : Simulation = Simulation.from_dict(mission_specs, overwrite=overwrite, level=level)
+
+                # check if output directory was properly initalized
+                assert os.path.isdir(results_dir), \
+                    f"Results directory not properly initialized at: {results_dir}"
+                            
+                tqdm.write(' - Executing simulation mission...')
+                mission.execute()
+            else:
+                tqdm.write(' - Simulation data found! Skipping execution...')
+                mission = None
+            
+            # # TODO : Re-enable result processing
+            # # print results if it hasn't been performed yet or if results need to be evaluated
+            # results_summary_path = os.path.join(results_dir, 'summary.csv')
+            # if not os.path.isfile(results_summary_path) or evaluate: 
+            #     if evaluate:
+            #         tqdm.write(' - Evaluation flag detected; processing simulation results...')
+            #     else:
+            #         tqdm.write(' - Results summary not found; processing simulation results...')
+            #     if mission is None:
+            #         # load mission to process results if not already loaded
+            #         tqdm.write(' - Initializing simulation mission...')
+            #         mission = Simulation.from_dict(
+            #                 mission_specs,
+            #                 overwrite=overwrite,
+            #                 printouts=False,
+            #                 level=level
+            #             )
+                    
+            #         # check if output directory was properly initalized
+            #         assert os.path.isdir(results_dir), \
+            #             f"Results directory not properly initialized at: {results_dir}"
+
+            #     tqdm.write(' - Evaluating simulation results...')
+            #     mission.process_results()
+
+            # # ensure if summary file was properly generated at the end of the simulation
+            # assert os.path.isfile(results_summary_path), \
+            #     f"Results summary file not found at: {results_summary_path}"
+
+
+            if runtime_profiling:
+                # disable profiler
+                pr.disable()
+                # save to file
+                tqdm.write(" - Printing runtime profiling results...")
+                runtime_path = os.path.join(results_dir, "profile.out")
+                pr.dump_stats(runtime_path)
+
+                # ensure if summary file was properly generated at the end of the simulation
+                assert os.path.isfile(runtime_path), \
+                    f"Results summary file not found at: `{runtime_path}`"
+                tqdm.write(f" - Profiling results saved to: `{runtime_path}`")
         
-        # # TODO : Re-enable result processing
-        # # print results if it hasn't been performed yet or if results need to be evaluated
-        # results_summary_path = os.path.join(results_dir, 'summary.csv')
-        # if not os.path.isfile(results_summary_path) or evaluate: 
-        #     if evaluate:
-        #         tqdm.write(' - Evaluation flag detected; processing simulation results...')
-        #     else:
-        #         tqdm.write(' - Results summary not found; processing simulation results...')
-        #     if mission is None:
-        #         # load mission to process results if not already loaded
-        #         tqdm.write(' - Initializing simulation mission...')
-        #         mission = Simulation.from_dict(
-        #                 mission_specs,
-        #                 overwrite=overwrite,
-        #                 printouts=False,
-        #                 level=level
-        #             )
-                
-        #         # check if output directory was properly initalized
-        #         assert os.path.isdir(results_dir), \
-        #             f"Results directory not properly initialized at: {results_dir}"
-
-        #     tqdm.write(' - Evaluating simulation results...')
-        #     mission.process_results()
-
-        # # ensure if summary file was properly generated at the end of the simulation
-        # assert os.path.isfile(results_summary_path), \
-        #     f"Results summary file not found at: {results_summary_path}"
-
-
-        if runtime_profiling:
-            # disable profiler
-            pr.disable()
-            # save to file
-            tqdm.write(" - Printing runtime profiling results...")
-            runtime_path = os.path.join(results_dir, "profile.out")
-            pr.dump_stats(runtime_path)
-
-            # ensure if summary file was properly generated at the end of the simulation
-            assert os.path.isfile(runtime_path), \
-                f"Results summary file not found at: `{runtime_path}`"
-            tqdm.write(f" - Profiling results saved to: `{runtime_path}`")
+        except Exception as e:
+            tqdm.write(f" - ERROR during scenario {scenario_id} execution: {repr(e)}")
+            tqdm.write(traceback.format_exc())
+            continue
 
     # study done
     return True
