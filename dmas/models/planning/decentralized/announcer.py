@@ -127,7 +127,8 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                 task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
                 
                 # update list of generated requests 
-                task_requests.append((event, task_request, task_request_msg.to_dict()))
+                # task_requests.append((event, task_request, task_request_msg.to_dict()))
+                task_requests.append((event, task_request, task_request_msg))
 
         # initialize set of times when broadcasts are scheduled (sets to avoid duplicates)
         t_broadcasts = set() 

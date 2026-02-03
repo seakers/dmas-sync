@@ -355,9 +355,9 @@ class TestBids(unittest.TestCase):
         )   
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)        
 
         # CASE 1.1.2: Sender has higher bid and a later observation time
@@ -369,9 +369,9 @@ class TestBids(unittest.TestCase):
         )   
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.1.2: Sender has lower bid and an earlier observation time
@@ -383,9 +383,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.1.4: Sender has lower bid and a later observation time
@@ -397,9 +397,9 @@ class TestBids(unittest.TestCase):
         ) 
         
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)  
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)  
 
         # CASE 1.2: Receiver thinks other is the winner 
@@ -410,9 +410,9 @@ class TestBids(unittest.TestCase):
         )   
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.3: Receiver thinks a 3rd party is the winner 
@@ -432,9 +432,9 @@ class TestBids(unittest.TestCase):
             t_img=10.0
         )
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.3.2: Sender has a more recent communication with 3rd party, higher bid, and later observation time
@@ -453,9 +453,9 @@ class TestBids(unittest.TestCase):
             t_img=10.0
         )
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)        
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.3.3: Sender has a more recent communication with 3rd party, lower bid, and earlier observation time
@@ -474,9 +474,9 @@ class TestBids(unittest.TestCase):
             t_img=10.0
         )
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
         
         # CASE 1.3.4: Sender has a more recent communication with 3rd party, lower bid, and later observation time
@@ -495,9 +495,9 @@ class TestBids(unittest.TestCase):
             t_img=10.0
         )
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.3.5: Sender has an older communication with 3rd party, higher bid, and earlier observation time
@@ -516,9 +516,9 @@ class TestBids(unittest.TestCase):
             t_img=10.0
         )
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.3.6: Sender has an older communication with 3rd party, higher bid, and later observation time
@@ -537,9 +537,9 @@ class TestBids(unittest.TestCase):
             t_img=10.0
         )
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.3.7: Sender has an older communication with 3rd party, lower bid, and earlier observation time
@@ -558,9 +558,9 @@ class TestBids(unittest.TestCase):
             t_img=10.0
         )
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 1.3.8: Sender has an older communication with 3rd party, lower bid, and later observation time
@@ -579,9 +579,9 @@ class TestBids(unittest.TestCase):
             t_img=10.0
         )
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 1.4: Receiver thinks no one is the winner 
@@ -592,9 +592,9 @@ class TestBids(unittest.TestCase):
         )   
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
     def test_compare_sender_thinks_receiver_winner(self):
@@ -614,9 +614,9 @@ class TestBids(unittest.TestCase):
         )   
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 2.2: Receiver thinks sender is the winner 
@@ -627,9 +627,9 @@ class TestBids(unittest.TestCase):
         )   
 
         # Expect: RESET
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.RESET)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.RESET)
 
         # CASE 2.3: Receiver thinks a third party is the winner 
@@ -646,9 +646,9 @@ class TestBids(unittest.TestCase):
         )
         
         # Expect: RESET
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.RESET)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.RESET)
         
         # CASE 2.3.2: Sender has an updated communication with 3rd party
@@ -664,9 +664,9 @@ class TestBids(unittest.TestCase):
         )
         
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 2.4: Receiver has no winner
@@ -682,9 +682,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
     def test_compare_sender_thinks_third_party_winner(self):
@@ -709,9 +709,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.1.2: Sender has a more updated communication with 3rd party, a higher bid, and a later observation time
@@ -731,9 +731,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.1.3: Sender has a more updated communication with 3rd party, a lower bid, and an earlier observation time
@@ -753,9 +753,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.1.4: Sender has a more updated communication with 3rd party, a lower bid, and a later observation time
@@ -775,9 +775,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.1.5: Sender has a more oudated communication with 3rd party, a higher bid, and an earlier observation time
@@ -797,9 +797,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.1.6: Sender has a more oudated communication with 3rd party, a higher bid, and a later observation time
@@ -819,9 +819,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.1.7: Sender has a more oudated communication with 3rd party, a lower bid, and an earlier observation time
@@ -841,9 +841,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.1.8: Sender has a more oudated communication with 3rd party, a lower bid, and a later observation time
@@ -863,9 +863,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)    
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)    
 
         # CASE 3.2: Receiver thinks sender is the winner
@@ -886,9 +886,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE) 
 
         # CASE 3.2.2: Sender has a more outdated communication with 3rd party
@@ -908,9 +908,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: RESET
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.RESET) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.RESET) 
 
         # CASE 3.3: Receiver thinks the same third party is the winner 
@@ -931,9 +931,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE) 
 
         # CASE 3.3.2: Sender has a more oudated communication with 3rd party
@@ -953,9 +953,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.4: Receiver thinks a different third party is the winner 
@@ -976,9 +976,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.4.2:  Sender has a more recent communication with 3rd party, a more recent communication with 4th party, a higher bid, and a later observation time
@@ -998,9 +998,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.4.3:  Sender has a more recent communication with 3rd party, a more recent communication with 4th party, a lower bid, and an earlier observation time
@@ -1020,9 +1020,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.4.4:  Sender has a more recent communication with 3rd party, a more recent communication with 4th party, a lower bid, and a later observation time
@@ -1042,9 +1042,9 @@ class TestBids(unittest.TestCase):
         ) 
         
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.4.5:  Sender has a more recent communication with 3rd party, a more oudated communication with 4th party, a higher bid, and an earlier observation time
@@ -1064,9 +1064,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.4.6:  Sender has a more recent communication with 3rd party, a more oudated communication with 4th party, a higher bid, and a later observation time
@@ -1086,9 +1086,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.4.7:  Sender has a more recent communication with 3rd party, a more oudated communication with 4th party, a lower bid, and an earlier observation time
@@ -1108,9 +1108,9 @@ class TestBids(unittest.TestCase):
         ) 
         
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 3.4.8:  Sender has a more recent communication with 3rd party, a more oudated communication with 4th party, a lower bid, and a later observation time
@@ -1130,9 +1130,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.4.9:  Sender has a more oudated communication with 3rd party, a more recent communication with 4th party, a higher bid, and an earlier observation time
@@ -1152,9 +1152,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: RESET
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.RESET)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.RESET)
 
         # CASE 3.4.10: Sender has a more oudated communication with 3rd party, a more recent communication with 4th party, a higher bid, and a later observation time
@@ -1174,9 +1174,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: RESET
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.RESET)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.RESET)
 
         # CASE 3.4.11: Sender has a more oudated communication with 3rd party, a more recent communication with 4th party, a lower bid, and an earlier observation time
@@ -1196,9 +1196,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: RESET
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.RESET)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.RESET)
 
         # CASE 3.4.12: Sender has a more oudated communication with 3rd party, a more recent communication with 4th party, a lower bid, and a later observation time
@@ -1218,9 +1218,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: RESET
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.RESET) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.RESET)
 
         # CASE 3.4.13: Sender has a more oudated communication with 3rd party, a more oudated communication with 4th party, a higher bid, and an earlier observation time
@@ -1240,9 +1240,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.4.14: Sender has a more oudated communication with 3rd party, a more oudated communication with 4th party, a higher bid, and a later observation time
@@ -1262,9 +1262,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.4.15: Sender has a more oudated communication with 3rd party, a more oudated communication with 4th party, a lower bid, and an earlier observation time
@@ -1284,9 +1284,9 @@ class TestBids(unittest.TestCase):
         ) 
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.4.16: Sender has a more oudated communication with 3rd party, a more oudated communication with 4th party, a lower bid, and a later observation time
@@ -1306,9 +1306,9 @@ class TestBids(unittest.TestCase):
         ) 
         
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 3.5: Receiver has no winner
@@ -1329,9 +1329,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)   
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)   
 
         # CASE 3.5.2: Sender has a more outdated communication with 3rd party
@@ -1351,9 +1351,9 @@ class TestBids(unittest.TestCase):
         )  
         
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE) 
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)     
 
     def test_compare_sender_has_no_winner(self):
@@ -1374,9 +1374,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
         # CASE 4.2: Receiver thinks sender is the winner
@@ -1387,9 +1387,9 @@ class TestBids(unittest.TestCase):
         )  
 
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 4.3: Receiver thinks a third party is the winner 
@@ -1407,9 +1407,9 @@ class TestBids(unittest.TestCase):
             t_img=20.0,
         )
         # Expect: UPDATE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.UPDATE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.UPDATE)
 
         # CASE 4.3.2: Receiver has a more recent bid
@@ -1426,9 +1426,9 @@ class TestBids(unittest.TestCase):
             t_bid=11.0
         )
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
         
         # CASE 1.4: Receiver has no winner
@@ -1443,9 +1443,9 @@ class TestBids(unittest.TestCase):
             t_stamps={self.THIRD_PARTY : 5.0},
         )
         # Expect: LEAVE
-        action = bid_receiver.rule_comparison(bid_sender)
+        action = bid_receiver._rule_comparison(bid_sender)
         self.assertEqual(action, BidComparisonResults.LEAVE)
-        action = bid_receiver.rule_comparison(bid_sender.to_dict())
+        action = bid_receiver._rule_comparison(bid_sender.to_dict())
         self.assertEqual(action, BidComparisonResults.LEAVE)
 
 
@@ -1492,7 +1492,7 @@ class TestBids(unittest.TestCase):
         )
 
         # sanity check: compare says UPDATE
-        action = base_bid.rule_comparison(other_bid)
+        action = base_bid._rule_comparison(other_bid)
         self.assertEqual(action, BidComparisonResults.UPDATE)
         
         # update bid
@@ -1539,7 +1539,7 @@ class TestBids(unittest.TestCase):
         other_bid_dict = other_bid.to_dict()  # to exercise dict path
 
         # sanity check: compare says UPDATE
-        action = base_bid.rule_comparison(other_bid_dict)
+        action = base_bid._rule_comparison(other_bid_dict)
         self.assertEqual(action, BidComparisonResults.UPDATE)
         
         # update bid

@@ -581,7 +581,7 @@ def main(trial_filename : str,
     print(f" - Loaded experiment templates from `resources/templates/`")
 
     # set simulation duration and step size
-    duration = 1100 / 3600 / 24.0 if debug else 1.0 # [days]
+    duration = 1500 / 3600 / 24.0 if debug else 1.0 # [days]
     duration = min(duration, 1.0)                   # cap at 1 day for sanity
     step_size = 10                                  # [s]
 
