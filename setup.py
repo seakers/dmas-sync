@@ -12,7 +12,7 @@ setup(
     author_email='aguilaraj15@tamu.edu',
     packages=['dmas'],
     scripts=[],
-    install_requires=['tqdm', 'instrupy', 'orbitpy', 'execsatm', # 'networkx',
+    install_requires=['tqdm', 'instrupy', 'orbitpy', 'execsatm', 'networkx',
                        'pytest', 'gurobipy', 'pandas', 'numpy', 'pyarrow', 'fastparquet'],
     long_description=readme(),
 )
