@@ -1,0 +1,25 @@
+Scenario ID,Num Sats,Ground Segment,Task Arrival Rate,Target Distribution
+0,24,Single NEN,10,25.0
+5,24,Single NEN,100,90.0
+13,24,Full NEN,10,60.0
+23,24,Full NEN,1000,90.0
+29,24,None,100,90.0
+31,24,None,500,60.0
+42,48,Single NEN,500,25.0
+55,48,Full NEN,500,60.0
+58,48,Full NEN,1000,60.0
+64,48,None,100,60.0
+66,48,None,500,25.0
+69,48,None,1000,25.0
+72,96,Single NEN,10,25.0
+73,96,Single NEN,10,60.0
+74,96,Single NEN,10,90.0
+77,96,Single NEN,100,90.0
+88,96,Full NEN,100,60.0
+104,96,None,500,90.0
+116,192,Single NEN,500,90.0
+129,192,Full NEN,1000,25.0
+130,192,Full NEN,1000,60.0
+131,192,Full NEN,1000,90.0
+132,192,None,10,25.0
+135,192,None,100,25.0
