@@ -1,4 +1,5 @@
 from collections import defaultdict, deque
+import copy
 from typing import Dict, List, Set, Tuple
 import numpy as np
 from tqdm import tqdm
@@ -46,7 +47,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         self.heuristic = heuristic
 
         # initialize properties
-        self.observation_opportunities : List[ObservationOpportunity] = None
+        # self.observation_opportunities : List[ObservationOpportunity] = None
+        self.access_opportunities : dict[tuple] = None
+        self.access_opportunity_horizon : Interval = None
+
 
     
     def _build_bundle_from_preplan(self,
@@ -157,27 +161,25 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         t_next = max(self.preplan.t + self.preplan.horizon, state._t)
         planning_horizon = Interval(state._t, t_next)
         
-        # check if observation opportunities need to be created/recreated
-        if self.__need_to_create_observation_opportunities(state, planning_horizon, state._t):
-            # calculate observation opportunities
-            self.observation_opportunities : List[ObservationOpportunity] \
-                = self.__calc_observation_opportunities(state, tasks, planning_horizon, cross_track_fovs, orbitdata)
+        # calculate observation opportunities for this planning horizon
+        observation_opportunities : List[ObservationOpportunity] \
+            = self.__update_observation_opportunities(state, tasks, planning_horizon, cross_track_fovs, orbitdata)
     
         # generate new plan according to selected model
         if self.heuristic == self.EARLIEST_ACCESS:
             # use earliest-access heuristic
             proposed_bundle, proposed_path, proposed_bids = \
-                 self.earliest_access_heuristic_bundle_builder(state, specs, cross_track_fovs, self.observation_opportunities, orbitdata, mission, observation_history)
+                 self.earliest_access_heuristic_bundle_builder(state, specs, cross_track_fovs, observation_opportunities, orbitdata, mission, observation_history)
         
         elif self.heuristic == self.TASK_VALUE:
             # use task-value heuristic
             proposed_bundle, proposed_path, proposed_bids = \
-                 self.task_value_heuristic_bundle_builder(state, specs, cross_track_fovs, self.observation_opportunities, orbitdata, mission, observation_history)
+                 self.task_value_heuristic_bundle_builder(state, specs, cross_track_fovs, observation_opportunities, orbitdata, mission, observation_history)
         
         elif self.heuristic == self.TASK_PRIORITY:
             # use task-priority heuristic
             proposed_bundle, proposed_path, proposed_bids = \
-                 self.task_priority_heuristic_bundle_builder(state, specs, cross_track_fovs, self.observation_opportunities, orbitdata, mission, observation_history)
+                 self.task_priority_heuristic_bundle_builder(state, specs, cross_track_fovs, observation_opportunities, orbitdata, mission, observation_history)
         else:
             # Fallback for unsupported heuristic
             raise NotImplementedError(f"Heuristic '{self.heuristic}' not supported.")            
@@ -190,44 +192,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # -------------------------------
 
         return proposed_bundle, proposed_path, proposed_bids
-
-    def __need_to_create_observation_opportunities(self, state : SimulationAgentState, current_planning_horizon : Interval, t : float) -> bool:
-        """ Check if observation opportunities need to be created/recreated. """
-        # TEMPORARY: always recreate observation opportunities
-        return True
-        
-        # TODO
-        # # define recalculation conditions
-        # conditions = [
-        #     # 0) there is no existing plan
-        #     self.plan is None,
-        #     # 1) no previous observation opportunities have been calculated
-        #     self.observation_opportunities is None,
-        #     # 2) available tasks have changed
-        #     self.task_announcements_received,
-        #     # 3) a new planning horizon has started (since last replan)
-        #     self.plan.t_next < current_planning_horizon.right - self.EPS
-        # ]
-
-        # # check if any were met
-        # return any(conditions)
-        
-        # if self.plan is None:
-        #     return True
-
-        # if self.observation_opportunities is None:
-        #     return True
-        
-        # if self.task_announcements_received:
-        #     return True
-        
-        # if self.plan.t_next < current_planning_horizon.right - self.EPS:
-        #     return True
-
-        # # else; no need to recreate observation opportunities
-        # return False
     
-    def __calc_observation_opportunities(self, 
+    def __update_observation_opportunities(self, 
                                          state : SimulationAgentState, 
                                          tasks : List[GenericObservationTask], 
                                          planning_horizon : Interval, 
@@ -257,6 +223,45 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
              
         # return observation opportunities
         return observation_opportunities
+    
+    def calculate_access_opportunities(self, state, planning_horizon, orbitdata) -> dict:
+        """ Calculate access opportunities for targets visible in the planning horizon """
+
+        # check if access opportunities need to be created/recreated
+        if self.__need_to_update_access_opportunities(state, planning_horizon):
+            # calculate access opportunities for this planning horizon
+            access_opportunities : dict[tuple] \
+                = super().calculate_access_opportunities(state, planning_horizon, orbitdata)
+            
+            # update access opportunity horizon
+            self.access_opportunity_horizon : Interval = copy.copy(planning_horizon)
+            
+            # outline is right-open interval
+            self.access_opportunity_horizon.open_right()
+
+            # update internal access opportunities
+            self.access_opportunities = access_opportunities
+
+        # retunrn latest known access opportunities
+        return self.access_opportunities
+
+    def __need_to_update_access_opportunities(self, state : SimulationAgentState, planning_horizon : Interval) -> bool:
+        """ Check if target access opportunities need to be created/recreated. """
+        
+        # no existing access opportunity horizon
+        if self.access_opportunity_horizon is None:
+            return True
+                
+        # simulation has advanced beyond existing access opportunity horizon
+        if state.get_time() not in self.access_opportunity_horizon:
+            return True
+        
+        # planning horizon has extended beyond existing access opportunity horizon
+        if planning_horizon.right > self.access_opportunity_horizon.right + self.EPS:
+            return True
+
+        # else; there is no need to recreate access opportunities
+        return False
     
     def get_available_tasks(self, tasks: List[GenericObservationTask], planning_horizon : Interval) -> list:
         """ Get only tasks that are available within the planning horizon. """
