@@ -9,7 +9,7 @@ from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.planner import AbstractPlanner
 from dmas.models.planning.tracker import ObservationHistory
 from dmas.models.states import SimulationAgentState
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 
 class AbstractReactivePlanner(AbstractPlanner):
     """ Repairs previously constructed plans according to external inputs and changes in state. """

@@ -6,7 +6,7 @@ import unittest
 import pandas as pd
 from tqdm import tqdm
 
-from dmas.core.orbitdata import OrbitData, ConnectivityLevels
+from dmas.utils.orbitdata import OrbitData, ConnectivityLevels
 from dmas.utils.tools import print_scenario_banner
 
 

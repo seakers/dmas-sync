@@ -4,10 +4,10 @@ import unittest
 
 import pandas as pd
 
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 from dmas.core.simulation import Simulation
 from dmas.models.agent import SimulationAgent
-from dmas.models.environment import SimulationEnvironment
+from dmas.core.environment import SimulationEnvironment
 from dmas.utils.tools import print_scenario_banner
 
 

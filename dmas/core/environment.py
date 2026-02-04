@@ -10,7 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from dmas.core.messages import ObservationResultsMessage, SimulationMessage, message_from_dict
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 
 from execsatm.tasks import EventObservationTask
 from execsatm.events import GeophysicalEvent

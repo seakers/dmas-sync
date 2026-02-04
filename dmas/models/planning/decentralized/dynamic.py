@@ -16,7 +16,7 @@ from dmas.models.states import *
 from dmas.models.actions import *
 from dmas.models.science.requests import *
 from dmas.models.states import SimulationAgentState
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 from dmas.core.messages import *
 from dmas.utils.tools import argmax
 

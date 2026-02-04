@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from collections import defaultdict
 from itertools import chain
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import logging
 
@@ -23,7 +23,7 @@ from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.core.messages import BusMessage, MeasurementBidMessage, MeasurementRequestMessage
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 
 class ConsensusPlanner(AbstractReactivePlanner):    
     # Replanning models

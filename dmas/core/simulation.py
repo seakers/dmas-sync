@@ -19,11 +19,11 @@ from execsatm.mission import Mission
 from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 from dmas.models import agent
 from dmas.models.actions import AgentAction
 from dmas.models.agent import SimulationAgent
-from dmas.models.environment import SimulationEnvironment
+from dmas.core.environment import SimulationEnvironment
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.planning.centralized.dealer import TestingDealer
 from dmas.models.planning.centralized.milp import DealerMILPPlanner
@@ -38,7 +38,7 @@ from dmas.models.planning.decentralized.nadir import NadirPointingPlanner
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
-from dmas.utils.data import ResultsProcessor
+from dmas.utils.results import ResultsProcessor
 from dmas.utils.tools import SimulationRoles
 
 class SimulationClockType(Enum):

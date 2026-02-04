@@ -16,7 +16,7 @@ from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
 
 from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, SimulationMessageTypes, message_from_dict
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction, action_from_dict
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner

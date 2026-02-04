@@ -19,8 +19,8 @@ import pandas as pd
 from pyparsing import Dict
 from tqdm import tqdm
 
-from dmas.core.constellations import Constellation, WalkerDeltaConstellation
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.constellations import Constellation, WalkerDeltaConstellation
+from dmas.utils.orbitdata import OrbitData
 from dmas.core.simulation import Simulation
 from dmas.utils.tools import LEVELS, print_scenario_banner
 

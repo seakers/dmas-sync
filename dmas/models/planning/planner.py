@@ -26,7 +26,7 @@ from dmas.models.planning.tracker import ObservationHistory, ObservationTracker
 from dmas.models.states import *
 from dmas.models.science.requests import *
 from dmas.core.messages import *
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 
 class AbstractPlanner(ABC):
     """ 

@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=cbba_stress
-#SBATCH --output=logs/cbba_stress_propagate_%j.out
-#SBATCH --error=logs/cbba_stress_propagate_%j.err
+#SBATCH --job-name=cbba_stress_prt_1
+#SBATCH --output=experiments/1_0_cbba_stress_test/logs/cbba_stress_prt_1_%j.out
+#SBATCH --error=experiments/1_0_cbba_stress_test/logs/cbba_stress_prt_1_%j.err
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4

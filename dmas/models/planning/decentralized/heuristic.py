@@ -6,8 +6,8 @@ from tqdm import tqdm
 from execsatm.mission import Mission
 from execsatm.observations import ObservationOpportunity
 
-from dmas.core.orbitdata import OrbitData
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 from dmas.core.messages import *
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.tracker import ObservationHistory

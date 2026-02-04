@@ -14,7 +14,7 @@ from dmas.models.planning.tracker import ObservationHistory
 from dmas.models.planning.plan import Plan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.states import SimulationAgentState
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 
 
 class HeuristicInsertionConsensusPlanner(ConsensusPlanner):

@@ -19,7 +19,7 @@ from dmas.models.planning.plan import PeriodicPlan, Plan
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import SimulationAgentState
 from dmas.core.messages import BusMessage, MeasurementRequestMessage
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 
 
 class EventAnnouncerPlanner(AbstractPeriodicPlanner):

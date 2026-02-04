@@ -16,7 +16,7 @@ from dmas.models.planning.planner import AbstractPlanner
 from dmas.models.planning.tracker import ObservationHistory
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 
 class AbstractPeriodicPlanner(AbstractPlanner):
     """

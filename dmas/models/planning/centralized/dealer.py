@@ -21,7 +21,7 @@ from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.tracker import ObservationHistory
 from dmas.models.states import SatelliteAgentState, SimulationAgentState
 from dmas.core.messages import  AgentStateMessage, PlanMessage
-from dmas.core.orbitdata import OrbitData
+from dmas.utils.orbitdata import OrbitData
 
 
 class DealerPlanner(AbstractPeriodicPlanner):
