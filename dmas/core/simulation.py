@@ -38,7 +38,7 @@ from dmas.models.planning.decentralized.nadir import NadirPointingPlanner
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
-from dmas.utils.results import ResultsProcessor
+from dmas.utils.processing import ResultsProcessor
 from dmas.utils.tools import SimulationRoles
 
 class SimulationClockType(Enum):
