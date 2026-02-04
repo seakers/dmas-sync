@@ -211,11 +211,12 @@ __marimo__/
 
 # Data and Results
 *results*
-*orbit_data*
+orbit_data
 */orbit_data/*
-*orbitdata*
+# *orbitdata*
 *plots*
-*results*
+# *results*
+*/results/*
 **tests/study/experiments
 **tests/**/results
 *geodata*
