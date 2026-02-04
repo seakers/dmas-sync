@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=cbba_stress
-#SBATCH --output=logs/cbba_stress_parallel_%j.out
-#SBATCH --error=logs/cbba_stress_parallel_%j.err
+#SBATCH --output=logs/cbba_stress_propagate_%j.out
+#SBATCH --error=logs/cbba_stress_propagate_%j.err
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
@@ -31,4 +31,4 @@ eval "$(conda shell.bash hook)"
 conda activate ./.venv
 
 # --- Run ---
-python ./experiments/1_0_cbba_stress_test/study.py -n lhs_trials-2_samples-1000_seed
+python ./experiments/1_0_cbba_stress_test/study.py -n lhs_trials-2_samples-1000_seed -s -l 0 -u 12
