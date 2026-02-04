@@ -1597,29 +1597,58 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # ---HISTORICAL DATA FROM BID RESULTS---
         # iterate through path to populate observation numbers and previous observation times
         for obs_idx, obs_act in enumerate(path):
+            # get trackers for this observation action
+            n_obs_i : dict = n_obs[obs_idx]
+            t_prev_i : dict = t_prev[obs_idx]
+
+            # iterate through parent tasks
             for task in obs_act.obs_opp.tasks:
-                # assume parent task is part of results
-                assert task in self.results, \
+                # get current bids for this task
+                bids = self.results.get(task, None)
+
+                # ensure parent task is part of results
+                assert bids is not None, \
                     "Parent task in path must be part of results to count observation numbers and revisit times."
 
-                # get matching bid for this observation task
-                matching_bids = [bid for bid in self.results[task]
-                                if abs(bid.t_img - obs_act.t_start) <= self.EPS]
+                # # get matching bid for this observation task
+                # matching_bids = [bid for bid in self.results[task]
+                #                 if abs(bid.t_img - obs_act.t_start) <= self.EPS]
                 
-                # assert  (matching_bids), \
-                #    "Matching bid for observation in path not found in results. Was assigned without updating results."
-                assert len(matching_bids) == 1, \
-                    "There should only be one matching bid for the current time step."
+                # # assert  (matching_bids), \
+                # #    "Matching bid for observation in path not found in results. Was assigned without updating results."
+                # assert len(matching_bids) == 1, \
+                #     "There should only be one matching bid for the current time step."
 
-                matching_bid : Bid = matching_bids.pop()
+                # matching_bid : Bid = matching_bids.pop()
 
-                # get previous matching observations for this task
-                prev_bids = [bid for bid in self.results[task]
-                            if bid.t_img < obs_act.t_start]
+                # # get previous matching observations for this task
+                # prev_bids = [bid for bid in self.results[task]
+                #             if bid.t_img < obs_act.t_start]
+
+                # find matching bid and most recent previous bid for this observation task
+                matching_bid : Bid = None
+                prev_bid : Bid = None
+                for bid in bids:
+                    if (abs(bid.t_img - obs_act.t_start) <= self.EPS 
+                        and bid.winner == state.agent_name):
+                        # found matching bid
+                        assert matching_bid is None, \
+                            "There should only be one matching bid for the current time step."
+                        # assign matching bid
+                        matching_bid = bid
+
+                    elif bid.t_img < obs_act.t_start:
+                        # found previous bid
+                        if prev_bid is None or bid.t_img > prev_bid.t_img:
+                            # assign if most recent previous bid
+                            prev_bid = bid
+
+                assert matching_bid is not None, \
+                    "Matching bid for observation in path not found in results. Was assigned without updating results."
                 
                 # update previous observation counts
-                n_obs[obs_idx][task] = matching_bid.n_obs
-                t_prev[obs_idx][task] = max((bid.t_img for bid in prev_bids), default=np.NINF)
+                n_obs_i[task] = matching_bid.n_obs
+                t_prev_i[task] = prev_bid.t_img if prev_bid is not None else np.NINF
 
         # ensure every parent task in path has values for `n_obs` and `t_prev`
         assert all(
