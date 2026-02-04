@@ -145,16 +145,16 @@ class Simulation:
                 while t < tf:
 
                     # update simulation states
-                    agent_percepts : Dict[str, Tuple] \
+                    agent_observations : Dict[str, Tuple] \
                         = self._environment.step(state_action_pairs, t)
 
                     # validate that all agents' states were updated
-                    assert all(agent.name in agent_percepts for agent in self._agents), \
+                    assert all(agent.name in agent_observations for agent in self._agents), \
                         "Not all agents received senses from the environment."
                     
                     # agent think
                     state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]] \
-                        = {agent.name : agent.decide_action(*agent_percepts[agent.name])
+                        = {agent.name : agent.decide_action(*agent_observations[agent.name])
                             for agent in self._agents}
 
                     # validate that all agents generated actions
@@ -179,13 +179,15 @@ class Simulation:
                     t += dt_progress
 
                     # reset agent percepts for next cycle
-                    agent_percepts.clear()
+                    agent_observations.clear()
 
             # mark simulation as executed
             self.__executed = True
 
             # simulation completed; print results for every agent
             for agent in self._agents: agent.print_results()
+            
+            # print results for the simulation itself
             self.print_results()
 
             # return execution status
@@ -197,7 +199,7 @@ class Simulation:
             raise e
 
         finally:
-            # print results for the simulation environment and simulation itself
+            # print results for the simulation environment regardless of the execution outcome
             self._environment.print_results()
 
 

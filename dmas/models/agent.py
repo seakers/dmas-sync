@@ -183,35 +183,48 @@ class SimulationAgent(object):
     THINK METHOD
     """
     def decide_action(self, 
-              state : SimulationAgentState,
-              action : AgentAction,
-              action_status : str,
-              incoming_messages : List[SimulationMessage],
-              observations : list
-            ) -> Tuple[SimulationAgentState, AgentAction]:
+                      curr_state : SimulationAgentState,
+                      prev_action : AgentAction,
+                      prev_action_status : str,
+                      incoming_messages : List[SimulationMessage],
+                      my_measurements : list
+                    ) -> Tuple[SimulationAgentState, AgentAction]:
         """ 
         Main thinking method for the agent; processes incoming messages and
             generates next actions to perform.
+
+        #### Parameters
+        - `curr_state` : SimulationAgentState
+            Current state of the agent.
+        - `prev_action` : AgentAction
+            Previous action performed by the agent.
+        - `prev_action_status` : str
+            Status of the previous action performed by the agent.
+        - `incoming_messages` : List[SimulationMessage]
+            List of incoming messages received by the agent.
+        - `my_measurements` : list
+            List of measurements performed by the agent.
+
         """
         # ensure time has advanced
-        assert state.get_time() > self._state.get_time() or abs(state.get_time() - self._state.get_time()) < 1e-6, \
+        assert curr_state.get_time() > self._state.get_time() or abs(curr_state.get_time() - self._state.get_time()) < 1e-6, \
             "State time must be greater than or equal to the previous state time."
 
         # update state
-        self._state = state
+        self._state = curr_state
 
         # append state to history if time has advanced
-        if abs(state.get_time() - self._state.get_time()) > 1e-6:
-            self._state_history.append(state.to_dict())
+        if abs(curr_state.get_time() - self._state.get_time()) > 1e-6:
+            self._state_history.append(curr_state.to_dict())
 
         # unpack and classify incoming messages
-        incoming_reqs, external_observations, \
+        incoming_reqs, external_measurements, \
             external_states, external_action_statuses, misc_messages \
-                = self.__classify_incoming_messages(state, incoming_messages)
+                = self.__classify_incoming_messages(curr_state, incoming_messages)
 
         # process action completion
         completed_actions, aborted_actions, pending_actions \
-            = self.__process_action_completion([(action, action_status)])
+            = self.__process_action_completion([(prev_action, prev_action_status)])
                                                         
         # --- FOR DEBUGGING PURPOSES ONLY: ---
         # x = 1 # breakpoint
@@ -224,14 +237,16 @@ class SimulationAgent(object):
         self.__update_plan_completion(completed_actions, 
                                     aborted_actions, 
                                     pending_actions, 
-                                    state._t)
+                                    curr_state._t)
 
         # process performed observations
-        generated_reqs : List[TaskRequest] = self.__process_observations(new_reqs, observations)
+        generated_reqs : List[TaskRequest] = self.__process_measurements(new_reqs, my_measurements)
         new_reqs.extend(generated_reqs)
                         
-        # update observation history
-        self.__update_observation_history(observations)
+        # update observation history with my measurements
+        self.__update_observation_history(my_measurements)
+
+        # TODO update observation history with external measurements
 
         # TODO update mission objectives from requests
 
@@ -240,10 +255,9 @@ class SimulationAgent(object):
             # there is a preplanner assigned to this planner
             
             # update preplanner precepts
-            self._preplanner.update_percepts(state,
+            self._preplanner.update_percepts(curr_state,
                                             self._plan, 
                                             self._known_tasks.values(),
-                                            # incoming_reqs,
                                             new_reqs,
                                             misc_messages,
                                             completed_actions,
@@ -252,15 +266,15 @@ class SimulationAgent(object):
                                         )
             
             # check if there is a need to construct a new plan
-            if self._preplanner.needs_planning(state, 
+            if self._preplanner.needs_planning(curr_state, 
                                               self._specs, 
                                               self._plan):  
                 
                 # update tasks for only tasks that are available
-                self.__update_tasks(state)
+                self.__update_tasks(curr_state)
                 
                 # initialize plan      
-                self._plan : Plan = self._preplanner.generate_plan(state, 
+                self._plan : Plan = self._preplanner.generate_plan(curr_state, 
                                                             self._specs,
                                                             self._orbitdata,
                                                             self._mission,
@@ -270,7 +284,7 @@ class SimulationAgent(object):
 
                 # save copy of plan for post-processing
                 plan_copy = [action for action in self._plan]
-                self._plan_history.append((state._t, plan_copy))
+                self._plan_history.append((curr_state._t, plan_copy))
                 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
@@ -286,10 +300,9 @@ class SimulationAgent(object):
             # there is a replanner assigned to this planner
 
             # update replanner precepts
-            self._replanner.update_percepts( state,
+            self._replanner.update_percepts( curr_state,
                                             self._plan, 
                                             self._known_tasks.values(),
-                                            # incoming_reqs,
                                             new_reqs,
                                             misc_messages,
                                             completed_actions,
@@ -297,7 +310,7 @@ class SimulationAgent(object):
                                             pending_actions
                                         )
             
-            if self._replanner.needs_planning(state, 
+            if self._replanner.needs_planning(curr_state, 
                                              self._specs,
                                              self._plan,
                                              self._orbitdata):    
@@ -307,10 +320,10 @@ class SimulationAgent(object):
                 # -------------------------------------
 
                 # update tasks for only tasks that are available
-                self.__update_tasks(state)
+                self.__update_tasks(curr_state)
 
                 # Modify current Plan      
-                self._plan : ReactivePlan = self._replanner.generate_plan(state, 
+                self._plan : ReactivePlan = self._replanner.generate_plan(curr_state, 
                                                                 self._specs,
                                                                 self._plan,
                                                                 self._orbitdata,
@@ -320,7 +333,7 @@ class SimulationAgent(object):
                                                                 )
 
                 # update last time plan was updated
-                t_plan = state.get_time()
+                t_plan = curr_state.get_time()
 
                 # save copy of plan for post-processing
                 plan_copy = [action for action in self._plan]
@@ -338,7 +351,7 @@ class SimulationAgent(object):
                 # -------------------------------------
 
         # get next actions to perform from current plan
-        next_action : AgentAction = self.get_next_planned_action(state)
+        next_action : AgentAction = self.get_next_planned_action(curr_state)
         
         # ensure an action was returned
         assert next_action is not None, \
@@ -346,15 +359,23 @@ class SimulationAgent(object):
 
         # change state to indicate the start of the new status 
         # (e.g., maneuvering, observing, waiting, etc.) 
-        action_state: SimulationAgentState \
-            = self.__prepare_state(state, next_action, state._t)
+        next_state: SimulationAgentState \
+            = self.__prepare_next_state(curr_state, next_action, curr_state._t)
         
         # save copy to state history
-        self._state_history.append(action_state.to_dict())
+        self._state_history.append(next_state.to_dict())
 
         # reset message and observations inbox for next cycle
-        # incoming_messages, observations = [], []
-        incoming_messages.clear(); observations.clear()
+        incoming_messages.clear(); my_measurements.clear()
+        incoming_reqs.clear()
+        external_measurements.clear()
+        external_states.clear()
+        external_action_statuses.clear()
+        misc_messages.clear()
+        # del state # TODO check if needed
+        # del action
+
+        # TODO clear any temporary variables if needed
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         if True:
@@ -363,37 +384,9 @@ class SimulationAgent(object):
             x = 1 # breakpoint
         # -------------------------------------        
         
-        # return next actions to perform
-        return action_state, next_action
+        # return next initial state and next actions to perform
+        return next_state, next_action
     
-    def __prepare_state(self, 
-                        state : SimulationAgentState, 
-                        next_action : AgentAction,
-                        t : float
-                    ) -> SimulationAgentState:
-        """ Update the agent state based on the next actions to perform. """
-        # create copy of current state
-        action_state : SimulationAgentState = state.copy()
-        
-        assert abs(action_state.get_time() - t) < 1e-6, \
-            "State time must match the provided time."
-
-        # determine new status from next action
-        if isinstance(next_action, ManeuverAction):
-            action_state.perform_maneuver(next_action, t)
-        elif isinstance(next_action, ObservationAction):
-            # update state
-            action_state.update(t, status=SimulationAgentState.MEASURING)
-        elif isinstance(next_action, BroadcastMessageAction):
-            # update state
-            action_state.update(t, status=SimulationAgentState.MESSAGING)
-        elif isinstance(next_action, WaitAction):
-            # update state
-            action_state.update(t, status=SimulationAgentState.WAITING)
-
-        # return updated state
-        return action_state
-
     def __classify_incoming_messages(self, 
                                      state : SimulationAgentState,
                                      incoming_messages : List[SimulationMessage]
@@ -417,7 +410,7 @@ class SimulationAgent(object):
 
         # define classified message lists
         incoming_reqs, observation_msgs, \
-            external_observations, external_states, \
+            external_measurements, external_states, \
                 external_action_statuses, misc_messages \
                     = [], [], [], [], [], []
 
@@ -428,7 +421,7 @@ class SimulationAgent(object):
             elif isinstance(msg, ObservationResultsMessage):
                 observation_msgs.append(msg)
                 if isinstance(msg.instrument, str):
-                    external_observations.append((msg.instrument, msg.observation_data))
+                    external_measurements.append((msg.instrument, msg.observation_data))
             elif isinstance(msg, AgentStateMessage) and msg.src != state.agent_name:
                 external_states.append(msg)
             elif isinstance(msg, AgentActionMessage):
@@ -437,7 +430,7 @@ class SimulationAgent(object):
                 misc_messages.append(msg)
 
         # return classified messages
-        return incoming_reqs, external_observations, \
+        return incoming_reqs, external_measurements, \
             external_states, external_action_statuses, list(misc_messages)
     
     def __process_action_completion(self, action_status_pairs : List[Tuple[AgentAction, str]]) -> tuple:
@@ -478,18 +471,18 @@ class SimulationAgent(object):
                                            pending_actions, 
                                            t)    
 
-    def __process_observations(self, 
+    def __process_measurements(self, 
                                incoming_reqs : List[TaskRequest], 
-                               observations : List[Tuple[str, list]]
+                               measurements : List[Tuple[str, list]]
                                ) -> List[TaskRequest]:
         """
-        Processes observations and generates new requests based on the observations.
+        Processes measurement observations and generates new requests based on the observations.
         """
         # check if there is a data processor assigned
         if self._processor is None: return []
 
         # process observations and return generated requests
-        new_reqs = self._processor.process_observations(incoming_reqs, observations)
+        new_reqs = self._processor.process_measurements(incoming_reqs, measurements)
 
         # add to known requests
         self._known_reqs.update({self._req_key(req): req for req in new_reqs})
@@ -841,6 +834,34 @@ class SimulationAgent(object):
                 # only include observations performed for the current plan
                 and self._plan.t * int(latest_plan_only) <= observation_tracker.latest_observation['t_end'] <= state.get_time()
             ]
+
+    def __prepare_next_state(self, 
+                            curr_state : SimulationAgentState, 
+                            next_action : AgentAction,
+                            t : float
+                        ) -> SimulationAgentState:
+        """ Update the agent state based on the next actions to perform. """
+        # create copy of current state
+        next_state : SimulationAgentState = curr_state.copy()
+        
+        assert abs(next_state.get_time() - t) < 1e-6, \
+            "State time must match the provided time."
+
+        # determine new status from next action
+        if isinstance(next_action, ManeuverAction):
+            next_state.perform_maneuver(next_action, t)
+        elif isinstance(next_action, ObservationAction):
+            # update state
+            next_state.update(t, status=SimulationAgentState.MEASURING)
+        elif isinstance(next_action, BroadcastMessageAction):
+            # update state
+            next_state.update(t, status=SimulationAgentState.MESSAGING)
+        elif isinstance(next_action, WaitAction):
+            # update state
+            next_state.update(t, status=SimulationAgentState.WAITING)
+
+        # return updated state
+        return next_state
 
     """
     ----------------------

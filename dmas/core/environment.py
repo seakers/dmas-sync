@@ -140,7 +140,7 @@ class SimulationEnvironment(object):
         actions = dict()
         action_statuses = dict()
         msgs : Dict[str, List] = defaultdict(list)
-        observations : dict[str, List] = defaultdict(list)
+        measurements : dict[str, List] = defaultdict(list)
         
         # iterate through each agent state-action pair
         for agent_name, (state, action) in state_action_pairs.items():                
@@ -165,7 +165,7 @@ class SimulationEnvironment(object):
 
             # store observations
             if agent_observations:
-                observations[agent_name].extend(agent_observations)
+                measurements[agent_name].extend(agent_observations)
 
         # compile senses per agent
         agent_percepts : Dict[str, tuple] = dict()
@@ -175,7 +175,7 @@ class SimulationEnvironment(object):
                 actions[agent_name],
                 action_statuses[agent_name],
                 msgs[agent_name],
-                observations.get(agent_name, [])
+                measurements.get(agent_name, [])
             )
 
         # return compiled senses
