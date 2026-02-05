@@ -1016,13 +1016,19 @@ class SimulationAgent(object):
             df = pd.DataFrame(data)
             df.to_parquet(f"{self._results_path}/observation_history.parquet", index=False)
 
-            # delete observation history to save memory
-            del self._observation_history
-
             # log performance stats
             runtime_dir = os.path.join(self._results_path, "runtime")
             if not os.path.isdir(runtime_dir): os.mkdir(runtime_dir)
 
+            # TODO log state history 
+
         except Exception as e:
             print(f'AGENT TEARDOWN ERROR: {e}')
             raise e
+        
+        finally:
+            # delete observation history to save memory
+            del self._observation_history
+
+            # delete state history to save memory
+            del self._state_history

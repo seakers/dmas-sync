@@ -1,24 +1,23 @@
+from dataclasses import dataclass, field
+from typing import List, Optional, Optional
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from dmas.utils.orbitdata import OrbitData
 
+@dataclass
 class ObservationTracker:
-    def __init__(self, t_last : float = np.NINF, n_obs : int = 0, latest_observation : dict = None):
+    __slots__ = ("t_last", "n_obs", "latest_observation", "observations")
+
+    def __init__(self, latest_observation: Optional[dict] = None):
         """ 
         Class to track the observation tasks and their history.
         """
-        # validate inputs
-        assert isinstance(t_last, (int, float)), "Last observation time must be a float or int."
-        assert isinstance(n_obs, int), "Number of observations must be an integer."
-        assert n_obs >= 0, "Number of observations must be non-negative."
-
-        # initialize trackers and parameters
-        self.t_last = t_last
-        self.n_obs = n_obs
+        self.t_last = np.NINF
+        self.n_obs = 0
         self.latest_observation = latest_observation
-        self.observations : list[dict] = [latest_observation] if latest_observation is not None else []
-    
+        self.observations = [latest_observation] if latest_observation else []
+
     def update(self, observation : dict) -> None:
         """ Update the observation tracker with a new observation."""        
         # update number of observations at this target

@@ -130,8 +130,7 @@ class SimulationEnvironment(object):
     
     def step(self, 
              state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
-             t_curr : float,
-             tracker : MessageTracker = None
+             t_curr : float
             ) -> Dict[str, List]:
         """Updates agent states based on the provided actions at time `t` """
         # update internal time and state
@@ -161,11 +160,6 @@ class SimulationEnvironment(object):
             # store outgoing messages depending on current connectivity
             for receiver in self._current_connectivity_map[agent_name]:
                 msgs[receiver].extend(msgs_out)
-
-            # track message if tracker provided
-            if tracker is not None:
-                for msg in msgs_out:
-                    tracker.track(msg)
 
             # store observations
             if agent_observations:
@@ -252,7 +246,7 @@ class SimulationEnvironment(object):
         state.update(t_curr, status=SimulationAgentState.MESSAGING)
 
         # TODO save broadcast to history
-        self._broadcasts_history.append(msg_out.to_dict())
+        # self._broadcasts_history.append(msg_out.to_dict())
 
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []
@@ -500,13 +494,23 @@ class SimulationEnvironment(object):
             # self.log(f"MEASUREMENT REQUESTS RECEIVED:\n{len(measurement_reqs.values)}\n\n", level=logging.WARNING)
             measurement_reqs.to_parquet(f"{self._results_path}/requests.parquet", index=False)
 
-            # print connectivity hisotry
+            # print connectivity history
             self.__print_connectivity_history()
 
         except Exception as e:
             print('\n','\n','\n')
             print(e)
             raise e       
+        
+        finally:
+            # delete observation history to save memory
+            del self._observation_history
+
+            # delete broadcasts history to save memory
+            del self._broadcasts_history
+
+            # delete requests history to save memory
+            del self._task_reqs
 
     async def teardown(self) -> None:
         # print final time
