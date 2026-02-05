@@ -2,7 +2,7 @@ from collections import defaultdict
 import copy
 import logging
 import os
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 import uuid
 from queue import Queue
 import numpy as np
@@ -494,14 +494,16 @@ class SimulationAgent(object):
         # return generated requests
         return new_reqs
 
-    def __update_observation_history(self, my_observations : list) -> None:
+    def __update_observation_history(self, my_observations : List[Tuple[str, List[Dict[str, Any]]]]) -> None:
         """
         Updates the observation history with the completed observations.
         """
-        for _,obs in my_observations:
+        for _,obs in my_observations:            
             self._observation_history.extend(obs)
 
-    def __update_observations_tracker(self, my_observations : list, external_observations : list) -> None:
+    def __update_observations_tracker(self, 
+                                      my_observations : List[Tuple[str, List[Dict[str, Any]]]], 
+                                      external_observations : List[Tuple[str, List[Dict[str, Any]]]]) -> None:
         """ Updates the observation history with the completed observations. """
         # update observation history
         if my_observations:
@@ -1015,7 +1017,7 @@ class SimulationAgent(object):
             
             # log observation history
             self._observation_history.close()
-            
+
         except Exception as e:
             print(f'AGENT TEARDOWN ERROR: {e}')
             raise e

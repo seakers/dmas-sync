@@ -480,7 +480,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 if bids_candidate is None: continue # no valid bids found; skip
 
                 # get path value for proposed path using best observation sequences
-                proposed_path_utility : float = self._calculate_path_utility(state, specs, cross_track_fovs, candidate_path, observation_history, orbitdata, mission, n_obs_candidate, t_prev_candidate)
+                proposed_path_utility : float \
+                    = self._calculate_path_utility(state, specs, cross_track_fovs, candidate_path, observation_history, orbitdata, mission, n_obs_candidate, t_prev_candidate)
 
                 # if path does not increase overall utility, skip
                 if proposed_path_utility <= best_path_utility: continue

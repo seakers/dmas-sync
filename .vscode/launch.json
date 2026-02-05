@@ -250,18 +250,18 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                // "-t", "full_factorial_trials",
-                "-t", "lhs_trials-2_samples-1000_seed",                
+                "-t", "full_factorial_trials",
+                // "-t", "lhs_trials-2_samples-1000_seed",                
                 // "--trial-range", "58:59",
                 // "--trial-range", "23:24",
                 // "--trial-range", "3:4",
                 // "--trial-range", "9:12",
-                // "--trial-range", "9:10",
-                // "--reduced",
+                "--trial-range", "9:10",
+                "--reduced",
                 "--profile-cpu",
                 "--profile-mem",
                 "--single-thread",
-                // "--force-simulate",
+                "--force-simulate",
                 // "--quiet",
             ]
         },

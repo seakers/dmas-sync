@@ -655,15 +655,19 @@ class AbstractPlanner(ABC):
                 grid_index,gp_index = int(grid_index), int(gp_index)
 
                 # get past observations for this target before current image time
-                target_observation : ObservationTracker = observation_history.get_observation_history(grid_index, gp_index)
+                # target_observation : ObservationTracker = observation_history.get_observation_history(grid_index, gp_index)
+                t_prev,n_obs,_ = observation_history.lookup(grid_index, gp_index)
 
                 # check if there are no previous observations for this target
-                if target_observation is None: continue  
+                # if target_observation is None: continue  
+                if n_obs == -1: continue
 
                 # count number of previous observations and observation time for this task
-                task_n_obs[task] += target_observation.n_obs
-                task_t_prev[task] = max(task_t_prev[task], target_observation.t_last) if target_observation.t_last <= t_img else task_t_prev[task]
-
+                # task_n_obs[task] += target_observation.n_obs
+                # task_t_prev[task] = max(task_t_prev[task], target_observation.t_last) if target_observation.t_last <= t_img else task_t_prev[task]
+                task_n_obs[task] += n_obs
+                task_t_prev[task] = max(task_t_prev[task], t_prev) if t_prev <= t_img else task_t_prev[task]
+                
                 # validate previous observation time
                 if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, "Previous observation time must be non-negative."
                     

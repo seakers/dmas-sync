@@ -427,7 +427,8 @@ class SimulationEnvironment(object):
                             v = arr[idx]
                             # Convert numpy scalars to Python types if needed
                             lst = [x.item() if hasattr(x, "item") else x for x in v.tolist()]
-                            merged[col] = lst[0] if len(lst) == 1 else lst
+                            # merged[col] = lst[0] if len(lst) == 1 else lst
+                            merged[col] = lst[-1] # always take last value to reflect changes in observed parameters along the observation window (e.g. for moving targets)
 
                     obs_data.append(dict(merged))
 

@@ -117,6 +117,7 @@ class DataSink:
     _rows: List[Dict[str, Any]] = field(default_factory=list)
     _writer: Optional[pq.ParquetWriter] = None
     _path: Optional[str] = None
+    _flush_count: int = 0
 
     _closed: bool = False
 
@@ -180,6 +181,9 @@ class DataSink:
         else:
             # if i_max is specified, we only flushed up to that index, so we remove those rows from the buffer
             del self._rows[:i_max]
+
+        # increment flush count
+        self._flush_count += 1
 
     def close(self) -> None:
         """ Close the sink, flushing any remaining data and releasing resources."""
@@ -379,9 +383,13 @@ class LatestObservationTracker:
             raise ValueError("observations must be an iterable of dicts")
         
         # update each observation in the input iterable
-        for instrument,obs_data in observations:
+        for _,obs_data in observations:
             # get the observation with the latest t_end
-            obs = max(obs_data, key=lambda o: o.get("t_end", -np.inf))  
+            obs = max(obs_data, key=lambda o: o.get("t_end", -np.inf), default=None)  
+            
+            # `obs_data` is empty; skip 
+            if obs is None:
+                continue
             
             # update the tracker with this observation
             self.__update_one(obs)
@@ -406,7 +414,7 @@ class LatestObservationTracker:
         """
         k = self.key_to_k.get((int(grid_idx), int(gp_idx)))
         if k is None:
-            return -np.inf, 0, None
+            return -np.inf, -1, None
 
         t = float(self.t_last[k])
         n = int(self.n_obs[k])
