@@ -11,7 +11,7 @@ from execsatm.utils import Interval
 
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.models.actions import ObservationAction
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import ObservationHistory
 from dmas.models.planning.plan import Plan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.states import SimulationAgentState

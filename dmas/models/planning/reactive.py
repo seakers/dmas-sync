@@ -7,7 +7,7 @@ from execsatm.mission import Mission
 
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.planner import AbstractPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import ObservationHistory
 from dmas.models.states import SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
 

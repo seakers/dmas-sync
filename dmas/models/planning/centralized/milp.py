@@ -15,7 +15,7 @@ from execsatm.utils import Interval
 
 from dmas.models.actions import ObservationAction
 from dmas.models.planning.centralized.dealer import DealerPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import ObservationHistory
 from dmas.models.states import SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
 

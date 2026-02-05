@@ -13,7 +13,7 @@ from execsatm.utils import Interval
 from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.planner import AbstractPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import ObservationHistory
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.utils.orbitdata import OrbitData

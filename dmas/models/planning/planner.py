@@ -22,7 +22,7 @@ from execsatm.utils import Interval
 
 from dmas.models.actions import ObservationAction
 from dmas.models.planning.plan import Plan
-from dmas.models.planning.tracker import ObservationHistory, ObservationTracker
+from dmas.models.trackers import ObservationHistory, ObservationTracker
 from dmas.models.states import *
 from dmas.models.science.requests import *
 from dmas.core.messages import *

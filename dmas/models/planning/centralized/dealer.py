@@ -18,7 +18,7 @@ from execsatm.utils import Interval
 from dmas.models.actions import AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import ObservationHistory
 from dmas.models.states import SatelliteAgentState, SimulationAgentState
 from dmas.core.messages import  AgentStateMessage, PlanMessage
 from dmas.utils.orbitdata import OrbitData

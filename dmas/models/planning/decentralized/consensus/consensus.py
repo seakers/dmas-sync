@@ -17,7 +17,7 @@ from execsatm.utils import Interval
 
 from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, IdleAction, ObservationAction, WaitAction
 from dmas.models.planning.reactive import AbstractReactivePlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import ObservationHistory
 from dmas.models.planning.plan import Plan, PeriodicPlan, ReactivePlan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.science.requests import TaskRequest

@@ -9,7 +9,7 @@ from execsatm.mission import Mission
 
 from dmas.models.states import SimulationAgentState, SatelliteAgentState
 from dmas.models.planning.decentralized.earliest import EarliestAccessPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import ObservationHistory
 from dmas.models.actions import ObservationAction
 from dmas.utils.orbitdata import OrbitData
 

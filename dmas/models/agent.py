@@ -21,7 +21,7 @@ from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction, action_from_dict
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
-from dmas.models.planning.tracker import ObservationHistory, ObservationTracker
+from dmas.models.trackers import ObservationHistory, ObservationTracker
 from dmas.models.science.processing import ObservationDataProcessor
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.science.requests import TaskRequest

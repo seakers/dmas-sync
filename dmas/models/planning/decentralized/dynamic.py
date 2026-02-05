@@ -11,7 +11,7 @@ from execsatm.mission import Mission
 from execsatm.utils import Interval
 
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import ObservationHistory
 from dmas.models.states import *
 from dmas.models.actions import *
 from dmas.models.science.requests import *

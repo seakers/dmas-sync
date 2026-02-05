@@ -88,17 +88,6 @@
             }
         },
         {
-            "name": "TEST: Agent Connectivity Levels",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceRoot}/tests/connectivity/connectivity_levels_test.py",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "cwd": "${workspaceRoot}",
-            "env": {
-                "PYTHONPATH": "${workspaceRoot}"
-            }
-        },{
             "name": "TEST: Consensus Bids",
             "type": "debugpy",
             "request": "launch",
@@ -115,6 +104,18 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceRoot}/tests/tasks/bid_results_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Data Trackers",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/agents/trackers_test.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "cwd": "${workspaceRoot}",
