@@ -1026,9 +1026,9 @@ class SimulationAgent(object):
             print(f'AGENT TEARDOWN ERROR: {e}')
             raise e
         
-        finally:
-            # delete observation history to save memory
-            del self._observation_history
+        # finally:
+        #     # delete observation history to save memory
+        #     del self._observation_history
 
-            # delete state history to save memory
-            del self._state_history
+        #     # delete state history to save memory
+        #     del self._state_history
