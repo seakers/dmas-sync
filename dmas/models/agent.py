@@ -92,14 +92,17 @@ class SimulationAgent(object):
         self._message_outbox : Queue = Queue([])
         self._plan : Plan = PeriodicPlan(t=-1.0)
         self._plan_history = []
-        self._state_history : list = []
         self._known_tasks : Dict[Tuple, GenericObservationTask] \
             = SimulationAgent.__initialize_default_mission_tasks(mission, orbitdata)
         self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
-        # initialize observation history and trackers
+        # initialize trackers and data sinks
         self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
         self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history")
+        self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history")
+
+        # save initial state to history
+        self._state_history.append(initial_state.to_dict())
 
     @staticmethod
     def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> Dict[Tuple, GenericObservationTask]:
@@ -212,12 +215,13 @@ class SimulationAgent(object):
         assert curr_state.get_time() > self._state.get_time() or abs(curr_state.get_time() - self._state.get_time()) < 1e-6, \
             "State time must be greater than or equal to the previous state time."
 
+        # append state to history if time has advanced
+        if (abs(curr_state.get_time() - self._state.get_time()) > 1e-6
+            or curr_state.status != self._state.status):
+            self._state_history.append(curr_state.to_dict())
+
         # update state
         self._state = curr_state
-
-        # append state to history if time has advanced
-        if abs(curr_state.get_time() - self._state.get_time()) > 1e-6:
-            self._state_history.append(curr_state.to_dict())
 
         # unpack and classify incoming messages
         incoming_reqs, external_measurements, \
@@ -365,8 +369,8 @@ class SimulationAgent(object):
         next_state: SimulationAgentState \
             = self.__prepare_next_state(curr_state, next_action, curr_state._t)
         
-        # save copy to state history
-        self._state_history.append(next_state.to_dict())
+        # # save copy to state history
+        # self._state_history.append(next_state.to_dict())
 
         # reset message and observations inbox for next cycle
         incoming_messages.clear(); my_measurements.clear()
@@ -376,7 +380,7 @@ class SimulationAgent(object):
         external_action_statuses.clear()
         misc_messages.clear()
         # TODO check if needed
-        del curr_state 
+        # del curr_state 
         # del action
 
         # TODO clear any temporary variables if needed
@@ -947,7 +951,6 @@ class SimulationAgent(object):
 
             self.log(out, level)
         except Exception as e:
-            print(e)
             raise e
         
     def __repr__(self):
@@ -1018,13 +1021,9 @@ class SimulationAgent(object):
             # log observation history
             self._observation_history.close()
 
-        except Exception as e:
-            print(f'AGENT TEARDOWN ERROR: {e}')
-            raise e
-        
-        # finally:
-        #     # delete observation history to save memory
-        #     del self._observation_history
+            # log state history
+            self._state_history.close()
 
-        #     # delete state history to save memory
-        #     del self._state_history
+
+        except Exception as e:
+            raise e        
