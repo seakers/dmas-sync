@@ -112,10 +112,22 @@
             }
         },
         {
-            "name": "TEST: Data Trackers",
+            "name": "TEST: Data Sinks",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceRoot}/tests/agents/trackers_test.py",
+            "program": "${workspaceRoot}/tests/agents/sinks_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Latest Observation Tracker",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/agents/observation_tracker_test.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "cwd": "${workspaceRoot}",

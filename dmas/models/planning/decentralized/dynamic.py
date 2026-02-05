@@ -11,7 +11,7 @@ from execsatm.mission import Mission
 from execsatm.utils import Interval
 
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
-from dmas.models.trackers import ObservationHistory
+from dmas.models.trackers import LatestObservationTracker
 from dmas.models.states import *
 from dmas.models.actions import *
 from dmas.models.science.requests import *
@@ -54,7 +54,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                                orbitdata : OrbitData, 
                                observation_opportunities : list,
                                mission : Mission,
-                               observation_history : ObservationHistory
+                               observation_history : LatestObservationTracker
                                ) -> List[ObservationAction]:
         
         if not isinstance(state, SatelliteAgentState):
@@ -116,7 +116,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                          observation_opportunities : List[ObservationOpportunity], 
                          orbitdata : OrbitData,
                          mission : Mission, 
-                         observation_history : ObservationHistory,
+                         observation_history : LatestObservationTracker,
                          specs : Spacecraft, 
                          payload : dict,
                          cross_track_fovs : Dict[str, float],
@@ -305,7 +305,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                            observation_opportunities : List[ObservationOpportunity], 
                            orbitdata : OrbitData,
                            mission : Mission, 
-                           observation_history : ObservationHistory,
+                           observation_history : LatestObservationTracker,
                            specs : Spacecraft, 
                            payload : dict,
                            cross_track_fovs : Dict[str, float],

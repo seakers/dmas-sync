@@ -7,6 +7,7 @@ import pyarrow.parquet as pq
 import unittest
 
 from dmas.models.trackers import DataSink
+from dmas.utils.tools import print_scenario_banner
 
 
 class TestDataSink(unittest.TestCase):
@@ -217,7 +218,7 @@ class TestDataSink(unittest.TestCase):
 
     def test_del(self):
         # construct expected sink path
-        sink_path = os.path.join(self.out_dir, f"{self.owner_name}_{self.large_data_name}.parquet")
+        sink_path = os.path.join(self.out_dir, f"{self.large_data_name}.parquet")
 
         # clear any existing file at the sink path
         if os.path.exists(sink_path):
@@ -255,6 +256,9 @@ class TestDataSink(unittest.TestCase):
         pd.testing.assert_frame_equal(loaded_data, expected_data)
 
 if __name__ == '__main__':
+    # print banner
+    print_scenario_banner("`DataSink` Unit Tests")
+    
     # run tests
     unittest.main()
     

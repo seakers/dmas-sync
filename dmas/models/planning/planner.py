@@ -22,7 +22,7 @@ from execsatm.utils import Interval
 
 from dmas.models.actions import ObservationAction
 from dmas.models.planning.plan import Plan
-from dmas.models.trackers import ObservationHistory, ObservationTracker
+from dmas.models.trackers import LatestObservationTracker
 from dmas.models.states import *
 from dmas.models.science.requests import *
 from dmas.core.messages import *
@@ -590,7 +590,7 @@ class AbstractPlanner(ABC):
                                      cross_track_fovs : Dict[str, float],
                                      orbitdata : OrbitData,
                                      mission : Mission,
-                                     observation_history : ObservationHistory,
+                                     observation_history : LatestObservationTracker,
                                      task_n_obs : Dict[GenericObservationTask,int] = None,
                                      task_t_prevs : Dict[GenericObservationTask,int] = None
                                 ) -> float:
@@ -640,7 +640,7 @@ class AbstractPlanner(ABC):
     def _count_previous_observations_from_history(self,
                                                    obs : ObservationOpportunity,
                                                    t_img : float,
-                                                   observation_history : ObservationHistory,
+                                                   observation_history : LatestObservationTracker,
                                                 ) -> Tuple[Dict[GenericObservationTask,int], Dict[GenericObservationTask,float]]:
         """ Counts the number of previous observations for each task in the observation opportunity. """
         # initialize observation counts and previous observation times

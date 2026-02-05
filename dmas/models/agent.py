@@ -21,7 +21,7 @@ from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction, action_from_dict
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
-from dmas.models.trackers import ObservationHistory, ObservationTracker
+from dmas.models.trackers import DataSink, LatestObservationTracker
 from dmas.models.science.processing import ObservationDataProcessor
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.science.requests import TaskRequest
@@ -97,8 +97,9 @@ class SimulationAgent(object):
             = SimulationAgent.__initialize_default_mission_tasks(mission, orbitdata)
         self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
-        # initialize observation history
-        self._observation_history = ObservationHistory.from_orbitdata(orbitdata)
+        # initialize observation history and trackers
+        self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
+        self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history")
 
     @staticmethod
     def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> Dict[Tuple, GenericObservationTask]:
@@ -247,7 +248,8 @@ class SimulationAgent(object):
         # update observation history with my measurements
         self.__update_observation_history(my_measurements)
 
-        # TODO update observation history with external measurements
+        # update observations tracker with my measurements and external measurements
+        self.__update_observations_tracker(my_measurements, external_measurements)
 
         # TODO update mission objectives from requests
 
@@ -280,7 +282,7 @@ class SimulationAgent(object):
                                                             self._orbitdata,
                                                             self._mission,
                                                             self._known_tasks.values(),
-                                                            self._observation_history
+                                                            self._observations_tracker
                                                             )
 
                 # save copy of plan for post-processing
@@ -330,7 +332,7 @@ class SimulationAgent(object):
                                                                 self._orbitdata,
                                                                 self._mission,
                                                                 self._known_tasks.values(),
-                                                                self._observation_history
+                                                                self._observations_tracker
                                                                 )
 
                 # update last time plan was updated
@@ -492,12 +494,22 @@ class SimulationAgent(object):
         # return generated requests
         return new_reqs
 
-    def __update_observation_history(self, observations : list) -> None:
+    def __update_observation_history(self, my_observations : list) -> None:
         """
         Updates the observation history with the completed observations.
         """
+        for _,obs in my_observations:
+            self._observation_history.extend(obs)
+
+    def __update_observations_tracker(self, my_observations : list, external_observations : list) -> None:
+        """ Updates the observation history with the completed observations. """
         # update observation history
-        self._observation_history.update(observations)
+        if my_observations:
+            self._observations_tracker.update_many(my_observations)
+
+        if external_observations:
+            raise NotImplementedError("Updating observation history with external observations is not yet implemented.")
+            self._observations_tracker.update_many(external_observations)
 
     def __update_requests_and_tasks(self,
                                     incoming_reqs : List[MeasurementRequestMessage] = []
@@ -827,7 +839,7 @@ class SimulationAgent(object):
                                 ) -> List[dict]:
         raise NotImplementedError("Error, get_latest_observations() is not yet implemented.")
         return [observation_tracker.latest_observation
-                 for _,grid in self._observation_history.trackers.items()
+                 for _,grid in self._observations_tracker.trackers.items()
                 for _, observation_tracker in grid.items()
                 if isinstance(observation_tracker, ObservationTracker)
                 # check if there is a latest observation
@@ -1002,26 +1014,8 @@ class SimulationAgent(object):
             df.to_parquet(f"{self._results_path}/planner_history.parquet", index=False)
             
             # log observation history
-            data = defaultdict(list)
-            for observation_tracker in self._observation_history.trackers.values():
-                if observation_tracker.n_obs == 0:
-                    # no observations for this grid point
-                    continue                
-                for key, value in observation_tracker.latest_observation.items():
-                    if isinstance(value, list):
-                        data[key].append(value[0])  # assuming single value lists
-                    else:
-                        data[key].append(value)
+            self._observation_history.close()
             
-            df = pd.DataFrame(data)
-            df.to_parquet(f"{self._results_path}/observation_history.parquet", index=False)
-
-            # log performance stats
-            runtime_dir = os.path.join(self._results_path, "runtime")
-            if not os.path.isdir(runtime_dir): os.mkdir(runtime_dir)
-
-            # TODO log state history 
-
         except Exception as e:
             print(f'AGENT TEARDOWN ERROR: {e}')
             raise e
