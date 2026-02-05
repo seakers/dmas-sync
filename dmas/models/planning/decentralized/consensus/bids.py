@@ -932,9 +932,6 @@ class Bid:
         assert t_comp >= 0, f'`t_comp` must be non-negative, got `{t_comp}`'
         
         # create a shallow copy of this bid
-        # cls = self.__class__
-        # new_bid = cls.__new__(cls)
-        # new_bid.__dict__ = self.__dict__.copy()
         new_bid = self.__clone_shallow()
         
         # check comparison rules

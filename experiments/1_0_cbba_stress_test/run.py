@@ -268,10 +268,10 @@ def _is_simulation_complete(results_dir: str) -> bool:
 
     # check if each agent directory has more than 2 files (to account for .gitignore)
     for d in entries:
-        if d.endswith(".csv"):
-            continue
         agent_dir = os.path.join(results_dir, d)
-        if (not os.path.isdir(agent_dir)) or (len(os.listdir(agent_dir)) <= 2):
+        if not os.path.isdir(agent_dir):
+            continue
+        if len(os.listdir(agent_dir)) <= 2:
             return False
 
     # if all checks passed, consider simulation complete

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 
+import numpy as np
+
 
 # ------------------------------------------------------------------
 # Config object passed to the simulator
@@ -86,7 +88,7 @@ def parse_args() -> SimulationConfig:
     parser.add_argument("-i", "--trial-start", type=int, default=0,
                         help="Lower trial index bound")
 
-    parser.add_argument("-j", "--trial-end", type=int, default=None,
+    parser.add_argument("-j", "--trial-end", type=int, default=np.Inf,
                         help="Upper trial index bound")
 
     parser.add_argument("--trial-range",
