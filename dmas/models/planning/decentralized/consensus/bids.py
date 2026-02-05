@@ -919,7 +919,7 @@ class Bid:
         # update timestamp for this bidder
         self.t_stamps[self.winner] = t_update
 
-    @bid_comparison_input_checks
+    # @bid_comparison_input_checks
     def update(self, other : Union['Bid', dict], t_comp : float) -> 'Bid':
         """ 
         Compares this bid with another and returns a new bid instance with the appropriate updated information.
