@@ -437,6 +437,9 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         }
 
     except Exception as e:
+        if sim_cfg.reduced:
+            raise e  # re-raise for debugging in reduced mode
+
         return {
             "scenario_id": scenario_id,
             "status": "error",

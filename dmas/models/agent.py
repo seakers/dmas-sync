@@ -1,4 +1,5 @@
 from collections import defaultdict
+import copy
 import logging
 import os
 from typing import Dict, List, Tuple
@@ -372,7 +373,8 @@ class SimulationAgent(object):
         external_states.clear()
         external_action_statuses.clear()
         misc_messages.clear()
-        # del state # TODO check if needed
+        # TODO check if needed
+        del curr_state 
         # del action
 
         # TODO clear any temporary variables if needed
@@ -823,6 +825,7 @@ class SimulationAgent(object):
                                 state : SimulationAgentState,
                                 latest_plan_only : bool = True
                                 ) -> List[dict]:
+        raise NotImplementedError("Error, get_latest_observations() is not yet implemented.")
         return [observation_tracker.latest_observation
                  for _,grid in self._observation_history.trackers.items()
                 for _, observation_tracker in grid.items()
@@ -843,6 +846,7 @@ class SimulationAgent(object):
         """ Update the agent state based on the next actions to perform. """
         # create copy of current state
         next_state : SimulationAgentState = curr_state.copy()
+        # next_state : SimulationAgentState = copy.copy(curr_state)
         
         assert abs(next_state.get_time() - t) < 1e-6, \
             "State time must match the provided time."
@@ -1011,6 +1015,9 @@ class SimulationAgent(object):
             
             df = pd.DataFrame(data)
             df.to_parquet(f"{self._results_path}/observation_history.parquet", index=False)
+
+            # delete observation history to save memory
+            del self._observation_history
 
             # log performance stats
             runtime_dir = os.path.join(self._results_path, "runtime")

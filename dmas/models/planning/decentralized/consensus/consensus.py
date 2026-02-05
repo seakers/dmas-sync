@@ -1842,6 +1842,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # generate bid messages to share bids in results
             compiled_bid_msgs = [
                 MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
+                # MeasurementBidMessage(state.agent_name, state.agent_name, bid)
                 for task,bids in self.results.items()
                 if isinstance(task, EventObservationTask)  # only share bids for event-driven tasks
                 for bid in bids
@@ -1858,7 +1859,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # compile results message containing all bid messages
             compiled_results_msg = BusMessage(state.agent_name, 
                                               state.agent_name, 
-                                              [bid_msg.to_dict() for bid_msg in compiled_bid_msgs])
+                                            #   [bid_msg.to_dict() for bid_msg in compiled_bid_msgs]
+                                              [bid_msg for bid_msg in compiled_bid_msgs]
+                                            )
             compiled_results_msg_dict = compiled_results_msg.to_dict()
             
             # initialize search for broadcast times during access opportunities

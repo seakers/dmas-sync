@@ -1,6 +1,7 @@
 
 from datetime import timedelta
 from enum import Enum
+import gc
 import json
 import logging
 import os
@@ -39,7 +40,7 @@ from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
 from dmas.utils.processing import ResultsProcessor
-from dmas.utils.tools import SimulationRoles
+from dmas.utils.tools import MessageTracker, SimulationRoles
 
 class SimulationClockType(Enum):
     # TODO add support for fixed time-step simulations
@@ -131,6 +132,10 @@ class Simulation:
                 for agent in self._agents
             }
 
+            # initialize message tracker
+            # tracker : MessageTracker  = MessageTracker()
+            tracker : MessageTracker = None
+
             # execute simulation loop
             with tqdm(total=tf, 
                       desc=f'{self._name}: Simulating', 
@@ -146,7 +151,7 @@ class Simulation:
 
                     # update simulation states
                     agent_observations : Dict[str, Tuple] \
-                        = self._environment.step(state_action_pairs, t)
+                        = self._environment.step(state_action_pairs, t, tracker)
 
                     # validate that all agents' states were updated
                     assert all(agent.name in agent_observations for agent in self._agents), \
@@ -180,6 +185,19 @@ class Simulation:
 
                     # reset agent percepts for next cycle
                     agent_observations.clear()
+                    
+                    # force garbage collection
+                    gc.collect()
+
+                    # debug tracking
+                    if tracker is not None:
+                        n_alive_messages = tracker.alive()
+                        if n_alive_messages> 0:
+                            print("alive messages:", n_alive_messages)
+                            for msg in list(tracker._refs):
+                                # print(f"Message ID: {repr(msg)}, Reffers: {tracker._reffers[id(msg)]}")
+                                print(f"Message ID: {repr(msg)}")
+                            x= 1
 
             # mark simulation as executed
             self.__executed = True

@@ -1,4 +1,5 @@
 import copy
+import gc
 import logging
 import os
 import time
@@ -19,7 +20,7 @@ from execsatm.utils import Interval
 from dmas.models.actions import *
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import SimulationAgentState, SimulationAgentTypes
-from dmas.utils.tools import SimulationRoles
+from dmas.utils.tools import MessageTracker, SimulationRoles
 
 
 class SimulationEnvironment(object):
@@ -129,7 +130,8 @@ class SimulationEnvironment(object):
     
     def step(self, 
              state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
-             t_curr : float
+             t_curr : float,
+             tracker : MessageTracker = None
             ) -> Dict[str, List]:
         """Updates agent states based on the provided actions at time `t` """
         # update internal time and state
@@ -157,11 +159,13 @@ class SimulationEnvironment(object):
             action_statuses[agent_name] = updated_action_status
             
             # store outgoing messages depending on current connectivity
-            for msg in msgs_out:
-                # determine recipients based on current connectivity
-                for receiver in self._current_connectivity_map[agent_name]:
-                    # add message to receiver's inbox
-                    msgs[receiver].append(msg)                  
+            for receiver in self._current_connectivity_map[agent_name]:
+                msgs[receiver].extend(msgs_out)
+
+            # track message if tracker provided
+            if tracker is not None:
+                for msg in msgs_out:
+                    tracker.track(msg)
 
             # store observations
             if agent_observations:
@@ -246,6 +250,9 @@ class SimulationEnvironment(object):
 
         # mark state status as messaging
         state.update(t_curr, status=SimulationAgentState.MESSAGING)
+
+        # TODO save broadcast to history
+        self._broadcasts_history.append(msg_out.to_dict())
 
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []

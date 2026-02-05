@@ -150,10 +150,24 @@ class Bid:
         """
         Crates a dictionary containing all information contained in this bid
         """
-        out = dict(self.__dict__)
-        out['task'] = self.task.to_dict()   
-        out['t_stamps'] = {key : val for key, val in self.t_stamps.items()}
-        return out            
+        # out = dict(self.__dict__)
+        # out['task'] = self.task.to_dict()   
+        # out['t_stamps'] = {key : val for key, val in self.t_stamps.items()}
+        # return out            
+        return {
+            'task' : self.task.to_dict(),
+            'n_obs' : self.n_obs,
+            'owner' : self.owner,
+            'owner_bid' : self.owner_bid,
+            'winner' : self.winner,
+            'winning_bid' : self.winning_bid,
+            't_img' : self.t_img,
+            't_bid' : self.t_bid,
+            # 't_stamps' : {key : val for key, val in self.t_stamps.items()},
+            't_stamps' : dict(self.t_stamps),
+            'main_measurement' : self.main_measurement,
+            'performed' : self.performed
+        }
 
     @classmethod
     def from_dict(cls, bid_dict: dict) -> 'Bid':
