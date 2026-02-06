@@ -44,7 +44,14 @@
 ## Running Trials
 
 ### Commandline Arguments and Parameters
-- `-n` or `--name` : (`str`) filename of `.csv` file outlining simulation trial cases to be ran,
+#### Trial Inputs
+ - `t` or `--trials` : (`str`) filename of the `.csv` file outline the simulation trial cases to be ran
+ - `i` or `--trial-start` : (`int`) lower bound of simulation trial indeces to be run (inclusive)
+ - `j` or `--trial-end` : (`int`) upper bound of simulation trial indeces to be run (non-inclusive).
+
+ - `--trial-range` followed by `START:END` : Trial range in format START:END (overrides start/end).
+
+<!-- - `-n` or `--name` : (`str`) filename of `.csv` file outlining simulation trial cases to be ran,
 - `-l` or `--lower-bound` : (`int`) lower bound of simulation trial indeces to be run (inclusive).
 - `-u` or `--upper-bound` : (`int`) upper bound of simulation trial indeces to be run (non-inclusive).
 - `-p` or `--propagate` : (`flag`) only performs orbit propagation of trial cases, does not simulate satellite mission. 
@@ -52,7 +59,7 @@
 - `-e` or `--evaluate` : (`flag`) runs processing of simulation results and overwrites existing results. If not flagged, trials with existing results will not be reevaluated.
 - `-d` or `--debug` : (`flag`) toggles the use of reduced complexity simulation trials for debugging purposes.
 - `-r` or `--runtime-profiling` : (`flag`) toggles the profiling of each trial's runtime. Prints results to `results/[NAME_OF_SCENARIO]/profile.out`
-    > Visualization of runtime profile requires the `snakeviz` library. Use command `snakeviz results/[NAME_OF_SCENARIO]/profile.out` to open results in default browser
+    > Visualization of runtime profile requires the `snakeviz` library. Use command `snakeviz results/[NAME_OF_SCENARIO]/profile.out` to open results in default browser -->
 
 
 ### Trial Simulation Commands
@@ -177,7 +184,7 @@ sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_propagate_2.slurm
 ### Monitor Batch Status
 Enlist all current jobs and their status.
 ```
-squeue -u $USER          
+squeue -u $USER
 ```
 
 Check status of a job with `<jobid>`

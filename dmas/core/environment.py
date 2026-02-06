@@ -412,7 +412,7 @@ class SimulationEnvironment(object):
                 for s,e in tqdm(zip(starts, ends), 
                                 desc=f"{SimulationRoles.ENVIRONMENT.value}-Merging observation data for instrument {instrument_name}...", 
                                 unit=' obs',
-                                disable=len(starts)<10,
+                                disable=len(starts)<10 or not self._printouts,
                                 leave=False):
                     idx = order[s:e]  # row indices for this group
 
@@ -541,7 +541,9 @@ class SimulationEnvironment(object):
             
             for msg_dict in tqdm(self._observation_history, 
                             desc='Compiling observations results', 
-                            leave=False):
+                            leave=False,
+                            disable=len(self._observation_history)<10 or not self._printouts
+                            ):
                 msg = ObservationResultsMessage(**msg_dict)
                 observation_data : List[dict] = msg.observation_data
                 observer = msg.dst
