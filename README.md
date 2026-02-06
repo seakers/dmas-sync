@@ -29,8 +29,12 @@ monitoring system.
 ├───experiments (folder with the input and results files for simulations experiments)
 ├───tests (unit tests)
 └───dmas (folder with main source code)
-    ├───core
-    └───network
+    ├───core (main simulation wrapper for synchronous execution)
+    ├───network (distributed simulation wrapper for asynchronous execution UNDER DEV)
+    ├───utils (useful resources for simulation modeling and execution)
+    └───models (agent modeling resources)
+        ├───planning (planning-based autonomous decision-making tools for agents)
+        └───science (onboard data processing modeling tools)
 ```
 <!-- 
     ├───nodes (`dmas` simulation nodes)
