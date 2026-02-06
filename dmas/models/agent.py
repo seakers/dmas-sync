@@ -1024,6 +1024,5 @@ class SimulationAgent(object):
             # log state history
             self._state_history.close()
 
-
         except Exception as e:
             raise e        

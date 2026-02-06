@@ -219,6 +219,21 @@ class DataSink:
             #               RuntimeWarning)
             pass
 
+    def __len__(self):
+        return len(self._rows)
+    
+    def __iter__(self):
+        for row in self._rows:
+            yield row
+
+    def empty(self) -> bool:
+        """ Returns True if the sink has no buffered data, False otherwise."""
+        return len(self._rows) == 0 and self._flush_count == 0
+
+    def get_flush_count(self) -> int:
+        """ Returns the number of times the sink has been flushed to disk."""
+        return self._flush_count
+
 
 TargetKey = Tuple[int, int]  # (grid_idx, gp_idx)
 

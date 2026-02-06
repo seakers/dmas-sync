@@ -10,7 +10,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from dmas.core.messages import ObservationResultsMessage, SimulationMessage, message_from_dict
+from dmas.core.messages import BusMessage, ObservationResultsMessage, SimulationMessage, message_from_dict
+from dmas.models.trackers import DataSink
 from dmas.utils.orbitdata import OrbitData
 
 from execsatm.tasks import EventObservationTask
@@ -94,9 +95,11 @@ class SimulationEnvironment(object):
         self._agent_state_update_times = {}
         self._task_reqs : list[dict] = list()        
 
-        self._observation_history = []
-        self._broadcasts_history = []
+        # initialize data sinks for historical data
+        self._observation_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="measurements")
+        self._broadcasts_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="broadcasts")
 
+        # initialize current connectivity to connectivity at t=0.0 
         self._current_connectivity_interval, self._current_connectivity_matrix, \
             self._current_connectivity_components, self._current_connectivity_map \
             = self.__get_agent_connectivity(t=0.0) # serve as references for connectivity at current time
@@ -245,8 +248,22 @@ class SimulationEnvironment(object):
         # mark state status as messaging
         state.update(t_curr, status=SimulationAgentState.MESSAGING)
 
-        # TODO save broadcast to history
-        # self._broadcasts_history.append(msg_out.to_dict())
+        # save broadcast to history 
+        #   (if message is a BusMessage, do not save message payload; 
+        #       otherwise save message dict directly)
+        if isinstance(msg_out, BusMessage):
+            # convert to dict before saving
+            msg_dict : dict = msg_out.to_dict()
+
+            # remove additional messages to avoid memory issues; only save main message info
+            msg_dict.pop('msgs', None)
+
+            # save main message info to history
+            self._broadcasts_history.append(msg_dict)
+
+        else:
+            # save broadcast to history directly as dict
+            self._broadcasts_history.append(msg_out.to_dict())
 
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []
@@ -279,26 +296,10 @@ class SimulationEnvironment(object):
         # save observation to history
         resp = action.req.copy()
         resp['observation_data'] = observation_data
-        self._observation_history.append(resp)    
+        self._observation_history.extend(observation_data)    
 
         # return packaged results
         return state, ActionStatuses.COMPLETED.value, [], [obs_data]
-                
-        # own_observations : list[tuple] = [(msg.instrument['name'], msg.observation_data) 
-        #                                   for msg in incoming_messages 
-        #                                   if isinstance(msg, ObservationResultsMessage)
-        #                                   and isinstance(msg.instrument, dict)]
-
-        # simulate observation data collection
-        # obs_data : dict = {
-        #     'observation': f"Data collected by {state.agent_name} at time {t_curr}[s]"
-        # }
-
-        # # mark state status as measuring
-        # state.update(t_curr, status=SimulationAgentState.MEASURING)
-
-        # # log observation event
-        # return state, ActionStatuses.COMPLETED.value, [], obs_data
     
     def __perform_wait(self, 
                      state : SimulationAgentState,
@@ -475,18 +476,31 @@ class SimulationEnvironment(object):
             self.log('Compiling results...',level=logging.WARNING)
 
             # compile observations performed
-            observations_performed : pd.DataFrame = self.compile_observations()
+            self._observation_history.close()
+            if self._observation_history.empty():
+                self.log("No observations were performed during the simulation.", level=logging.WARNING)
+                # create empty dataframe with appropriate columns
+                observations_performed = pd.DataFrame(data=[])
+                observations_performed.to_parquet(f"{self._results_path}/measurements.parquet", index=False)
 
-            # log and save results
-            # self.log(f"MEASUREMENTS RECEIVED:\n{len(observations_performed.values)}\n\n", level=logging.WARNING)
-            observations_performed.to_parquet(f"{self._results_path}/measurements.parquet", index=False)
+            # observations_performed : pd.DataFrame = self.compile_observations()
+
+            # # log and save results
+            # # self.log(f"MEASUREMENTS RECEIVED:\n{len(observations_performed.values)}\n\n", level=logging.WARNING)
+            # observations_performed.to_parquet(f"{self._results_path}/measurements.parquet", index=False)
             
             # commpile list of broadcasts performed
-            broadcasts_performed : pd.DataFrame = self.compile_broadcasts()
+            self._broadcasts_history.close()
+            if self._broadcasts_history.empty():
+                self.log("No broadcasts were performed during the simulation.", level=logging.WARNING)
+                # create empty dataframe with appropriate columns
+                broadcasts_performed = pd.DataFrame(data=[])
+                broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
+            # broadcasts_performed : pd.DataFrame = self.compile_broadcasts()
 
-            # log and save results
-            # self.log(f"BROADCASTS RECEIVED:\n{len(broadcasts_performed.values)}\n\n", level=logging.WARNING)
-            broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
+            # # log and save results
+            # # self.log(f"BROADCASTS RECEIVED:\n{len(broadcasts_performed.values)}\n\n", level=logging.WARNING)
+            # broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
 
             # compile list of measurement requests 
             measurement_reqs : pd.DataFrame = self.compile_requests()
@@ -504,19 +518,15 @@ class SimulationEnvironment(object):
             raise e       
         
         finally:
-            # delete observation history to save memory
-            del self._observation_history
+            # # delete observation history to save memory
+            # del self._observation_history
 
-            # delete broadcasts history to save memory
-            del self._broadcasts_history
+            # # delete broadcasts history to save memory
+            # del self._broadcasts_history
 
-            # delete requests history to save memory
-            del self._task_reqs
-
-    async def teardown(self) -> None:
-        # print final time
-        print('\n')
-        self.log(f'successfully shutdown', level=logging.WARNING)
+            # # delete requests history to save memory
+            # del self._task_reqs
+            pass
                     
     def compile_observations(self) -> pd.DataFrame:
         try:

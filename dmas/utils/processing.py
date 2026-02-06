@@ -204,8 +204,6 @@ class ResultsProcessor:
         
         # compile broadcast history
         agent_broadcasts_df = pd.read_parquet((os.path.join(environment_results_path, 'broadcasts.parquet')))
-        # IDEA remove duplicates? 
-        # agent_broadcasts_df = agent_broadcasts_df.drop_duplicates().reset_index(drop=True)
 
         # return collected results
         return compiled_orbitdata, agent_missions, observations_performed, events, events_detected, task_reqs, tasks_known, agent_broadcasts_df
@@ -428,8 +426,8 @@ class ResultsProcessor:
                     
                     # Messaging Statistics
                     ['Total Messages Broadcasted', len(agent_broadcasts_df)],
-                    ['P(Message Broadcasted | Bid Message )', len(agent_broadcasts_df[agent_broadcasts_df['message type']=='BUS']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
-                    ['P(Message Broadcasted | Measurement Request Message )', len(agent_broadcasts_df[agent_broadcasts_df['message type']=='MEASUREMENT_REQ']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
+                    ['P(Message Broadcasted | Bid Message )', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='BUS']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
+                    ['P(Message Broadcasted | Measurement Request Message )', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='MEASUREMENT_REQ']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
 
                     # TODO Utility Statistics 
 
@@ -874,26 +872,40 @@ class ResultsProcessor:
             matching_requests = sorted([task_req for task_req in task_reqs if task_req.task.event == event], 
                                         key= lambda a : a.t_req)
 
-        # find observations that overlooked a given event's location
-        matching_observations = [   (observer, t_obs_start, t_obs_end, img_lat, img_lon, instrument)
-                                    # for observer,gp_idx_img,_,img_lat,img_lon,*__,grid_idx_img,instrument,agent_name,___,t_obs_start,t_obs_end in observations_per_gp[(event_lat, event_lon)].values
-                                    for gp_idx_img,agent_name,grid_idx_img,_,_,_,instrument,img_lat,img_lon,_,_,observer,_,_,t_obs_end,t_obs_start,_ in observations_per_gp[(event_lat, event_lon)].values
-                                                                        
-                                    # check if observation time overlaps with event time
-                                    if Interval(t_obs_start, t_obs_end).overlaps(event.availability)
-                                    # check if instrument matches capability requirements
-                                    and instrument.lower() in instrument_capability_reqs[agent_name]
-                                    
-                                    # observation location sanity checks
-                                    and grid_idx_img == event_grid_idx
-                                    and gp_idx_img == event_gp_idx
-                                    and abs(img_lat - event_lat) <= 1e-3 
-                                    and abs(img_lon - event_lon) <= 1e-3
-                                ] if (event_lat, event_lon) in observations_per_gp else []
-        matching_observations.sort(key= lambda a : a[1])  # sort by observation start time
+        # get event observations for this event's location
+        if (event_lat, event_lon) not in observations_per_gp:
+            # no observations were performed at this event's location
+            # create empty dataframe with expected columns for consistency
+            matching_observations = pd.DataFrame(columns=["t_start", "t_end", "instrument", "agent name"])
+        else:
+            matching_observations : pd.DataFrame = observations_per_gp[(event_lat, event_lon)]
+
+        # find observations that match the event time
+        time_mask = (
+            ((event.availability.left <= matching_observations["t_start"]) &
+            (matching_observations["t_start"] <= event.availability.right))
+            |
+            ((event.availability.left <= matching_observations["t_end"]) &
+            (matching_observations["t_end"] <= event.availability.right))
+            |
+            ((matching_observations["t_start"] <= event.availability.left) &
+            (event.availability.right <= matching_observations["t_end"]))
+        )
+        matching_observations = matching_observations[time_mask]
+
+        # find observations that match the event's instrument capability requirements
+        inst_lower = matching_observations["instrument"].str.lower()
+        agents = matching_observations["agent name"]
+
+        instrument_mask = [
+            inst in instrument_capability_reqs.get(agent, [])
+            for inst, agent in zip(inst_lower, agents)
+        ]
+
+        matching_observations = matching_observations[instrument_mask]
 
         # return classified data
-        return access_intervals, matching_detections, matching_requests, matching_observations
+        return access_intervals, matching_detections, matching_requests, list(matching_observations.values)
 
     @staticmethod
     def __count_observations(orbitdata : dict, 
@@ -1285,18 +1297,16 @@ class ResultsProcessor:
         for _,observations in observations_per_gp.items():
             prev_observation = None
 
-            for observation in observations.values:
+            for _,observation in observations.iterrows():
                 if prev_observation is None:
                     prev_observation = observation
                     continue
 
                 # get observation times
-                *_,t_start,_ = observation
-                *_,t_prev_end,__,___ = prev_observation
+                t_start = observation['t_start']
+                t_prev_end = prev_observation['t_end']
 
                 # calculate revisit
-                # t : Interval = Interval(t_start, t_end)
-                # t_prev : Interval = Interval(t_prev_start, t_prev_end)
                 t_reobservation = t_start - t_prev_end
 
                 # add to list
