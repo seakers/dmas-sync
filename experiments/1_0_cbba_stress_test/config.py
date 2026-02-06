@@ -74,7 +74,7 @@ class RunConfig:
 # Argument Parsing
 # ------------------------------------------------------------------
 
-def parse_args() -> SimulationConfig:
+def parse_study_args() -> SimulationConfig:
     parser = argparse.ArgumentParser(
         description="Run batch satellite mission simulations"
     )

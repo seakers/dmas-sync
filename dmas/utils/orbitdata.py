@@ -1013,20 +1013,18 @@ class OrbitData:
 
         if not changes_to_scenario and not overwrite:
             # if propagation data files already exist, load results
-            if printouts:
-                tqdm.write(' - Existing orbit data found and matches scenario. Loading existing data...')
+            if printouts: tqdm.write(' - Existing orbit data found and matches scenario. Loading existing data...')
+            
         else:
             # if propagation data files do not exist, propagate and then load results
-            if os.path.exists(data_dir):
-                if printouts:
+            if printouts:
+                if os.path.exists(data_dir):
                     tqdm.write(' - Existing orbit data does not match scenario.')
-            else:
-                if printouts:
+                else:
                     tqdm.write(' - Orbit data not found.')
 
             # clear files if they exist
-            if printouts:
-                tqdm.write(' - Clearing \'orbitdata\' directory...')    
+            if printouts: tqdm.write(' - Clearing \'orbitdata\' directory...')    
             if os.path.exists(data_dir):
                 for f in os.listdir(data_dir):
                     f_dir = os.path.join(data_dir, f)
@@ -1090,10 +1088,10 @@ class OrbitData:
                 scenario_specs["settings"]["outDir"] = scenario_dir + '/orbit_data/'
 
             # propagate data and save to orbit data directory
-            print("Propagating orbits...")
-            mission : Mission = Mission.from_json(scenario_specs)  
-            mission.execute()                
-            print("Propagation done!")
+            if printouts: tqdm.write("Propagating orbits...")
+            mission : Mission = Mission.from_json(scenario_specs, printouts=printouts)  
+            mission.execute(printouts=printouts)                
+            if printouts: tqdm.write("Propagation done!")
 
         # update mission duration if needed
         orbitdata_filename = os.path.join(data_dir, 'MissionSpecs.json')

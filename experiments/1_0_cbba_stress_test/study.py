@@ -9,7 +9,7 @@ from pyparsing import Dict
 
 from dmas.utils.tools import LEVELS, print_scenario_banner
 
-from config import SimulationConfig, RunConfig, parse_args
+from config import SimulationConfig, RunConfig, parse_study_args
 from run import serial_run_trials, parallel_run_trials
 
 # ------------------------------------------------------------------
@@ -136,7 +136,7 @@ def main_study(sim_cfg: SimulationConfig) -> List[Dict]:
 if __name__ == "__main__":
     
     # parse args
-    config = parse_args()
+    config = parse_study_args()
 
     # run study
     main_study(config)

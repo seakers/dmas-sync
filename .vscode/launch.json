@@ -262,7 +262,8 @@
                 "--profile-cpu",
                 "--profile-mem",
                 "--single-thread",
-                "--force-simulate",
+                "--only-precompute",
+                // "--force-simulate",
                 "--quiet",
             ]
         },
