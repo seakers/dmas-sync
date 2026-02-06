@@ -41,7 +41,7 @@ class OrbitData:
                  ground_operator_link_data : Dict[str, pd.DataFrame],
                  gs_access_data : pd.DataFrame, 
                  gp_access_data : pd.DataFrame, 
-                 grid_data : list,
+                 grid_data : List[pd.DataFrame],
                  printouts : bool = True
                 ):
         # name of agent being represented by this object
@@ -73,65 +73,26 @@ class OrbitData:
         self.ground_operator_links : Dict[str, IntervalData] = {network_name : IntervalData.from_dataframe(ground_operator_link_data[network_name], self.time_step, f'{network_name}-gsn_access', printouts) 
                                                                 for network_name in ground_operator_link_data.keys()}
         
-        # inter-agent link access times
-        self.comms_links : Dict[str, IntervalData] = {agent_name : IntervalData.from_dataframe(satellite_link_data[agent_name], self.time_step, f"{agent_name.lower()}-comms_link", printouts)
-                                                     for agent_name in satellite_link_data.keys()}
-        self.comms_links.update({network_name : IntervalData.from_dataframe(ground_operator_link_data[network_name], self.time_step, f'{network_name}-comms_link', printouts)
-                                for network_name in ground_operator_link_data.keys()})
+        # compile inter-agent link access times
+        self.comms_links : Dict[str, IntervalData] = {
+            satellite_name : sat_links for satellite_name, sat_links in self.satellite_links.items()
+        }
+        self.comms_links.update({
+            network_name : gop_links for network_name, gop_links in self.ground_operator_links.items()
+        })
 
         # access times to ground stations 
         self.ground_station_links : IntervalData = IntervalData.from_dataframe(gs_access_data, self.time_step, 'gs-access', printouts)
 
         # ground point access times
         self.gp_access_data : TimeIndexedData = TimeIndexedData.from_dataframe(gp_access_data, self.time_step, 'gp-access', printouts)
+        
         # grid information
         assert isinstance(grid_data, list) and all([isinstance(df, pd.DataFrame) for df in grid_data]), 'grid data must be a list of pandas DataFrames'
-        self.grid_data : list[pd.DataFrame] = grid_data
-    
-    # def get_epoc_in_datetime(self, delta_ut1=0.0) -> datetime:
-    #     """
-    #     Converts epoc to a datetime in UTC.
+        # self.grid_data : list[pd.DataFrame] = grid_data
+        self.grid_data_columns = grid_data[0].columns.values if grid_data else None
+        self.grid_data : list[np.ndarray] = [df.to_numpy() for df in grid_data]
         
-    #     Parameters
-    #     ----------
-    #     delta_ut1 : float, optional
-    #         UT1-UTC offset in seconds (default 0.0, but usually provided by IERS).
-        
-    #     Returns
-    #     -------
-    #     datetime
-    #         Corresponding UTC datetime.
-    #     """
-    #     # check epoc type 
-    #     if self.epoc_type == self.JDUT1: # convert JDUT1 to datetime
-    #         JD_UNIX_EPOCH = 2440587.5  # JD of 1970-01-01 00:00:00 UTC
-    #         days_since_unix = self.epoc - JD_UNIX_EPOCH
-    #         seconds_since_unix = days_since_unix * 86400.0 - delta_ut1  # adjust to UTC
-    #         return datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=seconds_since_unix)
-
-    #     else:
-    #         raise NotImplementedError(f"Unsupported epoc type: {self.epoc_type}. Only 'JDUT1' is supported.")
-
-    def copy(self) -> object:
-        return OrbitData(self.agent_name, 
-                         self.gs_network_name,
-                         {'time step': self.time_step, 'epoc type' : self.epoc_type, 'epoc' : self.epoc},
-                         self.eclipse_data,
-                         self.position_data,
-                         self.satellite_links,
-                         self.ground_station_links,
-                         self.gp_access_data,
-                         self.grid_data
-                         )
-    
-    def update_databases(self, t : float) -> None:
-        # exclude outdated data
-        self.eclipse_data.update_expired_values(t)
-        self.position_data.update_expired_values(t)
-        for _, comms_link in self.comms_links.items(): comms_link.update_expired_values(t)
-        for _, isl in self.satellite_links.items(): isl.update_expired_values(t) 
-        self.ground_station_links.update_expired_values(t)
-        self.gp_access_data.update_expired_values(t)
 
     """
     GET NEXT methods
@@ -339,6 +300,8 @@ class OrbitData:
     """
     LOAD FROM PRE-COMPUTED DATA
     """
+    # def from_orbitdata():
+
     def from_directory(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Dict[str, 'OrbitData']:
         """
         Loads orbit data from a directory containig a json file specifying the details of the mission being simulated.
@@ -372,6 +335,7 @@ class OrbitData:
             # return compiled data
             return data
 
+    @staticmethod
     def load(orbitdata_path : str, agent_name : str, simulation_duration : float, printouts : bool = True) -> object:
         """
         Loads agent orbit data from pre-computed csv files in scenario directory
@@ -1250,55 +1214,3 @@ class OrbitData:
     """
     COVERAGE Metrics
     """
-    def calculate_percent_coverage(self) -> float:
-        n_observed = 0
-        n_points = sum([len(grid) for grid in self.grid_data])
-        t_0 = time.perf_counter()
-
-        # for grid in self.grid_data:
-        #     grid : pd.DataFrame
-
-        #     for lat,lon,grid_index,gp_index in grid.values:
-
-        #         accesses = [(t_img,lat,lon,lat_img,lon_img)
-        #                     for t_img, gp_index_img, _, lat_img, lon_img, _, _, _, _, grid_index_img, *_ 
-        #                     in self.gp_access_data.values
-        #                     if abs(lat - lat_img) < 1e-3
-        #                     and abs(lon - lon_img) < 1e-3
-        #                     and gp_index == gp_index_img 
-        #                     and grid_index == grid_index_img]
-                
-        #         if accesses:
-        #             n_observed += 1
-
-        gp_observed = { (lat,lon) 
-                        for grid in self.grid_data
-                        for lat,lon,grid_index,gp_index in grid.values
-                        for _, gp_index_img, _, _, _, _, _, _, _, grid_index_img, *_ in self.gp_access_data.values
-                        if gp_index == gp_index_img 
-                        and grid_index == grid_index_img}
-        n_observed = len(gp_observed)
-        
-        dt = time.perf_counter() - t_0        
-        
-        return n_points, n_observed, float(n_observed) / float(n_points)
-
-"""
-TESTING
-"""
-if __name__ == '__main__':
-    scenario_dir = './scenarios/sim_test/'
-    
-    orbit_data_list = OrbitData.from_directory(scenario_dir)
-
-    # expected val: (grid, point) = 0, 0
-    for agent in orbit_data_list:
-        lat = 1.0
-        lon = 158.0
-        t = 210.5
-
-        grid, point, gp_lat, gp_lon = orbit_data_list[agent].find_gp_index(lat, lon)
-        print(f'({lat}, {lon}) = G{grid}, P{point}, Lat{gp_lat}, Lon{gp_lon}')
-
-        print(orbit_data_list[agent].is_accessing_ground_point(lat, lon, t))
-        break

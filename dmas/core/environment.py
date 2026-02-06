@@ -6,6 +6,7 @@ import time
 from typing import Dict, List, Set, Tuple
 from collections import defaultdict, deque
 
+from scipy.sparse import csr_matrix, triu
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -628,14 +629,17 @@ class SimulationEnvironment(object):
             f.write(f"- Connectivity Level: **{self._connectivity_level}**\n\n")
             f.write(f"- Connectivity Relays Enabled: **{self._connectivity_relays}**\n\n")
 
-            for interval, conn_matrix, components, _ in self.__interval_connectivities:
+            for interval, conn_matrix_sparse, components, component_map in self.__interval_connectivities:
                 f.write('---\n')
                 f.write(f"**Interval:** {interval} [s]\n\n")
                 
+                conn_matrix = conn_matrix_sparse.toarray()
+                agent_names = list(component_map.keys())
+                agent_to_idx = {agent: idx for idx, agent in enumerate(agent_names)}
+
                 # print connectivity matrix
                 f.write("**Connectivity Matrix:**\n\n")
                 ## print table header 
-                agent_names = list(conn_matrix.keys())
                 header = "||" + "  |".join([f"`{name:>5}`" for name in agent_names]) + "|\n"
                 f.write(header)
                 f.write("|-|" + "-|"*len(agent_names) + "\n")
@@ -643,8 +647,11 @@ class SimulationEnvironment(object):
                 ## print matrix rows
                 for sender in agent_names:
                     row = f"|`{sender:>5}`|"
+                    u = agent_to_idx[sender]
                     for receiver in agent_names:
-                        row += f"{conn_matrix[sender][receiver]:>3}|"
+                        v = agent_to_idx[receiver]
+                        status = int(bool(conn_matrix[u][v]) or bool(conn_matrix[v][u]))
+                        row += f"{status:>3}|"
                     f.write(row + "\n")
 
                 f.write("\n**Connected Components:**\n")
@@ -711,9 +718,7 @@ class SimulationEnvironment(object):
         t_start = unique_event_times[0] if unique_event_times else np.Inf
         prev_interval = Interval(np.NINF, t_start, left_open=True, right_open=True)
         connectivity_intervals.insert(0, prev_interval)
-        prev_connectivity_matrix = {sender : {receiver : 0 for receiver in orbitdata.keys()} 
-                             for sender in orbitdata.keys()}
-        
+                
         # group events by interval 
         events_per_interval : Dict[Interval, List[tuple]] \
             = {interval : [] for interval in connectivity_intervals}
@@ -743,6 +748,9 @@ class SimulationEnvironment(object):
         
         # initialize interval-connectivity list
         interval_connectivities : List[tuple] = []
+        agent_to_idx = {agent: idx for idx, agent in enumerate(orbitdata.keys())}
+        idx_to_agent = [agent for agent in agent_to_idx.keys()]
+        prev_connectivity_matrix = np.zeros((len(orbitdata), len(orbitdata)), dtype=int)
         
         # create adjacency matrix per interval
         for interval in tqdm(connectivity_intervals, 
@@ -752,8 +760,9 @@ class SimulationEnvironment(object):
                              disable=not printouts
                             ):
             # copy previous connectivity state
-            interval_connectivity_matrix \
-                = copy.deepcopy(prev_connectivity_matrix)                    
+            # interval_connectivity_matrix \
+            #     = copy.deepcopy(prev_connectivity_matrix)                    
+            interval_connectivity_matrix = prev_connectivity_matrix.copy()
             
             # get connectivity events that occur during the interval
             # interval_events = [ evt for evt in connectivity_events if evt[0] in interval ]
@@ -761,14 +770,16 @@ class SimulationEnvironment(object):
 
             # update connectivity matrix based on events
             for _,sender,receiver,status in interval_events:
-                interval_connectivity_matrix[sender][receiver] = status
+                u_idx = agent_to_idx[sender]
+                v_idx = agent_to_idx[receiver]
+                interval_connectivity_matrix[u_idx][v_idx] = status
 
             # create component list from connectivity matrix
-            interval_components = SimulationEnvironment.__get_connected_components(interval_connectivity_matrix)
+            interval_components = SimulationEnvironment.__get_connected_components(interval_connectivity_matrix, agent_to_idx, idx_to_agent)
 
             # convert components to dict for easier lookup
             interval_component_map : Dict[str, List[str]] \
-                = { sender : [] for sender in interval_connectivity_matrix.keys() }
+                = { sender : [] for sender in idx_to_agent }
 
             for component in interval_components:
                 for sender in component:
@@ -776,8 +787,14 @@ class SimulationEnvironment(object):
                         if sender != receiver:
                             interval_component_map[sender].append(receiver)
 
+            # convert connectivity matrix to sparse matrix
+            sparse_interval_connectivity_matrix = csr_matrix(interval_connectivity_matrix)
+            
+            # save as upper triangle only to save memory, since connectivity is symmetric 
+            sparse_interval_connectivity_matrix = triu(sparse_interval_connectivity_matrix, k=0)   # keep diagonal + upper triangle only
+
             # store interval connectivity data
-            interval_connectivities.append( (interval, interval_connectivity_matrix, 
+            interval_connectivities.append( (interval, sparse_interval_connectivity_matrix, 
                                              interval_components, interval_component_map) )
 
             # set previous connectivity to current for next iteration
@@ -797,7 +814,8 @@ class SimulationEnvironment(object):
         return interval_connectivities
     
     @staticmethod
-    def __get_connected_components(adj: Dict[str, Dict[str, int]]):
+    # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
+    def __get_connected_components(adj: List[List[int]], agent_to_idx : Dict[str, int], idx_to_agent : List[str]) -> List[List[str]]:
         """
         adj: dict[node] -> dict[neighbor] -> weight/int (nonzero means edge exists)
         Assumes undirected (symmetric) or at least that reachability should be treated undirected.
@@ -808,7 +826,7 @@ class SimulationEnvironment(object):
         comps = []
 
         # BFS to find components
-        for start in adj.keys():
+        for start in range(len(adj)):
             # skip visited nodes
             if start in visited: continue
 
@@ -825,10 +843,10 @@ class SimulationEnvironment(object):
                 u = q.popleft()
 
                 # add to component list
-                comp.append(u)
+                comp.append(idx_to_agent[u])
 
                 # iterate neighbors; keep only truthy edges
-                for v, connected in adj[u].items():
+                for v, connected in enumerate(adj[u]):
                     # check if connected to neighbor
                     if not connected: continue
                     
