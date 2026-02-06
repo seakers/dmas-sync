@@ -630,12 +630,15 @@ def parallel_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Si
 
     # run trials in parallel
     try:
+        # print header for serial execution
+        print_scenario_banner("CBBA Stress Test Study - Parallel Execution")
+
         # initialize process pool
         with ProcessPoolExecutor(max_workers=max_workers) as ex:
             
             # submit all trials to executor
             fut_map = {
-                ex.submit(run_one_trial, row, run_cfg, (i % max_workers) + 1): row
+                ex.submit(run_one_trial, row, run_cfg, sim_cfg, (i % max_workers) + 1): row
                 # If you update run_one_trial signature to include sim_cfg:
                 # ex.submit(run_one_trial, row, run_cfg, sim_cfg, (i % max_workers) + 1): row
                 for i, row in enumerate(trial_rows)
@@ -664,6 +667,12 @@ def parallel_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Si
                     else:
                         # log normal status message
                         pbar.write(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+                else:
+                    # print to console if no progress bar (still respect quiet mode)
+                    sid = res.get("scenario_id", "???")
+                    status = res.get("status")
+                    elapsed = res.get("elapsed_s", None)
+                    print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
 
     finally:
         if pbar is not None:
