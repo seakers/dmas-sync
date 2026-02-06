@@ -73,7 +73,9 @@ class NadirPointingPlanner(EarliestAccessPlanner):
 
         for obs in tqdm(observation_opportunities,
                          desc=f'{state.agent_name}-PLANNER: Pre-Scheduling Observations', 
-                         leave=False):
+                         leave=False,
+                         disable=(len(observation_opportunities) < 10) or not self.printouts
+                        ):
             
             # check if agent has the payload to peform observation
             if obs.instrument_name not in payload: continue

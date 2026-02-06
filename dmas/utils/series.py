@@ -30,8 +30,9 @@ class TimeIndexedData(AbstractDataSeries):
                  columns : list,
                  t : list,
                  data : Dict[str, np.ndarray],
-                 bin_size : float = 3600 # in seconds, default 1 hour
-                 ):
+                 bin_size : float = 3600, # in seconds, default 1 hour
+                 printouts : bool = True
+                ):
         """ Stores time-indexed data for fast lookup."""
         
         # validate inputs
@@ -52,7 +53,7 @@ class TimeIndexedData(AbstractDataSeries):
         # group data indices into bins depending on their time for faster lookup
         grouped_indices = [[] for _ in range(self.n_bins)]
         inv_bs = 1.0 / bin_size
-        for i, ti in tqdm(enumerate(t), desc=f'Grouping time-indexed {name} time', unit=' time bins', leave=False):
+        for i, ti in tqdm(enumerate(t), desc=f'Grouping time-indexed {name} time', unit=' time bins', leave=False, disable=not printouts):
             b = int(ti * inv_bs)
             if b >= self.n_bins:
                 b = self.n_bins - 1
@@ -65,7 +66,7 @@ class TimeIndexedData(AbstractDataSeries):
             for col in columns
         }
 
-    def from_dataframe(df : pd.DataFrame, time_step : float, name : str = 'param') -> 'TimeIndexedData':
+    def from_dataframe(df : pd.DataFrame, time_step : float, name : str = 'param', printouts : bool = True) -> 'TimeIndexedData':
         # validate inputs
         assert 'time index' in df.columns or 'time [s]' in df.columns, 'time column not found in dataframe'
         assert time_step > 0.0, 'time step must be greater than 0.0'
@@ -110,7 +111,7 @@ class TimeIndexedData(AbstractDataSeries):
             data.pop('time [s]')
                 
         # return TimeIndexedData object
-        return TimeIndexedData(name, columns, np.array(t), data)
+        return TimeIndexedData(name, columns, np.array(t), data, printouts=printouts)
 
     def lookup_value(self, t : float, columns : list = None) -> dict:
         """
@@ -246,8 +247,9 @@ class IntervalData(AbstractDataSeries):
                  name : str,
                  columns : List[str],
                  data : List[tuple],
-                 bin_size : float = 3600 # in seconds, default 1 hour
-                 ):
+                 bin_size : float = 3600, # in seconds, default 1 hour
+                 printouts : bool = True
+                ):
         """ Stores interval-indexed data for fast lookup."""
 
         # validate inputs
@@ -272,7 +274,7 @@ class IntervalData(AbstractDataSeries):
         self.bin_to_data_indices = [[] for _ in range(self.n_bins)]
 
         # group data indices into bins depending on their interval for faster lookup
-        for interval_idx, (t_start, t_end, *_) in tqdm(enumerate(data), desc=f'Grouping interval {name} data', unit=' time bins', leave=False):
+        for interval_idx, (t_start, t_end, *_) in tqdm(enumerate(data), desc=f'Grouping interval {name} data', unit=' time bins', leave=False, disable=not printouts):
             b0 = max(0, int(t_start // self.bin_size))
             b1 = min(self.n_bins - 1, int(t_end // self.bin_size))
 
@@ -283,10 +285,10 @@ class IntervalData(AbstractDataSeries):
                 self.bin_to_data_indices[b].append(interval_idx)
 
         # sort each bin by start time for early stopping during lookup
-        for ids in tqdm(self.bin_to_data_indices, desc=f'Sorting interval {name} data indices', unit=' time bins', leave=False):
+        for ids in tqdm(self.bin_to_data_indices, desc=f'Sorting interval {name} data indices', unit=' time bins', leave=False, disable=not printouts):
             ids.sort(key=lambda idx: data[idx][0])
 
-    def from_dataframe(df : pd.DataFrame, time_step : float, name : str = 'param') -> 'IntervalData':
+    def from_dataframe(df : pd.DataFrame, time_step : float, name : str = 'param', printouts: bool = True) -> 'IntervalData':
         assert time_step > 0.0, 'time step must be greater than 0.0'
         assert 'start index' in df.columns, 'start index column not found in dataframe'
         assert 'end index' in df.columns, 'end index column not found in dataframe'
@@ -310,7 +312,7 @@ class IntervalData(AbstractDataSeries):
             data = [(t_start, t_end, *row) for t_start,t_end,*row in df.values]
 
         # return IntervalData object
-        return IntervalData(name, columns, data)
+        return IntervalData(name, columns, data, printouts=printouts)
     
     def lookup(self, t : float) -> Tuple:
         """

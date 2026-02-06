@@ -43,7 +43,8 @@ class SimulationEnvironment(object):
                 connectivity_level : str = 'LOS',
                 connectivity_relays : bool = False,
                 level: int = logging.INFO, 
-                logger: logging.Logger = None
+                logger: logging.Logger = None,
+                printouts : bool = True
             ) -> None:
         ...
         # setup results folder:
@@ -57,6 +58,7 @@ class SimulationEnvironment(object):
         self._logger : logging.Logger = logger if logger is not None \
                                             else logging.getLogger(SimulationRoles.ENVIRONMENT.value.lower())
         self._logger.setLevel(level)
+        self._printouts : bool = printouts
 
         # load agent names and classify by type of agent
         self.agents = {}
@@ -85,7 +87,7 @@ class SimulationEnvironment(object):
         # setup agent connectivity
         self._connectivity_level : str = connectivity_level.upper()
         self.__interval_connectivities : List[Tuple[Interval, Dict, List, Dict]] \
-            = SimulationEnvironment.__precompute_connectivity(scenario_orbitdata) # list of (interval, connectivity_matrix, components_list)
+            = SimulationEnvironment.__precompute_connectivity(scenario_orbitdata, printouts) # list of (interval, connectivity_matrix, components_list)
 
         # initialize parameters
         self._connectivity_relays : bool = connectivity_relays
@@ -374,10 +376,11 @@ class SimulationEnvironment(object):
                 mask = np.abs(angles_inst - satellite_off_axis_angle) <= instrument_off_axis_fov
 
                 matching_data = {col: np.asarray(vals)[inst_mask][mask] 
-                                 for col, vals in tqdm(raw_access_data.items(), 
+                                    for col, vals in tqdm(raw_access_data.items(), 
                                                        desc=f"{SimulationRoles.ENVIRONMENT.value}-Filtering access data for instrument {instrument_name}...", 
                                                        leave=False,
-                                                       disable=len(raw_access_data)<10)}
+                                                       disable=len(raw_access_data)<10 or not self._printouts)
+                                }
                 
                 # convert columns to arrays once
                 cols = {k: np.asarray(v) for k, v in matching_data.items()}
@@ -450,6 +453,9 @@ class SimulationEnvironment(object):
         Logs a message to the desired level.
         """
         try:
+            # check if printouts are enabled; if not, skip logging
+            if not self._printouts: return
+
             t = self._t_curr
             t = t if t is None else round(t,3)
 
@@ -671,7 +677,7 @@ class SimulationEnvironment(object):
     ---------------------------
     """
     @staticmethod
-    def __precompute_connectivity(orbitdata : Dict[str, OrbitData]) -> List[tuple]:
+    def __precompute_connectivity(orbitdata : Dict[str, OrbitData], printouts : bool) -> List[tuple]:
         """ 
         Precomputes initial connectivity matrix for all agents 
         
@@ -713,7 +719,9 @@ class SimulationEnvironment(object):
         for evt in tqdm(connectivity_events, 
                         desc='Grouping connectivity events by interval', 
                         unit=' events', 
-                        leave=False):
+                        leave=False,
+                        disable=not printouts
+                    ):
             # group by bisection search, asuuming `connectivity_intervals` is sorted
             low = 0
             high = len(connectivity_intervals) - 1
@@ -738,7 +746,9 @@ class SimulationEnvironment(object):
         for interval in tqdm(connectivity_intervals, 
                              desc='Precomputing agent connectivity intervals', 
                              unit=' intervals', 
-                             leave=False):
+                             leave=False,
+                             disable=not printouts
+                            ):
             # copy previous connectivity state
             interval_connectivity_matrix \
                 = copy.deepcopy(prev_connectivity_matrix)                    
@@ -752,7 +762,7 @@ class SimulationEnvironment(object):
                 interval_connectivity_matrix[sender][receiver] = status
 
             # create component list from connectivity matrix
-            interval_components = SimulationEnvironment.get_connected_components(interval_connectivity_matrix)
+            interval_components = SimulationEnvironment.__get_connected_components(interval_connectivity_matrix)
 
             # convert components to dict for easier lookup
             interval_component_map : Dict[str, List[str]] \
@@ -785,7 +795,7 @@ class SimulationEnvironment(object):
         return interval_connectivities
     
     @staticmethod
-    def get_connected_components(adj: Dict[str, Dict[str, int]]):
+    def __get_connected_components(adj: Dict[str, Dict[str, int]]):
         """
         adj: dict[node] -> dict[neighbor] -> weight/int (nonzero means edge exists)
         Assumes undirected (symmetric) or at least that reachability should be treated undirected.

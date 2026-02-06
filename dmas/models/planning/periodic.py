@@ -35,7 +35,8 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                     period : float = np.Inf,
                     sharing : str = OPPORTUNISTIC,
                     debug : bool = False,
-                    logger: logging.Logger = None
+                    logger: logging.Logger = None,
+                    printouts : bool = True
                 ) -> None:
         """
         ## Preplanner 
@@ -48,7 +49,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         - logger (`logging.Logger`) : debugging logger
         """
         # initialize planner
-        super().__init__(debug, logger)    
+        super().__init__(debug, logger, printouts)    
 
         # validate inputs
         assert isinstance(horizon, (int, float)) and horizon > 0, "Planning horizon must be a positive number."

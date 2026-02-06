@@ -130,7 +130,7 @@ def main_study(sim_cfg: SimulationConfig) -> List[Dict]:
     if sim_cfg.single_thread:
         return serial_run_trials(trials, run_cfg, sim_cfg)
     else:
-        # raise NotImplementedError("Parallel execution is not tested yet in this version.")
+        raise NotImplementedError("Parallel execution is not tested yet in this version.")
         return parallel_run_trials(trials, run_cfg, sim_cfg)
 
 if __name__ == "__main__":

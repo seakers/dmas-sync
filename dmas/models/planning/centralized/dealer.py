@@ -36,8 +36,9 @@ class DealerPlanner(AbstractPeriodicPlanner):
                  period = np.Inf, 
                  sharing = AbstractPeriodicPlanner.OPPORTUNISTIC,
                  debug = False, 
-                 logger = None):
-        super().__init__(horizon, period, sharing, debug, logger)
+                 logger = None,
+                 printouts : bool = True):
+        super().__init__(horizon, period, sharing, debug, logger, printouts)
 
         # check parameters
         assert isinstance(client_orbitdata, dict), "Clients must be a dictionary mapping agent names to OrbitData instances."

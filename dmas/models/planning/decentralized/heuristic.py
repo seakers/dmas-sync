@@ -57,7 +57,9 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
 
         for obs_opp in tqdm(sorted_observation_opportunities,
                          desc=f'{state.agent_name}-PLANNER: Pre-Scheduling Observations', 
-                         leave=False):
+                         leave=False,
+                         disable=(len(sorted_observation_opportunities) < 10) or not self._printouts
+                        ):
             
             # check if agent has the payload to peform observation
             if obs_opp.instrument_name not in payload: continue
@@ -190,8 +192,9 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
         heuristic_vals = [(obs, self._calc_heuristic(obs, specs, cross_track_fovs, orbitdata, mission, observation_history)) 
                           for obs in tqdm(observation_opportunities, 
                                            desc=f"{state.agent_name}-PREPLANNER: Calculating heuristic values", 
-                                           leave=False)
-                            ]
+                                           leave=False,
+                                           disable=(len(observation_opportunities) < 10) or not self._printouts
+                                        )]
                 
         # sort observations by heuristic value
         sorted_data = sorted(heuristic_vals, key=lambda x: x[1])

@@ -58,7 +58,8 @@ class Simulation:
                  environment : SimulationEnvironment,
                  agents : List[SimulationAgent],
                  level : int,
-                 time_step : float = None
+                 time_step : float = None,
+                 printouts : bool = True
             ) -> None:
         """ 
         Initializes simulation instance 
@@ -101,6 +102,7 @@ class Simulation:
             "Agents must be a list of SimulationAgent objects."
         assert isinstance(level, int), "Logging level must be an integer."
         if time_step is not None: raise NotImplementedError('simulations with fixed time-step not yet implemented.')
+        assert isinstance(printouts, bool), "Printouts flag must be a boolean."
         
         # set simulation attributes
         self._name : str = name
@@ -112,6 +114,7 @@ class Simulation:
         self._environment : SimulationEnvironment = environment
         self._agents : list[SimulationAgent] = agents
         self._level = level
+        self._printouts : bool = printouts
 
         # initialize execution flag
         self.__executed : bool = False
@@ -139,7 +142,8 @@ class Simulation:
                       mininterval=0.5, 
                       unit=' s', 
                       position=pbar_pos,
-                      file=sys.stderr
+                      file=sys.stderr,
+                      disable=not self._printouts
                     ) as pbar:
                 
                 # event-driven simulation loop
@@ -340,7 +344,7 @@ class Simulation:
 
         # precompute orbit data
         orbitdata_dir = OrbitData.precompute(d, printouts=printouts) if spacecraft_dict is not None else None
-        simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, scenario_duration) if orbitdata_dir is not None else {}
+        simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, scenario_duration, printouts) if orbitdata_dir is not None else {}
         
         # load missions
         simulation_missions : Dict[str, Mission] = Simulation.load_missions(scenario_dict)
@@ -374,7 +378,8 @@ class Simulation:
                                                             results_path,
                                                             orbitdata_dir,
                                                             level,
-                                                            logger)
+                                                            logger,
+                                                            printouts)
 
                 # add to list of agents
                 agents.append(agent)
@@ -389,7 +394,8 @@ class Simulation:
                                                                  results_path,
                                                                  orbitdata_dir,
                                                                  level,
-                                                                 logger)
+                                                                 logger,
+                                                                 printouts)
                 
                 # add to list of agents
                 agents.append(agent)
@@ -411,7 +417,8 @@ class Simulation:
                                             connectivity_level,
                                             relay_capabilities,
                                             level,
-                                            logger)
+                                            logger,
+                                            printouts=printouts)
             
         # return initialized mission
         return Simulation(scenario_name,
@@ -422,7 +429,8 @@ class Simulation:
                           events,
                           environment,
                           agents,
-                          level)
+                          level,
+                          printouts=printouts)
 
     @staticmethod
     def __setup_results_directory(scenario_path : str, scenario_name : str, agent_names : List[str], overwrite : bool = True) -> str:
@@ -530,7 +538,7 @@ class Simulation:
                           total=len(events_df), 
                           leave=False, 
                           mininterval=0.5,
-                          disable=len(events_df) < 10,
+                          disable=len(events_df) < 10 or not printouts,
                           file=sys.stderr,
                         ):
             # convert event to GeophysicalEvent
@@ -565,6 +573,7 @@ class Simulation:
                       orbitdata_dir : str,
                       level : int,
                       logger : logging.Logger,
+                      printouts : bool
                     ) -> SimulationAgent:
         """ creates a simulation agent from dictionary """
         
@@ -601,7 +610,9 @@ class Simulation:
                                          agent_mission, 
                                          simulation_missions, 
                                          simulation_orbitdata, 
-                                         logger)  
+                                         logger,
+                                         printouts
+                                        )  
 
         # build and return agent 
         return SimulationAgent( agent_name, 
@@ -615,7 +626,8 @@ class Simulation:
                                 preplanner,
                                 replanner,
                                 level,
-                                logger)
+                                logger,
+                                printouts)
 
     @staticmethod
     def __spacecraft_agent_factory(agent_dict : dict,
@@ -625,6 +637,7 @@ class Simulation:
                                  orbitdata_dir : str,
                                  level : int,
                                  logger : logging.Logger,
+                                 printouts : bool
                                 ) -> SimulationAgent:
 
 
@@ -661,7 +674,8 @@ class Simulation:
                                         simulation_results_path,
                                         orbitdata_dir,
                                         level,
-                                        logger)
+                                        logger,
+                                        printouts)
 
 
     @staticmethod
@@ -672,6 +686,7 @@ class Simulation:
                                       orbitdata_dir : str,
                                       level : int,
                                       logger : logging.Logger,
+                                      printouts : bool
                                     ) -> SimulationAgent:
         """ creates a ground operator simulation agent from dictionary """
         
@@ -697,7 +712,8 @@ class Simulation:
                                         simulation_results_path,
                                         orbitdata_dir,
                                         level,
-                                        logger)
+                                        logger,
+                                        printouts)
 
     
     @staticmethod
@@ -738,15 +754,17 @@ class Simulation:
                       agent_mission : Mission, 
                       simulation_missions : Dict[str,Mission], 
                       simulation_orbitdata: Dict[str, OrbitData],
-                      logger : logging.Logger) -> tuple:
+                      logger : logging.Logger,
+                      printouts : bool
+                    ) -> tuple:
         # check if planner dictionary is empty
         if planner_dict is None: return None, None
 
         # load preplanner
-        preplanner = Simulation.__load_preplanner(planner_dict, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger)
+        preplanner = Simulation.__load_preplanner(planner_dict, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
 
         # load replanner
-        replanner = Simulation.__load_replanner(planner_dict, logger)
+        replanner = Simulation.__load_replanner(planner_dict, logger, printouts)
 
         # return loaded planners
         return preplanner, replanner
@@ -758,7 +776,9 @@ class Simulation:
                         simulation_orbitdata : Dict[str, OrbitData],
                         orbitdata_dir : str,
                         agent_name : str,
-                        logger : logging.Logger) -> AbstractPeriodicPlanner:
+                        logger : logging.Logger,
+                        printouts : bool
+                    ) -> AbstractPeriodicPlanner:
         """ loads the preplanner for the agent """
         # get preplanner specs
         preplanner_dict : Dict = planner_dict.get('preplanner', None)
@@ -780,23 +800,23 @@ class Simulation:
 
         # initialize preplanner
         if preplanner_type.lower() in ["heuristic"]:
-            return HeuristicInsertionPlanner(horizon, period, sharing, debug, logger)
+            return HeuristicInsertionPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["naive", "fifo", "earliest"]:
-            return EarliestAccessPlanner(horizon, period, sharing, debug, logger)
+            return EarliestAccessPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'nadir':
-            return NadirPointingPlanner(horizon, period, sharing, debug, logger)
+            return NadirPointingPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["dynamic", "dp"]:
             model = preplanner_dict.get('model', 'earliest').lower()
-            return DynamicProgrammingPlanner(horizon, period, model, sharing, debug, logger)
+            return DynamicProgrammingPlanner(horizon, period, model, sharing, debug, logger, printouts)
         
         elif preplanner_type.lower() in ["eventannouncer", "announcer"]:
             events_path = preplanner_dict.get('eventsPath', None)
             if events_path is None: raise ValueError(f'predefined events path not specified in input file.')
             
-            return EventAnnouncerPlanner(events_path, agent_mission, debug, logger)
+            return EventAnnouncerPlanner(events_path, agent_mission, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'dealer':
             # unpack preplanner parameters
@@ -831,7 +851,7 @@ class Simulation:
                         client_missions.pop(client, None)
             
             if mode == 'test':                   
-                return TestingDealer(client_orbitdata, client_specs, horizon, period)
+                return TestingDealer(client_orbitdata, client_specs, horizon, period, printouts)
 
             elif mode in ['milp', 'mixed-integer-linear-programming']:
                 model = preplanner_dict.get('model', DealerMILPPlanner.STATIC).lower()
@@ -849,15 +869,16 @@ class Simulation:
                                          max_tasks=max_tasks, 
                                          max_observations=max_observations, 
                                          debug=debug,
-                                         logger=logger
+                                         logger=logger,
+                                         printouts=printouts
                                         )
 
         elif preplanner_type.lower() == 'worker':
             dealer_name = preplanner_dict.get('dealerName', None)
-            return WorkerPlanner(dealer_name, debug, logger)
+            return WorkerPlanner(dealer_name, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'blank':
-            return BlankPlanner(horizon, period, sharing, debug, logger)
+            return BlankPlanner(horizon, period, sharing, debug, logger, printouts)
 
         # elif... # add more preplanners here
 
@@ -878,7 +899,7 @@ class Simulation:
         raise NotImplementedError(f'preplanner of type `{preplanner_dict}` not yet supported.')
         
     @staticmethod
-    def __load_replanner(planner_dict : dict, logger : logging.Logger) -> AbstractReactivePlanner:
+    def __load_replanner(planner_dict : dict, logger : logging.Logger, printouts : bool) -> AbstractReactivePlanner:
         """ loads the replanner for the agent """
         # get replanner specs
         replanner_dict = planner_dict.get('replanner', None)
@@ -897,7 +918,7 @@ class Simulation:
 
             if 'heuristic' in model:
                 heuristic = replanner_dict.get('heuristic', 'earliestAccess')
-                return HeuristicInsertionConsensusPlanner(heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger)
+                return HeuristicInsertionConsensusPlanner(heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
             else:
                 raise NotImplementedError(f'replanner model `{model}` not yet supported.')
         

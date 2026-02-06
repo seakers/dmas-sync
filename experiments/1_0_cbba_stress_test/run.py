@@ -17,6 +17,7 @@ from typing import Any, List, Tuple, Dict, Optional
 from dmas.core.simulation import Simulation
 from dmas.utils.constellations import Constellation, WalkerDeltaConstellation
 from dmas.utils.orbitdata import OrbitData
+from dmas.utils.tools import print_scenario_banner
 
 # ------------------------------------------------------------------
 # Run setup helper functions
@@ -345,7 +346,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # ------------------------------------------------------------
         orbitdata_dir: Optional[str] = None
         if sim_cfg.only_precompute or sim_cfg.force_precompute:
-            orbitdata_dir = OrbitData.precompute(mission_specs)
+            orbitdata_dir = OrbitData.precompute(mission_specs, printouts=printouts)
             if sim_cfg.only_precompute:
                 return {
                     "scenario_id": scenario_id,
@@ -372,7 +373,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                 mission_specs,
                 overwrite=sim_cfg.force_simulate,   # you may want overwrite when forcing sim
                 printouts=printouts,
-                level=log_level_int
+                level=log_level_int,
             )
             mission.execute(pbar_pos, pbar_leave=pbar_leave if not sim_cfg.quiet else False)
             sim_status = "executed"
@@ -544,8 +545,14 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
 
     # run trials serially
     try:
+        # print header for serial execution
+        print_scenario_banner("CBBA Stress Test Study - Serial Execution")
+
         # iterate over trial rows
         for i, row in enumerate(trial_rows):
+            if not sim_cfg.quiet:
+                print(f"\n=== Running trial {i+1}/{len(trial_rows)}: scenario_id={row[0]}, num_sats={row[1]}, gnd_segment={row[2]}, task_arrival_rate={row[3]}, target_distribution={row[4]} ===")
+
             # run one trial
             res = run_one_trial(row, run_cfg, sim_cfg, pbar_pos=1)
             
@@ -567,6 +574,12 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
                 else:
                     # log normal status message
                     pbar.write(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+            else:
+                # print to console if no progress bar (still respect quiet mode)
+                sid = res.get("scenario_id", "???")
+                status = res.get("status")
+                elapsed = res.get("elapsed_s", None)
+                print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
 
     finally:
         # close progress bar if used

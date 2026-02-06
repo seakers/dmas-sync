@@ -51,9 +51,11 @@ class DealerMILPPlanner(DealerPlanner):
                  max_tasks : float = np.Inf,
                  max_observations : int = 10, 
                  debug : bool = False,
-                 logger : logging.Logger = None):
+                 logger : logging.Logger = None,
+                 printouts : bool = True,
+                ):
         
-        super().__init__(client_orbitdata, client_specs, client_missions, horizon, period, sharing, debug, logger)
+        super().__init__(client_orbitdata, client_specs, client_missions, horizon, period, sharing, debug, logger, printouts)
 
         if not debug or licence_path is not None:
             # Check for Gurobi license
@@ -325,25 +327,25 @@ class DealerMILPPlanner(DealerPlanner):
         for s,_ in enumerate(indexed_clients): model.addConstr(y[s,0] == 1, name=f"assign_initial_dummy_task_client{s}")
 
         ## set unreachable tasks to y=0
-        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Avoiding unreachable tasks", unit='tasks', leave=False):
+        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Avoiding unreachable tasks", unit='tasks', leave=False, disable=(len(y) < 10) or not self._printouts):
             if j == 0: continue # skip dummy task
             j_p_predecessors = [j_p for a,j_p,b in A if a == s and b == j]
             if not j_p_predecessors: model.addConstr(y[s,j] == 0, name=f"unreachable_task_client{s}_task{j}")
 
         ## Enforce exclusivity
-        for s,j,j_p in tqdm(E, desc=f"{state.agent_name}/PREPLANNER: Adding mutual exclusivity constraints", unit='task pairs', leave=False):
+        for s,j,j_p in tqdm(E, desc=f"{state.agent_name}/PREPLANNER: Adding mutual exclusivity constraints", unit='task pairs', leave=False, disable=(len(E) < 10) or not self._printouts):
             model.addConstr(y[s,j] + y[s,j_p] <= 1)
 
         ## Observation time and accessibility constraints; force task scheduling at start of visibility window
-        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding observation time constraints", unit='tasks', leave=False):            
+        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding observation time constraints", unit='tasks', leave=False, disable=(len(y) < 10) or not self._printouts):            
             model.addConstr(t[s,j] == t_start[s][j], name=f"static_time_assignment_client{s}_task{j}")
 
         ## Task sequencing constraints
-        for s,j,j_p in tqdm(z.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding sequencing time constraints", unit='sequences', leave=False):
+        for s,j,j_p in tqdm(z.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding sequencing time constraints", unit='sequences', leave=False, disable=(len(z) < 10) or not self._printouts):
              # If z[s, j, j_p] == 1, enforce slew constraint for task sequence j->j' for client s
             model.addGenConstrIndicator(z[s,j,j_p], 1, t[s,j] + d[s][j] + slew_times[s][j][j_p] <= t[s,j_p])  
 
-        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding task sequencing constraints", unit='tasks', leave=False):
+        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding task sequencing constraints", unit='tasks', leave=False, disable=(len(y) < 10) or not self._printouts):
             # Ensure that each task can have at most one successor
             j_p_successors = [j_p for a,b,j_p in A if a == s and b == j]
             model.addConstr(gp.quicksum(z[s,j,j_p] for j_p in j_p_successors) <= y[s,j],
@@ -391,7 +393,7 @@ class DealerMILPPlanner(DealerPlanner):
                                                       self.client_orbitdata[client], 
                                                       self.client_missions[client], 
                                                      observation_history)
-                            for task in tqdm(schedulable_tasks[client],leave=False,desc=f'{state.agent_name}/PREPLANNER: Calculating task rewards for client agent `{client}`')
+                            for task in tqdm(schedulable_tasks[client],leave=False,desc=f'{state.agent_name}/PREPLANNER: Calculating task rewards for client agent `{client}`', unit='tasks', disable=(len(schedulable_tasks[client]) < 10) or not self._printouts)
                             if isinstance(task,ObservationOpportunity)]
                             for client in indexed_clients]
 
@@ -438,17 +440,17 @@ class DealerMILPPlanner(DealerPlanner):
         for s,_ in enumerate(indexed_clients): model.addConstr(y[s,0] == 1, name=f"assign_initial_dummy_task_client{s}")
 
         ## set unreachable tasks to y=0
-        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Avoiding unreachable tasks", unit='tasks', leave=False):
+        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Avoiding unreachable tasks", unit='tasks', leave=False, disable=(len(y) < 10) or not self._printouts):
             if j == 0: continue # skip dummy task
             j_p_predecessors = [j_p for a,j_p,b in A if a == s and b == j]
             if not j_p_predecessors: model.addConstr(y[s,j] == 0, name=f"unreachable_task_client{s}_task{j}")
 
         ## Enforce exclusivity
-        for s,j,j_p in tqdm(E, desc=f"{state.agent_name}/PREPLANNER: Adding mutual exclusivity constraints", unit='task pairs', leave=False):
+        for s,j,j_p in tqdm(E, desc=f"{state.agent_name}/PREPLANNER: Adding mutual exclusivity constraints", unit='task pairs', leave=False, disable=(len(E) < 10) or not self._printouts):
             model.addConstr(y[s,j] + y[s,j_p] <= 1)
 
         ## Observation time and accessibility constraints
-        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding observation time constraints", unit='tasks', leave=False):
+        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding observation time constraints", unit='tasks', leave=False, disable=(len(y) < 10) or not self._printouts):
             # Enforce task scheduling within visibility window
             t[s,j].LB = t_start[s][j]
             t[s,j].UB = t_end[s][j] - d[s][j]
@@ -457,11 +459,11 @@ class DealerMILPPlanner(DealerPlanner):
             model.addGenConstrIndicator(y[s,j], 0, t[s,j] == float(t_start[s][j]))
 
         ## Task sequencing constraints
-        for s,j,j_p in tqdm(z.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding sequencing time constraints", unit='sequences', leave=False):
+        for s,j,j_p in tqdm(z.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding sequencing time constraints", unit='sequences', leave=False, disable=(len(z) < 10) or not self._printouts):
              # If z[s, j, j_p] == 1, enforce slew constraint for task sequence j->j' for client s
             model.addGenConstrIndicator(z[s,j,j_p], 1, t[s,j] + d[s][j] + slew_times[s][j][j_p] <= t[s,j_p])  
 
-        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding task sequencing constraints", unit='tasks', leave=False):
+        for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding task sequencing constraints", unit='tasks', leave=False, disable=(len(y) < 10) or not self._printouts):
             # Ensure that each task can have at most one successor
             j_p_successors = [j_p for a,b,j_p in A if a == s and b == j]
             model.addConstr(gp.quicksum(z[s,j,j_p] for j_p in j_p_successors) <= y[s,j],
@@ -516,7 +518,7 @@ class DealerMILPPlanner(DealerPlanner):
                                                       self.client_orbitdata[client], 
                                                       self.client_missions[client], 
                                                      observation_history)]
-                            for task in tqdm(schedulable_tasks[client],leave=False,desc=f'{state.agent_name}/PREPLANNER: Calculating task rewards for client agent `{client}`')
+                            for task in tqdm(schedulable_tasks[client],leave=False,desc=f'{state.agent_name}/PREPLANNER: Calculating task rewards for client agent `{client}`', unit='tasks', disable=(len(schedulable_tasks[client]) < 10) or not self._printouts)
                             if isinstance(task,ObservationOpportunity)]
                             for client in indexed_clients]
     

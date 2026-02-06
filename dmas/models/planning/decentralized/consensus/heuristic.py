@@ -37,8 +37,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                  optimistic_bidding_threshold : int = 1,
                  periodic_overwrite : bool = False,
                  debug : bool = False, 
-                 logger : bool = None):
-        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger)
+                 logger : bool = None,
+                 printouts : bool = True
+                ):
+        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
 
         # validate inputs
         assert heuristic in self.HEURISTICS, f"Invalid heuristic '{heuristic}'. Must be one of {self.HEURISTICS}."
@@ -434,7 +436,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # ------------------------------- 
 
         # Add tasks to path iteratively based on heuristic
-        for proposed_observation in tqdm(sorted_observation_opportunities, desc=f'{state.agent_name}-REPLANNER: Building bundle', leave=False):
+        for proposed_observation in tqdm(sorted_observation_opportunities, 
+                                         desc=f'{state.agent_name}-REPLANNER: Building bundle', 
+                                         leave=False,
+                                         disable=(len(sorted_observation_opportunities) < 10) or not self._printouts
+                                        ):
             # -------------------------------
             # DEBUG PRINTOUTS
             # if self._debug:
@@ -463,7 +469,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # Find best placement in path   
             for candidate_path, obs_added, obs_removed in tqdm(candidate_paths, 
                                                                desc=f'{state.agent_name}-REPLANNER: Evaluating placements for observation {proposed_observation.id.split("-")[0]}', 
-                                                               leave=False):
+                                                               leave=False,
+                                                               disable=(len(candidate_paths) < 10) or not self._printouts
+                                                            ):
                 # -------------------------------
                 # DEBUG PRINTOUTS
                 # if self._debug:

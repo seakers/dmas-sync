@@ -42,7 +42,8 @@ class SimulationAgent(object):
                  preplanner : AbstractPeriodicPlanner = None,
                  replanner : AbstractReactivePlanner = None,
                  level : int = logging.INFO, 
-                 logger : logging.Logger = None
+                 logger : logging.Logger = None,
+                 printouts : bool = True
                 ):
         # validate inputs        
         assert isinstance(agent_name, str), "Agent name must be a string."
@@ -59,7 +60,7 @@ class SimulationAgent(object):
         assert replanner is None or isinstance(replanner, AbstractReactivePlanner), "Replanner must be an AbstractReactivePlanner object or None."
         assert isinstance(level, int), "Logging level must be an integer."
         assert logger is None or isinstance(logger, logging.Logger), "Logger must be a logging.Logger object or None."
-
+        assert isinstance(printouts, bool), "Printouts toggle must be a boolean."
 
         # assign parameters
         self.name : str = agent_name
@@ -77,6 +78,7 @@ class SimulationAgent(object):
         self._orbitdata : OrbitData = orbitdata
         self._state : SimulationAgentState = initial_state
         self._mission : Mission = mission
+        self._printouts : bool = printouts
         
         self._processor : ObservationDataProcessor = processor
         self._preplanner : AbstractPeriodicPlanner = preplanner
@@ -97,7 +99,7 @@ class SimulationAgent(object):
         self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
         # initialize trackers and data sinks
-        self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
+        self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name, quiet=not printouts)
         self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history")
         self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history")
 
@@ -918,9 +920,14 @@ class SimulationAgent(object):
         Logs a message to the desired level.
         """
         try:
+            # check if printouts are enabled
+            if not self._printouts: return
+
+            # get current simulation time
             t = self._state.get_time()
             t = t if t is None else round(t,3)
 
+            # log to the appropriate level with agent name and current time
             if level is logging.DEBUG:
                 self._logger.debug(f'T={t}[s] | {self.name}: {msg}')
             elif level is logging.INFO:

@@ -37,7 +37,9 @@ class AbstractPlanner(ABC):
     
     def __init__(self, 
                  debug : bool = False,
-                 logger : logging.Logger = None) -> None:
+                 logger : logging.Logger = None,
+                 printouts : bool = True
+                ) -> None:
         # initialize object
         super().__init__()
 
@@ -52,6 +54,7 @@ class AbstractPlanner(ABC):
         # set attribute parameters
         self._debug = debug                 # toggles debugging features
         self._logger = logger               # logger for debugging
+        self._printouts = printouts         # toggles printouts
 
     @abstractmethod
     def update_percepts( self,
@@ -93,10 +96,11 @@ class AbstractPlanner(ABC):
         for i,t in tqdm(enumerate(raw_coverage_data['time [s]']), 
                         desc=f'{state.agent_name}/PLANNER: Grouping access opportunities', 
                         unit=' time-step', 
-                        disable=len(raw_coverage_data['time [s]'])<10,
+                        disable=len(raw_coverage_data['time [s]'])<10 or not self._printouts,
                         mininterval=0.5, 
-                        leave=False):
-            # extract relevant data
+                        leave=False
+                    ):
+            # extract relevant dataF
             grid_index = raw_coverage_data['grid index'][i]
             gp_index = raw_coverage_data['GP index'][i]
             instrument = raw_coverage_data['instrument'][i]
@@ -111,7 +115,7 @@ class AbstractPlanner(ABC):
         for grid_idx,gp_accesses in tqdm(coverage_idx_by_target.items(), 
                                          desc=f'{state.agent_name}/PLANNER: Merging access opportunities', 
                                          unit=' target',
-                                         disable=len(coverage_idx_by_target)<10,
+                                         disable=len(coverage_idx_by_target)<10 or not self._printouts,
                                          leave=False, 
                                          mininterval=0.5,
                                         ):
@@ -227,7 +231,7 @@ class AbstractPlanner(ABC):
         observation_opps : List[ObservationOpportunity] = []
 
         # create one instance of an observation opportunity per each access opportunity
-        for task in tqdm(available_tasks, desc="Calculating access times to known tasks", leave=False):
+        for task in tqdm(available_tasks, desc="Calculating access times to known tasks", leave=False, disable=not self._printouts):
 
             # extract minimum duration requirement for this task
             min_duration_req : float = self.__extract_minimum_duration_req(task, orbitdata)
@@ -421,14 +425,14 @@ class AbstractPlanner(ABC):
             bins = defaultdict(list)
             
             # group task in bins by accessibility
-            for task in tqdm(observation_opportunities, leave=False, desc="Grouping tasks into bins"):
+            for task in tqdm(observation_opportunities, leave=False, desc="Grouping tasks into bins", disable=not self._printouts):
                 task : ObservationOpportunity
                 center_time = (task.accessibility.left + task.accessibility.right) / 2 - t_min
                 bin_key = int(center_time // threshold)
                 bins[bin_key].append(task)
 
             # populate adjacency list
-            with tqdm(total=len(observation_opportunities), desc="Checking task clusterability", leave=False) as pbar:
+            with tqdm(total=len(observation_opportunities), desc="Checking task clusterability", leave=False, disable=not self._printouts) as pbar:
                 for b in bins:
                     candidates : list[ObservationOpportunity]\
                           = bins[b] + bins.get(b + 1, [])  # optionally add b-1 for symmetry
@@ -488,7 +492,7 @@ class AbstractPlanner(ABC):
         # combine observation opportunities into clusters
         combined_obs : list[ObservationOpportunity] = []
 
-        with tqdm(total=len(v), desc="Merging overlapping observation opportunities", leave=False) as pbar:
+        with tqdm(total=len(v), desc="Merging overlapping observation opportunities", leave=False, disable=not self._printouts) as pbar:
             while len(v) > 0:
                 # pop first observation opportunity from the list of observation opportunities to be scheduled
                 p : ObservationOpportunity = v.pop()
@@ -667,7 +671,7 @@ class AbstractPlanner(ABC):
                 # task_t_prev[task] = max(task_t_prev[task], target_observation.t_last) if target_observation.t_last <= t_img else task_t_prev[task]
                 task_n_obs[task] += n_obs
                 task_t_prev[task] = max(task_t_prev[task], t_prev) if t_prev <= t_img else task_t_prev[task]
-                
+
                 # validate previous observation time
                 if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, "Previous observation time must be non-negative."
                     
@@ -1032,7 +1036,9 @@ class AbstractPlanner(ABC):
 
         for i,curr_observation in tqdm(enumerate(observations), 
                       desc=f'{state.agent_name}-PLANNER: Scheduling Maneuvers', 
-                      leave=False):
+                      leave=False,
+                      disable=not self._printouts or len(observations) < 10
+                    ):
 
             # estimate previous state
             if i == 0:

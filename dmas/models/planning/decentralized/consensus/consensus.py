@@ -39,9 +39,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
                  optimistic_bidding_threshold : int,
                  periodic_overwrite : bool,
                  debug : bool = False,
-                 logger: logging.Logger = None
-                 ) -> None:
-        super().__init__(debug, logger)
+                 logger: logging.Logger = None,
+                 printouts : bool = True
+                ) -> None:
+        super().__init__(debug, logger, printouts)
         """
         ## Consensus Couple-Constrained Planner
         
