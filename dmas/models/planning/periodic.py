@@ -13,7 +13,7 @@ from execsatm.utils import Interval
 from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.planner import AbstractPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import LatestObservationTracker
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
@@ -35,7 +35,8 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                     period : float = np.Inf,
                     sharing : str = OPPORTUNISTIC,
                     debug : bool = False,
-                    logger: logging.Logger = None
+                    logger: logging.Logger = None,
+                    printouts : bool = True
                 ) -> None:
         """
         ## Preplanner 
@@ -48,7 +49,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         - logger (`logging.Logger`) : debugging logger
         """
         # initialize planner
-        super().__init__(debug, logger)    
+        super().__init__(debug, logger, printouts)    
 
         # validate inputs
         assert isinstance(horizon, (int, float)) and horizon > 0, "Planning horizon must be a positive number."
@@ -103,7 +104,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                         orbitdata : OrbitData,
                         mission : Mission,
                         tasks : list,
-                        observation_history : ObservationHistory,
+                        observation_history : LatestObservationTracker,
                     ) -> Plan:
         """ Generates a new plan for the agent """
         # compile instrument field of view specifications   
@@ -161,7 +162,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 and task.availability.overlaps(planning_horizon)]
     
     @abstractmethod
-    def _schedule_observations(self, state : SimulationAgentState, specs : object, orbitdata : OrbitData, observation_opportunities : list, mission : Mission, observation_history : ObservationHistory) -> list:
+    def _schedule_observations(self, state : SimulationAgentState, specs : object, orbitdata : OrbitData, observation_opportunities : list, mission : Mission, observation_history : LatestObservationTracker) -> list:
         """ Creates a list of observation actions to be performed by the agent """    
 
     @abstractmethod

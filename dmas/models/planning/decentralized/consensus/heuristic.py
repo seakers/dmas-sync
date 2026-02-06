@@ -11,7 +11,7 @@ from execsatm.utils import Interval
 
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.models.actions import ObservationAction
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import LatestObservationTracker
 from dmas.models.planning.plan import Plan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.states import SimulationAgentState
@@ -37,8 +37,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                  optimistic_bidding_threshold : int = 1,
                  periodic_overwrite : bool = False,
                  debug : bool = False, 
-                 logger : bool = None):
-        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger)
+                 logger : bool = None,
+                 printouts : bool = True
+                ):
+        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
 
         # validate inputs
         assert heuristic in self.HEURISTICS, f"Invalid heuristic '{heuristic}'. Must be one of {self.HEURISTICS}."
@@ -59,7 +61,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     current_plan : Plan,
                                     orbitdata : OrbitData,
                                     mission : Mission,
-                                    observation_history : ObservationHistory
+                                    observation_history : LatestObservationTracker
                                     ) -> tuple:    
         """ Build bundle from latest periodic preplan. """
         # compile instrument field of view specifications   
@@ -150,7 +152,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                        tasks : List[GenericObservationTask],
                        orbitdata : OrbitData,
                        mission : Mission,
-                       observation_history : ObservationHistory
+                       observation_history : LatestObservationTracker
                     ) -> tuple:
         
         """ Build new bundle and path according to selected heuristic model. """
@@ -294,7 +296,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : ObservationHistory
+                                       observation_history : LatestObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using earliest-access heuristic. 
@@ -318,7 +320,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : ObservationHistory
+                                       observation_history : LatestObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using task-value as main heuristic for order of task addition in bundle building process. 
@@ -352,7 +354,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : ObservationHistory
+                                       observation_history : LatestObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using task priority as main heuristic for order of task addition in bundle building process. 
@@ -382,7 +384,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        sorted_observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : ObservationHistory
+                                       observation_history : LatestObservationTracker
                                     ) -> Tuple[list, List[ObservationAction], dict]:
         """ 
         Build bundle using a given heuristic. Attempts to insert tasks into existing path, right-shift existing tasks to accommodate for new 
@@ -434,7 +436,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # ------------------------------- 
 
         # Add tasks to path iteratively based on heuristic
-        for proposed_observation in tqdm(sorted_observation_opportunities, desc=f'{state.agent_name}-REPLANNER: Building bundle', leave=False):
+        for proposed_observation in tqdm(sorted_observation_opportunities, 
+                                         desc=f'{state.agent_name}-REPLANNER: Building bundle', 
+                                         leave=False,
+                                         disable=(len(sorted_observation_opportunities) < 10) or not self._printouts
+                                        ):
             # -------------------------------
             # DEBUG PRINTOUTS
             # if self._debug:
@@ -463,7 +469,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # Find best placement in path   
             for candidate_path, obs_added, obs_removed in tqdm(candidate_paths, 
                                                                desc=f'{state.agent_name}-REPLANNER: Evaluating placements for observation {proposed_observation.id.split("-")[0]}', 
-                                                               leave=False):
+                                                               leave=False,
+                                                               disable=(len(candidate_paths) < 10) or not self._printouts
+                                                            ):
                 # -------------------------------
                 # DEBUG PRINTOUTS
                 # if self._debug:
@@ -480,7 +488,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 if bids_candidate is None: continue # no valid bids found; skip
 
                 # get path value for proposed path using best observation sequences
-                proposed_path_utility : float = self._calculate_path_utility(state, specs, cross_track_fovs, candidate_path, observation_history, orbitdata, mission, n_obs_candidate, t_prev_candidate)
+                proposed_path_utility : float \
+                    = self._calculate_path_utility(state, specs, cross_track_fovs, candidate_path, observation_history, orbitdata, mission, n_obs_candidate, t_prev_candidate)
 
                 # if path does not increase overall utility, skip
                 if proposed_path_utility <= best_path_utility: continue
@@ -957,7 +966,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                                                      cross_track_fovs : dict,
                                                                      orbitdata : OrbitData,
                                                                      mission : Mission,
-                                                                     observation_history : ObservationHistory
+                                                                     observation_history : LatestObservationTracker
                                                                     ) -> Tuple[Dict[int, Dict[GenericObservationTask, int]], 
                                                                                 Dict[int, Dict[GenericObservationTask, float]],
                                                                                 Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]]]:

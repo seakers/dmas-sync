@@ -27,7 +27,9 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                  events_path : str,
                  mission : Mission,
                  debug = False, 
-                 logger = None):
+                 logger = None,
+                 printouts : bool = True
+                ) -> None:
         """
         # Event Announcer Planner
         Announces geophysical events to other agents in the mission as they become available.
@@ -35,7 +37,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         TODO : expand to announce events at different times, not just when they become available.
         """
 
-        super().__init__(np.Inf, np.Inf, AbstractPeriodicPlanner.OPPORTUNISTIC, debug, logger)
+        super().__init__(np.Inf, np.Inf, AbstractPeriodicPlanner.OPPORTUNISTIC, debug, logger, printouts)
 
         # validate inputs
         if not os.path.isfile(events_path):
@@ -99,14 +101,20 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         broadcasts : List[BroadcastMessageAction] = []
 
         # get list of future events
-        future_events : List[GeophysicalEvent] = [event for event in tqdm(self.events, desc=f'{state.agent_name}-PREPLANNER: Collecting future events', leave=False) 
+        future_events : List[GeophysicalEvent] = [event for event in tqdm(self.events, 
+                                                                          desc=f'{state.agent_name}-PREPLANNER: Collecting future events', 
+                                                                          leave=False,
+                                                                          disable=(len(self.events) < 10) or not self._printouts
+                                                                        )
                                                   if event.is_available(state._t)]
 
         # create requests for each event
         task_requests : List[Tuple[GeophysicalEvent, TaskRequest]] = []
         for event in tqdm(future_events, 
                           desc=f'{state.agent_name}-PREPLANNER: Generating task request from known events',
-                          leave=False):
+                          leave=False,
+                          disable=(len(future_events) < 10) or not self._printouts
+                        ):
             # get event objetives from mission
             objectives  : list[EventDrivenObjective] = [objective for objective in self.parent_mission.objectives
                                                         if isinstance(objective, EventDrivenObjective)
@@ -136,7 +144,9 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         # create broadcasts for each request
         for event,task_req,task_request_msg in tqdm(task_requests, 
                                                     desc=f'{state.agent_name}/PREPLANNER: Scheduling broadcasts for generated task requests',
-                                                    leave=False):
+                                                    leave=False,
+                                                    disable=(len(task_requests) < 10) or not self._printouts
+                                                ):
             
             # schedule broadcasts to all available agents
             for target in orbitdata.comms_links.keys():

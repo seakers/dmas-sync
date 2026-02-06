@@ -88,17 +88,6 @@
             }
         },
         {
-            "name": "TEST: Agent Connectivity Levels",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceRoot}/tests/connectivity/connectivity_levels_test.py",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "cwd": "${workspaceRoot}",
-            "env": {
-                "PYTHONPATH": "${workspaceRoot}"
-            }
-        },{
             "name": "TEST: Consensus Bids",
             "type": "debugpy",
             "request": "launch",
@@ -115,6 +104,30 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceRoot}/tests/tasks/bid_results_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Data Sinks",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/agents/sinks_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
+            "name": "TEST: Latest Observation Tracker",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/agents/observation_tracker_test.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "cwd": "${workspaceRoot}",
@@ -237,18 +250,21 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                "-n", "full_factorial_trials",
-                // "-n", "lhs_trials-2_samples-1000_seed",
-                "-o", 
-                "-d",
-                "-r",
-                // "-p",
-                // "-l", "58",
-                // "-u", "59"
-                "-l", "23",
-                "-u", "24"
-                // "-l", "3",
-                // "-u", "4"
+                "-t", "full_factorial_trials",
+                // "-t", "lhs_trials-2_samples-1000_seed",                
+                // "--trial-range", "58:59",
+                // "--trial-range", "23:24",
+                // "--trial-range", "3:4",
+                // "--trial-range", "9:12",
+                // "--trial-range", "9:10",
+                "--trial-range", "0:2",
+                "--reduced",
+                "--profile-cpu",
+                "--profile-mem",
+                // "--single-thread",
+                // "--only-precompute",
+                "--force-simulate",
+                "--quiet",
             ]
         },
     ]

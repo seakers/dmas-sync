@@ -44,18 +44,19 @@ class AbstractAgentState(ABC):
         Creates a string representing the contents of this agent state
         """
         pass
-
+    
+    @abstractmethod
     def to_dict(self) -> dict:
         """
         Crates a dictionary containing all information contained in this agent state object
         """
-        return dict(self.__dict__)
 
     def __eq__(self, other : object) -> bool:
         """
         Compares two instances of an agent state message. Returns True if they represent the same message.
         """
-        return self.to_dict() == dict(other.__dict__)
+        assert isinstance(other, AbstractAgentState), f"Cannot compare AbstractAgentState with object of type {type(other)}."
+        return self.to_dict() == other.to_dict()
 
 class SimulationAgentState(AbstractAgentState):
     """
@@ -232,22 +233,30 @@ class SimulationAgentState(AbstractAgentState):
     def __str__(self):
         return str(dict(self.__dict__))
 
-    def copy(self) -> object:
+    def copy(self) -> 'AbstractAgentState':
         d : dict = self.to_dict()
         return SimulationAgentState.from_dict( d )
 
+    @abstractmethod
     def to_dict(self) -> dict:
-        d = dict(self.__dict__)
-        d['t'] = d.pop('_t')
-        return d
+        return {
+            'agent_name' : self.agent_name,
+            'agent_id' : self.agent_id,
+            'state_type' : self.state_type,
+            'pos' : list(self.pos),
+            'vel' : list(self.vel),
+            'attitude' : list(self.attitude),
+            'attitude_rates' : list(self.attitude_rates),
+            'status' : self.status,
+            't' : self._t
+        }
 
+    @abstractmethod
     def from_dict(d : dict) -> object:
         if d['state_type'] == SimulationAgentTypes.GROUND_OPERATOR.value:
-            return GroundOperatorAgentState(**d)
+            return GroundOperatorAgentState.from_dict(d)
         elif d['state_type'] == SimulationAgentTypes.SATELLITE.value:
-            return SatelliteAgentState(**d)
-        # elif d['state_type'] == SimulationAgentTypes.UAV.value:
-        #     return UAVAgentState(**d)
+            return SatelliteAgentState.from_dict(d)
         else:
             raise NotImplementedError(f"Agent states of type {d['state_type']} not yet supported.")
         
@@ -305,6 +314,18 @@ class GroundOperatorAgentState(SimulationAgentState):
     
     def __repr__(self):
         return f"GroundOperatorAgentState(agent_name={self.agent_name}, status={self.status}, t={round(self._t,3)})"
+    
+    def to_dict(self) -> dict:
+        return super().to_dict()    
+
+    @staticmethod
+    def from_dict(d : dict) -> object:
+        return GroundOperatorAgentState(agent_name = d['agent_name'],
+                                        agent_id = d['agent_id'],
+                                        status = d['status'],
+                                        pos = d['pos'],
+                                        vel = d['vel'],
+                                        t = d['t'])
 
 class GroundSensorAgentState(SimulationAgentState):
     """
@@ -338,6 +359,11 @@ class GroundSensorAgentState(SimulationAgentState):
                         [0,0,0],
                         status,
                         t)
+        
+        # assign remaining attributes
+        self.lat = lat
+        self.lon = lon
+        self.alt = alt
 
     def to_rads(self, th : float) -> float:
         return th * np.pi / 180
@@ -394,6 +420,24 @@ class GroundSensorAgentState(SimulationAgentState):
     
     def __repr__(self):
         return f"GroundSensorAgentState(agent_name={self.agent_name}, status={self.status}, t={round(self._t,3)})"
+    
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d['lat'] = self.lat
+        d['lon'] = self.lon
+        d['alt'] = self.alt
+        return d
+
+    @staticmethod
+    def from_dict(d):
+        return GroundSensorAgentState(agent_name = d['agent_name'],
+                                      lat = d.get('lat', 0.0),
+                                      lon = d.get('lon', 0.0),
+                                      alt = d.get('alt', 0.0),
+                                      pos = d['pos'],
+                                      vel = d['vel'],
+                                      status = d['status'],
+                                      t = d['t'])
 
 class SatelliteAgentState(SimulationAgentState):
     """
@@ -409,38 +453,28 @@ class SatelliteAgentState(SimulationAgentState):
                     vel : list = None,
                     attitude : list = [0,0,0],
                     attitude_rates : list = [0,0,0],
-                    keplerian_state : dict = None,
+                    keplerian_state : tuple = None,
                     t: Union[float, int] = 0.0, 
                     eclipse : int = 0,
                     status: str = SimulationAgentState.IDLING, 
                     **_
                 ) -> None:
-        
-        self.orbit_state = orbit_state
-        self.eclipse = eclipse
+        # initiate orbit state object for future use 
+        orbit_state_obj = None
+
+        # calculate position and velocity if both are missing
         if pos is None and vel is None:
-            orbit_state : OrbitState = OrbitState.from_dict(self.orbit_state)
-            cartesian_state = orbit_state.get_cartesian_earth_centered_inertial_state()
+            # create orbit state object
+            orbit_state_obj : OrbitState = OrbitState.from_dict(orbit_state)
+            
+            # obtain cartesian state
+            cartesian_state = orbit_state_obj.get_cartesian_earth_centered_inertial_state()
             pos = cartesian_state[0:3]
             vel = cartesian_state[3:]
-
-            keplerian_state : tuple = orbit_state.get_keplerian_earth_centered_inertial_state()
-            self.keplerian_state = {"aop" : keplerian_state.aop,
-                                    "ecc" : keplerian_state.ecc,
-                                    "sma" : keplerian_state.sma,
-                                    "inc" : keplerian_state.inc,
-                                    "raan" : keplerian_state.raan,
-                                    "ta" : keplerian_state.ta}
+        elif pos is None or vel is None:
+            raise ValueError("both position and velocity must be provided, or neither.")
         
-        elif keplerian_state is not None:
-            self.keplerian_state = keplerian_state
-        
-        self.time_step = time_step
-        if eps:
-            self.eps = eps
-        else:
-            self.eps = self.__calc_eps(pos) if self.time_step else 1e-6
-        
+        # initialize parent class
         super().__init__(   agent_name,
                             agent_id,
                             SimulationAgentTypes.SATELLITE.value, 
@@ -451,6 +485,43 @@ class SatelliteAgentState(SimulationAgentState):
                             status, 
                             t
                         )
+        
+        # check if keplerian state is given
+        if keplerian_state is None:
+            # form orbit state object if not already done
+            if orbit_state_obj is None:
+                orbit_state_obj : OrbitState = OrbitState.from_dict(orbit_state)
+            
+            # calculate missing keplerian state
+            keplerian_state : tuple = orbit_state_obj.get_keplerian_earth_centered_inertial_state()
+            # self.keplerian_state = {"aop" : keplerian_state.aop,
+            #                         "ecc" : keplerian_state.ecc,
+            #                         "sma" : keplerian_state.sma,
+            #                         "inc" : keplerian_state.inc,
+            #                         "raan" : keplerian_state.raan,
+            #                         "ta" : keplerian_state.ta}
+            self.keplerian_state : tuple = (keplerian_state.aop, 
+                                            keplerian_state.ecc, 
+                                            keplerian_state.sma,
+                                            keplerian_state.inc,
+                                            keplerian_state.raan,
+                                            keplerian_state.ta)
+        
+        elif keplerian_state is not None:
+            # assign given keplerian state
+            # self.keplerian_state = dict()
+            # self.keplerian_state.update(keplerian_state)        
+            self.keplerian_state : tuple  = keplerian_state
+        
+        # assign remaining attributes
+        self.orbit_state = orbit_state
+        self.eclipse = eclipse
+        self.time_step = time_step
+        if eps:
+            self.eps = eps
+        else:
+            self.eps = self.__calc_eps(pos) if self.time_step else 1e-6
+        
 
     def kinematic_model(self, tf: Union[int, float], update_keplerian : bool = True) -> tuple:
         # propagates orbit
@@ -498,20 +569,18 @@ class SatelliteAgentState(SimulationAgentState):
 
         if update_keplerian:
             keplerian_state = spc.GetKeplerianState().GetRealArray()
-            self.keplerian_state = {"sma" : keplerian_state[0],
-                                    "ecc" : keplerian_state[1],
-                                    "inc" : keplerian_state[2],
-                                    "raan" : keplerian_state[3],
-                                    "aop" : keplerian_state[4],
-                                    "ta" : keplerian_state[5]}                  
+            # self.keplerian_state.update({"sma" : keplerian_state[0],
+            #                              "ecc" : keplerian_state[1],
+            #                              "inc" : keplerian_state[2],
+            #                              "raan" : keplerian_state[3],
+            #                              "aop" : keplerian_state[4],
+            #                              "ta" : keplerian_state[5]})
+            self.keplerian_state = tuple(keplerian_state)
 
         attitude = []
         for i in range(len(self.attitude)):
             th = self.attitude[i] + dt * self.attitude_rates[i]
             attitude.append(th)
-
-            if th > 65.0:
-                x = 1
        
         return pos, vel, attitude, self.attitude_rates
 
@@ -627,97 +696,30 @@ class SatelliteAgentState(SimulationAgentState):
     
     def __repr__(self):
         return f"SatelliteAgentState(agent_name={self.agent_name}, status={self.status}, t={round(self._t,3)})"
-
-# class UAVAgentState(SimulationAgentState):
-#     """
-#     Describes the state of a UAV Agent
-#     """
-#     def __init__(   self, 
-#                     agent_name : str,
-#                     pos: list, 
-#                     max_speed: float,
-#                     vel: list = [0.0,0.0,0.0], 
-#                     eps : float = 1e-6,
-#                     status: str = SimulationAgentState.IDLING, 
-#                     t: Union[float, int] = 0, 
-#                     **_
-#                 ) -> None:
-                
-#         super().__init__(   agent_name,
-#                             SimulationAgentTypes.UAV.value, 
-#                             pos, 
-#                             vel, 
-#                             [0.0,0.0,0.0], 
-#                             [0.0,0.0,0.0], 
-#                             status, 
-#                             t)
-#         self.max_speed = max_speed
-#         self.eps = eps        
-
-#     def kinematic_model(self, tf: Union[int, float]) -> tuple:
-#         dt = tf - self._t
-
-#         if dt < 0:
-#             raise RuntimeError(f"cannot propagate UAV state with non-negative time-step of {dt} [s].")
-
-#         pos = np.array(self.pos) + np.array(self.vel) * dt
-#         pos = [
-#                 pos[0],
-#                 pos[1],
-#                 pos[2]
-#             ]
-
-#         return pos, self.vel.copy(), self.attitude, self.attitude_rates
-
-#     def perform_travel(self, action: TravelAction, t: Union[int, float]) -> tuple:
-#         # calculate time step
-#         dt = t - self._t
-
-#         # update state
-#         self.update(t, status=self.TRAVELING)
-
-#         # check completion
-#         if self.comp_vectors(self.pos, action.final_pos, self.eps):
-#             # if reached, return successful completion status
-#             self.vel = [0.0,0.0,0.0]
-#             return ActionStatuses.COMPLETED.value, 0.0
-        
-#         elif t > action.t_end - self.eps:
-#             # could not complete action before action end time
-#             self.vel = [0.0,0.0,0.0]
-#             return ActionStatuses.ABORTED.value, 0.0
-
-#         # else, wait until position is reached
-#         else:
-#             # find new direction towards target
-#             dr = np.array(action.final_pos) - np.array(self.pos)
-#             norm = np.sqrt( dr.dot(dr) )
-#             if norm > 0:
-#                 dr = np.array([
-#                                 dr[0] / norm,
-#                                 dr[1] / norm,
-#                                 dr[2] / norm
-#                                 ]
-#                             )
-
-#             # chose new velocity 
-#             vel = self.max_speed * dr
-#             self.vel = [
-#                         vel[0],
-#                         vel[1],
-#                         vel[2]
-#                         ]
-
-#             dt = min(action.t_end - t, norm / self.max_speed)
-
-#             return ActionStatuses.PENDING.value, dt
-
-#     def perform_maneuver(self, action: ManeuverAction, t: Union[int, float]) -> tuple:
-#         # update state
-#         self.update(t, status=self.MANEUVERING)
-
-#         # Cannot perform maneuvers
-#         return ActionStatuses.ABORTED.value, 0.0
-
-#     def is_failure(self) -> None:
-#         return False
+    
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d['orbit_state'] = dict(self.orbit_state)
+        d['keplerian_state'] = tuple(self.keplerian_state)
+        d['time_step'] = self.time_step
+        d['eps'] = self.eps
+        d['eclipse'] = self.eclipse
+        return d
+    
+    EMPTY_VECTOR = [0,0,0]
+    @staticmethod
+    def from_dict(d) -> 'SatelliteAgentState':
+        return SatelliteAgentState( agent_name = d['agent_name'],
+                                    agent_id = d['agent_id'],
+                                    orbit_state = d['orbit_state'],
+                                    time_step = d.get('time_step', None),
+                                    eps = d.get('eps', None),
+                                    pos = d.get('pos', None),
+                                    vel = d.get('vel', None),
+                                    attitude = d.get('attitude', SatelliteAgentState.EMPTY_VECTOR),
+                                    attitude_rates = d.get('attitude_rates', SatelliteAgentState.EMPTY_VECTOR),
+                                    keplerian_state = d.get('keplerian_state', None),
+                                    t = d.get('t', 0.0),
+                                    eclipse = d.get('eclipse', 0),
+                                    status=d.get('status', SimulationAgentState.IDLING)
+                                )

@@ -154,21 +154,24 @@ python ./experiments/1_0_cbba_stress_test/study.py -n full_factorial_no_lhs -p
 Runs all cases for the LHS trials in a linear manner.
 ```
 cd $SCRATCH/src/dmas-sync
-sbatch ./experiments/1_0_cbba_stress_test/cbba_study.slurm
+sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_run_1.slurm
+sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_run_2.slurm
 ```
 
 #### Run Parallellized Study
 Runs all cases for the LHS trials in a parallellized process.
 ```
 cd $SCRATCH/src/dmas-sync
-sbatch ./experiments/1_0_cbba_stress_test/cbba_study_parallel.slurm
+sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_run_parallel_1.slurm
+sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_run_parallel_2.slurm
 ```
 
 #### Propagate Only
 Performs orbit data propagation for all cases within the LHS trials.
 ```
 cd $SCRATCH/src/dmas-sync
-sbatch ./experiments/1_0_cbba_stress_test/cbba_study_propagate.slurm
+sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_propagate_1.slurm
+sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_propagate_2.slurm
 ```
 
 ### Monitor Batch Status

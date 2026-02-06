@@ -54,15 +54,15 @@ class Plan(ABC):
         # check action was removed
         assert action not in self.actions, f"Action {action} could not be removed from plan."
 
-    def update(self, *action_lists, t : float) -> None:
+    def update(self, *action_lists, t : float, printouts : bool = False) -> None:
         """ Updates the current plan to a new list of actions """
         
         # reset current plan
         self.actions = []
 
         # add actions from iterable set of actions
-        # for actions in tqdm(action_lists, desc='Adding action lists to plan', leave=False):
-        for actions in action_lists:
+        for actions in tqdm(action_lists, desc='Adding action lists to plan', leave=False, disable=not printouts):
+        # for actions in action_lists:
             # check argument types
             if not isinstance(actions, list):
                 raise ValueError(f'updated plan must be of type `list`.')
@@ -74,7 +74,7 @@ class Plan(ABC):
                 raise RuntimeError("Cannot update plan: new plan is unfeasible.")
         
             # update plan
-            self.add_all(actions, t)
+            self.add_all(actions, t, printouts=printouts)
 
         # update plan update time
         self.t = t            
@@ -82,7 +82,7 @@ class Plan(ABC):
         # check feasibility of new plan
         assert self.__is_feasible(self.actions)
         
-    def add_all(self, actions : List[AgentAction], t : float) -> None:
+    def add_all(self, actions : List[AgentAction], t : float, printouts : bool = False) -> None:
         """ adds a set of actions to plan """
         
         # sort new set of actions by start time 
@@ -101,7 +101,9 @@ class Plan(ABC):
 
             with tqdm(total=len(curr_actions) + len(new_actions),
                       desc='Planner-Adding actions to plan',
-                      leave=False) as pbar:
+                      leave=False,
+                      disable=(len(curr_actions) + len(new_actions) < 10) or not printouts
+                      ) as pbar:
                 while curr_actions and new_actions:
                     curr_action : AgentAction = curr_actions[0]
                     new_action : AgentAction = new_actions[0]

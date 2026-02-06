@@ -11,7 +11,7 @@ from execsatm.mission import Mission
 from execsatm.utils import Interval
 
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import LatestObservationTracker
 from dmas.models.states import *
 from dmas.models.actions import *
 from dmas.models.science.requests import *
@@ -33,13 +33,16 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                  model : str = EARLIEST,
                  sharing : str = None,
                  debug : bool = False,
-                 logger: Logger = None
-                 ) -> None:
+                 logger: Logger = None,
+                 printouts : bool = True
+                ) -> None:
         super().__init__(horizon, 
                          period, 
                          sharing,
                          debug, 
-                         logger)
+                         logger,
+                         printouts
+                        )
         
         # validate inputs
         assert model in self.MODELS, f'Invalid `model` type `{model}`. Must be one of {self.MODELS}.'
@@ -54,7 +57,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                                orbitdata : OrbitData, 
                                observation_opportunities : list,
                                mission : Mission,
-                               observation_history : ObservationHistory
+                               observation_history : LatestObservationTracker
                                ) -> List[ObservationAction]:
         
         if not isinstance(state, SatelliteAgentState):
@@ -116,7 +119,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                          observation_opportunities : List[ObservationOpportunity], 
                          orbitdata : OrbitData,
                          mission : Mission, 
-                         observation_history : ObservationHistory,
+                         observation_history : LatestObservationTracker,
                          specs : Spacecraft, 
                          payload : dict,
                          cross_track_fovs : Dict[str, float],
@@ -160,7 +163,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                                     for j,pair_j in tqdm(enumerate(observation_pairs), 
                                                         desc=f'{state.agent_name}-PLANNER: Estimating Observation Rewards',
                                                         leave=False,
-                                                        total=len(observation_pairs))
+                                                        total=len(observation_pairs),
+                                                        disable=(len(observation_pairs) < 10) or not self._printouts
+                                                    )
         }
 
         # perform DAG DP pull to get optimal path
@@ -238,7 +243,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         # process nodes in topographical order
         for v in tqdm(topography_order, 
                       desc=f'{state.agent_name}-PLANNER: Finding best path',
-                      leave=False):
+                      leave=False,
+                      disable=(len(topography_order) < 10) or not self._printouts
+                    ):
             
             # skip source
             if v == src: continue
@@ -255,7 +262,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
             # for u in preds[v]:
             for u in tqdm(preds[v], 
                       desc=f'{state.agent_name}-PLANNER: Evaluating predecessors for obs={v[1][0]} at t={v[1][1]:.2f}s',
-                      leave=False):
+                      leave=False,
+                      disable=(len(preds[v]) < 10) or not self._printouts
+                    ):
                 # check if unreachable from src
                 if np.isneginf(cummulative_rewards[u]): 
                     continue
@@ -305,7 +314,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                            observation_opportunities : List[ObservationOpportunity], 
                            orbitdata : OrbitData,
                            mission : Mission, 
-                           observation_history : ObservationHistory,
+                           observation_history : LatestObservationTracker,
                            specs : Spacecraft, 
                            payload : dict,
                            cross_track_fovs : Dict[str, float],
@@ -337,7 +346,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         # populate observation action list 
         for i, obs_i in tqdm(enumerate(observation_opportunities), 
                                 desc=f'{state.agent_name}-PLANNER: Generating Observation Actions from Observation Opportunities',
-                                leave=False):
+                                leave=False,
+                                disable=(len(observation_opportunities) < 10) or not self._printouts
+                            ):
             
             # collect all targets and objectives
             th_i = th_imgs[i]
@@ -367,7 +378,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         # populate adjacency matrix 
         for i in tqdm(range(len(observation_opportunities)), 
                         desc=f'{state.agent_name}-PLANNER: Generating Adjacency Matrix',
-                        leave=False):
+                        leave=False,
+                        disable=(len(observation_opportunities) < 10) or not self._printouts
+                    ):
             for j in range(i + 1, len(observation_opportunities)):
                 # check mutual exclusivity
                 if observation_opportunities[i].is_mutually_exclusive(observation_opportunities[j]):
@@ -391,7 +404,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         # calculate optimal path and update results
         for j in tqdm(range(len(observation_opportunities)), 
                       desc=f'{state.agent_name}-PLANNER: Evaluating Path Reward',
-                      leave=False):
+                      leave=False,
+                      disable=(len(observation_opportunities) < 10) or not self._printouts
+                    ):
             # get indeces of possible prior observations
             prev_indices : list[int] = [i for i in range(0,j) if adjacency[i][j]]
 
@@ -462,7 +477,12 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         observation_pairs : list[tuple] = [] # of the form (observation_index, t_img, reward)
 
         # generate observation-time pairs
-        for i,obs_i in tqdm(enumerate(observation_opportunities), desc=f'{state.agent_name}-PLANNER: Generating Observation-Time Pairs', leave=False):
+        for i,obs_i in tqdm(enumerate(observation_opportunities), 
+                            desc=f'{state.agent_name}-PLANNER: Generating Observation-Time Pairs', 
+                            leave=False, 
+                            total=len(observation_opportunities),
+                            disable=(len(observation_opportunities) < 10) or not self._printouts
+                        ):
             # set initial imaging time
             t_img = obs_i.accessibility.left
 
@@ -498,8 +518,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
             for j,pair_j in tqdm(enumerate(observation_pairs), 
                                     desc=f'{state.agent_name}-PLANNER: Generating Adjacency Matrix',
                                     leave=False,
-                                    total=len(observation_pairs)
-                                    ):
+                                    total=len(observation_pairs),
+                                    disable=(len(observation_pairs) < 10) or not self._printouts
+                                ):
                 
                 # skip first observation-time pair
                 if j == 0: continue # dummy observation has no preceeding observations
@@ -680,7 +701,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         #         # add performing action broadcast to plan
         #         for action_dict in tqdm(plan_out, 
         #                                 desc=f'{state.agent_name}-PLANNER: Pre-Scheduling Broadcasts', 
-        #                                 leave=False):
+        #                                 leave=False,
+        #                                total=len(plan_out),
+        #                               disable=(len(plan_out) < 10) or not self._printouts):
         #             # update action dict to indicate completion
         #             action_dict['status'] = AgentAction.COMPLETED
                     

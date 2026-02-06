@@ -17,7 +17,7 @@ from execsatm.utils import Interval
 
 from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, IdleAction, ObservationAction, WaitAction
 from dmas.models.planning.reactive import AbstractReactivePlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import LatestObservationTracker
 from dmas.models.planning.plan import Plan, PeriodicPlan, ReactivePlan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.science.requests import TaskRequest
@@ -39,9 +39,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
                  optimistic_bidding_threshold : int,
                  periodic_overwrite : bool,
                  debug : bool = False,
-                 logger: logging.Logger = None
-                 ) -> None:
-        super().__init__(debug, logger)
+                 logger: logging.Logger = None,
+                 printouts : bool = True
+                ) -> None:
+        super().__init__(debug, logger, printouts)
         """
         ## Consensus Couple-Constrained Planner
         
@@ -1272,7 +1273,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                       orbitdata : OrbitData,
                       mission : Mission,
                       tasks : List[GenericObservationTask],
-                      observation_history : ObservationHistory,
+                      observation_history : LatestObservationTracker,
                     ) -> Plan:  
         """ Generate new plan according to consensus replanning model. """             
         try:
@@ -1326,7 +1327,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                 orbitdata : OrbitData,
                                 mission : Mission,
                                 tasks : List[GenericObservationTask],
-                                observation_history : ObservationHistory,
+                                observation_history : LatestObservationTracker,
                               ) -> tuple:
 
         # DEBUG PRINTOUTS----------------
@@ -1410,7 +1411,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                     current_plan : Plan,
                                     orbitdata : OrbitData,
                                     mission : Mission,
-                                    observation_history : ObservationHistory
+                                    observation_history : LatestObservationTracker
                                     ) -> tuple:    
         """ Build bundle from latest periodic preplan. """
 
@@ -1422,7 +1423,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         tasks : List[GenericObservationTask],
                         orbitdata : OrbitData,
                         mission : Mission,
-                        observation_history : ObservationHistory
+                        observation_history : LatestObservationTracker
                         ) -> tuple:        
         """ 
         Build bundle according to selected replanning model. 
@@ -1610,7 +1611,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                 specs : object,
                                 cross_track_fovs : Dict[str, float],
                                 path : List[ObservationAction],
-                                observation_history : ObservationHistory,
+                                observation_history : LatestObservationTracker,
                                 orbitdata : OrbitData,
                                 mission : Mission,
                                 n_obs : List[Dict[GenericObservationTask, int]],
@@ -1631,7 +1632,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                               specs : object,
                               cross_track_fovs : Dict[str, float],
                               path : List[ObservationAction],
-                              observation_history : ObservationHistory,
+                              observation_history : LatestObservationTracker,
                               orbitdata : OrbitData,
                               mission : Mission,
                               n_obs : List[Dict[GenericObservationTask, int]],
@@ -1648,7 +1649,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                               specs : object,
                               cross_track_fovs : Dict[str, float],
                               path : List[ObservationAction],
-                              observation_history : ObservationHistory,
+                              observation_history : LatestObservationTracker,
                               orbitdata : OrbitData,
                               mission : Mission,
                               n_obs : List[Dict[GenericObservationTask, int]],
@@ -1842,6 +1843,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # generate bid messages to share bids in results
             compiled_bid_msgs = [
                 MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
+                # MeasurementBidMessage(state.agent_name, state.agent_name, bid)
                 for task,bids in self.results.items()
                 if isinstance(task, EventObservationTask)  # only share bids for event-driven tasks
                 for bid in bids
@@ -1858,7 +1860,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # compile results message containing all bid messages
             compiled_results_msg = BusMessage(state.agent_name, 
                                               state.agent_name, 
-                                              [bid_msg.to_dict() for bid_msg in compiled_bid_msgs])
+                                            #   [bid_msg.to_dict() for bid_msg in compiled_bid_msgs]
+                                              [bid_msg for bid_msg in compiled_bid_msgs]
+                                            )
             compiled_results_msg_dict = compiled_results_msg.to_dict()
             
             # initialize search for broadcast times during access opportunities

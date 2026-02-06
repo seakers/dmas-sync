@@ -1,8 +1,10 @@
 
 from enum import Enum
+import gc
 import logging
 import math
 import os
+import weakref
 
 class SimulationRoles(Enum):
     ENVIRONMENT = 'ENVIRONMENT'
@@ -14,6 +16,23 @@ class SimulationRoles(Enum):
 #     WARNING = logging.WARNING
 #     CRITICAL = logging.CRITICAL
 #     ERROR = logging.ERROR
+
+class MessageTracker:
+    """ Tracks live message objects using weak references. """
+    def __init__(self):
+        self._refs = weakref.WeakSet()
+        self._reffers : dict[int, list] = dict()
+
+    def track(self, msg):
+        self._refs.add(msg)
+        # self._reffers[id(msg)] = gc.get_referrers(msg)
+
+    def alive(self):
+        gc.collect()
+        # for msg in list(self._refs):
+        #     self._reffers[id(msg)] = gc.get_referrers(msg)
+        return len(self._refs)
+
 
 LEVELS = {  'DEBUG' : logging.DEBUG, 
             'INFO' : logging.INFO, 

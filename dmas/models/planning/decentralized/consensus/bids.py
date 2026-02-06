@@ -14,26 +14,8 @@ REQUIRED_KEYS = ['task', 'n_obs',
 
 def bid_comparison_input_checks( func : Callable ) -> Callable:
     """ Decorator to validate inputs for bid comparison methods """
-    def checker(self, other : object, *args, **kwargs) -> Any:
+    def checker(self : 'Bid', other : object, *args, **kwargs) -> Any:
         # validate inputs
-        # assert isinstance(other, (Bid,dict)), \
-        #     f'can only compare bids to other bids or dictionary representation of bids.'
-        
-        # if isinstance(other, dict):
-        #     # ensure all required keys are present
-        #     # assert all(key in other for key in REQUIRED_KEYS), \
-        #     #     f'Bid dictionary is missing required keys. Required keys: {REQUIRED_KEYS}'
-        #     # assert self.task.to_dict() == other['task'], \
-        #     #     f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other["task"]["id"]})'
-        #     assert self.task.id == other['task']['id'], \
-        #           f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other["task"]["id"]})'
-        #     assert self.n_obs == other['n_obs'], \
-        #         f'cannot compare bids intended for different image numbers (expected image number: {self.n_obs}, given image number: {other["n_obs"]})'
-        # else:
-        #     # assert self.task == other.task, f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other.task.id})'
-        #     assert self.task.id == other.task.id, f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other.task.id})'
-        #     assert self.n_obs == other.n_obs, f'cannot compare bids intended for different image numbers (expected image number: {self.n_obs}, given image number: {other.n_obs})'
-
         if isinstance(other, dict):
             other_id = other['task']['id']
             other_n_obs = other['n_obs']
@@ -41,7 +23,7 @@ def bid_comparison_input_checks( func : Callable ) -> Callable:
             other_id = other.task.id
             other_n_obs = other.n_obs
         else:
-            raise ValueError(f'unknown type for `other` bid: {type(other)}')
+            raise AssertionError(f'unknown type for `other` bid: {type(other)}')
         
         assert self.task.id == other_id, \
             f'cannot compare bids intended for different tasks (expected task id: {self.task.id}, given id: {other_id})'
@@ -65,6 +47,16 @@ class Bid:
 
     Describes a bid placed on a generic observation task by a given agent
     """
+    __slots__ = (
+        "task", "n_obs",
+        "owner", "owner_bid",
+        "winner", "winning_bid",
+        "t_img", "t_bid",
+        "t_stamps",
+        "main_measurement",
+        "performed",
+    )
+
     # Constants
     NONE = 'none'   # NONE value used in various bid attributes
     EPS = 1e-6      # small epsilon value for float comparisons
@@ -150,10 +142,24 @@ class Bid:
         """
         Crates a dictionary containing all information contained in this bid
         """
-        out = dict(self.__dict__)
-        out['task'] = self.task.to_dict()   
-        out['t_stamps'] = {key : val for key, val in self.t_stamps.items()}
-        return out            
+        # out = dict(self.__dict__)
+        # out['task'] = self.task.to_dict()   
+        # out['t_stamps'] = {key : val for key, val in self.t_stamps.items()}
+        # return out            
+        return {
+            'task' : self.task.to_dict(),
+            'n_obs' : self.n_obs,
+            'owner' : self.owner,
+            'owner_bid' : self.owner_bid,
+            'winner' : self.winner,
+            'winning_bid' : self.winning_bid,
+            't_img' : self.t_img,
+            't_bid' : self.t_bid,
+            # 't_stamps' : {key : val for key, val in self.t_stamps.items()},
+            't_stamps' : dict(self.t_stamps),
+            'main_measurement' : self.main_measurement,
+            'performed' : self.performed
+        }
 
     @classmethod
     def from_dict(cls, bid_dict: dict) -> 'Bid':
@@ -335,32 +341,7 @@ class Bid:
             return True
 
         # bids are the same winner-wise
-        return False
-
-        # if isinstance(other, dict):
-        #     # Compare winning bid information
-        #     if (
-        #         self.winner != other['winner']             # different winning bidder
-        #         or abs(self.winning_bid - other['winning_bid']) > self.EPS # different winning bid value
-        #         or abs(self.t_img - other['t_img']) > self.EPS             # different imaging time
-        #         # or abs(self.[t_bid] - other['t_bid']) > self.EPS             # different bid time
-        #         # or self.t_stamps != other.t_stamps                      # different time stamps
-        #         ):
-        #         return True
-        # else:
-        #     # Compare winning bid information
-        #     if (
-        #         self.winner != other.winner             # different winning bidder
-        #         or abs(self.winning_bid - other.winning_bid) > self.EPS # different winning bid value
-        #         or abs(self.t_img - other.t_img) > self.EPS             # different imaging time
-        #         # or abs(self.t_bid - other.t_bid) > self.EPS             # different bid time
-        #         # or self.t_stamps != other.t_stamps                      # different time stamps
-        #         ):
-        #         return True
-        
-        # # Fallback → bids are the same
-        # return False
-        
+        return False        
 
     """
     ------------------
@@ -389,11 +370,7 @@ class Bid:
                 
             else: # bid is of the same type (i.e., `Bid` class object)
                 comp_result = self.__compare_to_bid(other)                 
-            
-            # # check output type
-            # assert isinstance(comp_result, BidComparisonResults), 
-            #       f'comparison result must be of type `BidComparisonResults`, got `{type(comp_result)}`'
-
+                        
             # return comparison result
             return comp_result
         
@@ -955,10 +932,7 @@ class Bid:
         assert t_comp >= 0, f'`t_comp` must be non-negative, got `{t_comp}`'
         
         # create a shallow copy of this bid
-        # new_bid = copy.copy(self)
-        cls = self.__class__
-        new_bid = cls.__new__(cls)
-        new_bid.__dict__ = self.__dict__.copy()
+        new_bid = self.__clone_shallow()
         
         # check comparison rules
         comp_result : BidComparisonResults = self._rule_comparison(other)
@@ -977,6 +951,29 @@ class Bid:
 
         # return updated bid
         return new_bid
+    
+    def __clone_shallow(self) -> "Bid":
+        cls = self.__class__
+        new = cls.__new__(cls)
+
+        # copy slot fields
+        new.task = self.task
+        new.n_obs = self.n_obs
+        new.owner = self.owner
+        new.owner_bid = self.owner_bid
+        new.winner = self.winner
+        new.winning_bid = self.winning_bid
+        new.t_img = self.t_img
+        new.t_bid = self.t_bid
+
+        # IMPORTANT: timestamps is a dict; you usually want a shallow copy
+        # new.t_stamps = self.t_stamps.copy()
+        new.t_stamps = self.t_stamps
+
+        new.main_measurement = self.main_measurement
+        new.performed = self.performed
+
+        return new
     
     def __update_info(self, other : Union['Bid', dict], t_comp : float) -> None:
         """

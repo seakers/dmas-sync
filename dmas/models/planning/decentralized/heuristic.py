@@ -10,7 +10,7 @@ from dmas.utils.orbitdata import OrbitData
 from dmas.utils.orbitdata import OrbitData
 from dmas.core.messages import *
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
-from dmas.models.planning.tracker import ObservationHistory
+from dmas.models.trackers import LatestObservationTracker
 from dmas.models.states import *
 from dmas.models.actions import *
 from dmas.models.science.requests import *
@@ -26,7 +26,7 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
                                orbitdata : OrbitData, 
                                observation_opportunities : list,
                                mission : Mission,
-                               observation_history : ObservationHistory
+                               observation_history : LatestObservationTracker
                                ) -> list:
         if not isinstance(state, SatelliteAgentState):
             raise NotImplementedError(f'Naive planner not yet implemented for agents of type `{type(state)}.`')
@@ -57,7 +57,9 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
 
         for obs_opp in tqdm(sorted_observation_opportunities,
                          desc=f'{state.agent_name}-PLANNER: Pre-Scheduling Observations', 
-                         leave=False):
+                         leave=False,
+                         disable=(len(sorted_observation_opportunities) < 10) or not self._printouts
+                        ):
             
             # check if agent has the payload to peform observation
             if obs_opp.instrument_name not in payload: continue
@@ -168,7 +170,7 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
                                 cross_track_fovs : dict, 
                                 orbitdata : OrbitData, 
                                 mission : Mission, 
-                                observation_history : ObservationHistory) -> list:
+                                observation_history : LatestObservationTracker) -> list:
         """ Sorts tasks by heuristic value """
         
         # return if no observations to schedule
@@ -190,8 +192,9 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
         heuristic_vals = [(obs, self._calc_heuristic(obs, specs, cross_track_fovs, orbitdata, mission, observation_history)) 
                           for obs in tqdm(observation_opportunities, 
                                            desc=f"{state.agent_name}-PREPLANNER: Calculating heuristic values", 
-                                           leave=False)
-                            ]
+                                           leave=False,
+                                           disable=(len(observation_opportunities) < 10) or not self._printouts
+                                        )]
                 
         # sort observations by heuristic value
         sorted_data = sorted(heuristic_vals, key=lambda x: x[1])
@@ -206,7 +209,7 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
                         cross_track_fovs : dict, 
                         orbitdata : OrbitData, 
                         mission : Mission,
-                        observation_history : ObservationHistory
+                        observation_history : LatestObservationTracker
                         ) -> tuple:
         """ Heuristic function to sort tasks by their heuristic value. """
         # calculate task priority

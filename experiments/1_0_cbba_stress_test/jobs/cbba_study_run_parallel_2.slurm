@@ -31,4 +31,4 @@ eval "$(conda shell.bash hook)"
 conda activate ./.venv
 
 # --- Run ---
-python ./experiments/1_0_cbba_stress_test/study.py -n lhs_trials-2_samples-1000_seed -l 12 -u 18
+python ./experiments/1_0_cbba_stress_test/study.py -t lhs_trials-2_samples-1000_seed --trial-range 12:24 -p -m --force-simulate
