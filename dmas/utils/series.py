@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import json
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from matplotlib.table import table
 import numpy as np
@@ -11,79 +11,132 @@ from tqdm import tqdm
 
 from execsatm.utils import Interval
 
-
 @dataclass
-class StateTable:
-    """
-    Memmap-backed time-indexed state table:
-      pos: (N,3)
-      vel: (N,3)
-      t:   (N,) optional (monotonic int indices or time indices)
-    """
-    _pos: np.ndarray
-    _vel: np.ndarray
-    _t: Optional[np.ndarray]
-    _meta: Dict
-
+class AbstractTable(ABC):
+    """ Base class for memmap-backed tables. """
     @classmethod
-    def load(cls, in_dir: str, mmap_mode: str = "r") -> "StateTable":
+    def load(cls, in_dir: str, mmap_mode: str = "r") -> "AbstractTable":
+        # validate inputs
+        if not os.path.isdir(in_dir):
+            raise ValueError(f"input directory {in_dir} does not exist or is not a directory")
+        if not os.path.isfile(os.path.join(in_dir, "meta.json")):
+            raise ValueError(f"metadata file meta.json not found in input directory {in_dir}")
+        
+        # load metadata to get file paths and dtypes
         with open(os.path.join(in_dir, "meta.json"), "r") as f:
             meta = json.load(f)
+            # load state data from binary using metadata
+            return cls.from_schema(meta, mmap_mode=mmap_mode)
+        
+    @classmethod
+    @abstractmethod
+    def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "AbstractTable":
+        """ Creates an instance of the class from a metadata schema. """
+        # validate inputs
+        if not isinstance(schema, dict):
+            raise ValueError("schema must be a dictionary")
+        if mmap_mode not in ["r", "r+", "w+", "c"]:
+            raise ValueError(f"invalid mmap_mode {mmap_mode}; must be one of 'r', 'r+', 'w+', or 'c'")
+    
+@dataclass
+class TargetGridTable(AbstractTable):
+    """
+    Memmap-backed target grid table:
+      _lat:      (N,1)
+      _lon:      (N,1)
+      _grid_idx: (N,1)
+      _gp_idx:   (N,1)
+    """
+    _lat: np.ndarray
+    _lon: np.ndarray
+    _grid_idx: np.ndarray
+    _gp_idx: np.ndarray
+    
+    @classmethod
+    def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "TargetGridTable":
+        # validate inputs
+        super().from_schema(schema, mmap_mode=mmap_mode)
 
-        pos = np.load(os.path.join(in_dir, meta["files"]["pos"]), mmap_mode=mmap_mode)
-        vel = np.load(os.path.join(in_dir, meta["files"]["vel"]), mmap_mode=mmap_mode)
+        # extract in_dir from schema
+        in_dir = schema.get("dir", None)
 
-        t = None
-        if meta.get("has_t", False):
-            t = np.load(os.path.join(in_dir, meta["files"]["t"]), mmap_mode=mmap_mode)
+        # load data as memmaps
+        lat : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["lat_deg"]),  mmap_mode=mmap_mode)
+        lon : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["lon_deg"]),  mmap_mode=mmap_mode)
+        grid_idx : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["grid_index"]),  mmap_mode=mmap_mode)
+        gp_idx : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["GP_index"]),  mmap_mode=mmap_mode)
 
-        return cls(_pos=pos, _vel=vel, _t=t, _meta=meta)
+        # ensure shapes are correct
+        assert lat.shape == (schema["n"],), f"expected lat shape {(schema['n'],)}, got {lat.shape}"
+        assert lon.shape == (schema["n"],), f"expected lon shape {(schema['n'],)}, got {lon.shape}"
+        assert grid_idx.shape == (schema["n"],), f"expected grid_idx shape {(schema['n'],)}, got {grid_idx.shape}"
+        assert gp_idx.shape == (schema["n"],), f"expected gp_idx shape {(schema['n'],)}, got {gp_idx.shape}"
 
-    def get_state_at_index(self, i: int):
-        return self._pos[i], self._vel[i]
+        # initiate GroundPointTable object
+        return cls(_lat=lat, _lon=lon, _grid_idx=grid_idx, _gp_idx=gp_idx)
 
-    def get_state_at_time(self, t: float) -> tuple:
+@dataclass
+class StateTable(AbstractTable):
+    """
+    Memmap-backed time-indexed state table:
+      t:        (N,1) 
+      pos:      (N,3)
+      vel:      (N,3)
+    """
+    _t: np.ndarray
+    _pos: np.ndarray
+    _vel: np.ndarray
+    
+    @classmethod
+    def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "StateTable":
+        # validate inputs
+        super().from_schema(schema, mmap_mode=mmap_mode)
+
+        # extract in_dir from schema
+        in_dir = schema.get("dir", None)
+
+        # load data as memmaps
+        t : np.ndarray   = np.load(os.path.join(in_dir, schema["files"]["t"]),    mmap_mode=mmap_mode)
+        pos : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["pos"]),  mmap_mode=mmap_mode)
+        vel : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["vel"]),  mmap_mode=mmap_mode)
+
+        # ensure shapes are correct
+        assert t.shape == (schema["n"],), f"expected t shape {(schema['n'],)}, got {t.shape}"
+        assert pos.shape == (schema["n"], 3), f"expected pos shape {(schema['n'], 3)}, got {pos.shape}"
+        assert vel.shape == (schema["n"], 3), f"expected vel shape {(schema['n'], 3)}, got {vel.shape}"
+
+        # initiate StateTable object
+        return cls(_t=t, _pos=pos, _vel=vel)
+
+    def lookup(self, t: float) -> tuple:
+        """ Returns the state (position and velocity) at time `t` by interpolating between the closest time indices. """
+
         # validate inputs
         if not isinstance(t, (int, float)) or t < 0.0:
             raise ValueError("time t must be a non-negative number")
-        if self._t is None:
-            raise ValueError("This StateTable has no explicit t array; use direct index lookup.")
         
-        # calculate time index
-        time_step = self._meta.get("time_step", None)
-        if time_step is None:
-            raise ValueError("This StateTable does not have a time step defined in its metadata; cannot compute time index.")
-        
-        # Find location in time array 
-        idx = np.searchsorted(self._t, t, side="left")
-
-        # check if exact match
-        if idx < len(self._t) and abs(self._t[idx] - t) < 1e-6:
-            # return state at time index
-            return self._pos[idx], self._vel[idx]
-        if idx >= len(self._t):
+        # check if t is out of bounds
+        if t < self._t[0] - 1e-6:
+            # time is positive but before first index; return first state
+            return self._pos[0], self._vel[0]
+        elif t > self._t[-1] + 1e-6:
             # time is beyond last index; return last state
             return self._pos[-1], self._vel[-1]
 
+        # find location in time array 
+        t_idx = np.searchsorted(self._t, t, side="left")
+
+        # check if exact match was found
+        if abs(self._t[t_idx] - t) < 1e-6:
+            # return state at time index
+            return self._pos[t_idx], self._vel[t_idx]
+
         # interpolate between closest indices
-        i0 = max(0, idx - 1)
-        alpha = (t - self._t[i0]) / (self._t[idx] - self._t[i0])
-        return self.lerp_state(i0, alpha)
-
-    # def get_state_at_time_index_value(self, t_val: int):
-    #     if self._t is None:
-    #         raise ValueError("This StateTable has no explicit t array; use direct index lookup.")
-
-    #     # Find exact match
-    #     i = int(np.searchsorted(self._t, t_val, side="left"))
-    #     if i >= len(self._t) or int(self._t[i]) != int(t_val):
-    #         raise KeyError(f"time index {t_val} not found")
-    #     return self._pos[i], self._vel[i]
+        i0 = max(0, t_idx - 1)
+        alpha = (t - self._t[i0]) / (self._t[t_idx] - self._t[i0])
+        return self.__linear_interp_state(i0, alpha)
     
-    # def get_states_in_index_range(self, i0: int, i1: int):
-    #     return self._pos[i0:i1], self._vel[i0:i1]
-    
-    def lerp_state(self, i0: int, alpha: float):
+    def __linear_interp_state(self, i0: int, alpha: float):
         """
         alpha in [0,1): returns state between i0 and i0+1
         """
@@ -91,8 +144,94 @@ class StateTable:
         v = (1.0 - alpha) * self._vel[i0] + alpha * self._vel[i0 + 1]
         return p, v
 
+@dataclass
+class IntervalTable(AbstractTable):
+    """
+    Memmap-backed interval table.
+    - start/end are int indices.
+    - prefix_max_end enables O(log n) existence checks.
+    - extras are optional numeric columns.
+    """
+    _start: np.ndarray              # memmap
+    _end: np.ndarray                # memmap
+    _prefix_max_end: np.ndarray     # memmap
+    _extras: Dict[str, np.ndarray]  # memmap per column
 
+    @classmethod
+    def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "IntervalTable":
+        # validate inputs
+        super().from_schema(schema, mmap_mode=mmap_mode)
+        
+        # extract in_dir from schema
+        in_dir = schema.get("dir", None)
 
+        # load required data as memmaps
+        start : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["start"]), mmap_mode=mmap_mode)
+        end : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["end"]), mmap_mode=mmap_mode)
+        prefix : np.ndarray = np.load(os.path.join(in_dir, schema["files"]["prefix_max_end"]), mmap_mode=mmap_mode)
+
+        # load any extra columns as memmaps
+        extras: Dict[str, np.ndarray] = {}
+        for k, fname in schema["files"].items():
+            if k in ("start", "end", "prefix_max_end"):
+                continue
+            extras[k] = np.load(os.path.join(in_dir, fname), mmap_mode=mmap_mode)
+
+        # validate shapes
+        assert start.shape == (schema["n"],), f"expected start shape {(schema['n'],)}, got {start.shape}"
+        assert end.shape == (schema["n"],), f"expected end shape {(schema['n'],)}, got {end.shape}"
+        assert prefix.shape == (schema["n"],), f"expected prefix_max_end shape {(schema['n'],)}, got {prefix.shape}"
+        for k, arr in extras.items():
+            assert arr.shape == (schema["n"],), f"expected extra column {k} shape {(schema['n'],)}, got {arr.shape}"
+
+        # return `IntervalTable` object
+        return cls(_start=start, _end=end, _prefix_max_end=prefix, _extras=extras)
+    
+@dataclass
+class AccessTable(AbstractTable):
+    _offsets: np.ndarray     # (T+1,) int64
+    _t: np.ndarray           # (M,)   float32
+    _t_idx: np.ndarray       # (M,)   int32/int64
+    _lat: np.ndarray         # (M,)   float32
+    _lon: np.ndarray         # (M,)   float32
+    _grid_idx: np.ndarray      # (M,)   int32/int64
+    _gp_idx: np.ndarray      # (M,)   int32/int64
+    _extras: Dict[str, np.ndarray]  # memmap per extra column
+    _meta: Dict[str, Any]
+
+    @classmethod
+    def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "AccessTable":
+        # validate inputs
+        super().from_schema(schema, mmap_mode=mmap_mode)
+
+        # extract in_dir from schema
+        in_dir = schema.get("dir", None)
+
+        # load required data as memmaps
+        offsets = np.load(os.path.join(in_dir, schema["files"]["offsets"]), mmap_mode=mmap_mode)
+        t = np.load(os.path.join(in_dir, schema["files"]["t"]), mmap_mode=mmap_mode)
+        t_idx = np.load(os.path.join(in_dir, schema["files"]["t_index"]), mmap_mode=mmap_mode)
+        grid_idx  = np.load(os.path.join(in_dir, schema["files"]["grid_index"]),  mmap_mode=mmap_mode)
+        gp_idx  = np.load(os.path.join(in_dir, schema["files"]["GP_index"]),  mmap_mode=mmap_mode)
+        lat     = np.load(os.path.join(in_dir, schema["files"]["lat_deg"]),     mmap_mode=mmap_mode)
+        lon     = np.load(os.path.join(in_dir, schema["files"]["lon_deg"]),     mmap_mode=mmap_mode)
+
+        # load any extra columns as memmaps
+        extras: Dict[str, np.ndarray] = {}
+        for k, fname in schema["files"].items():
+            if k in ("offsets", "t", "t_index", "grid_index", "GP_index", "lat_deg", "lon_deg"):
+                continue
+            extras[k] = np.load(os.path.join(in_dir, fname), mmap_mode=mmap_mode)
+
+        return cls(_offsets=offsets, _t=t, _t_idx=t_idx, _lat=lat, _lon=lon, _grid_idx=grid_idx, _gp_idx=gp_idx, _extras=extras, _meta=schema)
+
+    @property
+    def n_steps(self) -> int:
+        return int(self._meta["n_steps"])
+
+    @property
+    def n_rows(self) -> int:
+        return int(self._meta["n_rows"])
 
 
 class AbstractDataSeries(ABC):
