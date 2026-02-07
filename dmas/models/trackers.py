@@ -210,9 +210,6 @@ class LatestObservationTracker:
           orbitdata.grid_data: iterable of pandas DataFrames containing columns:
             ["grid index", "GP index"] (and optionally lat/lon, but not required for tracking)
         """
-        # define required columns for constructing the tracker from orbitdata
-        cols = ["grid index", "GP index"]
-
         # initialize mappings
         key_to_k: Dict[TargetKey, int] = {}
         
@@ -221,7 +218,6 @@ class LatestObservationTracker:
             grid_iter = tqdm(orbitdata.grid_data, desc="Init ObservationHistory", unit=" df", leave=False)
         else:
             grid_iter = orbitdata.grid_data 
-
 
         # iterate through the unique grid points and populate the key_to_k and k_to_key mappings
         for *_,grid_idx,gp_idx in grid_iter:
