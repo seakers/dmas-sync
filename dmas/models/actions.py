@@ -68,11 +68,11 @@ class AgentAction(ABC):
         super().__init__()
 
         # type and value checks
-        if not isinstance(t_start, float) and not isinstance(t_start, int):
+        if not isinstance(t_start, (float, int)):
             raise AttributeError(f'`t_start` must be of type `float` or type `int`. is of type {type(t_start)}.')
         elif t_start < 0:
             raise ValueError(f'`t_start` must be a value higher than 0. is of value {t_start}.')
-        if not isinstance(t_end, float) and not isinstance(t_end, int):
+        if not isinstance(t_end, (float, int)):
             raise AttributeError(f'`t_end` must be of type `float` or type `int`. is of type {type(t_end)}.')
         elif t_end < 0:
             raise ValueError(f'`t_end` must be a value higher than 0. is of value {t_end}.')

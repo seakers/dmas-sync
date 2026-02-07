@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import json
+import math
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -75,14 +76,15 @@ class TargetGridTable(AbstractTable):
         # initiate GroundPointTable object
         return cls(_lat=lat, _lon=lon, _grid_idx=grid_idx, _gp_idx=gp_idx)
     
-
     def __iter__(self):
         """
         Returns an iterator over the data
         """
         for i in range(len(self._lat)):
-            yield (self._lat[i], self._lon[i], self._grid_idx[i], self._gp_idx[i])
-            
+            yield (float(self._lat[i]), float(self._lon[i]), int(self._grid_idx[i]), int(self._gp_idx[i]))
+
+    def __len__(self):
+        return len(self._lat)
 
 @dataclass
 class StateTable(AbstractTable):
@@ -117,7 +119,7 @@ class StateTable(AbstractTable):
         # initiate StateTable object
         return cls(_t=t, _pos=pos, _vel=vel)
 
-    def lookup(self, t: float) -> tuple:
+    def lookup_value(self, t: float) -> tuple:
         """ Returns the state (position and velocity) at time `t` by interpolating between the closest time indices. """
 
         # validate inputs
@@ -153,9 +155,8 @@ class StateTable(AbstractTable):
         v = (1.0 - alpha) * self._vel[i0] + alpha * self._vel[i0 + 1]
         return p, v
     
-    def lookup_value(self, t : float) -> tuple:
-        # TODO 
-        pass
+    def __len__(self):
+        return len(self._t)
 
 @dataclass
 class IntervalTable(AbstractTable):
@@ -166,6 +167,7 @@ class IntervalTable(AbstractTable):
     _end: np.ndarray                # memmap
     _prefix_max_end: np.ndarray     # memmap
     _extras: Dict[str, np.ndarray]  # memmap per column
+    _meta : Dict[str, Any]          # metadata dictionary
 
     @classmethod
     def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "IntervalTable":
@@ -195,7 +197,7 @@ class IntervalTable(AbstractTable):
             assert arr.shape == (schema["n"],), f"expected extra column {k} shape {(schema['n'],)}, got {arr.shape}"
 
         # return `IntervalTable` object
-        return cls(_start=start, _end=end, _prefix_max_end=prefix, _extras=extras)    
+        return cls(_start=start, _end=end, _prefix_max_end=prefix, _extras=extras, _meta=schema)    
     
     def __iter__(self):
         """
@@ -246,14 +248,22 @@ class IntervalTable(AbstractTable):
         # return list of intervals
         return intervals
 
-    def lookup_interval(self, t : float, include_current: bool = False) -> Optional[Interval]:
+    def lookup_interval(self, t : float, t_max : float = np.Inf, include_current: bool = False) -> Optional[Interval]:
         """
         Returns the interval that contains time `t` if it exists. If `include_current` is True, also includes the interval that starts at time `t` if it exists.
         """
         # validate inputs
         if not isinstance(t, (int, float)) or t < 0.0:
             raise ValueError("time t must be a non-negative number")
+        if not isinstance(t_max, (int, float)) or t_max < 0.0:
+            raise ValueError("time t_max must be a non-negative number")
+        if t > t_max + 1e-6:
+            raise ValueError("time t must be less than or equal to time t_max")
     
+        # check if there is any data
+        if len(self._start) == 0:
+            return None
+
         # check if t is beyond the end of all intervals
         if t > self._prefix_max_end[-1] + 1e-6:
             # time is beyond the end of all intervals; return None
@@ -261,7 +271,28 @@ class IntervalTable(AbstractTable):
 
         # find starting index using prefix max end for efficient search
         idx = np.searchsorted(self._prefix_max_end, t, side="left")
+
+        # set upper bound for search to stop at t_max
+        n = len(self._start)
+
+        # iterate through intervals starting from idx 
+        for i in range(idx, n):
+            # early stop if start time is beyond t_max
+            if self._start[i] > t_max + 1e-6: break
+
+            # check if starts after time t or is current and include_current is True
+            if include_current or self._start[i] > t - 1e-6:
+                # first interval that contains time t is found
+                t_start = max(self._start[i], t) if include_current else self._start[i]
+                
+                # return interval as Interval object
+                return Interval(float(t_start), float(self._end[i]))
+
+        # fallback, return None
+        return None
     
+    def __len__(self):
+        return len(self._start)
     
 @dataclass
 class AccessTable(AbstractTable):
@@ -312,3 +343,119 @@ class AccessTable(AbstractTable):
     @property
     def n_rows(self) -> int:
         return int(self._meta["n_rows"])
+    
+    def __len__(self):
+        return len(self._t)
+    
+    def _time_to_index_floor(self, t: float) -> int:
+        dt = float(self._meta["time_step"])
+        return int(t // dt) if not np.isinf(t) else len(self._offsets) - 1
+        # return int(t // dt) if t < self._t[-1] + 1e-6 else len(self._t_idx) - 1
+
+    def _clamp_index(self, ti: int) -> int:
+        T = len(self._offsets) - 1
+        # T = len(self._t_idx) - 1
+        if ti < 0:
+            return 0
+        if ti > T - 1:
+            return T - 1
+        return ti
+    
+    def _slice_for_index_range(self, ti0: int, ti1: int) -> slice:
+        if ti1 < ti0:
+            return slice(0, 0)
+        ti0 = self._clamp_index(ti0)
+        ti1 = self._clamp_index(ti1)
+        if ti1 < ti0:
+            return slice(0, 0)
+        a = int(self._offsets[ti0])
+        b = int(self._offsets[ti1 + 1])
+        # a = int(self._t_idx[ti0])
+        # b = int(self._t_idx[ti1 + 1])
+        return slice(a, b)
+
+    # def get_next_access_intervals(self, target: str, t: float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
+    def lookup_interval(self, t_start : float, t_end : float = np.Inf) -> Dict[str, np.ndarray]:
+        # validate inputs
+        if not isinstance(t_start, (int, float)) or t_start < 0.0:
+            raise ValueError("time t_start must be a non-negative number")
+        if not isinstance(t_end, (int, float)) or t_end < 0.0:
+            raise ValueError("time t_end must be a non-negative number")
+        if t_start > t_end + 1e-6:
+            raise ValueError("time t_start must be less than or equal to time t_end")
+        
+        # check if there is any data
+        if len(self._t) == 0:
+            return {
+                "time [s]": self._t[0:0],
+                # "t_index": self._t_idx[0:0],
+                "lat [deg]": self._lat[0:0],
+                "lon [deg]": self._lon[0:0],
+                "grid index": self._grid_idx[0:0],
+                "GP index": self._gp_idx[0:0],
+            }
+
+        # get start and end indices for time range
+        ti0 = self._time_to_index_floor(t_start)
+        ti1 = self._time_to_index_floor(t_end)
+
+        # get slice for time index range
+        s = self._slice_for_index_range(ti0, ti1)
+
+        # construct output dictionary
+        out = {
+            "time [s]": self._t[s].astype(float),
+            # "t_index": self._t_idx[s],
+            "lat [deg]": self._lat[s].astype(float),
+            "lon [deg]": self._lon[s].astype(float),
+            "grid index": self._grid_idx[s],
+            "GP index": self._gp_idx[s],
+        }
+
+        # add any extra columns
+        for k, arr in self._extras.items():
+            col = self._meta["columns"].get(k, {}).get("col_name", k)
+            # check if column is encoded in metadata
+            if 'vocab' in self._meta["columns"].get(k, {}):
+                # decode column using vocab
+                vocab : dict = self._meta["columns"][k]["vocab"]
+                out[col] = np.array([vocab.get(str(code), None) for code in arr[s]])
+            else:
+                out[col] = arr[s].astype(float)
+
+        # filter out any rows that are outside the time range 
+        if s.start != s.stop:
+            mask = (out["time [s]"] >= t_start) & (out["time [s]"] <= t_end)
+            for col in list(out.keys()):
+                out[col] = out[col][mask]
+        
+        # return output
+        return out
+
+    def __iter__(self):
+        """
+        Returns an iterator over the data
+        """
+        for i in range(len(self._t)):
+            
+            out = {
+                # "t_index": self._t_idx[i],
+                "lat [deg]": float(self._lat[i]),
+                "lon [deg]": float(self._lon[i]),
+                "grid index": self._grid_idx[i],
+                "GP index": self._gp_idx[i],
+            }
+            # add any extra columns
+            for k, arr in self._extras.items():
+                col = self._meta["columns"].get(k, {}).get("col_name", k)                
+                # check if column is encoded in metadata
+                if 'vocab' in self._meta["columns"].get(k, {}):
+                    # decode column using vocab
+                    vocab : dict = self._meta["columns"][k]["vocab"]
+                    # add decoding for current row
+                    out[col] = vocab.get(str(arr[i]), None)
+                else:
+                    # add raw value for current row
+                    out[col] = float(arr[i])
+
+            yield float(self._t[i]),out

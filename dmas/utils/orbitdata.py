@@ -143,6 +143,10 @@ class OrbitData:
 
     def __get_next_interval(self, interval_data : IntervalTable, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
         """ returns the next access interval from `interval_data` after or during time `t`. """
+        return interval_data.lookup_interval(t, t_max, include_current)
+        
+        raise NotImplementedError('TODO: need to implement method to return next interval from interval data. This is currently not being used in the code but will be needed for future features such as eclipse-aware planning and ground station access scheduling.')
+        
         # get next intervals
         future_intervals : list[Interval] = interval_data.lookup_interval(t, t_max, include_current)
 
@@ -172,32 +176,14 @@ class OrbitData:
         assert target in self.comms_links.keys(), f'No comms data found for target agent `{target}`.'
 
         # get next access intervals
-        future_access_intervals = self.__get_next_intervals(self.comms_links[target], t, t_max, include_current)
+        return self.__get_next_intervals(self.comms_links[target], t, t_max, include_current)
 
-        # return in interval form
-        return [Interval(t_start,t_end) for t_start,t_end in future_access_intervals] if future_access_intervals else []
-
-    def __get_next_intervals(self, interval_data : IntervalTable, t : float, t_max: float = np.Inf, include_current: bool = False) -> List[Tuple[float, float]]:
+    def __get_next_intervals(self, interval_data : IntervalTable, t : float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
         # find all intervals that end after time `t` and start before time `t_max`
         future_intervals : List[Interval] = interval_data.lookup_intervals(t, t_max, include_current)
-        
-        # convert to tuple form
-        future_interval_pairs = [(interval.left, interval.right) for interval in future_intervals]
-        
-        # # check if current interval should be included
-        # if not include_current:
-        #     # exclude intervals that contain time `t`
-        #     future_interval_pairs = [(t_start, t_end) for t_start,t_end in future_interval_pairs
-        #                         if t < t_start] # interval starts after time `t`
-        # else:
-        #     # include current intervals but clip to start at time `t`
-        #     future_interval_pairs = [(max(t, t_start), t_end) for t_start,t_end in future_interval_pairs]
-
-        # check if there are any valid intervals
-        if not future_interval_pairs: return None
-        
-        # sort by start time and return
-        return sorted(future_interval_pairs, key=lambda interval: interval[0])
+                
+        # return intervals that start after or at time `t` and end before or at time `t_max`
+        return future_intervals
     
     def get_next_gp_access_interval(self, lat: float, lon: float, t: float, t_max : float = np.Inf) -> Interval:
         """
@@ -1289,6 +1275,7 @@ class OrbitData:
                 # (vectorized mapping via pandas map)
                 mapped = s2.map(lambda x: str_to_code.get(str(x), 0) if pd.notna(x) else 0)
                 codes[:] = mapped.to_numpy(dtype=np.int32, na_value=0)
+                vocab = {"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}
 
                 # define file paths for codes and dictionary
                 codes_path = f"col_{safe}__codes.npy"
@@ -1297,13 +1284,14 @@ class OrbitData:
                 # save codes and dictionary to files
                 np.save(os.path.join(out_dir, codes_path), codes)
                 with open(os.path.join(out_dir, dict_path), "w") as f:
-                    json.dump({"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}, f, indent=4)
+                    json.dump(vocab, f, indent=4)
 
                 # update metadata for this column
                 meta["columns"][safe] = {
                     "col_name" : col,
                     "kind": "string_dict",
                     "dict_file": dict_path,
+                    "vocab" : vocab
                 }
                 meta['files'][safe] = codes_path
                 meta['dtypes'][safe] = str(codes.dtype)
@@ -1393,7 +1381,8 @@ class OrbitData:
             return np.dtype(np.int32)
         if pd.api.types.is_float_dtype(series):
             # float32 is usually fine for many telemetry-ish fields
-            return np.dtype(np.float32)
+            # return np.dtype(np.float32)
+            return np.dtype(np.float64)
         raise TypeError(f"Unsupported dtype for column '{series.name}': {series.dtype}. "
                         f"Encode strings/categories before writing.")
 
@@ -1586,6 +1575,7 @@ class OrbitData:
         meta: Dict[str, Any] = {
             "name": table_name,
             "n_rows": int(offsets[-1]),
+            "time_step" : float(time_step),
             "n_steps": int(T),            
             "format": "ragged_csr_columnar",
             "t_col": t_col,
@@ -1630,17 +1620,19 @@ class OrbitData:
                 # (vectorized mapping via pandas map)
                 mapped = s2.map(lambda x: str_to_code.get(str(x), 0) if pd.notna(x) else 0)
                 codes[:] = mapped.to_numpy(dtype=np.int32, na_value=0)
+                vocab = {"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}
 
                 codes_path = f"col_{safe}__codes.npy"
                 dict_path = f"dict_{safe}.json"
                 np.save(os.path.join(out_dir, codes_path), codes)
                 with open(os.path.join(out_dir, dict_path), "w") as f:
-                    json.dump({"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}, f, indent=4)
+                    json.dump(vocab, f, indent=4)
 
                 meta["columns"][safe] = {
                     "kind": "string_dict",
                     "col_name": col,
                     "dict_file": dict_path,
+                    "vocab" : vocab
                 }
                 meta["files"][safe] = codes_path
                 meta["dtypes"][safe] = str(codes.dtype)
