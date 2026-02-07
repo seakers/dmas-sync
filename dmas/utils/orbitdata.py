@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from orbitpy.mission import Mission
 from execsatm.utils import Interval
-from dmas.utils.series import AccessTable, IntervalTable, StateTable, TargetGridTable, TimeIndexedData,IntervalData
+from dmas.utils.series import AccessTable, IntervalTable, StateTable, TargetGridTable
 
 class ConnectivityLevels(Enum):
     FULL = 'FULL'   # static fully connected network between all agents
@@ -75,17 +75,19 @@ class OrbitData:
     """
     @staticmethod
     def from_directory(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Dict[str, 'OrbitData']:
+        # TODO check if schemas have already been generated at the provided directory and load from there if so, o
+        # therwise preprocess data and generate schemas before loading
+        
         # preprocess data and store as binarys for faster loading in the future
-        schemas : list[dict] \
+        schemas : dict[str, dict] \
             = OrbitData.preprocess(orbitdata_dir, simulation_duration, printouts=printouts)
 
         # force garbage collection after loading data to free up memory
         gc.collect() 
 
         data = dict()
-        for schema in schemas:
+        for agent_name, schema in schemas.items():
             # unpack agent-specific data from schema
-            agent_name = schema['agent_name']
             gs_network_name = schema['gs_network_name']
             time_step = schema['time_specs']['time step']
             epoch_type = schema['time_specs']['epoch type']
@@ -119,6 +121,387 @@ class OrbitData:
         # return compiled data
         return data     
 
+    """
+    GET NEXT methods
+    """
+    def get_next_agent_access(self, target : str, t: float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
+        """ returns the next access interval to another agent or ground station after or during time `t` up to a given time `t_max`. """
+
+        # check if target is within the list of known agents
+        assert target in self.comms_links.keys(), f'No comms data found for target agent `{target}`.'
+
+        # return next access interval
+        return self.__get_next_interval(self.comms_links[target], t, t_max, include_current)
+
+    def get_next_gs_access(self, t, t_max: float = np.Inf, include_current: bool = False) -> Interval:
+        """ returns the next access interval to a ground station after or during time `t`. """
+        return self.__get_next_interval(self.gs_access_data, t, t_max, include_current)
+
+    def get_next_eclipse_interval(self, t: float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
+        """ returns the next eclipse interval after or during time `t`. """
+        return self.__get_next_interval(self.eclipse_data, t, t_max, include_current)
+
+    def __get_next_interval(self, interval_data : IntervalTable, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
+        """ returns the next access interval from `interval_data` after or during time `t`. """
+        # get next intervals
+        future_intervals : list[Interval] = interval_data.lookup_interval(t, t_max, include_current)
+
+        # # check if current interval should be included
+        # if not include_current:
+        #     # exclude intervals that contain time `t`
+        #     future_intervals = [interval for interval in future_intervals
+        #                         if t < interval.left] # interval starts after time `t`
+        # else:
+        #     # include current intervals but clip to start at time `t`
+        #     future_intervals = [Interval(max(t, interval.left), interval.right) if interval.left <= t <= interval.right else interval
+        #                         for interval in future_intervals]
+
+        # check if there are any valid intervals
+        if not future_intervals: return None
+
+        # get next interval
+        next_interval = future_intervals[0]
+
+        # return the first interval that starts after or at time `t`
+        return Interval(max(t, next_interval.left), min(next_interval.right, t_max))
+
+    def get_next_agent_accesses(self, target : str, t: float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
+        """ returns a list of the next access interval to another agent or ground station after or during time `t` up to a given time `t_max`. """
+
+        # check if target is within the list of known agents
+        assert target in self.comms_links.keys(), f'No comms data found for target agent `{target}`.'
+
+        # get next access intervals
+        future_access_intervals = self.__get_next_intervals(self.comms_links[target], t, t_max, include_current)
+
+        # return in interval form
+        return [Interval(t_start,t_end) for t_start,t_end in future_access_intervals] if future_access_intervals else []
+
+    def __get_next_intervals(self, interval_data : IntervalTable, t : float, t_max: float = np.Inf, include_current: bool = False) -> List[Tuple[float, float]]:
+        # find all intervals that end after time `t` and start before time `t_max`
+        future_intervals : List[Interval] = interval_data.lookup_intervals(t, t_max, include_current)
+        
+        # convert to tuple form
+        future_interval_pairs = [(interval.left, interval.right) for interval in future_intervals]
+        
+        # # check if current interval should be included
+        # if not include_current:
+        #     # exclude intervals that contain time `t`
+        #     future_interval_pairs = [(t_start, t_end) for t_start,t_end in future_interval_pairs
+        #                         if t < t_start] # interval starts after time `t`
+        # else:
+        #     # include current intervals but clip to start at time `t`
+        #     future_interval_pairs = [(max(t, t_start), t_end) for t_start,t_end in future_interval_pairs]
+
+        # check if there are any valid intervals
+        if not future_interval_pairs: return None
+        
+        # sort by start time and return
+        return sorted(future_interval_pairs, key=lambda interval: interval[0])
+    
+    def get_next_gp_access_interval(self, lat: float, lon: float, t: float, t_max : float = np.Inf) -> Interval:
+        """
+        Returns the next access to a ground point
+        """
+        # TODO
+        raise NotImplementedError('TODO: need to implement.')
+
+    """
+    STATE QUERY methods
+    """
+
+    def is_eclipse(self, t: float):
+        """ checks if a satellite is currently in eclise at time `t`. """
+        _,_,eclipse = self.get_orbit_state(t)
+        return bool(eclipse)
+
+    def get_position(self, t: float):
+        pos, _, _ = self.get_orbit_state(t)
+        return pos
+
+    def get_velocity(self, t: float):
+        _, vel, _ = self.get_orbit_state(t)
+        return vel
+        
+    def get_orbit_state(self, t: float):
+        # get eclipse data
+        is_eclipse = self.is_eclipse(t)
+
+        # get position data
+        position_data = self.state_data.lookup_value(t)
+        
+        if not position_data:
+            raise ValueError(f'No position data found for time {t} [s].')
+
+        # unpack position and velocity data
+        pos = [position_data['x [km]'], position_data['y [km]'], position_data['z [km]']]
+        vel = [position_data['vx [km/s]'], position_data['vy [km/s]'], position_data['vz [km/s]']]
+        
+        return (pos, vel, is_eclipse)
+
+    """
+    PRECOMPUTATION OF ORBIT DATA
+    """
+    def precompute(scenario_specs : dict, overwrite : bool = False, printouts: bool = True) -> str:
+        """ Pre-calculates coverage and position data for all agents described in the scenario specifications """
+        
+        # get desired orbit data path
+        scenario_dir = scenario_specs['scenario']['scenarioPath']
+        settings_dict : dict = scenario_specs.get('settings', None)
+        if settings_dict is None:
+            data_dir = None
+        else:
+            data_dir = settings_dict.get('outDir', None)
+
+        if data_dir is None:
+            data_dir = os.path.join(scenario_dir, 'orbit_data')
+    
+        if not os.path.exists(data_dir):
+            # if directory does not exists, create it
+            os.mkdir(data_dir)
+            changes_to_scenario = True
+        else:
+            changes_to_scenario : bool = OrbitData._check_changes_to_scenario(scenario_specs, data_dir)
+
+        if not changes_to_scenario and not overwrite:
+            # if propagation data files already exist, load results
+            if printouts: tqdm.write(' - Existing orbit data found and matches scenario. Loading existing data...')
+            
+        else:
+            # if propagation data files do not exist, propagate and then load results
+            if printouts:
+                if os.path.exists(data_dir):
+                    tqdm.write(' - Existing orbit data does not match scenario.')
+                else:
+                    tqdm.write(' - Orbit data not found.')
+
+            # clear files if they exist
+            if printouts: tqdm.write(' - Clearing \'orbitdata\' directory...')    
+            if os.path.exists(data_dir):
+                for f in os.listdir(data_dir):
+                    f_dir = os.path.join(data_dir, f)
+                    if os.path.isdir(f_dir):
+                        for h in os.listdir(f_dir):
+                            os.remove(os.path.join(f_dir, h))
+                        os.rmdir(f_dir)
+                    else:
+                        os.remove(f_dir) 
+            if printouts:
+                tqdm.write(' - \'orbitdata\' cleared!')
+
+            # set grid 
+            grid_dicts : list = scenario_specs.get("grid", None)
+            grid_dicts = [grid_dicts] if isinstance(grid_dicts, dict) else grid_dicts
+            assert isinstance(grid_dicts, list), 'Grid specifications must be provided as a list of dictionaries.'
+
+            for grid_dict in grid_dicts:
+                grid_dict : dict
+                if grid_dict is not None:
+                    grid_type : str = grid_dict.get('@type', None)
+                    
+                    if grid_type.lower() == 'customgrid':
+                        # do nothing
+                        pass
+                    elif grid_type.lower() == 'uniform':
+                        # create uniform grid
+                        lat_spacing = grid_dict.get('lat_spacing', 1)
+                        lon_spacing = grid_dict.get('lon_spacing', 1)
+                        grid_index  = grid_dicts.index(grid_dict)
+                        grid_path : str = OrbitData._create_uniform_grid(scenario_dir, grid_index, lat_spacing, lon_spacing)
+
+                        # set to customgrid
+                        grid_dict['@type'] = 'customgrid'
+                        grid_dict['covGridFilePath'] = grid_path
+                        
+                    elif grid_type.lower() in ['cluster', 'clustered']:
+                        # create clustered grid
+                        n_clusters          = grid_dict.get('n_clusters', 100)
+                        n_cluster_points    = grid_dict.get('n_cluster_points', 1)
+                        variance            = grid_dict.get('variance', 1)
+                        grid_index          = grid_dicts.index(grid_dict)
+                        grid_path : str = OrbitData._create_clustered_grid(scenario_dir, grid_index, n_clusters, n_cluster_points, variance)
+
+                        # set to customgrid
+                        grid_dict['@type'] = 'customgrid'
+                        grid_dict['covGridFilePath'] = grid_path
+                        
+                    else:
+                        raise ValueError(f'Grids of type \'{grid_type}\' not supported.')
+                else:
+                    pass
+            scenario_specs['grid'] = grid_dicts
+
+            # set output directory to orbit data directory
+            if scenario_specs.get("settings", None) is not None:
+                if scenario_specs["settings"].get("outDir", None) is None:
+                    scenario_specs["settings"]["outDir"] = scenario_dir + '/orbit_data/'
+            else:
+                scenario_specs["settings"] = {}
+                scenario_specs["settings"]["outDir"] = scenario_dir + '/orbit_data/'
+
+            # propagate data and save to orbit data directory
+            if printouts: tqdm.write("Propagating orbits...")
+            mission : Mission = Mission.from_json(scenario_specs, printouts=printouts)  
+            mission.execute(printouts=printouts)                
+            if printouts: tqdm.write("Propagation done!")
+
+        # update mission duration if needed
+        orbitdata_filename = os.path.join(data_dir, 'MissionSpecs.json')
+        ## check if mission specs file exists
+        original_duration = scenario_specs['duration']
+        if os.path.exists(orbitdata_filename):
+            with open(orbitdata_filename, 'r') as orbitdata_specs:
+                # load existing mission specs
+                orbitdata_dict : dict = json.load(orbitdata_specs)
+
+                # update duration to that of the longest mission
+                scenario_specs['duration'] = max(scenario_specs['duration'], orbitdata_dict['duration'])
+
+        # save specifications of propagation in the orbit data directory
+        with open(os.path.join(data_dir,'MissionSpecs.json'), 'w') as mission_specs:
+            mission_specs.write(json.dumps(scenario_specs, indent=4))
+            assert os.path.exists(os.path.join(data_dir,'MissionSpecs.json')), \
+                'Mission specifications not saved correctly!'
+            
+        # restore original duration value
+        scenario_specs['duration'] = original_duration
+
+        # return orbit data directory
+        return data_dir
+    
+    def _check_changes_to_scenario(scenario_dict : dict, orbitdata_dir : str) -> bool:
+        """ 
+        Checks if the scenario has already been pre-computed 
+        or if relevant changes have been made 
+        """
+        # check if directory exists
+        filename = 'MissionSpecs.json'
+        orbitdata_filename = os.path.join(orbitdata_dir, filename)
+        if not os.path.exists(orbitdata_filename):
+            return True
+        
+        # copy scenario specs
+        scenario_specs : dict = copy.deepcopy(scenario_dict)
+            
+        # compare specifications
+        with open(orbitdata_filename, 'r') as orbitdata_specs:
+            orbitdata_dict : dict = json.load(orbitdata_specs)
+
+            scenario_specs.pop('settings')
+            orbitdata_dict.pop('settings')
+            scenario_specs.pop('scenario')
+            orbitdata_dict.pop('scenario')
+
+            if (
+                    scenario_specs['epoch'] != orbitdata_dict['epoch']
+                or scenario_specs['duration'] > orbitdata_dict['duration']
+                or scenario_specs.get('groundStation', None) != orbitdata_dict.get('groundStation', None)
+                # or scenario_dict['grid'] != orbitdata_dict['grid']
+                # or scenario_dict['scenario']['connectivity'] != mission_dict['scenario']['connectivity']
+                ):
+                return True
+            
+            if scenario_specs['grid'] != orbitdata_dict['grid']:
+                if len(scenario_specs['grid']) != len(orbitdata_dict['grid']):
+                    return True
+                
+                for i in range(len(scenario_specs['grid'])):
+                    scenario_grid : dict = scenario_specs['grid'][i]
+                    mission_grid : dict = orbitdata_dict['grid'][i]
+
+                    scenario_gridtype = scenario_grid['@type'].lower()
+                    mission_gridtype = mission_grid['@type'].lower()
+
+                    if scenario_gridtype != mission_gridtype == 'customgrid':
+                        if scenario_gridtype not in mission_grid['covGridFilePath']:
+                            return True
+
+            if scenario_specs['spacecraft'] != orbitdata_dict['spacecraft']:
+                if len(scenario_specs['spacecraft']) != len(orbitdata_dict['spacecraft']):
+                    return True
+                
+                for i in range(len(scenario_specs['spacecraft'])):
+                    scenario_sat : dict = scenario_specs['spacecraft'][i]
+                    mission_sat : dict = orbitdata_dict['spacecraft'][i]
+                    
+                    if "planner" in scenario_sat:
+                        scenario_sat.pop("planner")
+                    if "science" in scenario_sat:
+                        scenario_sat.pop("science")
+                    if "notifier" in scenario_sat:
+                        scenario_sat.pop("notifier") 
+                    if "missionProfile" in scenario_sat:
+                        scenario_sat.pop("missionProfile")
+                    if "mission" in scenario_sat:
+                        scenario_sat.pop("mission")
+                    if "spacecraftBus" in scenario_sat and "components" in scenario_sat["spacecraftBus"]:
+                        scenario_sat["spacecraftBus"].pop("components")
+
+                    if "planner" in mission_sat:
+                        mission_sat.pop("planner")
+                    if "science" in mission_sat:
+                        mission_sat.pop("science")
+                    if "notifier" in mission_sat:
+                        mission_sat.pop("notifier") 
+                    if "missionProfile" in mission_sat:
+                        mission_sat.pop("missionProfile")
+                    if "mission" in mission_sat:
+                        mission_sat.pop("mission")
+                    if "spacecraftBus" in mission_sat and "components" in mission_sat["spacecraftBus"]:
+                        mission_sat["spacecraftBus"].pop("components")
+
+                    if scenario_sat != mission_sat:
+                        return True
+                        
+        return False
+
+    def _create_uniform_grid(scenario_dir : str, grid_index : int, lat_spacing : float, lon_spacing : float) -> str:
+        # create uniform grid
+        groundpoints = [(lat, lon) 
+                        for lat in np.linspace(-90, 90, int(180/lat_spacing)+1)
+                        for lon in np.linspace(-180, 180, int(360/lon_spacing)+1)
+                        if lon < 180
+                        ]
+                
+        # create datagrame
+        df = pd.DataFrame(data=groundpoints, columns=['lat [deg]','lon [deg]'])
+
+        # save to csv
+        grid_path : str = os.path.join(scenario_dir, 'resources', f'uniform_grid{grid_index}.csv')
+        df.to_csv(grid_path,index=False)
+
+        # return address
+        return grid_path
+
+    def _create_clustered_grid(scenario_dir : str, grid_index : int, n_clusters : int, n_cluster_points : int, variance : float) -> str:
+        # create clustered grid of gound points
+        std = np.sqrt(variance)
+        groundpoints = []
+        
+        for _ in range(n_clusters):
+            # find cluster center
+            lat_cluster = (90 - -90) * random.random() -90
+            lon_cluster = (180 - -180) * random.random() -180
+            
+            for _ in range(n_cluster_points):
+                # sample groundpoint
+                lat = random.normalvariate(lat_cluster, std)
+                lon = random.normalvariate(lon_cluster, std)
+                groundpoints.append((lat,lon))
+
+        # create datagrame
+        df = pd.DataFrame(data=groundpoints, columns=['lat [deg]','lon [deg]'])
+
+        # save to csv
+        grid_path : str = os.path.join(scenario_dir, 'resources', f'clustered_grid{grid_index}.csv')
+        df.to_csv(grid_path,index=False)
+
+        # return address
+        return grid_path
+    
+    """
+    DATA PREPROCESSING METHODS
+    """
     @staticmethod
     def preprocess(orbitdata_dir: str, simulation_duration : float, overwrite : bool = True, printouts : bool = True) -> dict:
         """
@@ -152,7 +535,7 @@ class OrbitData:
                 grid_data_dfs = OrbitData.__load_csv_data(orbitdata_dir, simulation_duration, printouts)
             
         # create instances of OrbitData for each agent and store in dictionary indexed by agent name
-        schemas = []
+        schemas = dict()
         for *__,agent_name,gs_network_name in agents_loaded: 
             # extract relevant data for this agent
             agent_eclipse_data = eclipse_dfs[agent_name]
@@ -187,8 +570,7 @@ class OrbitData:
             grid_meta = OrbitData.__write_grid_table(grid_data_dfs, agent_bin_dir, 'grid', allow_overwrite=True)
 
             # compile schema for this agent and store in dictionary
-            schemas.append({
-                'agent_name': agent_name,
+            schemas[agent_name] = {
                 'gs_network_name': gs_network_name,
                 'time_specs' : time_specs,
                 'dir' : agent_bin_dir,
@@ -198,8 +580,11 @@ class OrbitData:
                 'state': state_meta,
                 'gp_access': gp_access_meta,
                 'grid': grid_meta
-            })
+            }
             
+        with open(os.path.join(bin_dir, "meta.json"), "w") as f:
+            json.dump(schemas, f, indent=4)
+
         # return compiled schemas for all agents
         return schemas
         
@@ -1347,470 +1732,3 @@ class OrbitData:
         
         # return metadata
         return meta 
-
-    """
-    GET NEXT methods
-    """
-    def get_next_agent_access(self, target : str, t: float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
-        """ returns the next access interval to another agent or ground station after or during time `t` up to a given time `t_max`. """
-
-        # check if target is within the list of known agents
-        assert target in self.comms_links.keys(), f'No comms data found for target agent `{target}`.'
-
-        # return next access interval
-        return self.__get_next_interval(self.comms_links[target], t, t_max, include_current)
-
-    def get_next_agent_accesses(self, target : str, t: float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
-        """ returns a list of the next access interval to another agent or ground station after or during time `t` up to a given time `t_max`. """
-
-        # check if target is within the list of known agents
-        assert target in self.comms_links.keys(), f'No comms data found for target agent `{target}`.'
-
-        # get next access intervals
-        future_access_intervals = self.__get_next_intervals(self.comms_links[target], t, t_max, include_current)
-
-        # return in interval form
-        return [Interval(t_start,t_end) for t_start,t_end in future_access_intervals] if future_access_intervals else []
-
-    def get_next_isl_access_interval(self, target : str, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
-        """ returns the next access interval to another agent after or during time `t`. """
-
-        # check if target is within the list of known satellite agents
-        assert target in self.satellite_links.keys(), f'No ISL data found for target agent `{target}`.'
-
-        # return next access interval
-        return self.__get_next_interval(self.satellite_links[target], t, t_max, include_current)
-
-    def get_next_ground_operator_access_interval(self, target : str, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
-        """ returns the next access interval to a ground operator agent after or during time `t`. """
-
-        # check if target is within the list of known ground operator agents
-        assert target in self.ground_operator_links.keys(), f'No ground operator data found for target agent `{target}`.'
-
-        # return next access interval
-        return self.__get_next_interval(self.ground_operator_links[target], t, t_max, include_current)
-
-    def get_next_gs_access(self, t, t_max: float = np.Inf, include_current: bool = False) -> Interval:
-        """ returns the next access interval to a ground station after or during time `t`. """
-        return self.__get_next_interval(self.gs_access_data, t, t_max, include_current)
-
-    def get_next_eclipse_interval(self, t: float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
-        """ returns the next eclipse interval after or during time `t`. """
-        return self.__get_next_interval(self.eclipse_data, t, t_max, include_current)
-
-    def __get_next_interval(self, interval_data : IntervalData, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
-        """ returns the next access interval from `interval_data` after or during time `t`. """
-        # get next intervals
-        future_intervals : list[Interval] = interval_data.lookup_intervals(t, t_max)
-
-        # check if current interval should be included
-        if not include_current:
-            # exclude intervals that contain time `t`
-            future_intervals = [interval for interval in future_intervals
-                                if t < interval.left] # interval starts after time `t`
-        else:
-            # include current intervals but clip to start at time `t`
-            future_intervals = [Interval(max(t, interval.left), interval.right) if interval.left <= t <= interval.right else interval
-                                for interval in future_intervals]
-
-        # check if there are any valid intervals
-        if not future_intervals: return None
-
-        # get next interval
-        next_interval = future_intervals[0]
-
-        # return the first interval that starts after or at time `t`
-        return Interval(max(t, next_interval.left), min(next_interval.right, t_max))
-        
-        # TEMP previous implementation
-        # # get next intervals
-        # future_intervals: list[tuple[float, float]] = self.__get_next_intervals(interval_data, t, t_max, include_current)
-
-        # # check if there are any valid intervals
-        # if not future_intervals: return None
-
-        # # get interval bounds
-        # t_start,t_end = future_intervals[0]
-
-        # # return the first interval that starts after or at time `t`
-        # return Interval(max(t, t_start), min(t_end, t_max))
-
-    def __get_next_intervals(self, interval_data : IntervalData, t : float, t_max: float = np.Inf, include_current: bool = False) -> List[Tuple[float, float]]:
-        # find all intervals that end after time `t` and start before time `t_max`
-        future_intervals : List[Interval] = interval_data.lookup_intervals(t, t_max)
-        
-        # convert to tuple form
-        future_interval_pairs = [(interval.left, interval.right) for interval in future_intervals]
-        
-        # check if current interval should be included
-        if not include_current:
-            # exclude intervals that contain time `t`
-            future_interval_pairs = [(t_start, t_end) for t_start,t_end in future_interval_pairs
-                                if t < t_start] # interval starts after time `t`
-        else:
-            # include current intervals but clip to start at time `t`
-            future_interval_pairs = [(max(t, t_start), t_end) for t_start,t_end in future_interval_pairs]
-
-        # check if there are any valid intervals
-        if not future_interval_pairs: return None
-        
-        # sort by start time and return
-        return sorted(future_interval_pairs, key=lambda interval: interval[0])
-    
-    def get_latest_agent_access(self, target : str, t: float, t_max: float, include_current: bool = False) -> Interval:
-        """ returns the latest access interval to another agent or ground station after or during time `t`. """
-
-        # check if target is within the list of known agents
-        assert target in self.comms_links.keys(), f'No comms data found for target agent `{target}`.'
-
-        # return next access interval
-        return self.__get_latest_interval(self.comms_links[target], t, t_max, include_current)
-
-    def __get_latest_interval(self, interval_data : IntervalData, t : float, t_max: float, include_current: bool = False) -> Interval:
-        """ returns the latest access interval from `interval_data` after or during time `t`. """
-        # find all intervals that end after time `t` and start before time `t_max`
-        future_intervals: list[tuple[float, float]] = [(t_start, t_end)
-                                                        for t_start,t_end,*_ in interval_data.data
-                                                        if t <= t_end # interval ends after or at time `t`
-                                                        and t_start <= t_max # interval starts before or at time `t_max`
-                                                        ]
-        
-        # check if current interval should be included
-        if not include_current:
-            # exclude intervals that contain time `t`
-            future_intervals = [(t_start, t_end) for t_start,t_end in future_intervals
-                                if t < t_start] # interval starts after time `t`
-
-        # check if there are any valid intervals
-        if not future_intervals: return None
-        
-        # sort by start time
-        future_intervals.sort(key=lambda interval: interval[0])
-
-        # get interval bounds
-        t_start,t_end = future_intervals[-1]
-
-        # return the last interval that starts after or at time `t`
-        return Interval(max(t, t_start), min(t_end, t_max))
-
-    def get_next_gp_access_interval(self, lat: float, lon: float, t: float, t_max : float = np.Inf) -> Interval:
-        """
-        Returns the next access to a ground point
-        """
-        # TODO
-        raise NotImplementedError('TODO: need to implement.')
-
-    """
-    STATE QUERY methods
-    """
-    def is_accessing_agent(self, target: str, t: float) -> bool:
-        """ checks if a satellite is currently accessing another agent at time `t`. """
-        # check if the target is the agent itself
-        if target in self.agent_name: return True
-
-        # check if target is within the list of known agents
-        if target not in self.comms_links.keys(): return False
-
-        # get next access interval
-        next_access = self.comms_links[target].lookup(t)
-
-        # check if there is a current access interval
-        return next_access is not None
-
-    def is_accessing_ground_station(self, target : str, t: float) -> bool:
-        raise NotImplementedError('TODO: implement ground station access check.')
-        # t = t/self.time_step
-        # nrows, _ = self.gs_access_data.query('`start index` <= @t & @t <= `end index` & `gndStn name` == @target').shape
-        # return bool(nrows > 0)
-
-    def is_eclipse(self, t: float):
-        """ checks if a satellite is currently in eclise at time `t`. """
-        return self.eclipse_data.is_active(t)
-
-    def get_position(self, t: float):
-        pos, _, _ = self.get_orbit_state(t)
-        return pos
-
-    def get_velocity(self, t: float):
-        _, vel, _ = self.get_orbit_state(t)
-        return vel
-        
-    def get_orbit_state(self, t: float):
-        # get eclipse data
-        is_eclipse = self.is_eclipse(t)
-
-        # get position data
-        position_data = self.state_data.lookup_value(t)
-        
-        if not position_data:
-            raise ValueError(f'No position data found for time {t} [s].')
-
-        # unpack position and velocity data
-        pos = [position_data['x [km]'], position_data['y [km]'], position_data['z [km]']]
-        vel = [position_data['vx [km/s]'], position_data['vy [km/s]'], position_data['vz [km/s]']]
-        
-        return (pos, vel, is_eclipse)
-
-    """
-    PRECOMPUTATION OF ORBIT DATA
-    """
-    def precompute(scenario_specs : dict, overwrite : bool = False, printouts: bool = True) -> str:
-        """ Pre-calculates coverage and position data for all agents described in the scenario specifications """
-        
-        # get desired orbit data path
-        scenario_dir = scenario_specs['scenario']['scenarioPath']
-        settings_dict : dict = scenario_specs.get('settings', None)
-        if settings_dict is None:
-            data_dir = None
-        else:
-            data_dir = settings_dict.get('outDir', None)
-
-        if data_dir is None:
-            data_dir = os.path.join(scenario_dir, 'orbit_data')
-    
-        if not os.path.exists(data_dir):
-            # if directory does not exists, create it
-            os.mkdir(data_dir)
-            changes_to_scenario = True
-        else:
-            changes_to_scenario : bool = OrbitData._check_changes_to_scenario(scenario_specs, data_dir)
-
-        if not changes_to_scenario and not overwrite:
-            # if propagation data files already exist, load results
-            if printouts: tqdm.write(' - Existing orbit data found and matches scenario. Loading existing data...')
-            
-        else:
-            # if propagation data files do not exist, propagate and then load results
-            if printouts:
-                if os.path.exists(data_dir):
-                    tqdm.write(' - Existing orbit data does not match scenario.')
-                else:
-                    tqdm.write(' - Orbit data not found.')
-
-            # clear files if they exist
-            if printouts: tqdm.write(' - Clearing \'orbitdata\' directory...')    
-            if os.path.exists(data_dir):
-                for f in os.listdir(data_dir):
-                    f_dir = os.path.join(data_dir, f)
-                    if os.path.isdir(f_dir):
-                        for h in os.listdir(f_dir):
-                            os.remove(os.path.join(f_dir, h))
-                        os.rmdir(f_dir)
-                    else:
-                        os.remove(f_dir) 
-            if printouts:
-                tqdm.write(' - \'orbitdata\' cleared!')
-
-            # set grid 
-            grid_dicts : list = scenario_specs.get("grid", None)
-            grid_dicts = [grid_dicts] if isinstance(grid_dicts, dict) else grid_dicts
-            assert isinstance(grid_dicts, list), 'Grid specifications must be provided as a list of dictionaries.'
-
-            for grid_dict in grid_dicts:
-                grid_dict : dict
-                if grid_dict is not None:
-                    grid_type : str = grid_dict.get('@type', None)
-                    
-                    if grid_type.lower() == 'customgrid':
-                        # do nothing
-                        pass
-                    elif grid_type.lower() == 'uniform':
-                        # create uniform grid
-                        lat_spacing = grid_dict.get('lat_spacing', 1)
-                        lon_spacing = grid_dict.get('lon_spacing', 1)
-                        grid_index  = grid_dicts.index(grid_dict)
-                        grid_path : str = OrbitData._create_uniform_grid(scenario_dir, grid_index, lat_spacing, lon_spacing)
-
-                        # set to customgrid
-                        grid_dict['@type'] = 'customgrid'
-                        grid_dict['covGridFilePath'] = grid_path
-                        
-                    elif grid_type.lower() in ['cluster', 'clustered']:
-                        # create clustered grid
-                        n_clusters          = grid_dict.get('n_clusters', 100)
-                        n_cluster_points    = grid_dict.get('n_cluster_points', 1)
-                        variance            = grid_dict.get('variance', 1)
-                        grid_index          = grid_dicts.index(grid_dict)
-                        grid_path : str = OrbitData._create_clustered_grid(scenario_dir, grid_index, n_clusters, n_cluster_points, variance)
-
-                        # set to customgrid
-                        grid_dict['@type'] = 'customgrid'
-                        grid_dict['covGridFilePath'] = grid_path
-                        
-                    else:
-                        raise ValueError(f'Grids of type \'{grid_type}\' not supported.')
-                else:
-                    pass
-            scenario_specs['grid'] = grid_dicts
-
-            # set output directory to orbit data directory
-            if scenario_specs.get("settings", None) is not None:
-                if scenario_specs["settings"].get("outDir", None) is None:
-                    scenario_specs["settings"]["outDir"] = scenario_dir + '/orbit_data/'
-            else:
-                scenario_specs["settings"] = {}
-                scenario_specs["settings"]["outDir"] = scenario_dir + '/orbit_data/'
-
-            # propagate data and save to orbit data directory
-            if printouts: tqdm.write("Propagating orbits...")
-            mission : Mission = Mission.from_json(scenario_specs, printouts=printouts)  
-            mission.execute(printouts=printouts)                
-            if printouts: tqdm.write("Propagation done!")
-
-        # update mission duration if needed
-        orbitdata_filename = os.path.join(data_dir, 'MissionSpecs.json')
-        ## check if mission specs file exists
-        original_duration = scenario_specs['duration']
-        if os.path.exists(orbitdata_filename):
-            with open(orbitdata_filename, 'r') as orbitdata_specs:
-                # load existing mission specs
-                orbitdata_dict : dict = json.load(orbitdata_specs)
-
-                # update duration to that of the longest mission
-                scenario_specs['duration'] = max(scenario_specs['duration'], orbitdata_dict['duration'])
-
-        # save specifications of propagation in the orbit data directory
-        with open(os.path.join(data_dir,'MissionSpecs.json'), 'w') as mission_specs:
-            mission_specs.write(json.dumps(scenario_specs, indent=4))
-            assert os.path.exists(os.path.join(data_dir,'MissionSpecs.json')), \
-                'Mission specifications not saved correctly!'
-            
-        # restore original duration value
-        scenario_specs['duration'] = original_duration
-
-        # return orbit data directory
-        return data_dir
-    
-    def _check_changes_to_scenario(scenario_dict : dict, orbitdata_dir : str) -> bool:
-        """ 
-        Checks if the scenario has already been pre-computed 
-        or if relevant changes have been made 
-        """
-        # check if directory exists
-        filename = 'MissionSpecs.json'
-        orbitdata_filename = os.path.join(orbitdata_dir, filename)
-        if not os.path.exists(orbitdata_filename):
-            return True
-        
-        # copy scenario specs
-        scenario_specs : dict = copy.deepcopy(scenario_dict)
-            
-        # compare specifications
-        with open(orbitdata_filename, 'r') as orbitdata_specs:
-            orbitdata_dict : dict = json.load(orbitdata_specs)
-
-            scenario_specs.pop('settings')
-            orbitdata_dict.pop('settings')
-            scenario_specs.pop('scenario')
-            orbitdata_dict.pop('scenario')
-
-            if (
-                    scenario_specs['epoch'] != orbitdata_dict['epoch']
-                or scenario_specs['duration'] > orbitdata_dict['duration']
-                or scenario_specs.get('groundStation', None) != orbitdata_dict.get('groundStation', None)
-                # or scenario_dict['grid'] != orbitdata_dict['grid']
-                # or scenario_dict['scenario']['connectivity'] != mission_dict['scenario']['connectivity']
-                ):
-                return True
-            
-            if scenario_specs['grid'] != orbitdata_dict['grid']:
-                if len(scenario_specs['grid']) != len(orbitdata_dict['grid']):
-                    return True
-                
-                for i in range(len(scenario_specs['grid'])):
-                    scenario_grid : dict = scenario_specs['grid'][i]
-                    mission_grid : dict = orbitdata_dict['grid'][i]
-
-                    scenario_gridtype = scenario_grid['@type'].lower()
-                    mission_gridtype = mission_grid['@type'].lower()
-
-                    if scenario_gridtype != mission_gridtype == 'customgrid':
-                        if scenario_gridtype not in mission_grid['covGridFilePath']:
-                            return True
-
-            if scenario_specs['spacecraft'] != orbitdata_dict['spacecraft']:
-                if len(scenario_specs['spacecraft']) != len(orbitdata_dict['spacecraft']):
-                    return True
-                
-                for i in range(len(scenario_specs['spacecraft'])):
-                    scenario_sat : dict = scenario_specs['spacecraft'][i]
-                    mission_sat : dict = orbitdata_dict['spacecraft'][i]
-                    
-                    if "planner" in scenario_sat:
-                        scenario_sat.pop("planner")
-                    if "science" in scenario_sat:
-                        scenario_sat.pop("science")
-                    if "notifier" in scenario_sat:
-                        scenario_sat.pop("notifier") 
-                    if "missionProfile" in scenario_sat:
-                        scenario_sat.pop("missionProfile")
-                    if "mission" in scenario_sat:
-                        scenario_sat.pop("mission")
-                    if "spacecraftBus" in scenario_sat and "components" in scenario_sat["spacecraftBus"]:
-                        scenario_sat["spacecraftBus"].pop("components")
-
-                    if "planner" in mission_sat:
-                        mission_sat.pop("planner")
-                    if "science" in mission_sat:
-                        mission_sat.pop("science")
-                    if "notifier" in mission_sat:
-                        mission_sat.pop("notifier") 
-                    if "missionProfile" in mission_sat:
-                        mission_sat.pop("missionProfile")
-                    if "mission" in mission_sat:
-                        mission_sat.pop("mission")
-                    if "spacecraftBus" in mission_sat and "components" in mission_sat["spacecraftBus"]:
-                        mission_sat["spacecraftBus"].pop("components")
-
-                    if scenario_sat != mission_sat:
-                        return True
-                        
-        return False
-
-    def _create_uniform_grid(scenario_dir : str, grid_index : int, lat_spacing : float, lon_spacing : float) -> str:
-        # create uniform grid
-        groundpoints = [(lat, lon) 
-                        for lat in np.linspace(-90, 90, int(180/lat_spacing)+1)
-                        for lon in np.linspace(-180, 180, int(360/lon_spacing)+1)
-                        if lon < 180
-                        ]
-                
-        # create datagrame
-        df = pd.DataFrame(data=groundpoints, columns=['lat [deg]','lon [deg]'])
-
-        # save to csv
-        grid_path : str = os.path.join(scenario_dir, 'resources', f'uniform_grid{grid_index}.csv')
-        df.to_csv(grid_path,index=False)
-
-        # return address
-        return grid_path
-
-    def _create_clustered_grid(scenario_dir : str, grid_index : int, n_clusters : int, n_cluster_points : int, variance : float) -> str:
-        # create clustered grid of gound points
-        std = np.sqrt(variance)
-        groundpoints = []
-        
-        for _ in range(n_clusters):
-            # find cluster center
-            lat_cluster = (90 - -90) * random.random() -90
-            lon_cluster = (180 - -180) * random.random() -180
-            
-            for _ in range(n_cluster_points):
-                # sample groundpoint
-                lat = random.normalvariate(lat_cluster, std)
-                lon = random.normalvariate(lon_cluster, std)
-                groundpoints.append((lat,lon))
-
-        # create datagrame
-        df = pd.DataFrame(data=groundpoints, columns=['lat [deg]','lon [deg]'])
-
-        # save to csv
-        grid_path : str = os.path.join(scenario_dir, 'resources', f'clustered_grid{grid_index}.csv')
-        df.to_csv(grid_path,index=False)
-
-        # return address
-        return grid_path
-    
-    """
-    COVERAGE Metrics
-    """
