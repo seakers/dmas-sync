@@ -42,7 +42,7 @@ class AbstractTable(ABC):
 class TargetGridTable(AbstractTable):
     """
     Memmap-backed target grid table:
-      _lat:      (N,1)
+      _lat:      (N,1) 
       _lon:      (N,1)
       _grid_idx: (N,1)
       _gp_idx:   (N,1)
@@ -74,6 +74,15 @@ class TargetGridTable(AbstractTable):
 
         # initiate GroundPointTable object
         return cls(_lat=lat, _lon=lon, _grid_idx=grid_idx, _gp_idx=gp_idx)
+    
+
+    def __iter__(self):
+        """
+        Returns an iterator over the data
+        """
+        for i in range(len(self._lat)):
+            yield (self._lat[i], self._lon[i], self._grid_idx[i], self._gp_idx[i])
+            
 
 @dataclass
 class StateTable(AbstractTable):
@@ -148,9 +157,6 @@ class StateTable(AbstractTable):
 class IntervalTable(AbstractTable):
     """
     Memmap-backed interval table.
-    - start/end are int indices.
-    - prefix_max_end enables O(log n) existence checks.
-    - extras are optional numeric columns.
     """
     _start: np.ndarray              # memmap
     _end: np.ndarray                # memmap
@@ -185,10 +191,22 @@ class IntervalTable(AbstractTable):
             assert arr.shape == (schema["n"],), f"expected extra column {k} shape {(schema['n'],)}, got {arr.shape}"
 
         # return `IntervalTable` object
-        return cls(_start=start, _end=end, _prefix_max_end=prefix, _extras=extras)
+        return cls(_start=start, _end=end, _prefix_max_end=prefix, _extras=extras)    
+    
+    def __iter__(self):
+        """
+        Returns an iterator over the data
+        """
+        for i in range(len(self._start)):
+            row = {k: self._extras[k][i] for k in self._extras}
+            yield (self._start[i], self._end[i], *row.values())
     
 @dataclass
 class AccessTable(AbstractTable):
+    """
+    Memmap-backed access table.    
+    """
+
     _offsets: np.ndarray     # (T+1,) int64
     _t: np.ndarray           # (M,)   float32
     _t_idx: np.ndarray       # (M,)   int32/int64

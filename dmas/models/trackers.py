@@ -215,26 +215,19 @@ class LatestObservationTracker:
 
         # initialize mappings
         key_to_k: Dict[TargetKey, int] = {}
-
-        # register actor_name in the mapping
-        grid_iter : np.ndarray = orbitdata.grid_data
         
         # if enabled, wrap with tqdm progress bar
         if not quiet:
-            grid_iter = tqdm(grid_iter, desc="Init ObservationHistory", unit=" df", leave=False)
+            grid_iter = tqdm(orbitdata.grid_data, desc="Init ObservationHistory", unit=" df", leave=False)
+        else:
+            grid_iter = orbitdata.grid_data 
 
-        # iterate through each grid in `orbitdata.grid_data`
-        for grid in grid_iter:
-            # ensure required columns exist
-            if not all(c in orbitdata.grid_data_columns for c in cols):
-                missing = [c for c in cols if c not in orbitdata.grid_data_columns ]
-                raise ValueError(f"OrbitData grid_data df missing columns: {missing}")
 
-            # iterate through the unique grid points and populate the key_to_k and k_to_key mappings
-            for *_,grid_idx,gp_idx in grid:
-                key = (int(grid_idx), int(gp_idx))
-                if key not in key_to_k:
-                    key_to_k[key] = len(key_to_k)
+        # iterate through the unique grid points and populate the key_to_k and k_to_key mappings
+        for *_,grid_idx,gp_idx in grid_iter:
+            key = (int(grid_idx), int(gp_idx))
+            if key not in key_to_k:
+                key_to_k[key] = len(key_to_k)
 
         # define agent name -> id mapping
         actor_to_id = {actor_name: 0}
