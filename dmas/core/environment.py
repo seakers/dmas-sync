@@ -87,7 +87,7 @@ class SimulationEnvironment(object):
 
         # setup agent connectivity
         self._connectivity_level : str = connectivity_level.upper()
-        self.__interval_connectivities : List[Tuple[Interval, Dict, List, Dict]] \
+        self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
             = SimulationEnvironment.__precompute_connectivity(scenario_orbitdata, printouts) # list of (interval, connectivity_matrix, components_list)
 
         # initialize parameters
@@ -103,7 +103,7 @@ class SimulationEnvironment(object):
         self._broadcasts_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="broadcasts")
 
         # initialize current connectivity to connectivity at t=0.0 
-        self._current_connectivity_interval, self._current_connectivity_matrix, \
+        self._current_connectivity_interval, \
             self._current_connectivity_components, self._current_connectivity_map \
             = self.__get_agent_connectivity(t=0.0) # serve as references for connectivity at current time
         
@@ -125,7 +125,7 @@ class SimulationEnvironment(object):
         # check if connectivity needs to be update
         if t not in self._current_connectivity_interval:
             # update current connectivity matrix and components
-            self._current_connectivity_interval, self._current_connectivity_matrix, \
+            self._current_connectivity_interval, \
                 self._current_connectivity_components, self._current_connectivity_map \
                     = self.__get_agent_connectivity(t)
         
@@ -326,7 +326,6 @@ class SimulationEnvironment(object):
     ORBITDATA QUERY METHODS
     ----------------------
     """
-
     def _query_measurement_data( self,
                                 agent_state_dict : dict, 
                                 instrument_dict : dict,
@@ -629,11 +628,11 @@ class SimulationEnvironment(object):
             f.write(f"- Connectivity Level: **{self._connectivity_level}**\n\n")
             f.write(f"- Connectivity Relays Enabled: **{self._connectivity_relays}**\n\n")
 
-            for interval, conn_matrix_sparse, components, component_map in self.__interval_connectivities:
+            for interval, components, component_map in self.__interval_connectivities:
                 f.write('---\n')
                 f.write(f"**Interval:** {interval} [s]\n\n")
                 
-                conn_matrix = conn_matrix_sparse.toarray()
+                # conn_matrix = conn_matrix_sparse.toarray()
                 agent_names = list(component_map.keys())
                 agent_to_idx = {agent: idx for idx, agent in enumerate(agent_names)}
 
@@ -644,15 +643,15 @@ class SimulationEnvironment(object):
                 f.write(header)
                 f.write("|-|" + "-|"*len(agent_names) + "\n")
                 
-                ## print matrix rows
-                for sender in agent_names:
-                    row = f"|`{sender:>5}`|"
-                    u = agent_to_idx[sender]
-                    for receiver in agent_names:
-                        v = agent_to_idx[receiver]
-                        status = int(bool(conn_matrix[u][v]) or bool(conn_matrix[v][u]))
-                        row += f"{status:>3}|"
-                    f.write(row + "\n")
+                # ## print matrix rows
+                # for sender in agent_names:
+                #     row = f"|`{sender:>5}`|"
+                #     u = agent_to_idx[sender]
+                #     for receiver in agent_names:
+                #         v = agent_to_idx[receiver]
+                #         status = int(bool(conn_matrix[u][v]) or bool(conn_matrix[v][u]))
+                #         row += f"{status:>3}|"
+                #     f.write(row + "\n")
 
                 f.write("\n**Connected Components:**\n")
                 for i,comp in enumerate(sorted(components)):
@@ -794,7 +793,7 @@ class SimulationEnvironment(object):
             sparse_interval_connectivity_matrix = triu(sparse_interval_connectivity_matrix, k=0)   # keep diagonal + upper triangle only
 
             # store interval connectivity data
-            interval_connectivities.append( (interval, sparse_interval_connectivity_matrix, 
+            interval_connectivities.append( (interval, 
                                              interval_components, interval_component_map) )
 
             # set previous connectivity to current for next iteration
@@ -809,9 +808,36 @@ class SimulationEnvironment(object):
             # print('='*50 + '\n')
             # x = 1 # breakpoint
             # -------------------------------
-
+        
         # return compiled list of interval connectivities
-        return interval_connectivities
+        # return interval_connectivities
+
+        merged_intervals : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] = []
+        for interval, components, component_map in tqdm(interval_connectivities, 
+                                                        desc='Merging agent connectivity intervals', 
+                                                        unit=' intervals', 
+                                                        leave=False,
+                                                        disable=not printouts
+                                                    ):
+            if not merged_intervals:
+                merged_intervals.append( (interval, components, component_map) )
+                continue
+
+            # get previous interval data
+            prev_interval, prev_components, prev_component_map = merged_intervals[-1]
+            
+            # compare components to determine if connectivity changed; if not, merge intervals
+            if components == prev_components and prev_interval.overlaps(interval):
+                # merge intervals by updating end time of previous interval to end time of current interval
+                merged_interval = prev_interval.union(interval)
+                merged_intervals[-1] = (merged_interval, prev_components, prev_component_map)
+
+            else:
+                # connectivity changed; add current interval as new entry
+                merged_intervals.append( (interval, components, component_map) )
+        
+        return merged_intervals
+
     
     @staticmethod
     # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
@@ -823,7 +849,7 @@ class SimulationEnvironment(object):
         """
         # initialize BFS variables
         visited = set()
-        comps = []
+        comps = set()
 
         # BFS to find components
         for start in range(len(adj)):
@@ -837,13 +863,13 @@ class SimulationEnvironment(object):
             visited.add(start)
 
             # explore subgraph components starting from root
-            comp = []
+            comp = set()
             while q:
                 # pop next node
                 u = q.popleft()
 
                 # add to component list
-                comp.append(idx_to_agent[u])
+                comp.add(idx_to_agent[u])
 
                 # iterate neighbors; keep only truthy edges
                 for v, connected in enumerate(adj[u]):
@@ -856,7 +882,7 @@ class SimulationEnvironment(object):
                         q.append(v)
 
             # add component to component list
-            comps.append(comp)
+            comps.add(frozenset(comp))
 
         # return list of components
         return comps
@@ -873,11 +899,11 @@ class SimulationEnvironment(object):
             mid = (low + high) // 2
 
             # unpack interval data
-            interval, connectivity, components, components_map \
+            interval, components, components_map \
                 = self.__interval_connectivities[mid]
 
             # return if time t is in the interval
-            if t in interval: return interval, connectivity, components, components_map
+            if t in interval: return interval, components, components_map
             
             # if not, adjust search bounds
             if t < interval.left:

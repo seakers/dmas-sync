@@ -78,12 +78,22 @@ class OrbitData:
         # TODO check if schemas have already been generated at the provided directory and load from there if so, o
         # therwise preprocess data and generate schemas before loading
         
-        # preprocess data and store as binarys for faster loading in the future
-        schemas : dict[str, dict] \
-            = OrbitData.preprocess(orbitdata_dir, simulation_duration, printouts=printouts)
+        # define binary output directory
+        bin_dir = os.path.join(orbitdata_dir, 'bin')
+        bin_meta_file = os.path.join(bin_dir, "meta.json")
 
-        # force garbage collection after loading data to free up memory
-        gc.collect() 
+        if os.path.exists(bin_meta_file):
+            # if metadata file exists, load schemas from metadata
+            with open(bin_meta_file, 'r') as meta_file:
+                schemas : dict[str, dict] = json.load(meta_file)
+                if printouts: tqdm.write('Existing preprocessed data found. Loading from binaries...')
+        else:
+            # preprocess data and store as binarys for faster loading in the future
+            schemas : dict[str, dict] \
+                = OrbitData.preprocess(orbitdata_dir, simulation_duration, printouts=printouts)
+        
+            # force garbage collection after loading data to free up memory
+            gc.collect() 
 
         data = dict()
         for agent_name, schema in schemas.items():
@@ -348,6 +358,12 @@ class OrbitData:
             mission_specs.write(json.dumps(scenario_specs, indent=4))
             assert os.path.exists(os.path.join(data_dir,'MissionSpecs.json')), \
                 'Mission specifications not saved correctly!'
+            
+        if changes_to_scenario or overwrite:
+            # preprocess data and store as binarys for faster loading in the future
+            if printouts: tqdm.write("Preprocessing orbit data...")
+            OrbitData.preprocess(data_dir, scenario_specs['duration'], overwrite=True, printouts=printouts)
+            if printouts: tqdm.write("Preprocessing done!")
             
         # restore original duration value
         scenario_specs['duration'] = original_duration
