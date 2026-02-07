@@ -937,7 +937,7 @@ class ResultsProcessor:
             agent_orbitdata : OrbitData
 
             # count number of ground points
-            n_gps = sum([len(gps.values) for gps in agent_orbitdata.grid_data]) if n_gps is None else n_gps
+            n_gps = sum([len(gps) for gps in agent_orbitdata.grid_data]) if n_gps is None else n_gps
 
             # get set of accessible ground points
             gps_accessible : set = {(row['grid index'], row['GP index']) for _,row in agent_orbitdata.gp_access_data}
