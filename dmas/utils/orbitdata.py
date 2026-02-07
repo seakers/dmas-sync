@@ -1,5 +1,6 @@
 from collections import defaultdict
 import copy
+from dataclasses import dataclass
 from enum import Enum
 import gc
 import json
@@ -24,6 +25,11 @@ class ConnectivityLevels(Enum):
     ISL = 'ISL'     # inter-satellite links only
     GS = 'GS'       # satellite-to-ground station links only
     NONE = 'NONE'   # no inter-agent connectivity
+
+@dataclass
+class SharedGridData:
+    grid_data_columns: List[str]
+    grid_data: List[np.ndarray]
         
 class OrbitData:
     """
@@ -46,8 +52,7 @@ class OrbitData:
                  ground_operator_link_data : Dict[str, IntervalData],
                  gs_access_data : IntervalData,
                  gp_access_data : TimeIndexedData,
-                 grid_data_columns : List[str],
-                 grid_data : List[np.ndarray]
+                 grid_data : SharedGridData
                 ):
         # assign attributes
         self.agent_name = agent_name
@@ -71,23 +76,20 @@ class OrbitData:
         self.gp_access_data = gp_access_data
 
         # grid data
-        self.grid_data_columns = grid_data_columns
-        self.grid_data = grid_data       
+        self.grid_data_columns = grid_data.grid_data_columns
+        self.grid_data = grid_data.grid_data       
     
     """
     LOAD FROM PRE-COMPUTED DATA
     """
     @staticmethod
     def from_directory(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Dict[str, 'OrbitData']:
-        """
-        Loads orbit data from a directory containig a json file specifying the details of the mission being simulated.
-        If the data has not been previously propagated, it will do so and store it in the same directory as the json file
-        being used.
-
-        The data gets stored as a dictionary, with each entry containing the orbit data of each agent in the mission 
-        indexed by the name of the agent.
-        """
         try:
+            # # preprocess data and store as binarys for faster loading in the future
+            # out_dir = OrbitData.preprocess(orbitdata_dir, simulation_duration, printouts)
+
+            # raise NotImplementedError('This method is not yet implemented. Please use `preprocess` method to load pre-computed data from directory for now.')
+
             # initialize orbit data dictionary
             data = dict()
 
@@ -184,8 +186,11 @@ class OrbitData:
                                     for agent_name in gs_access_dfs.keys()}
                 gp_access_data = {agent_name : TimeIndexedData.from_dataframe(gp_access_dfs[agent_name], time_step, 'gp-access', printouts)
                                 for agent_name in gp_access_dfs.keys()}
+                
+                
                 grid_data_columns = grid_data_dfs[0].columns.values if grid_data_dfs else None
                 grid_data = [ grid_df.to_numpy() for grid_df in grid_data_dfs]
+                shared_grid_data = SharedGridData(grid_data_columns, grid_data) 
                 
                 # create instances of OrbitData for each agent and store in dictionary indexed by agent name
                 for *_,agent_name,gs_network_name in agents_to_load: 
@@ -211,8 +216,7 @@ class OrbitData:
                     agent_orbitdata = OrbitData(agent_name, gs_network_name, time_step, epoch_type, epoch, 
                                                 simulation_duration, agent_eclipse_data, agent_position_data,
                                                 agent_satellite_link_data, agent_ground_operator_link_data,
-                                                agent_gs_access_data, agent_gp_access_data, grid_data_columns,
-                                                grid_data)
+                                                agent_gs_access_data, agent_gp_access_data, shared_grid_data)
                                                 
                     # store in dictionary
                     data[agent_name] = agent_orbitdata
@@ -221,6 +225,143 @@ class OrbitData:
                 return data
         finally:
             gc.collect() # force garbage collection after loading data to free up memory
+
+    # @staticmethod
+    # def preprocess(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> str:
+    #     """
+    #     Loads orbit data from a directory containig a json file specifying the details of the mission being simulated.
+    #     If the data has not been previously propagated, it will do so and store it in the same directory as the json file
+    #     being used.
+
+    #     The data gets stored as a dictionary, with each entry containing the orbit data of each agent in the mission 
+    #     indexed by the name of the agent.
+    #     """
+    #     try:
+    #         # define 
+    #         bin_dir = os.path.join(orbitdata_dir, 'bin')
+
+    #         # define progress bar settings
+    #         tqdm_config = {
+    #             'leave': False,
+    #             'disable': not printouts
+    #         }
+
+    #         # define path to mission specifications json file
+    #         orbitdata_specs : str = os.path.join(orbitdata_dir, 'MissionSpecs.json')
+
+    #         with open(orbitdata_specs, 'r') as scenario_specs:            
+    #             # open and load mission specifications file
+    #             mission_dict : dict = json.load(scenario_specs)
+                
+    #             # extract agent information from mission specifications
+    #             spacecraft_list : List[dict] = mission_dict.get('spacecraft', None)
+    #             spacecraft_names = [sc['name'] for sc in spacecraft_list] if spacecraft_list else []
+
+    #             ground_ops_list : List[dict] = mission_dict.get('groundOperator', [])
+    #             ground_op_names = [go['name'] for go in ground_ops_list] if ground_ops_list else []
+
+    #             # compile list of ground stations in the scenario (if any)
+    #             ground_station_list : List[dict] = mission_dict.get('groundStation', [])
+
+    #             # get scenario settings
+    #             scenario_dict : dict = mission_dict.get('scenario', None)
+
+    #             # get connectivity setting
+    #             connectivity : str = scenario_dict.get('connectivity', None) \
+    #                 if scenario_dict else ConnectivityLevels.LOS.value # default to LOS if not specified
+
+    #             # compile list of all agents to load
+    #             agents_to_load : List[dict] = []
+    #             for i,spacecraft_dict in enumerate(spacecraft_list):
+    #                 spacecraft_name : str = spacecraft_dict['name']
+    #                 gs_network_name = spacecraft_dict.get('groundStationNetwork', None)
+    #                 agents_to_load.append(('spacecraft', i, spacecraft_name, gs_network_name))
+    #             for i,ground_op_dict in enumerate(ground_ops_list):
+    #                 ground_op_name : str = ground_op_dict['name']
+    #                 agents_to_load.append(('groundOperator', i, ground_op_name, ground_op_name))
+
+    #             # load time specifications
+    #             position_file = os.path.join(orbitdata_dir, f"sat{agents_to_load[0][1]}", "state_cartesian.csv")
+    #             time_data =  pd.read_csv(position_file, nrows=3)
+    #             _, epoch_type, _, epoch = time_data.at[0,time_data.axes[1][0]].split(' ')
+    #             epoch_type = epoch_type[1 : -1]
+    #             epoch = float(epoch)
+    #             _, _, _, _, time_step = time_data.at[1,time_data.axes[1][0]].split(' ')
+    #             time_step = float(time_step)
+    #             _, _, _, _, prop_duration = time_data.at[2,time_data.axes[1][0]].split(' ')
+    #             prop_duration = float(prop_duration)
+
+    #             assert simulation_duration <= prop_duration, \
+    #                 f'Simulation duration ({simulation_duration} days) exceeds pre-computed propagation duration ({prop_duration} days).'
+
+    #             time_data = { "epoch": epoch, 
+    #                         "epoch type": epoch_type, 
+    #                         "time step": time_step,
+    #                         "duration" : simulation_duration }
+                
+    #             # load pre-computed data for each agent
+
+    #             ## load agent eclipse data 
+    #             eclipse_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_eclipse_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
+
+    #             ## load agent position data
+    #             position_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_position_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
+
+    #             ## load ground station access data
+    #             gs_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gs_access_data(orbitdata_dir, agents_to_load, simulation_duration, time_step, ground_station_list, connectivity, tqdm_config)
+
+    #             ## load comms link data
+    #             comms_link_dfs : Dict[tuple, pd.DataFrame] = OrbitData.__load_agent_comms_link_data(orbitdata_dir, agents_to_load, simulation_duration, gs_access_dfs, time_step, connectivity)
+
+    #             ## load ground point access data
+    #             gp_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gp_access_data(orbitdata_dir, agents_to_load, mission_dict, simulation_duration, time_step, spacecraft_list, tqdm_config)
+
+    #             ## load grid data
+    #             grid_data_dfs : List[pd.DataFrame] = OrbitData.__load_grid_data(orbitdata_dir, mission_dict)
+
+    #             # free up memory after loading position data
+    #             gc.collect()
+
+    #             # convert to interval data and time indexed data formats 
+    #             eclise_data = {agent_name : IntervalData.from_dataframe(eclipse_dfs[agent_name], time_step, 'eclipse', printouts) 
+    #                         for agent_name in eclipse_dfs.keys()}
+    #             position_data = {agent_name : TimeIndexedData.from_dataframe(position_dfs[agent_name], time_step, 'position', printouts)
+    #                             for agent_name in position_dfs.keys()}
+    #             comms_link_data = {agent_pair : IntervalData.from_dataframe(comms_link_dfs[agent_pair], time_step, f'{agent_pair[0]}-{agent_pair[1]}-comms', printouts)
+    #                                 for agent_pair in comms_link_dfs.keys()}
+    #             gs_access_data = {agent_name : IntervalData.from_dataframe(gs_access_dfs[agent_name], time_step, 'gs-access', printouts)
+    #                                 for agent_name in gs_access_dfs.keys()}
+    #             gp_access_data = {agent_name : TimeIndexedData.from_dataframe(gp_access_dfs[agent_name], time_step, 'gp-access', printouts)
+    #                             for agent_name in gp_access_dfs.keys()}
+                
+                
+    #             grid_data_columns = grid_data_dfs[0].columns.values if grid_data_dfs else None
+    #             grid_data = [ grid_df.to_numpy() for grid_df in grid_data_dfs]
+    #             shared_grid_data = SharedGridData(grid_data_columns, grid_data) 
+                
+    #             # create instances of OrbitData for each agent and store in dictionary indexed by agent name
+    #             for *_,agent_name,gs_network_name in agents_to_load: 
+    #                 # extract relevant data for this agent
+    #                 agent_eclipse_data = eclise_data[agent_name]
+    #                 agent_position_data = position_data[agent_name]
+    #                 agent_gs_access_data = gs_access_data[agent_name]
+    #                 agent_gp_access_data = gp_access_data[agent_name]
+    #                 agent_comms_link_data = { u if u != agent_name else v : comms_links
+    #                                         for (u,v), comms_links in comms_link_data.items()
+    #                                         if agent_name in (u,v) }                
+                    
+    #                 # group satellite and ground station access data for this agent
+    #                 agent_satellite_link_data = { link_name : link_data 
+    #                                             for link_name, link_data in agent_comms_link_data.items() 
+    #                                             if link_name in spacecraft_names }
+    #                 agent_ground_operator_link_data = { link_name : link_data
+    #                                                     for link_name, link_data in agent_comms_link_data.items()
+    #                                                     if link_name in ground_op_names }
+
+    #                 x = 1
+                    
+    #     finally:
+    #         gc.collect() # force garbage collection after loading data to free up memory
         
     @staticmethod
     def __load_agent_eclipse_data(orbitdata_path : str, 
