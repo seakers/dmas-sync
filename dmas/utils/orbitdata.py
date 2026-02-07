@@ -9,7 +9,7 @@ import os
 import random
 import re
 import time
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import pandas as pd
 import numpy as np
 from datetime import timedelta
@@ -17,7 +17,7 @@ from tqdm import tqdm
 
 from orbitpy.mission import Mission
 from execsatm.utils import Interval
-from dmas.utils.series import TimeIndexedData,IntervalData
+from dmas.utils.series import StateTable, TimeIndexedData,IntervalData
 
 class ConnectivityLevels(Enum):
     FULL = 'FULL'   # static fully connected network between all agents
@@ -85,10 +85,39 @@ class OrbitData:
     @staticmethod
     def from_directory(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Dict[str, 'OrbitData']:
         try:
-            # # preprocess data and store as binarys for faster loading in the future
-            # out_dir = OrbitData.preprocess(orbitdata_dir, simulation_duration, printouts)
+            # preprocess data and store as binarys for faster loading in the future
+            schemas = OrbitData.preprocess(orbitdata_dir, simulation_duration, printouts)
 
-            # raise NotImplementedError('This method is not yet implemented. Please use `preprocess` method to load pre-computed data from directory for now.')
+            for agent_name, schema in schemas.items():
+                state_dir = os.path.join(schema['dir'], 'kartesian_state')
+                # load state data from binary 
+                state_table = StateTable.load(state_dir)
+                
+                # TODO debug print 
+                # CASE 1: direct match
+                pos_1,vel_1 = state_table.get_state_at_time(0)
+
+                # CASE 2: some time within the propagation duration
+                pos_2,vel_2 = state_table.get_state_at_time(15)
+
+                # CASE 3: negative time 
+                try:
+                    pos_3,vel_3 = state_table.get_state_at_time(-5)
+                except Exception as e:
+                    print(f"Expected error for negative time value: {e}")
+
+                # Case 4: time beyond propagation duration
+                pos_4,vel_4 = state_table.get_state_at_time(simulation_duration*24*3600 + 10)
+
+                # Case 5: non-float value
+                try:
+                    pos_5,vel_5 = state_table.get_state_at_time("invalid")
+                except Exception as e:
+                    print(f"Expected error for non-float time value: {e}")
+
+                x = 1
+
+            raise NotImplementedError('This method is not yet implemented. Please use `preprocess` method to load pre-computed data from directory for now.')
 
             # initialize orbit data dictionary
             data = dict()
@@ -118,6 +147,7 @@ class OrbitData:
 
                 # get scenario settings
                 scenario_dict : dict = mission_dict.get('scenario', None)
+
 
                 # get connectivity setting
                 connectivity : str = scenario_dict.get('connectivity', None) \
@@ -158,7 +188,7 @@ class OrbitData:
                 eclipse_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_eclipse_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
 
                 ## load agent position data
-                position_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_position_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
+                position_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_state_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
 
                 ## load ground station access data
                 gs_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gs_access_data(orbitdata_dir, agents_to_load, simulation_duration, time_step, ground_station_list, connectivity, tqdm_config)
@@ -226,142 +256,156 @@ class OrbitData:
         finally:
             gc.collect() # force garbage collection after loading data to free up memory
 
-    # @staticmethod
-    # def preprocess(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> str:
-    #     """
-    #     Loads orbit data from a directory containig a json file specifying the details of the mission being simulated.
-    #     If the data has not been previously propagated, it will do so and store it in the same directory as the json file
-    #     being used.
+    @staticmethod
+    def preprocess(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> dict:
+        """
+        Loads orbit data from a directory containig a json file specifying the details of the mission being simulated.
+        If the data has not been previously propagated, it will do so and store it in the same directory as the json file
+        being used.
 
-    #     The data gets stored as a dictionary, with each entry containing the orbit data of each agent in the mission 
-    #     indexed by the name of the agent.
-    #     """
-    #     try:
-    #         # define 
-    #         bin_dir = os.path.join(orbitdata_dir, 'bin')
+        The data gets stored as a dictionary, with each entry containing the orbit data of each agent in the mission 
+        indexed by the name of the agent.
+        """
+        try:
+            # define binary output directory
+            bin_dir = os.path.join(orbitdata_dir, 'bin')
 
-    #         # define progress bar settings
-    #         tqdm_config = {
-    #             'leave': False,
-    #             'disable': not printouts
-    #         }
+            # create binary output directory if it does not exist
+            os.makedirs(bin_dir, exist_ok=True)
 
-    #         # define path to mission specifications json file
-    #         orbitdata_specs : str = os.path.join(orbitdata_dir, 'MissionSpecs.json')
+            # define progress bar settings
+            tqdm_config = {
+                'leave': False,
+                'disable': not printouts
+            }
 
-    #         with open(orbitdata_specs, 'r') as scenario_specs:            
-    #             # open and load mission specifications file
-    #             mission_dict : dict = json.load(scenario_specs)
+            # define path to mission specifications json file
+            orbitdata_specs : str = os.path.join(orbitdata_dir, 'MissionSpecs.json')
+
+            with open(orbitdata_specs, 'r') as scenario_specs:            
+                # open and load mission specifications file
+                mission_dict : dict = json.load(scenario_specs)
                 
-    #             # extract agent information from mission specifications
-    #             spacecraft_list : List[dict] = mission_dict.get('spacecraft', None)
-    #             spacecraft_names = [sc['name'] for sc in spacecraft_list] if spacecraft_list else []
+                # extract agent information from mission specifications
+                spacecraft_list : List[dict] = mission_dict.get('spacecraft', None)
+                ground_ops_list : List[dict] = mission_dict.get('groundOperator', [])
 
-    #             ground_ops_list : List[dict] = mission_dict.get('groundOperator', [])
-    #             ground_op_names = [go['name'] for go in ground_ops_list] if ground_ops_list else []
+                # compile list of ground stations in the scenario (if any)
+                ground_station_list : List[dict] = mission_dict.get('groundStation', [])
 
-    #             # compile list of ground stations in the scenario (if any)
-    #             ground_station_list : List[dict] = mission_dict.get('groundStation', [])
+                # get scenario settings
+                scenario_dict : dict = mission_dict.get('scenario', None)
 
-    #             # get scenario settings
-    #             scenario_dict : dict = mission_dict.get('scenario', None)
+                # get connectivity setting
+                connectivity : str = scenario_dict.get('connectivity', None) \
+                    if scenario_dict else ConnectivityLevels.LOS.value # default to LOS if not specified
 
-    #             # get connectivity setting
-    #             connectivity : str = scenario_dict.get('connectivity', None) \
-    #                 if scenario_dict else ConnectivityLevels.LOS.value # default to LOS if not specified
+                # compile list of all agents to load
+                agents_to_load : List[dict] = []
+                for i,spacecraft_dict in enumerate(spacecraft_list):
+                    spacecraft_name : str = spacecraft_dict['name']
+                    gs_network_name = spacecraft_dict.get('groundStationNetwork', None)
+                    agents_to_load.append(('spacecraft', i, spacecraft_name, gs_network_name))
+                for i,ground_op_dict in enumerate(ground_ops_list):
+                    ground_op_name : str = ground_op_dict['name']
+                    agents_to_load.append(('groundOperator', i, ground_op_name, ground_op_name))
 
-    #             # compile list of all agents to load
-    #             agents_to_load : List[dict] = []
-    #             for i,spacecraft_dict in enumerate(spacecraft_list):
-    #                 spacecraft_name : str = spacecraft_dict['name']
-    #                 gs_network_name = spacecraft_dict.get('groundStationNetwork', None)
-    #                 agents_to_load.append(('spacecraft', i, spacecraft_name, gs_network_name))
-    #             for i,ground_op_dict in enumerate(ground_ops_list):
-    #                 ground_op_name : str = ground_op_dict['name']
-    #                 agents_to_load.append(('groundOperator', i, ground_op_name, ground_op_name))
+                # load time specifications
+                position_file = os.path.join(orbitdata_dir, f"sat{agents_to_load[0][1]}", "state_cartesian.csv")
+                time_data =  pd.read_csv(position_file, nrows=3)
+                _, epoch_type, _, epoch = time_data.at[0,time_data.axes[1][0]].split(' ')
+                epoch_type = epoch_type[1 : -1]
+                epoch = float(epoch)
+                _, _, _, _, time_step = time_data.at[1,time_data.axes[1][0]].split(' ')
+                time_step = float(time_step)
+                _, _, _, _, prop_duration = time_data.at[2,time_data.axes[1][0]].split(' ')
+                prop_duration = float(prop_duration)
+                n_steps = int(simulation_duration * 24 * 3600 // time_step) + 1
 
-    #             # load time specifications
-    #             position_file = os.path.join(orbitdata_dir, f"sat{agents_to_load[0][1]}", "state_cartesian.csv")
-    #             time_data =  pd.read_csv(position_file, nrows=3)
-    #             _, epoch_type, _, epoch = time_data.at[0,time_data.axes[1][0]].split(' ')
-    #             epoch_type = epoch_type[1 : -1]
-    #             epoch = float(epoch)
-    #             _, _, _, _, time_step = time_data.at[1,time_data.axes[1][0]].split(' ')
-    #             time_step = float(time_step)
-    #             _, _, _, _, prop_duration = time_data.at[2,time_data.axes[1][0]].split(' ')
-    #             prop_duration = float(prop_duration)
+                assert simulation_duration <= prop_duration, \
+                    f'Simulation duration ({simulation_duration} days) exceeds pre-computed propagation duration ({prop_duration} days).'
 
-    #             assert simulation_duration <= prop_duration, \
-    #                 f'Simulation duration ({simulation_duration} days) exceeds pre-computed propagation duration ({prop_duration} days).'
-
-    #             time_data = { "epoch": epoch, 
-    #                         "epoch type": epoch_type, 
-    #                         "time step": time_step,
-    #                         "duration" : simulation_duration }
+                time_data = { "epoch": epoch, 
+                            "epoch type": epoch_type, 
+                            "time step": time_step,
+                            "duration" : simulation_duration }
                 
-    #             # load pre-computed data for each agent
+                # load pre-computed data for each agent
 
-    #             ## load agent eclipse data 
-    #             eclipse_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_eclipse_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
+                ## load agent eclipse data 
+                eclipse_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_eclipse_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
 
-    #             ## load agent position data
-    #             position_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_position_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
+                ## load agent position/vel data
+                state_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_state_data(orbitdata_dir, agents_to_load, simulation_duration, time_step)
 
-    #             ## load ground station access data
-    #             gs_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gs_access_data(orbitdata_dir, agents_to_load, simulation_duration, time_step, ground_station_list, connectivity, tqdm_config)
+                ## load ground station access data
+                gs_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gs_access_data(orbitdata_dir, agents_to_load, simulation_duration, time_step, ground_station_list, connectivity, tqdm_config)
 
-    #             ## load comms link data
-    #             comms_link_dfs : Dict[tuple, pd.DataFrame] = OrbitData.__load_agent_comms_link_data(orbitdata_dir, agents_to_load, simulation_duration, gs_access_dfs, time_step, connectivity)
+                ## load comms link data
+                comms_link_dfs : Dict[tuple, pd.DataFrame] = OrbitData.__load_agent_comms_link_data(orbitdata_dir, agents_to_load, simulation_duration, gs_access_dfs, time_step, connectivity)
 
-    #             ## load ground point access data
-    #             gp_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gp_access_data(orbitdata_dir, agents_to_load, mission_dict, simulation_duration, time_step, spacecraft_list, tqdm_config)
+                ## load ground point access data
+                gp_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gp_access_data(orbitdata_dir, agents_to_load, mission_dict, simulation_duration, time_step, spacecraft_list, tqdm_config)
 
-    #             ## load grid data
-    #             grid_data_dfs : List[pd.DataFrame] = OrbitData.__load_grid_data(orbitdata_dir, mission_dict)
+                ## load grid data
+                grid_data_dfs : List[pd.DataFrame] = OrbitData.__load_grid_data(orbitdata_dir, mission_dict)
 
-    #             # free up memory after loading position data
-    #             gc.collect()
-
-    #             # convert to interval data and time indexed data formats 
-    #             eclise_data = {agent_name : IntervalData.from_dataframe(eclipse_dfs[agent_name], time_step, 'eclipse', printouts) 
-    #                         for agent_name in eclipse_dfs.keys()}
-    #             position_data = {agent_name : TimeIndexedData.from_dataframe(position_dfs[agent_name], time_step, 'position', printouts)
-    #                             for agent_name in position_dfs.keys()}
-    #             comms_link_data = {agent_pair : IntervalData.from_dataframe(comms_link_dfs[agent_pair], time_step, f'{agent_pair[0]}-{agent_pair[1]}-comms', printouts)
-    #                                 for agent_pair in comms_link_dfs.keys()}
-    #             gs_access_data = {agent_name : IntervalData.from_dataframe(gs_access_dfs[agent_name], time_step, 'gs-access', printouts)
-    #                                 for agent_name in gs_access_dfs.keys()}
-    #             gp_access_data = {agent_name : TimeIndexedData.from_dataframe(gp_access_dfs[agent_name], time_step, 'gp-access', printouts)
-    #                             for agent_name in gp_access_dfs.keys()}
+                # free up memory after loading position data
+                gc.collect()
                 
-                
-    #             grid_data_columns = grid_data_dfs[0].columns.values if grid_data_dfs else None
-    #             grid_data = [ grid_df.to_numpy() for grid_df in grid_data_dfs]
-    #             shared_grid_data = SharedGridData(grid_data_columns, grid_data) 
-                
-    #             # create instances of OrbitData for each agent and store in dictionary indexed by agent name
-    #             for *_,agent_name,gs_network_name in agents_to_load: 
-    #                 # extract relevant data for this agent
-    #                 agent_eclipse_data = eclise_data[agent_name]
-    #                 agent_position_data = position_data[agent_name]
-    #                 agent_gs_access_data = gs_access_data[agent_name]
-    #                 agent_gp_access_data = gp_access_data[agent_name]
-    #                 agent_comms_link_data = { u if u != agent_name else v : comms_links
-    #                                         for (u,v), comms_links in comms_link_data.items()
-    #                                         if agent_name in (u,v) }                
+                # create instances of OrbitData for each agent and store in dictionary indexed by agent name
+                schemas = {}
+                for *_,agent_name,gs_network_name in agents_to_load: 
+                    # extract relevant data for this agent
+                    agent_eclipse_data = eclipse_dfs[agent_name]
+                    agent_state_data = state_dfs[agent_name]
+                    agent_gs_access_data = gs_access_dfs[agent_name]
+                    agent_gp_access_data = gp_access_dfs[agent_name]
+                    agent_comms_link_data = { u if u != agent_name else v : comms_links
+                                            for (u,v), comms_links in comms_link_dfs.items()
+                                            if agent_name in (u,v) }                
                     
-    #                 # group satellite and ground station access data for this agent
-    #                 agent_satellite_link_data = { link_name : link_data 
-    #                                             for link_name, link_data in agent_comms_link_data.items() 
-    #                                             if link_name in spacecraft_names }
-    #                 agent_ground_operator_link_data = { link_name : link_data
-    #                                                     for link_name, link_data in agent_comms_link_data.items()
-    #                                                     if link_name in ground_op_names }
-
-    #                 x = 1
+                    # define agent-specific binary output directory
+                    agent_bin_dir = os.path.join(bin_dir, agent_name)
                     
-    #     finally:
-    #         gc.collect() # force garbage collection after loading data to free up memory
+                    # print interval data to binaries 
+                    eclipse_meta = OrbitData.__write_interval_table(agent_eclipse_data, agent_bin_dir, 'eclipse', allow_overwrite=True)
+                    gs_meta = OrbitData.__write_interval_table(agent_gs_access_data, agent_bin_dir, 'gs_access', allow_overwrite=True)
+
+                    # print comms link data to binaries
+                    agent_comms_bin_dir = os.path.join(agent_bin_dir, 'comms')
+                    comms_metas = dict()
+                    for link_name, comms_links in agent_comms_link_data.items():
+                        comms_meta = OrbitData.__write_interval_table(comms_links, agent_comms_bin_dir, link_name + '_comms', allow_overwrite=True)
+                        comms_metas[link_name] = comms_meta
+
+                    # print agent position data to binaries
+                    state_meta = OrbitData.__write_state_table(agent_state_data, agent_bin_dir, 'kartesian_state', time_step, allow_overwrite=True)
+                    
+                    # print agent's groundpoint coverage data to binaries
+                    gp_access_meta = OrbitData.__write_gp_access_table(agent_gp_access_data, agent_bin_dir, 'gp_access', n_steps=n_steps, allow_overwrite=True)
+
+                    # print grid data to binaries
+                    grid_meta = OrbitData.__write_grid_table(grid_data_dfs, agent_bin_dir, 'grid', allow_overwrite=True)
+
+
+                    schemas[agent_name] = {
+                        'agent_name': agent_name,
+                        'dir' : agent_bin_dir,
+                        'data': {
+                            'eclipse': eclipse_meta,
+                            'gs_access': gs_meta,
+                            'comms_links': comms_metas,
+                            'state': state_meta,
+                            'gp_access': gp_access_meta,
+                            'grid': grid_meta
+                        }
+                    }
+                
+            return schemas
+                    
+        finally:
+            gc.collect() # force garbage collection after loading data to free up memory
         
     @staticmethod
     def __load_agent_eclipse_data(orbitdata_path : str, 
@@ -403,12 +447,12 @@ class OrbitData:
         return data
     
     @staticmethod
-    def __load_agent_position_data(orbitdata_path : str, 
-                                   agents_to_load : List[tuple],  
-                                   simulation_duration : float,
-                                   time_step : float
-                                ) -> Dict[str, pd.DataFrame]:
-        # initialize eclipse data 
+    def __load_agent_state_data(orbitdata_path : str, 
+                                agents_to_load : List[tuple],  
+                                simulation_duration : float,
+                                time_step : float
+                            ) -> Dict[str, pd.DataFrame]:
+        # initialize state data 
         data = dict()
         
         # iterate through agents to load
@@ -419,25 +463,25 @@ class OrbitData:
                 sat_id = "sat" + str(spacecraft_idx)
                 agent_folder = sat_id + '/' 
             
-                ## load agent position data
-                position_file = os.path.join(orbitdata_path, agent_folder, "state_cartesian.csv")
-                position_data = pd.read_csv(position_file, skiprows=range(4))
+                ## load agent position and velocity state data
+                state_file = os.path.join(orbitdata_path, agent_folder, "state_cartesian.csv")
+                state_data = pd.read_csv(state_file, skiprows=range(4))
 
                 # reduce data to only include intervals within the simulation duration
                 max_time_index = int(simulation_duration * 24 * 3600 // time_step)
-                position_data = position_data[position_data['time index'] <= max_time_index]
+                state_data = state_data[state_data['time index'] <= max_time_index]
                 
             elif agent_type == 'groundOperator':
-                # no eclipse data for ground operators; create empty dataframe
-                position_data = pd.DataFrame(columns=['time index','x [km]','y [km]','z [km]','vx [km/s]','vy [km/s]','vz [km/s]'])
+                # no state data for ground operators; create empty dataframe
+                state_data = pd.DataFrame(columns=['time index','x [km]','y [km]','z [km]','vx [km/s]','vy [km/s]','vz [km/s]'])
 
             else:
                 raise ValueError(f'Unknown agent type `{agent_type}` for agent `{agent_name}`.')
             
             # store in dictionary
-            data[agent_name] = position_data
+            data[agent_name] = state_data
         
-        # return compiled eclipse data
+        # return compiled state data
         return data
                 
     @staticmethod
@@ -816,7 +860,7 @@ class OrbitData:
                 
             elif agent_type == 'groundOperator':
                 # Ground Operators have no sensing capability; create empty ground point coverage data
-                gp_access_data = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]', 'agent','instrument',
+                gp_access_data = pd.DataFrame(columns=['time index','grid index', 'GP index','pnt-opt index','lat [deg]','lon [deg]', 'agent','instrument',
                                                         'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
 
             else:
@@ -857,6 +901,406 @@ class OrbitData:
         # return compiled grid data
         return grid_data_compiled
     
+    @staticmethod
+    def __write_interval_table(df: pd.DataFrame,
+                               bin_dir: str,
+                               table_name: str,
+                               *,
+                               start_col: str = "start index",
+                               end_col: str = "end index",
+                               sort: bool = True,
+                               allow_overwrite: bool = True,
+                            ) -> Dict[str, Any]:
+        """
+        Writes interval data to memmap-able .npy arrays + meta.json.
+
+        Required columns: start_col, end_col (integer indices).
+        Additional columns: numeric/bool only (unless you pre-encode strings).
+        """
+        # validate output directory
+        out_dir = os.path.join(bin_dir, table_name) # e.g. bin/sat0/eclipse
+        os.makedirs(out_dir, exist_ok=True)
+
+        # validate that we are not overwriting existing data unless allowed
+        if not allow_overwrite and os.path.exists(os.path.join(out_dir, "meta.json")):
+            raise FileExistsError(f"Interval table already exists at: {out_dir}")
+
+        # validate required columns
+        if start_col not in df.columns or end_col not in df.columns:
+            raise KeyError(f"Missing required columns: '{start_col}' and/or '{end_col}'")
+
+        # Keep only needed columns (required + extras)
+        cols = list(df.columns)
+        if start_col not in cols or end_col not in cols:
+            raise ValueError("start/end columns not found in df")
+
+        # Copy just the columns we will store
+        work = df.copy(deep=False)
+
+        # Ensure integer arrays for start/end
+        start = work[start_col].to_numpy()
+        end = work[end_col].to_numpy()
+
+        if not np.issubdtype(start.dtype, np.integer):
+            start = start.astype(np.int64, copy=False)
+        if not np.issubdtype(end.dtype, np.integer):
+            end = end.astype(np.int64, copy=False)
+
+        if sort:
+            # stable sort by start then end
+            order = np.lexsort((end, start))
+            start = start[order]
+            end = end[order]
+            work = work.iloc[order].reset_index(drop=True)
+
+        # Prefix max end for fast existence checks
+        prefix_max_end = np.maximum.accumulate(end)
+
+        # Write start/end/prefix
+        np.save(os.path.join(out_dir, "start.npy"), start.astype(np.int32, copy=False))
+        np.save(os.path.join(out_dir, "end.npy"), end.astype(np.int32, copy=False))
+        np.save(os.path.join(out_dir, "prefix_max_end.npy"), prefix_max_end.astype(np.int32, copy=False))
+
+        for col in work.columns:
+            # check if any columns have strings; if so, encode them
+            if pd.api.types.is_string_dtype(work[col]):
+                codes, uniques = pd.factorize(work[col], sort=True)
+                work = work.copy()
+                work[f"{col}_code"] = codes.astype(np.int32)
+
+                with open(os.path.join(out_dir, f"{col}_vocab.json"), "w") as f:
+                    json.dump([str(x) for x in uniques.tolist()], f, indent=4)
+
+        # Write extra columns
+        extras_dt: Dict[str, str] = {}
+        extras_cols : Dict[str,str] ={}
+        for col in work.columns:
+            # skip start and end time columns
+            if col in (start_col, end_col):
+                continue
+            # check if column is of type string
+            if pd.api.types.is_string_dtype(work[col]):
+                continue  # already encoded as {col}_code
+
+            s = work[col]
+            dt = OrbitData.__pick_numpy_dtype(s)
+            arr = s.to_numpy()
+
+            safe = col.replace('[deg]', '').strip()
+            safe = safe.replace(' ', '_')  # avoid spaces in file names
+
+            # Cast to chosen dtype (no copy if already compatible)
+            arr = arr.astype(dt, copy=False)
+            np.save(os.path.join(out_dir, f"{safe}.npy"), arr)
+            extras_dt[safe] = str(dt)
+            extras_cols[col] = safe
+
+        meta = {
+            "n": int(len(work)),
+            "start_col": start_col,
+            "end_col": end_col,
+            "sorted_by_start": bool(sort),
+            **{
+                col_str + "_col" : col for col,col_str in extras_cols.items()
+            },
+            "files": {
+                "start": "start.npy",
+                "end": "end.npy",
+                "prefix_max_end": "prefix_max_end.npy",
+                **{col_str: f"{col_str}.npy" for col_str in extras_cols.values()},
+            },
+            "dtypes": {
+                "start": "int32",
+                "end": "int32",
+                "prefix_max_end": "int32",
+                **extras_dt,
+            },
+        }
+
+        with open(os.path.join(out_dir, "meta.json"), "w") as f:
+            json.dump(meta, f, indent=4)
+
+        return meta
+    
+    @staticmethod
+    def __write_state_table(df: pd.DataFrame,
+                            bin_dir: str,
+                            table_name: str,
+                            time_step : float,
+                            *,
+                            t_col: str = "time index",
+                            pos_cols: Tuple[str, str, str] = ("x [km]", "y [km]", "z [km]"),
+                            vel_cols: Tuple[str, str, str] = ("vx [km/s]", "vy [km/s]", "vz [km/s]"),
+                            dtype: np.dtype = np.float32,
+                            sort_by_time: bool = True,
+                            allow_overwrite: bool = True,
+                        ) -> Dict[str, Any]:
+        """
+        Writes a time-indexed position/velocity table to memmap-able .npy arrays + meta.json.
+
+        Files:
+        - t.npy (optional if t_col is None)
+        - pos.npy shape (N,3)
+        - vel.npy shape (N,3)
+        - plus any extra numeric columns you decide to add later
+        """
+        # validate output directory
+        out_dir = os.path.join(bin_dir, table_name) 
+        os.makedirs(out_dir, exist_ok=True)
+
+        meta_path = os.path.join(out_dir, "meta.json")
+        if (not allow_overwrite) and os.path.exists(meta_path):
+            raise FileExistsError(f"State table already exists at: {out_dir}")
+
+        for c in pos_cols + vel_cols:
+            if c not in df.columns:
+                raise KeyError(f"Missing required column '{c}'")
+
+        # Copy just the columns we will store
+        work = df.copy(deep=False)
+
+        if t_col is not None:
+            if t_col not in work.columns:
+                raise KeyError(f"Missing time column '{t_col}'")
+            t_idx = work[t_col].to_numpy()
+            if not np.issubdtype(t_idx.dtype, np.integer):
+                t_idx = t_idx.astype(np.int64, copy=False)
+                t = t_idx * time_step
+                t = t.astype(np.float32, copy=False)
+
+            if sort_by_time:
+                order = np.argsort(t_idx, kind="mergesort")  # stable
+                work = work.iloc[order].reset_index(drop=True)
+                t_idx = t_idx[order]
+                t = t_idx * time_step
+                t = t.astype(np.float32, copy=False)
+        else:
+            t_idx = None  # implicit index
+            t = None
+        
+        pos = work.loc[:, list(pos_cols)].to_numpy(dtype=dtype, copy=False)
+        vel = work.loc[:, list(vel_cols)].to_numpy(dtype=dtype, copy=False)
+
+        np.save(os.path.join(out_dir, "pos.npy"), pos)
+        np.save(os.path.join(out_dir, "vel.npy"), vel)
+        files = {"pos": "pos.npy", "vel": "vel.npy"}
+
+        if t_idx is not None:
+            # store time index as int32 if safe; else int64
+            if t_idx.max(initial=0) <= np.iinfo(np.int32).max:
+                t_idx = t_idx.astype(np.int32, copy=False)
+                t_dtype = "int32"
+            else:
+                t_idx = t_idx.astype(np.int64, copy=False)
+                t_dtype = "int64"
+
+            np.save(os.path.join(out_dir, "t_index.npy"), t_idx)
+            np.save(os.path.join(out_dir, "t.npy"), t)
+            files["t_index"] = "t_index.npy"
+            files["t"] = "t.npy"
+        else:
+            t_dtype = None
+
+        meta = {
+            "n": int(len(work)),
+            "has_t": t is not None,
+            "t_col": t_col,
+            "pos_cols": list(pos_cols),
+            "vel_cols": list(vel_cols),
+            "time_step": float(time_step),
+            "dtypes": {
+                "pos": str(np.dtype(dtype)),
+                "vel": str(np.dtype(dtype)),
+                "t" : "float32" if t is not None else None,
+                "t_idx": t_dtype,
+            },
+            "files": files,
+            "sorted_by_time": bool(sort_by_time),
+        }
+
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=4)
+
+        return meta
+        
+    @staticmethod
+    def __pick_numpy_dtype(series: pd.Series) -> np.dtype:
+        """
+        Choose a stable numpy dtype for a dataframe column.
+        Keep it simple: ints -> int32/int64, floats -> float32/float64, bool -> bool.
+        """
+        if pd.api.types.is_bool_dtype(series):
+            return np.dtype(np.bool_)
+        if pd.api.types.is_integer_dtype(series):
+            # Use int32 if safe (often time indices fit); else int64
+            # If you know your ranges, you can force int32 for space.
+            return np.dtype(np.int32)
+        if pd.api.types.is_float_dtype(series):
+            # float32 is usually fine for many telemetry-ish fields
+            return np.dtype(np.float32)
+        raise TypeError(f"Unsupported dtype for column '{series.name}': {series.dtype}. "
+                        f"Encode strings/categories before writing.")
+
+    @staticmethod
+    def __write_gp_access_table(df: pd.DataFrame,
+                                bin_dir: str,
+                                table_name: str,
+                                *,
+                                t_col: str = 'time index',
+                                required_cols: Sequence[str] = ['GP index','grid index','lat [deg]','lon [deg]', 'instrument'],
+                                n_steps: Optional[int] = None,
+                                sort_within_time: bool = False,
+                                string_max_unique: Optional[int] = None,  # optional guardrail
+                                allow_overwrite: bool = True,
+                            ) -> Dict[str, Any]:
+        """
+        Writes a ragged table with unknown columns to memmap-friendly binaries:
+        - offsets.npy
+        - one .npy per column (numeric) OR codes + dict for strings
+        - meta.json
+        """
+        # validate output directory
+        out_dir = os.path.join(bin_dir, table_name) 
+        os.makedirs(out_dir, exist_ok=True)
+
+        # Validate
+        for c in (t_col, *required_cols):
+            if c not in df.columns:
+                raise KeyError(f"Missing required column: {c}")
+
+        # Copy just the columns we will store
+        work = df.copy(deep=False)
+
+        # Extract time
+        t = work[t_col].to_numpy()
+        if not np.issubdtype(t.dtype, np.integer):
+            t = t.astype(np.int64, copy=False)
+        else:
+            t = t.astype(np.int64, copy=False)
+
+        # Determine steps
+        if n_steps is None:
+            T = 0 if len(t) == 0 else int(t.max()) + 1
+        else:
+            T = int(n_steps)
+
+        # Filter to [0, T-1]
+        if len(t) > 0:
+            mask = (t >= 0) & (t < T)
+            if not np.all(mask):
+                work = work.loc[mask].copy()
+                t = t[mask]
+
+        # Sort by time so each bucket is contiguous
+        if sort_within_time:
+            # stable tie-breaker: keep existing row order by using mergesort later
+            order = np.lexsort((np.arange(len(t), dtype=np.int64), t))
+        else:
+            order = np.argsort(t, kind="mergesort")
+
+        work = work.iloc[order]
+        t = t[order]
+
+        # Offsets
+        counts = np.bincount(t, minlength=T).astype(np.int64, copy=False)
+        offsets = np.empty(T + 1, dtype=np.int64)
+        offsets[0] = 0
+        np.cumsum(counts, out=offsets[1:])
+
+        np.save(os.path.join(out_dir, "offsets.npy"), offsets)
+
+        # Decide which columns to write (everything except time, unless you want to keep it too)
+        cols_to_write = [c for c in work.columns if c != t_col]
+
+        meta: Dict[str, Any] = {
+            "format": "ragged_csr_columnar",
+            "t_col": t_col,
+            "n_steps": int(T),
+            "n_rows": int(offsets[-1]),
+            "columns": {},
+            "required_cols": list(required_cols),
+            "files": {"offsets": "offsets.npy"},
+        }
+
+        for col in cols_to_write:
+            safe = OrbitData.__safe_name(col)
+            s = work[col]
+
+            # Treat pandas "string/object" as string-like; also category
+            is_stringish = (
+                pd.api.types.is_object_dtype(s.dtype)
+                or pd.api.types.is_string_dtype(s.dtype)
+                or pd.api.types.is_categorical_dtype(s.dtype)
+            )
+
+            if is_stringish:
+                # Convert to pandas strings; normalize NaNs
+                s2 = s.astype("string")
+                # Dictionary encode
+                uniques = s2.dropna().unique()
+                if string_max_unique is not None and len(uniques) > string_max_unique:
+                    raise ValueError(f"Column '{col}' has {len(uniques)} unique strings; too many for dictionary encoding.")
+
+                # Build mapping (stable)
+                # code 0 reserved for NULL
+                uniq_list = [str(x) for x in uniques]
+                str_to_code = {v: i + 1 for i, v in enumerate(uniq_list)}
+                codes = np.zeros(len(s2), dtype=np.int32)
+
+                # Fill codes
+                # (vectorized mapping via pandas map)
+                mapped = s2.map(lambda x: str_to_code.get(str(x), 0) if pd.notna(x) else 0)
+                codes[:] = mapped.to_numpy(dtype=np.int32, na_value=0)
+
+                codes_path = f"col_{safe}__codes.npy"
+                dict_path = f"dict_{safe}.json"
+                np.save(os.path.join(out_dir, codes_path), codes)
+                with open(os.path.join(out_dir, dict_path), "w") as f:
+                    json.dump({"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}, f)
+
+                meta["columns"][col] = {
+                    "kind": "string_dict",
+                    "codes_file": codes_path,
+                    "dict_file": dict_path,
+                    "codes_dtype": str(codes.dtype),
+                }
+            else:
+                # Numeric/bool → store as array
+                arr = s.to_numpy()
+                # Choose compact dtypes if you want (example: float64->float32)
+                # arr = arr.astype(np.float32, copy=False) if arr.dtype == np.float64 else arr
+
+                col_path = f"col_{safe}.npy"
+                np.save(os.path.join(out_dir, col_path), arr)
+                meta["columns"][col] = {
+                    "kind": "numeric",
+                    "file": col_path,
+                    "dtype": str(arr.dtype),
+                }
+
+        with open(os.path.join(out_dir, "meta.json"), "w") as f:
+            json.dump(meta, f)
+
+        return meta
+
+    @staticmethod
+    def __safe_name(col: str) -> str:
+        return col.replace(" ", "_").replace("[", "").replace("]", "").replace("/", "_")
+    
+    @staticmethod
+    def __write_grid_table(df: pd.DataFrame,
+                            bin_dir: str,
+                            table_name: str,
+                            *,                            
+                            required_cols: Sequence[str] = ['lat [deg]','lon [deg]'],
+                            vel_cols: Tuple[str, str, str] = ("vx [km/s]", "vy [km/s]", "vz [km/s]"),
+                            dtype: np.dtype = np.float32,
+                            sort_by_time: bool = True,
+                            allow_overwrite: bool = True,
+                        ) -> Dict[str, Any]:
+        # TODO
+        return None 
+
     """
     GET NEXT methods
     """

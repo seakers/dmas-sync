@@ -1,11 +1,99 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple
+from dataclasses import dataclass
+import json
+import os
+from typing import Dict, List, Optional, Tuple
 
+from matplotlib.table import table
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
 from execsatm.utils import Interval
+
+
+@dataclass
+class StateTable:
+    """
+    Memmap-backed time-indexed state table:
+      pos: (N,3)
+      vel: (N,3)
+      t:   (N,) optional (monotonic int indices or time indices)
+    """
+    _pos: np.ndarray
+    _vel: np.ndarray
+    _t: Optional[np.ndarray]
+    _meta: Dict
+
+    @classmethod
+    def load(cls, in_dir: str, mmap_mode: str = "r") -> "StateTable":
+        with open(os.path.join(in_dir, "meta.json"), "r") as f:
+            meta = json.load(f)
+
+        pos = np.load(os.path.join(in_dir, meta["files"]["pos"]), mmap_mode=mmap_mode)
+        vel = np.load(os.path.join(in_dir, meta["files"]["vel"]), mmap_mode=mmap_mode)
+
+        t = None
+        if meta.get("has_t", False):
+            t = np.load(os.path.join(in_dir, meta["files"]["t"]), mmap_mode=mmap_mode)
+
+        return cls(_pos=pos, _vel=vel, _t=t, _meta=meta)
+
+    def get_state_at_index(self, i: int):
+        return self._pos[i], self._vel[i]
+
+    def get_state_at_time(self, t: float) -> tuple:
+        # validate inputs
+        if not isinstance(t, (int, float)) or t < 0.0:
+            raise ValueError("time t must be a non-negative number")
+        if self._t is None:
+            raise ValueError("This StateTable has no explicit t array; use direct index lookup.")
+        
+        # calculate time index
+        time_step = self._meta.get("time_step", None)
+        if time_step is None:
+            raise ValueError("This StateTable does not have a time step defined in its metadata; cannot compute time index.")
+        
+        # Find location in time array 
+        idx = np.searchsorted(self._t, t, side="left")
+
+        # check if exact match
+        if idx < len(self._t) and abs(self._t[idx] - t) < 1e-6:
+            # return state at time index
+            return self._pos[idx], self._vel[idx]
+        if idx >= len(self._t):
+            # time is beyond last index; return last state
+            return self._pos[-1], self._vel[-1]
+
+        # interpolate between closest indices
+        i0 = max(0, idx - 1)
+        alpha = (t - self._t[i0]) / (self._t[idx] - self._t[i0])
+        return self.lerp_state(i0, alpha)
+
+    # def get_state_at_time_index_value(self, t_val: int):
+    #     if self._t is None:
+    #         raise ValueError("This StateTable has no explicit t array; use direct index lookup.")
+
+    #     # Find exact match
+    #     i = int(np.searchsorted(self._t, t_val, side="left"))
+    #     if i >= len(self._t) or int(self._t[i]) != int(t_val):
+    #         raise KeyError(f"time index {t_val} not found")
+    #     return self._pos[i], self._vel[i]
+    
+    # def get_states_in_index_range(self, i0: int, i1: int):
+    #     return self._pos[i0:i1], self._vel[i0:i1]
+    
+    def lerp_state(self, i0: int, alpha: float):
+        """
+        alpha in [0,1): returns state between i0 and i0+1
+        """
+        p = (1.0 - alpha) * self._pos[i0] + alpha * self._pos[i0 + 1]
+        v = (1.0 - alpha) * self._vel[i0] + alpha * self._vel[i0 + 1]
+        return p, v
+
+
+
+
 
 class AbstractDataSeries(ABC):
     """
