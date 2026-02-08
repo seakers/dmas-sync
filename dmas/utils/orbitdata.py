@@ -43,7 +43,7 @@ class OrbitData:
                  duration : float,
                  eclipse_data : IntervalTable,
                  state_data : StateTable,
-                 comms_links : Dict[str, IntervalTable],
+                 comms_links : IntervalTable,
                  gs_access_data : IntervalTable,
                  gp_access_data : AccessTable,
                  grid_data: TargetGridTable
@@ -111,9 +111,7 @@ class OrbitData:
             gs_access_data = IntervalTable.from_schema(schema['gs_access'], mmap_mode='r')
 
             # load comms link data from binary
-            comms_links = dict()
-            for link_name, comms_meta in schema['comms_links'].items():
-                comms_links[link_name] = IntervalTable.from_schema(comms_meta, mmap_mode='r')
+            comms_links = IntervalTable.from_schema(schema['comms_links'], mmap_mode='r')
 
             # load ground point access data from binary
             gp_access_data = AccessTable.from_schema(schema['gp_access'], mmap_mode='r')
@@ -365,8 +363,20 @@ class OrbitData:
             OrbitData.preprocess(data_dir, scenario_specs['duration'], overwrite=True, printouts=printouts)
             if printouts: tqdm.write("Preprocessing done!")
 
-        # TODO remove raw data and only keep binaries to save space? Or keep both to allow for future changes to preprocessing methods without needing to re-propagate data? For now, keeping both.
-            
+        # TODO test pending vvv
+        # remove raw data and only keep binaries to save space? Or keep both to allow for future changes to preprocessing methods without needing to re-propagate data? For now, keeping both.
+        if settings_dict is not None:
+            save_unprocessed_coverage = settings_dict.get('saveUnprocessedCoverage', "False").lower() == "true"
+            if not save_unprocessed_coverage:
+                # remove raw coverage data to save space
+                raise NotImplementedError('Not tested yet')
+                for f in os.listdir(data_dir):
+                    f_dir = os.path.join(data_dir, f)
+                    if os.path.isdir(f_dir) and f != 'bin':
+                        for h in os.listdir(f_dir):
+                            os.remove(os.path.join(f_dir, h))
+                        os.rmdir(f_dir)
+
         # restore original duration value
         scenario_specs['duration'] = original_duration
 
@@ -557,12 +567,12 @@ class OrbitData:
             eclipse_meta = OrbitData.__write_interval_data_table(agent_eclipse_data, agent_bin_dir, 'eclipse', time_specs['time step'], allow_overwrite=True)
             gs_meta = OrbitData.__write_interval_data_table(agent_gs_access_data, agent_bin_dir, 'gs_access', time_specs['time step'], allow_overwrite=True)
 
+            # concatenate comms link dataframes for different targets 
+            comms_links_concat :pd.DataFrame = OrbitData.__compile_agent_comms_data(agent_comms_link_data)
+                
             # print comms link data to binaries
             agent_comms_bin_dir = os.path.join(agent_bin_dir, 'comm')
-            comms_metas = dict()
-            for link_name, comms_links in agent_comms_link_data.items():
-                comms_meta = OrbitData.__write_interval_data_table(comms_links, agent_comms_bin_dir, link_name + '_comm', time_specs['time step'], allow_overwrite=True)
-                comms_metas[link_name] = comms_meta
+            comms_meta = OrbitData.__write_interval_data_table(comms_links_concat, agent_comms_bin_dir, 'comm', time_specs['time step'], allow_overwrite=True)
 
             # print agent position data to binaries
             state_meta = OrbitData.__write_state_table(agent_state_data, agent_bin_dir, 'cartesian_state', time_specs['time step'], allow_overwrite=True)
@@ -580,17 +590,57 @@ class OrbitData:
                 'dir' : agent_bin_dir,
                 'eclipse': eclipse_meta,
                 'gs_access': gs_meta,
-                'comms_links': comms_metas,
+                # 'comms_links': comms_metas,
+                'comms_links': comms_meta,
                 'state': state_meta,
                 'gp_access': gp_access_meta,
                 'grid': grid_meta
             }
-            
+        
+        # save schemas for all agents to metadata file in binary directory for future loading
         with open(os.path.join(bin_dir, "meta.json"), "w") as f:
             json.dump(schemas, f, indent=4)
 
         # return compiled schemas for all agents
         return schemas
+    
+    @staticmethod
+    def __compile_agent_comms_data(agent_comms_link_data : Dict[str, pd.DataFrame]) -> pd.DataFrame:
+        comms_req_columns = ["start index", "end index"]
+        working_dfs = []
+        for peer, comms_links in agent_comms_link_data.items():
+            # take only the required cols (this avoids mutating the original DF)
+            work = comms_links.loc[:, comms_req_columns].copy()
+
+            # force numeric (coerce bad values to NaN so you can detect them)
+            for c in comms_req_columns:
+                work[c] = pd.to_numeric(work[c], errors="coerce")
+
+            # if these must be integers, enforce and fail fast on NaNs
+            if work[comms_req_columns].isna().any().any():
+                bad = work[work[comms_req_columns].isna().any(axis=1)].head(5)
+                raise ValueError(
+                    f"Non-numeric or missing start/end values after coercion for peer={peer}. "
+                    f"Examples:\n{bad}"
+                )
+
+            # cast to the dtype you want (likely int32)
+            work["start index"] = work["start index"].astype(np.int32)
+            work["end index"]   = work["end index"].astype(np.int32)
+
+            work["target"] = peer
+            working_dfs.append(work)
+        
+        if working_dfs:
+            comms_links_concat = (
+                pd.concat(working_dfs, ignore_index=True, copy=False)
+                .sort_values(by=["start index", "end index"], kind="mergesort")
+                .reset_index(drop=True)
+            )
+        else:
+            comms_links_concat = pd.DataFrame(columns=[*comms_req_columns, "target"])
+
+        return comms_links_concat
         
     def __load_csv_data(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Tuple:
         """ 
@@ -1189,6 +1239,7 @@ class OrbitData:
                                     sort_by_time: bool = True,
                                     string_max_unique: Optional[int] = None, 
                                     allow_overwrite: bool = True,
+                                    packed_dtype: np.dtype = np.float32
                                 ) -> Dict[str, Any]:
         """
         Writes interval data to memmap-able .npy arrays + meta.json.
@@ -1231,108 +1282,120 @@ class OrbitData:
         # prefix max end for fast existence checks
         prefix_max_end = np.maximum.accumulate(end)
 
-        # Write start/end/prefix
-        np.save(os.path.join(out_dir, "start.npy"), start)
-        np.save(os.path.join(out_dir, "end.npy"), end)
-        np.save(os.path.join(out_dir, "prefix_max_end.npy"), prefix_max_end.astype(np.int32, copy=False))
+        # select extra columns (everything except start/end)
+        extra_cols = [c for c in work.columns if c != start_col and c != end_col]
 
-        # select which columns are pending to be written
-        cols_to_write = [c for c in work.columns if c != start_col and c != end_col]
+        # We'll build extras in deterministic order using safe names (like before)
+        extras_safe: list[str] = []
+        extras_data: dict[str, np.ndarray] = {}   # safe -> numeric array (already encoded for strings)
+        columns_meta: dict[str, Any] = {}         # safe -> metadata (keeps your current structure)
 
-        # initialize metadata dictionary
-        meta: Dict[str, Any] = {
-            "name": table_name,
-            "n": int(len(work)),
-            "columns": {},
-            "dtypes" : {
-                "start" : str(np.dtype(start_dtype)),
-                "end" : str(np.dtype(end_dtype)),
-                "prefix_max_end" : str(np.dtype(end_dtype))
-            },
-            "files": {
-                "start": "start.npy", 
-                "end": "end.npy", 
-                "prefix_max_end": "prefix_max_end.npy"
-            },
-            "sorted_by_time": bool(sort_by_time),
-            "dir" : out_dir
-        }
-
-        # write extra columns and update metadata
-        for col in cols_to_write:
-            # get a safe name for the column to use in file names
+        # encode extras (mostly same as your existing code, but don't write per-column files)
+        for col in extra_cols:
+            # get a safe name for the column
             safe = OrbitData.__safe_name(col)
-            
-            # get data series for working column
-            s : pd.Series = work[col]
 
-            # check if column is string-like (object, string, or categorical dtype)
+            # get data series for working column
+            s: pd.Series = work[col]
+
+            # evaluate if column is string-like 
             is_stringish = (
                 pd.api.types.is_object_dtype(s.dtype)
                 or pd.api.types.is_string_dtype(s.dtype)
                 or pd.api.types.is_categorical_dtype(s.dtype)
             )
 
+            # compile data according to column type
             if is_stringish:
                 # convert to pandas strings (normalizes NaNs)
-                s2 : pd.Series = s.astype("string")
+                s2 = s.astype("string")
 
                 # get unique string values
                 uniques = s2.dropna().unique()
 
-                # if a limit is set, ensure number of unique strings is not too large for dictionary encoding
+                # check if number of unique strings exceeds max allowed for dictionary encoding
                 if string_max_unique is not None and len(uniques) > string_max_unique:
-                    raise ValueError(f"Column '{col}' has {len(uniques)} unique strings; too many for dictionary encoding.")
+                    raise ValueError(
+                        f"Column '{col}' has {len(uniques)} unique strings; too many for dictionary encoding."
+                    )
 
-                # build string encoding mapping (code 0 reserved for NULL/NaN)
+                # get list of unique strings 
                 uniq_list = [str(x) for x in uniques]
-                str_to_code = {v: i + 1 for i, v in enumerate(uniq_list)}
-                codes = np.zeros(len(s2), dtype=np.int32)
 
-                # Fill codes
-                # (vectorized mapping via pandas map)
+                # map strings to integer codes (0 reserved for null/NaN)
+                str_to_code = {v: i + 1 for i, v in enumerate(uniq_list)}  # 0 reserved for null
+                
+                # map original string series to integer codes, using 0 for NaN/null values
                 mapped = s2.map(lambda x: str_to_code.get(str(x), 0) if pd.notna(x) else 0)
-                codes[:] = mapped.to_numpy(dtype=np.int32, na_value=0)
+
+                # convert mapped codes to numpy array
+                codes = mapped.to_numpy(dtype=np.int32, na_value=0)
+
+                # save code to string mappings 
                 vocab = {"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}
 
-                # define file paths for codes and dictionary
-                codes_path = f"col_{safe}__codes.npy"
-                dict_path = f"dict_{safe}.json"
-
-                # save codes and dictionary to files
-                np.save(os.path.join(out_dir, codes_path), codes)
-                with open(os.path.join(out_dir, dict_path), "w") as f:
-                    json.dump(vocab, f, indent=4)
-
-                # update metadata for this column
-                meta["columns"][safe] = {
-                    "col_name" : col,
+                # store encoded codes as numeric (we'll pack into float array later)
+                extras_safe.append(safe)
+                extras_data[safe] = codes  # keep as int32 for now
+                columns_meta[safe] = {
+                    "col_name": col,
                     "kind": "string_dict",
-                    "dict_file": dict_path,
-                    "vocab" : vocab
+                    "vocab": vocab,
+                    "code_dtype": str(codes.dtype),
                 }
-                meta['files'][safe] = codes_path
-                meta['dtypes'][safe] = str(codes.dtype)
 
             else:
-                # convert series to numpy array 
-                arr : np.ndarray = s.to_numpy()
-                
-                # pick an appropriate dtype for storage
+                arr = s.to_numpy()
                 dtype = OrbitData.__pick_numpy_dtype(s)
                 arr = arr.astype(dtype, copy=False)
 
-                # save array to .npy file
-                col_path = f"col_{safe}.npy"
-                np.save(os.path.join(out_dir, col_path), arr)
-
-                # update metadata for this column
-                meta["columns"][safe] = {
-                    "col_name" : col,
+                extras_safe.append(safe)
+                extras_data[safe] = arr
+                columns_meta[safe] = {
+                    "col_name": col,
                     "kind": "numeric",
+                    "dtype_original": str(arr.dtype),
                 }
-                meta['files'][safe] = col_path
-                meta['dtypes'][safe] = str(arr.dtype)
+
+        # number of rows and total columns (start, end, prefix, extras)
+        n = int(len(work))
+        layout = ["start", "end", "prefix_max_end", *extras_safe]
+        k = len(layout)
+
+        # pack into one (N,K) array 
+        packed = np.empty((n, k), dtype=np.dtype(packed_dtype))
+        
+        # pack required columns (start, end, prefix_max_end)
+        packed[:, 0] = start.astype(packed_dtype, copy=False)
+        packed[:, 1] = end.astype(packed_dtype, copy=False)
+        packed[:, 2] = prefix_max_end.astype(packed_dtype, copy=False)
+
+        # pack additional columns in order defined by layout
+        for j, safe in enumerate(extras_safe, start=3):
+            packed[:, j] = extras_data[safe].astype(packed_dtype, copy=False)
+
+        # save single packed file
+        packed_fname = "intervals.npy"
+        np.save(os.path.join(out_dir, packed_fname), packed)
+
+        # metadata (keep very similar to yours)
+        meta: Dict[str, Any] = {
+            "name": table_name,
+            "n": n,
+            "layout": layout,  # <--- NEW: defines column order in intervals.npy
+            "shape": [n, k],
+            "packed_dtype": str(np.dtype(packed_dtype)),
+            "columns": columns_meta,  # per-extra metadata incl vocab for strings
+            "dtypes": {
+                "start_original": str(np.dtype(start_dtype)),
+                "end_original": str(np.dtype(end_dtype)),
+            },
+            "files": {"intervals": packed_fname},  # <--- ONLY ONE
+            "sorted_by_time": bool(sort_by_time),
+            "dir": out_dir,
+            "start_col_name": start_col,
+            "end_col_name": end_col,
+        }
 
         # write metadata to file
         with open(os.path.join(out_dir, "meta.json"), "w") as f:
@@ -1472,30 +1535,36 @@ class OrbitData:
         pos = work.loc[:, list(pos_cols)].to_numpy(dtype=state_dtype, copy=False)
         vel = work.loc[:, list(vel_cols)].to_numpy(dtype=state_dtype, copy=False)
 
-        # save time, position, and velocity data to .npy files
-        np.save(os.path.join(out_dir, "t.npy"), t)
-        np.save(os.path.join(out_dir, "pos.npy"), pos)
-        np.save(os.path.join(out_dir, "vel.npy"), vel)
-        
-        # map filenames to columns
-        files = {"t": "t.npy", "pos": "pos.npy", "vel": "vel.npy"}
+        # --- pack into one array (N,7) ---
+        # Choose one dtype for the packed array. To keep it simple and memmap-friendly:
+        n = int(len(work))
+        packed_dtype = np.dtype(state_dtype)
 
-        # store metadata 
+        state = np.empty((n, 7), dtype=packed_dtype)
+        state[:, 0] = t.astype(packed_dtype, copy=False)
+        state[:, 1:4] = pos
+        state[:, 4:7] = vel
+
+        # save single packed file
+        state_fname = "state.npy"
+        np.save(os.path.join(out_dir, state_fname), state)
+
+        # metadata
+        files = {"state": state_fname}
+        layout = ["t", *pos_cols, *vel_cols]  # length 7
+
         meta = {
             "name": table_name,
-            "n": int(len(work)),
-            "columns":{
-                "pos": list(pos_cols),
-                "vel": list(vel_cols)
-            },
+            "n": n,
+            "layout": layout,               # order of columns in state.npy
             "dtypes": {
-                "t" : str(np.dtype(t_dtype)),
-                "pos": str(np.dtype(state_dtype)),
-                "vel": str(np.dtype(state_dtype))
+                "state": str(packed_dtype), # dtype of packed array
+                "t_original": str(np.dtype(t_dtype)),  # for reference/debug
             },
             "files": files,
             "sorted_by_time": bool(sort_by_time),
-            "dir" : out_dir
+            "dir": out_dir,
+            "shape": [n, 7],
         }
 
         # save metadata to json file
@@ -1517,6 +1586,7 @@ class OrbitData:
                                 sort_within_time: bool = False,
                                 string_max_unique: Optional[int] = None,  # optional guardrail
                                 allow_overwrite: bool = True,
+                                packed_dtype: np.dtype = np.float32
                             ) -> Dict[str, Any]:
         """
         Writes a ragged table with unknown columns to memmap-friendly binaries:
@@ -1583,36 +1653,18 @@ class OrbitData:
         offsets[0] = 0
         np.cumsum(counts, out=offsets[1:])
 
-        np.save(os.path.join(out_dir, "offsets.npy"), offsets)
-        np.save(os.path.join(out_dir, "t.npy"), t)
-        np.save(os.path.join(out_dir, "t_index.npy"), t_idx)
-
-        # Decide which columns to write
+        # Decide columns to write (everything except t_col; we will include packed "t" and "t_index" explicitly)
         cols_to_write = [c for c in work.columns if c != t_col]
 
-        meta: Dict[str, Any] = {
-            "name": table_name,
-            "n_rows": int(offsets[-1]),
-            "time_step" : float(time_step),
-            "n_steps": int(T),            
-            "format": "ragged_csr_columnar",
-            "t_col": t_col,
-            "columns": {},
-            "dtypes" : {},
-            "files": {
-                "offsets": "offsets.npy",
-                "t": "t.npy",
-                "t_index": "t_index.npy"
-            },
-            "required_cols": list(required_cols),
-            "dir" : out_dir
-        }
+        # encode additional data
+        columns_meta: Dict[str, Any] = {}
+        extras_safe: list[str] = []
+        extras_data: dict[str, np.ndarray] = {}
 
         for col in cols_to_write:
             safe = OrbitData.__safe_name(col)
-            s : pd.Series = work[col]
+            s: pd.Series = work[col]
 
-            # Treat pandas "string/object" as string-like; also category
             is_stringish = (
                 pd.api.types.is_object_dtype(s.dtype)
                 or pd.api.types.is_string_dtype(s.dtype)
@@ -1620,57 +1672,81 @@ class OrbitData:
             )
 
             if is_stringish:
-                # Convert to pandas strings; normalize NaNs
-                s2 : pd.Series = s.astype("string")
-
-                # Dictionary encode
+                s2 = s.astype("string")
                 uniques = s2.dropna().unique()
+
                 if string_max_unique is not None and len(uniques) > string_max_unique:
-                    raise ValueError(f"Column '{col}' has {len(uniques)} unique strings; too many for dictionary encoding.")
+                    raise ValueError(
+                        f"Column '{col}' has {len(uniques)} unique strings; too many for dictionary encoding."
+                    )
 
-                # Build mapping (stable)
-                # code 0 reserved for NULL
                 uniq_list = [str(x) for x in uniques]
-                str_to_code = {v: i + 1 for i, v in enumerate(uniq_list)}
-                codes = np.zeros(len(s2), dtype=np.int32)
-
-                # Fill codes
-                # (vectorized mapping via pandas map)
+                str_to_code = {v: i + 1 for i, v in enumerate(uniq_list)}  # 0 reserved for null
                 mapped = s2.map(lambda x: str_to_code.get(str(x), 0) if pd.notna(x) else 0)
-                codes[:] = mapped.to_numpy(dtype=np.int32, na_value=0)
+                codes = mapped.to_numpy(dtype=np.int32, na_value=0)
+
                 vocab = {"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}
 
-                codes_path = f"col_{safe}__codes.npy"
-                dict_path = f"dict_{safe}.json"
-                np.save(os.path.join(out_dir, codes_path), codes)
-                with open(os.path.join(out_dir, dict_path), "w") as f:
-                    json.dump(vocab, f, indent=4)
-
-                meta["columns"][safe] = {
+                extras_safe.append(safe)
+                extras_data[safe] = codes  
+                columns_meta[safe] = {
                     "kind": "string_dict",
                     "col_name": col,
-                    "dict_file": dict_path,
-                    "vocab" : vocab
+                    "vocab": vocab,
+                    "code_dtype": str(codes.dtype),
                 }
-                meta["files"][safe] = codes_path
-                meta["dtypes"][safe] = str(codes.dtype)
             else:
-                # Numeric/bool → store as array
-                arr : np.ndarray = s.to_numpy()
-                
-                # Choose compact dtypes if you want (example: float64->float32)
-                # arr = arr.astype(np.float32, copy=False) if arr.dtype == np.float64 else arr
+                arr = s.to_numpy()
                 dtype = OrbitData.__pick_numpy_dtype(s)
-                arr : np.ndarray = arr.astype(dtype, copy=False)
+                arr = arr.astype(dtype, copy=False)
 
-                col_path = f"col_{safe}.npy"
-                np.save(os.path.join(out_dir, col_path), arr)
-                meta["columns"][safe] = {
+                extras_safe.append(safe)
+                extras_data[safe] = arr
+                columns_meta[safe] = {
                     "kind": "numeric",
-                    "col_name" : col,
+                    "col_name": col,
+                    "dtype_original": str(arr.dtype),
                 }
-                meta["files"][safe] = col_path
-                meta["dtypes"][safe] = str(arr.dtype)
+
+        # get number of rows and total columns (t, t_index, extras)
+        n_rows = int(offsets[-1])
+        layout = ["t", "t_index", *extras_safe]
+        k = len(layout)
+
+        # package data 
+        rows = np.empty((n_rows, k), dtype=np.dtype(packed_dtype))
+        rows[:, 0] = t.astype(packed_dtype, copy=False)
+        rows[:, 1] = t_idx.astype(packed_dtype, copy=False)
+
+        for j, safe in enumerate(extras_safe, start=2):
+            rows[:, j] = extras_data[safe].astype(packed_dtype, copy=False)
+
+        # write binaries
+        np.save(os.path.join(out_dir, "offsets.npy"), offsets)
+        np.save(os.path.join(out_dir, "rows.npy"), rows)
+
+        # metadata
+        meta: Dict[str, Any] = {
+            "name": table_name,
+            "n_rows": n_rows,
+            "time_step": float(time_step),
+            "n_steps": int(T),
+            "format": "ragged_offsets_packed_rows",
+            "t_col": t_col,
+            "required_cols": list(required_cols),
+            "layout": layout,
+            "shape": [n_rows, k],
+            "packed_dtype": str(np.dtype(packed_dtype)),
+            "columns": columns_meta,
+            "dtypes": {
+                "t_original": str(np.dtype(t_dtype)),
+            },
+            "files": {
+                "offsets": "offsets.npy",
+                "rows": "rows.npy",
+            },
+            "dir": out_dir,
+        }
 
         with open(os.path.join(out_dir, "meta.json"), "w") as f:
             json.dump(meta, f, indent=4)
@@ -1683,7 +1759,7 @@ class OrbitData:
                             table_name: str,
                             *,                            
                             required_cols: Sequence[str] = ['lat [deg]','lon [deg]', 'grid index', 'GP index'],
-                            dtype: np.dtype = np.float32,
+                            packed_dtype: np.dtype = np.float32,
                             allow_overwrite: bool = True,
                         ) -> Dict[str, Any]:
         # validate output directory
@@ -1708,37 +1784,36 @@ class OrbitData:
         if len(work.columns) > len(required_cols):
             raise ValueError(f"Unexpected extra columns found in grid data: {set(work.columns) - set(required_cols)}")
 
-        # initiate metadata 
+        # get number of rows and columns
+        n = int(len(work))
+        layout = list(required_cols)  
+        k = len(layout)
+
+        # build packed array
+        packed = np.empty((n, k), dtype=np.dtype(packed_dtype))
+        for j, col in enumerate(layout):
+            # robust numeric conversion (avoids object dtype issues)
+            s = work[col]
+            arr = pd.to_numeric(s, errors="raise").to_numpy(copy=False)
+            packed[:, j] = arr.astype(packed_dtype, copy=False)
+
+        # write single file
+        packed_fname = "grid.npy"
+        np.save(os.path.join(out_dir, packed_fname), packed)
+
+        # metadata
         meta = {
             "name": table_name,
-            "n": int(len(work)),
-            "columns":{},
-            "dtypes": {},
-            "files": {},
-            "dir" : out_dir
+            "n": n,
+            "layout": layout,
+            "shape": [n, k],
+            "packed_dtype": str(np.dtype(packed_dtype)),
+            "files": {"grid": packed_fname},
+            "dir": out_dir,
         }
 
-        # extract and save required columns as .npy files
-        for col in required_cols:
-            # generate a safe name for this column to use in file names
-            safe = OrbitData.__safe_name(col)
-
-            # get appropriate dtype for this column
-            col_dtype = OrbitData.__pick_numpy_dtype(work[col])
-
-            # convert column to numpy array
-            arr = work[col].to_numpy(dtype=col_dtype, copy=False)
-
-            # define file path for this column
-            col_path = f"col_{safe}.npy"
-
-            # save to .npy file
-            np.save(os.path.join(out_dir, col_path), arr)
-
-            # update metadata with file and dtype info
-            meta['columns'][safe] = col
-            meta['files'][safe] = col_path
-            meta['dtypes'][safe] = str(col_dtype)
+        with open(os.path.join(out_dir, "meta.json"), "w") as f:
+            json.dump(meta, f, indent=4)
         
         # return metadata
         return meta 

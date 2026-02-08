@@ -579,7 +579,13 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
                 sid = res.get("scenario_id", "???")
                 status = res.get("status")
                 elapsed = res.get("elapsed_s", None)
-                print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+
+                if status == "error":
+                    # log error message
+                    print(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                else:
+                    # log normal status message
+                    print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
 
     finally:
         # close progress bar if used

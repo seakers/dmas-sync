@@ -289,6 +289,7 @@ class PlannerTester(ABC):
         settings = {
                 "coverageType": "GRID COVERAGE",
                 "outDir" : f"./tests/planners/orbit_data/{scenario_name}",
+                "saveUnprocessedCoverage": "True",
             }
         return settings
     
