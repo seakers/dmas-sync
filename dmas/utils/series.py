@@ -346,6 +346,45 @@ class AccessTable(AbstractTable):
     
     def __len__(self):
         return len(self._t)
+      
+    # def get_next_access_intervals(self, target: str, t: float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
+    def lookup_interval(self, t_start : float, t_end : float = np.Inf) -> Dict[str, np.ndarray]:
+        # validate inputs
+        if not isinstance(t_start, (int, float)) or t_start < 0.0:
+            raise ValueError("time t_start must be a non-negative number")
+        if not isinstance(t_end, (int, float)) or t_end < 0.0:
+            raise ValueError("time t_end must be a non-negative number")
+        if t_start > t_end + 1e-6:
+            raise ValueError("time t_start must be less than or equal to time t_end")
+        
+        # check if there is any data
+        if len(self._t) == 0:
+            s0 = slice(0, 0)
+            return self.__rows_from_slice(s0, include_extras=True)
+
+        # get start and end indices for time range
+        ti0 = self._time_to_index_floor(t_start)
+        ti1 = self._time_to_index_floor(t_end)
+
+        # check if start and end time are in the same time index bucket
+        if ti0 == ti1:
+            # if so, return the rows for that bucket
+            return self.lookup_time(t_start, include_extras=True)
+
+        # get slice for time index range
+        s = self._slice_for_index_range(ti0, ti1)
+
+        # construct output dictionary
+        out = self.__rows_from_slice(s, include_extras=True)
+
+        # filter out any rows that are outside the time range 
+        if s.start != s.stop:
+            mask = (t_start <= out["time [s]"]) & (out["time [s]"] <= t_end)
+            for col in list(out.keys()):
+                out[col] = out[col][mask]
+        
+        # return output
+        return out
     
     def _time_to_index_floor(self, t: float) -> int:
         dt = float(self._meta["time_step"])
@@ -373,40 +412,10 @@ class AccessTable(AbstractTable):
         # a = int(self._t_idx[ti0])
         # b = int(self._t_idx[ti1 + 1])
         return slice(a, b)
-
-    # def get_next_access_intervals(self, target: str, t: float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
-    def lookup_interval(self, t_start : float, t_end : float = np.Inf) -> Dict[str, np.ndarray]:
-        # validate inputs
-        if not isinstance(t_start, (int, float)) or t_start < 0.0:
-            raise ValueError("time t_start must be a non-negative number")
-        if not isinstance(t_end, (int, float)) or t_end < 0.0:
-            raise ValueError("time t_end must be a non-negative number")
-        if t_start > t_end + 1e-6:
-            raise ValueError("time t_start must be less than or equal to time t_end")
-        
-        # check if there is any data
-        if len(self._t) == 0:
-            return {
-                "time [s]": self._t[0:0],
-                # "t_index": self._t_idx[0:0],
-                "lat [deg]": self._lat[0:0],
-                "lon [deg]": self._lon[0:0],
-                "grid index": self._grid_idx[0:0],
-                "GP index": self._gp_idx[0:0],
-            }
-
-        # get start and end indices for time range
-        ti0 = self._time_to_index_floor(t_start)
-        ti1 = self._time_to_index_floor(t_end)
-        ti1 += 1 if ti0 == ti1 else 0
-
-        # get slice for time index range
-        s = self._slice_for_index_range(ti0, ti1)
-
-        # construct output dictionary
+           
+    def __rows_from_slice(self, s: slice, include_extras: bool = False) -> Dict[str, Any]:
         out = {
             "time [s]": self._t[s].astype(float),
-            # "t_index": self._t_idx[s],
             "lat [deg]": self._lat[s].astype(float),
             "lon [deg]": self._lon[s].astype(float),
             "grid index": self._grid_idx[s],
@@ -414,24 +423,55 @@ class AccessTable(AbstractTable):
         }
 
         # add any extra columns
-        for k, arr in self._extras.items():
-            col = self._meta["columns"].get(k, {}).get("col_name", k)
-            # check if column is encoded in metadata
-            if 'vocab' in self._meta["columns"].get(k, {}):
-                # decode column using vocab
-                vocab : dict = self._meta["columns"][k]["vocab"]
-                out[col] = np.array([vocab.get(str(code), None) for code in arr[s]])
-            else:
-                out[col] = arr[s].astype(float)
+        if include_extras: 
+            for k, arr in self._extras.items():
+                col = self._meta["columns"].get(k, {}).get("col_name", k)
+                # check if column is encoded in metadata
+                if 'vocab' in self._meta["columns"].get(k, {}):
+                    # decode column using vocab
+                    vocab : dict = self._meta["columns"][k]["vocab"]
+                    out[col] = np.array([vocab.get(str(code), None) for code in arr[s]])
+                else:
+                    out[col] = arr[s].astype(float)
 
-        # # filter out any rows that are outside the time range 
-        # if s.start != s.stop:
-        #     mask = (t_start <= out["time [s]"]) & (out["time [s]"] <= t_end)
-        #     for col in list(out.keys()):
-        #         out[col] = out[col][mask]
-        
-        # return output
         return out
+    
+    def lookup_time(self, t: float, include_extras: bool = False) -> Dict[str, Any]:
+        # Find nearest / first occurrence; but you still need the corresponding time index bucket.
+        # If you trust that each bucket has constant t value, you can map by search then use t_idx:
+        
+        # validate inputs
+        if not isinstance(t, (int, float)) or t < 0.0:
+            raise ValueError("time `t` must be a non-negative number")
+        
+        # check if there is any data
+        if len(self._t) == 0:
+            s0 = slice(0, 0)
+            return self.__rows_from_slice(s0, include_extras=include_extras)
+        
+        elif self._t[-1] < t - 1e-6:
+            # time is beyond last index; return last row
+            s_last = slice(len(self._t) - 1, len(self._t))
+            return self.__rows_from_slice(s_last, include_extras=include_extras)
+        
+        # find location in time array
+        i = int(np.searchsorted(self._t, t, side="left"))
+        
+        # convert to time index and get rows for that time index
+        ti = int(self._t_idx[i])
+        return self.__rows_at_index(ti, include_extras=include_extras)
+    
+    def __rows_at_index(self, ti: int, include_extras: bool = False) -> Dict[str, Any]:
+        s = self.__slice_for_time_index(ti)
+        return self.__rows_from_slice(s, include_extras=include_extras)
+    
+    def __slice_for_time_index(self, ti: int) -> slice:
+        # bounds check (optional but nice)
+        if ti < 0 or ti >= (len(self._offsets) - 1):
+            return slice(0, 0)  # empty
+        a = int(self._offsets[ti])
+        b = int(self._offsets[ti + 1])
+        return slice(a, b)
 
     def __iter__(self):
         """
