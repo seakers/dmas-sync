@@ -908,7 +908,7 @@ class AbstractPlanner(ABC):
             return ([], t_init)
         
         # check if broadcast needs to be routed
-        earliest_accesses = [   orbitdata.get_next_agent_access(target_agent, t_init) 
+        earliest_accesses = [   orbitdata.get_next_agent_access(t_init, target=target_agent) 
                                 for target_agent in target_agents]           
         
         same_access_start = [   abs(access.left - earliest_accesses[0].left) < 1e-3
@@ -955,7 +955,7 @@ class AbstractPlanner(ABC):
                 # query next access interval to children nodes
                 t_access : float = state._t + path_cost
 
-                access_interval : Interval = orbitdata.get_next_agent_access(receiver_agent, t_access)
+                access_interval : Interval = orbitdata.get_next_agent_access(t_access, target=receiver_agent)
                 
                 if access_interval.left < np.Inf:
                     new_path = [path_element for path_element in current_path]

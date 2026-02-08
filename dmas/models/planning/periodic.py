@@ -208,41 +208,40 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 # initialize set of times when broadcasts are scheduled
                 t_access_starts = set()     
                 
-                # get access intervals with the client agent within the planning horizon
-                for target in orbitdata.comms_links.keys():
-                    access_intervals : List[Interval] = orbitdata.get_next_agent_accesses(target, state.get_time(), include_current=True)
+                # get access intervals with a client agent within the planning horizon
+                access_intervals : List[Tuple[Interval, str]] = orbitdata.get_next_agent_accesses(state.get_time(), include_current=True)
 
-                    # collect access start times for future reference
-                    t_access_starts.update([access.left for access in access_intervals if not access.is_empty()])
+                # collect access start times for future reference
+                t_access_starts.update([access.left for access,_ in access_intervals if not access.is_empty()])
 
-                    # create broadcast actions for each access interval
-                    for next_access in access_intervals:
-                        next_access : Interval
+                # create broadcast actions for each access interval
+                for next_access in access_intervals:
+                    next_access : Interval
 
-                        # if no access opportunities in this planning horizon, skip scheduling
-                        if next_access.is_empty(): continue
+                    # if no access opportunities in this planning horizon, skip scheduling
+                    if next_access.is_empty(): continue
 
-                        # if access opportunity is beyond the next planning period, skip scheduling    
-                        if next_access.right <= state.get_time() + self.period: continue
+                    # if access opportunity is beyond the next planning period, skip scheduling    
+                    if next_access.right <= state.get_time() + self.period: continue
 
-                        # get last access interval and calculate broadcast time
-                        # t_broadcast : float = max(next_access.left, state.t+self.period-5e-3) # ensure broadcast happens before the end of the planning period
-                        t_broadcast : float = max(
-                                              min(next_access.left + 5*self.EPS,    # give buffer time for access to start
-                                                  next_access.right),               # ensure broadcast is before access ends
-                                            state.get_time())                                # ensure broadcast is not in the past
+                    # get last access interval and calculate broadcast time
+                    # t_broadcast : float = max(next_access.left, state.t+self.period-5e-3) # ensure broadcast happens before the end of the planning period
+                    t_broadcast : float = max(
+                                            min(next_access.left + 5*self.EPS,    # give buffer time for access to start
+                                                next_access.right),               # ensure broadcast is before access ends
+                                        state.get_time())                                # ensure broadcast is not in the past
 
-                        # generate plan message to share state
-                        state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
+                    # generate plan message to share state
+                    state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
 
-                        # generate plan message to share completed observations
-                        observations_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.OBSERVATIONS, t_broadcast)
+                    # generate plan message to share completed observations
+                    observations_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.OBSERVATIONS, t_broadcast)
 
-                        # generate plan message to share any task requests generated
-                        task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
+                    # generate plan message to share any task requests generated
+                    task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
 
-                        # add to client broadcast list
-                        broadcasts.extend([state_msg, observations_msg, task_requests_msg])
+                    # add to client broadcast list
+                    broadcasts.extend([state_msg, observations_msg, task_requests_msg])
 
                 # connection waits; allows for messages to be received right after access start times
                 waits = [WaitAction(t_access_start, t_access_start) for t_access_start in t_access_starts]

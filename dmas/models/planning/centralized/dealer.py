@@ -212,7 +212,9 @@ class DealerPlanner(AbstractPeriodicPlanner):
         planning_horizons : Dict[str,Interval] = self._calculate_horizons(state, orbitdata, self.horizon)
 
         # check if there are clients reachable in the planning horizon
-        if all([orbitdata.get_next_agent_access(client, state._t, state._t+self.period, True) is None 
+        if all([orbitdata.get_next_agent_access(state._t, target=client, 
+                                                t_max=state._t+self.period, 
+                                                include_current=True) is None 
                 for client in self.client_orbitdata.keys()]):
             return {client: PeriodicPlan([], 
                                          t=state._t, 
@@ -481,10 +483,11 @@ class DealerPlanner(AbstractPeriodicPlanner):
             
             if self.sharing == self.OPPORTUNISTIC:
                 # get access intervals with the client agent within the planning horizon
-                access_intervals : List[Interval] = orbitdata.get_next_agent_accesses(client, state._t, include_current=True)
+                access_intervals : List[Tuple[Interval, str]] \
+                    = orbitdata.get_next_agent_accesses(client, state._t, include_current=True)
 
                 # create broadcast actions for each access interval
-                for next_access in access_intervals:
+                for next_access,_ in access_intervals:
 
                     # if no access opportunities in this planning horizon, skip scheduling
                     if next_access.is_empty(): continue

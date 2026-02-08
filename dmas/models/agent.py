@@ -520,11 +520,7 @@ class SimulationAgent(object):
     def __update_requests_and_tasks(self,
                                     incoming_reqs : List[MeasurementRequestMessage] = []
                                 ) -> Tuple[List[TaskRequest], List[GenericObservationTask]]:
-        # DEBUG------
-        if incoming_reqs:
-            x = 1 # breakpoint
-        # ------------
-
+        
         # find unique and new requests in incoming requests
         unique_new_reqs = {self._req_key(msg.req): msg.req
                           for msg in incoming_reqs
@@ -977,7 +973,7 @@ class SimulationAgent(object):
             columns = ['id', 'task type', 'requester', 'parameter', 'lat [deg]', 'lon [deg]', 'grid index', 'gp index', 't start', 't end', 'priority']
             data = [(task.id,task.task_type, self.name, task.parameter, task.location[0][0], task.location[0][1], task.location[0][2], task.location[0][3],
                     task.availability.left, task.availability.right, task.priority)
-                for task in self._known_tasks
+                for task in self._known_tasks.values()
                 if isinstance(task, DefaultMissionTask)
             ]
             df = pd.DataFrame(data=data, columns=columns)        

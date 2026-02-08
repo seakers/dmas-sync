@@ -148,23 +148,21 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                                                 ):
             
             # schedule broadcasts to all available agents
-            for target in orbitdata.comms_links.keys():
-                # get access intervals with the client agent within the planning horizon
-                access_intervals : List[Interval] = orbitdata.get_next_agent_accesses(target, task_req.t_req, include_current=True)
+            access_intervals : List[Tuple[Interval, str]] = orbitdata.get_next_agent_accesses(task_req.t_req, include_current=True)
 
-                # create broadcast actions for each access interval
-                for next_access in access_intervals:
-                    # if no access opportunities in this planning horizon, skip scheduling
-                    if next_access.is_empty(): continue
+            # create broadcast actions for each access interval
+            for next_access,target in access_intervals:
+                # if no access opportunities in this planning horizon, skip scheduling
+                if next_access.is_empty(): continue
 
-                    # check if the task is available during the given access interval
-                    if not event.availability.overlaps(next_access): continue
+                # check if the task is available during the given access interval
+                if not event.availability.overlaps(next_access): continue
 
-                    # calculate broadcast time to earliest in this access interval
-                    t_broadcast : float = max(next_access.left, task_req.t_req)
-                    
-                    # add broadcast time to set of broadcast times
-                    t_broadcasts.add(t_broadcast)
+                # calculate broadcast time to earliest in this access interval
+                t_broadcast : float = max(next_access.left, task_req.t_req)
+                
+                # add broadcast time to set of broadcast times
+                t_broadcasts.add(t_broadcast)
 
         # iterate through access start times to find active requests
         for t_broadcast in sorted(t_broadcasts):

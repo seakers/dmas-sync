@@ -701,10 +701,9 @@ class SimulationEnvironment(object):
         # compile event markers for changes in connectivity 
         connectivity_events : List[tuple] = []
         for sender,agent_orbitdata in orbitdata.items():
-            for receiver,data in agent_orbitdata.comms_links.items():
-                for t_start,t_end,*_ in data:
-                    connectivity_events.append( (t_start, sender, receiver, 1) )   # link comes online
-                    connectivity_events.append( (t_end, sender, receiver, 0) )     # link goes offline
+            for t_start,t_end,receiver in agent_orbitdata.comms_links:
+                connectivity_events.append( (t_start, sender, receiver, 1) )   # link comes online
+                connectivity_events.append( (t_end, sender, receiver, 0) )     # link goes offline
 
         # sort events by time
         connectivity_events.sort(key=lambda x: x[0])

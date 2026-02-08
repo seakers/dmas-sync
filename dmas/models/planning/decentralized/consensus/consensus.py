@@ -1874,10 +1874,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # check if shareble bids to share exist
             if any([isinstance(task, EventObservationTask) for task in self.results]):
                 # schedule broadcast times and find useful access intervals
-                for target in orbitdata.comms_links.keys():
+                for target in orbitdata.comms_targets:
 
                     # get access intervals with target agent
-                    next_access_interval : Interval = orbitdata.get_next_agent_access(target, state.get_time(), t_max=t_next, include_current=True)
+                    next_access_interval : Interval = orbitdata.get_next_agent_access(state.get_time(), target=target, t_max=t_next, include_current=True)
                     
                     # if no access opportunities in this planning horizon, skip scheduling
                     if next_access_interval is not None:
@@ -1888,7 +1888,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         t_broadcasts.add(t_broadcast)
                                        
                 # check if any communication links are available at all
-                if not orbitdata.comms_links:
+                if not orbitdata.comms_targets:
                     # no communication links available, broadcast task requests into the void
                     t_broadcasts.add(state.get_time())
 
