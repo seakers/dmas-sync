@@ -292,7 +292,7 @@ class IntervalTable(AbstractTable):
         # check if table is empty
         if n == 0:
             # empty table; define empty `ndarray` with correct number of columns based on layout
-            dtype = np.dtype(schema.get("packed_dtype", np.float32))
+            dtype = np.dtype(schema.get("packed_dtype", np.float64))
             buf = np.empty((0, k), dtype=dtype)
 
             start = buf[:, col["start"]] if "start" in col else np.empty((0,), dtype=dtype)
@@ -515,7 +515,7 @@ class AccessTable(AbstractTable):
         if n == 0:
             # empty table; define empty `ndarray` for offsets and rows
             offsets = np.empty((0,), dtype=np.int64)
-            dtype = np.dtype(schema.get("packed_dtype", np.float32))
+            dtype = np.dtype(schema.get("packed_dtype", np.float64))
             rows = np.empty((0, k), dtype=dtype)
             t = rows[:, layout.index("t")] if "t" in layout else np.empty((0,), dtype=dtype)
             t_idx = rows[:, layout.index("t_index")] if "t_index" in layout else np.empty((0,), dtype=dtype)

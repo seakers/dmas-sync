@@ -12,11 +12,12 @@ from instrupy.base import Instrument
 from orbitpy.util import Spacecraft
 
 from execsatm.mission import Mission
-from execsatm.tasks import GenericObservationTask, DefaultMissionTask
+from execsatm.tasks import GenericObservationTask, DefaultMissionTask, EventObservationTask
 from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
 
-from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, SimulationMessageTypes, message_from_dict
+from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementBidMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, SimulationMessageTypes, message_from_dict
+from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction, action_from_dict
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
@@ -353,7 +354,7 @@ class SimulationAgent(object):
                 if True:
                 # if 95.0 < state.t < 96.0:
                 # if state.get_time() > 19 and "1" in state.agent_name:
-                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -388,7 +389,7 @@ class SimulationAgent(object):
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         if True:
             # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-            # self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
+            self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
             x = 1 # breakpoint
         # -------------------------------------        
         
@@ -705,6 +706,9 @@ class SimulationAgent(object):
             elif bt == FutureBroadcastMessageAction.REQUESTS:
                 msgs.extend(self._compile_request_broadcasts(fb, state, t))
 
+            elif bt == FutureBroadcastMessageAction.BIDS:
+                msgs.extend(self._compile_bid_broadcasts(state, t))
+
             else:
                 raise NotImplementedError(f"Future broadcast type {bt} not supported.")
 
@@ -761,6 +765,25 @@ class SimulationAgent(object):
         
         # return compiled messages
         return msgs
+    
+    def _compile_bid_broadcasts(self, state : SimulationAgentState, t: float) -> List[SimulationMessage]:
+        # TODO check if there is a replanner assigned to this agent
+        if self._replanner is None:
+            raise NotImplementedError("Bid broadcasting is not yet implemented for cases without a replanner.")
+        if not isinstance(self._replanner, ConsensusPlanner):
+            raise NotImplementedError("Bid broadcasting is only implemented for agents with a replanner of type `ConsensusPlanner`.")
+        
+        # generate bid messages to share bids in results
+        compiled_bid_msgs = [
+            MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
+            # MeasurementBidMessage(state.agent_name, state.agent_name, bid)
+            for task,bids in self._replanner.results.items()
+            if isinstance(task, EventObservationTask)  # only share bids for event-driven tasks
+            for bid in bids
+        ]
+
+        # return messages list
+        return compiled_bid_msgs
 
     def _merge_broadcast_actions_if_needed(self, 
                                            actions : List[AgentAction], 

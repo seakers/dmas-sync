@@ -357,10 +357,10 @@ class OrbitData:
         # TODO test pending vvv
         # remove raw data and only keep binaries to save space? Or keep both to allow for future changes to preprocessing methods without needing to re-propagate data? For now, keeping both.
         if settings_dict is not None:
-            save_unprocessed_coverage = settings_dict.get('saveUnprocessedCoverage', "False").lower() == "true"
+            save_unprocessed_coverage = settings_dict.get('saveUnprocessedCoverage', "True").lower() == "true"
             if not save_unprocessed_coverage:
-                # remove raw coverage data to save space
-                raise NotImplementedError('Not tested yet')
+                # remove raw coverage data to save space but maintain mission specifications 
+                # raise NotImplementedError('Not tested yet')
                 for f in os.listdir(data_dir):
                     f_dir = os.path.join(data_dir, f)
                     if os.path.isdir(f_dir) and f != 'bin':
@@ -1230,7 +1230,7 @@ class OrbitData:
                                     sort_by_time: bool = True,
                                     string_max_unique: Optional[int] = None, 
                                     allow_overwrite: bool = True,
-                                    packed_dtype: np.dtype = np.float32
+                                    packed_dtype: np.dtype = np.float64
                                 ) -> Dict[str, Any]:
         """
         Writes interval data to memmap-able .npy arrays + meta.json.
@@ -1472,7 +1472,7 @@ class OrbitData:
                             t_col: str = "time index",
                             pos_cols: Tuple[str, str, str] = ("x [km]", "y [km]", "z [km]"),
                             vel_cols: Tuple[str, str, str] = ("vx [km/s]", "vy [km/s]", "vz [km/s]"),
-                            state_dtype: np.dtype = np.float32,
+                            state_dtype: np.dtype = np.float64,
                             sort_by_time: bool = True,
                             allow_overwrite: bool = True,
                         ) -> Dict[str, Any]:
@@ -1577,7 +1577,7 @@ class OrbitData:
                                 sort_within_time: bool = False,
                                 string_max_unique: Optional[int] = None,  # optional guardrail
                                 allow_overwrite: bool = True,
-                                packed_dtype: np.dtype = np.float32
+                                packed_dtype: np.dtype = np.float64
                             ) -> Dict[str, Any]:
         """
         Writes a ragged table with unknown columns to memmap-friendly binaries:
@@ -1750,7 +1750,7 @@ class OrbitData:
                             table_name: str,
                             *,                            
                             required_cols: Sequence[str] = ['lat [deg]','lon [deg]', 'grid index', 'GP index'],
-                            packed_dtype: np.dtype = np.float32,
+                            packed_dtype: np.dtype = np.float64,
                             allow_overwrite: bool = True,
                         ) -> Dict[str, Any]:
         # validate output directory

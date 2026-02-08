@@ -1,4 +1,5 @@
 
+import collections
 from datetime import timedelta
 from enum import Enum
 import gc
@@ -216,6 +217,34 @@ class Simulation:
                     #         tqdm.write(f"- Count: {stat.count}")
                     #         tqdm.write(f"- Traceback: `{line_info}`\n")
                         
+                    #     # objs = gc.get_objects()
+                    #     # hits = []
+                    #     # for o in objs:
+                    #     #     if isinstance(o, dict) and "t_stamps" in o and "task" in o and "winner" in o:
+                    #     #         print('WARNING: Found a bid-like dictionary object in memory:')
+                    #     #         print(f' - Referrers to this object:')
+                    #     #         refs = gc.get_referrers(o)
+                                
+                    #     #         for r_idx,r in enumerate(refs[:20]):
+                    #     #             print(f'\t {r_idx}:', type(r), getattr(r, "__class__", None))
+ 
+                    #     #         print(f' - Referrer tree to this object:')
+                    #     #         seen = set()
+                    #     #         cur = o
+                    #     #         for d in range(100):
+                    #     #             refs = [r for r in gc.get_referrers(cur) if id(r) not in seen]
+                    #     #             if not refs:
+                    #     #                 print("no more referrers")
+                    #     #                 return
+                    #     #             # prefer containers
+                    #     #             refs_sorted = sorted(refs, key=lambda r: 0 if isinstance(r, (list, dict, collections.deque)) else 1)
+                    #     #             parent = refs_sorted[0]
+                    #     #             print(f"\t depth {d}: {type(parent)}")
+                    #     #             seen.add(id(parent))
+                    #     #             cur = parent
+
+                    #             # x = 1 # breakpoint
+
                     #     x = 1 # breakpoint
                     # # --------------------------------------------------
 
@@ -254,6 +283,9 @@ class Simulation:
                     t += dt_progress
 
                     # reset agent percepts for next cycle
+                    for *_,msgs,obs_data in agent_observations.values():
+                        msgs.clear()
+                        obs_data.clear()
                     agent_observations.clear()
                     
                     # force garbage collection

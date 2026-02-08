@@ -141,11 +141,7 @@ class Bid:
     def to_dict(self) -> dict:
         """
         Crates a dictionary containing all information contained in this bid
-        """
-        # out = dict(self.__dict__)
-        # out['task'] = self.task.to_dict()   
-        # out['t_stamps'] = {key : val for key, val in self.t_stamps.items()}
-        # return out            
+        """        
         return {
             'task' : self.task.to_dict(),
             'n_obs' : self.n_obs,
@@ -196,7 +192,20 @@ class Bid:
     
     def copy(self) -> 'Bid':
         """ Creates a deep copy of this bid object """
-        return Bid.from_dict(self.to_dict())
+        # return Bid.from_dict(self.to_dict())
+        return Bid(
+            self.task,
+            self.owner,
+            self.n_obs,
+            self.owner_bid,
+            self.winning_bid,
+            self.winner,
+            self.t_img,
+            self.t_bid,
+            dict(self.t_stamps),
+            self.main_measurement,
+            self.performed
+        )
 
     """
     ------------------

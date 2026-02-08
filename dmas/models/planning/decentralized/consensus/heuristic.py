@@ -410,18 +410,19 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         proposed_bids : Dict[GenericObservationTask, Dict[int, Bid]] = defaultdict(dict)
         for _,obs in proposed_bundle:
             for task,n_obs in obs.items():
-                # find matchiong existing bid
+                # find matching existing bid
                 existing_bid = self.results[task][n_obs]
 
                 # ensure this bid is assigned to current agent
                 assert existing_bid.winner == state.agent_name, \
                           "Existing bids in bundle do not belong to current agent."
                 
-                # add to proposed bids
+                # add deep copy to proposed bids
                 proposed_bids[task][n_obs] = existing_bid.copy()
 
         # extract observation number assignments for current path
-        n_obs_proposed, t_prev_proposed = self._count_observations_and_revisit_times_from_results(state, proposed_path)
+        n_obs_proposed, t_prev_proposed \
+            = self._count_observations_and_revisit_times_from_results(state, proposed_path)
 
         # calculate current path utility
         current_path_utility : float = self._calculate_path_utility(state, specs, cross_track_fovs, proposed_path, observation_history, orbitdata, mission, n_obs_proposed, t_prev_proposed)

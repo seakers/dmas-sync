@@ -168,6 +168,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self.results_changes_performed = len(results_updates) > 0
         # 2) incoming bids modified tasks in my bundle
         self.bundle_changes_performed = len(bundle_updates) > 0
+        
+        # clear incoming percepts after processing
+        incoming_bids.clear()
+        incoming_reqs.clear()        
+        
+        # clear updates lists after processing
+        task_updates.clear()
+        results_updates.clear()
+        bundle_updates.clear()    
+
 
     def __collect_incoming_bids(self, misc_messages : List[SimulationMessage]) -> List[Union[Bid,dict]]:
         """ Collect bids from incoming messages and requests. """
@@ -774,6 +784,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         #     x = 1 # debug breakpoint
         # -------------------------------
 
+        # clear grouped bids after processing
+        grouped_bids.clear()
+
         # return result changes
         return results_updates
 
@@ -992,40 +1005,40 @@ class ConsensusPlanner(AbstractReactivePlanner):
             "performed": False,
         }
     
-    def __update_performed_bids(self, state : SimulationAgentState) -> List[Bid]:
-        """ Assumes tasks who were won by other agents and whose imaging time has passed were performed by those agents. """
+    # def __update_performed_bids(self, state : SimulationAgentState) -> List[Bid]:
+    #     """ Assumes tasks who were won by other agents and whose imaging time has passed were performed by those agents. """
 
-        # initialize list of performed updates
-        performed_updates = []
+    #     # initialize list of performed updates
+    #     performed_updates = []
 
-        # TODO should this even be done? Agents should announce when they perform bids, 
-        #   not assume so. Implement after testing other parts of consensus planner
-        # check every bid in results for performed status
-        for task, bids in self.results.items():
-            for n_obs, bid in enumerate(bids):
-                # check if bid is already marked as performed
-                if bid.was_performed():
-                    continue # already marked or has no winner; skip
+    #     # TODO should this even be done? Agents should announce when they perform bids, 
+    #     #   not assume so. Implement after testing other parts of consensus planner
+    #     # check every bid in results for performed status
+    #     for task, bids in self.results.items():
+    #         for n_obs, bid in enumerate(bids):
+    #             # check if bid is already marked as performed
+    #             if bid.was_performed():
+    #                 continue # already marked or has no winner; skip
                 
-                # check if imaging time has passed
-                if np.NINF < bid.t_img < state.get_time():
-                    # assume bid has a winner different from this agent
-                    assert bid.has_winner(), \
-                        "Cannot mark bid as performed if it has no winner."
-                    assert bid.winner != state.agent_name, \
-                        "Bid should have been marked as performed by parent agent in previous steps."
+    #             # check if imaging time has passed
+    #             if np.NINF < bid.t_img < state.get_time():
+    #                 # assume bid has a winner different from this agent
+    #                 assert bid.has_winner(), \
+    #                     "Cannot mark bid as performed if it has no winner."
+    #                 assert bid.winner != state.agent_name, \
+    #                     "Bid should have been marked as performed by parent agent in previous steps."
                     
-                    # mark bid as performed
-                    bid.set_performed(state.get_time(), performed=True, performer=bid.winner)
+    #                 # mark bid as performed
+    #                 bid.set_performed(state.get_time(), performed=True, performer=bid.winner)
 
-                    # update results
-                    self.results[task][n_obs] = bid
+    #                 # update results
+    #                 self.results[task][n_obs] = bid
 
-                    # add to list of performed updates
-                    performed_updates.append(bid.copy())
+    #                 # add to list of performed updates
+    #                 performed_updates.append(bid.copy())
 
-        # return list of performed bids
-        return performed_updates
+    #     # return list of performed bids
+    #     return performed_updates
          
     def __update_bundle_from_results(self,
                                     state : SimulationAgentState
@@ -1840,30 +1853,36 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # initialize list of broadcasts to be done
             broadcasts : List[AgentAction] = []       
 
-            # generate bid messages to share bids in results
-            compiled_bid_msgs = [
-                MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
-                # MeasurementBidMessage(state.agent_name, state.agent_name, bid)
+            # # generate bid messages to share bids in results
+            # compiled_bid_msgs = [
+            #     MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
+            #     # MeasurementBidMessage(state.agent_name, state.agent_name, bid)
+            #     for task,bids in self.results.items()
+            #     if isinstance(task, EventObservationTask)  # only share bids for event-driven tasks
+            #     for bid in bids
+            # ]
+            bidded_tasks = [
+                task
                 for task,bids in self.results.items()
-                if isinstance(task, EventObservationTask)  # only share bids for event-driven tasks
-                for bid in bids
+                if isinstance(task, EventObservationTask)   # only consider bids for event-driven tasks
+                if bids                                     # only tasks with bids
             ]
 
             # identify tasks without bids to share
-            empty_bids = [
+            empty_tasks = [
                 task
                 for task,bids in self.results.items()
                 if isinstance(task, EventObservationTask)   # only consider bids for event-driven tasks
                 if not bids                                 # no bids to share
             ]
 
-            # compile results message containing all bid messages
-            compiled_results_msg = BusMessage(state.agent_name, 
-                                              state.agent_name, 
-                                            #   [bid_msg.to_dict() for bid_msg in compiled_bid_msgs]
-                                              [bid_msg for bid_msg in compiled_bid_msgs]
-                                            )
-            compiled_results_msg_dict = compiled_results_msg.to_dict()
+            # # compile results message containing all bid messages
+            # compiled_results_msg = BusMessage(state.agent_name, 
+            #                                   state.agent_name, 
+            #                                 #   [bid_msg.to_dict() for bid_msg in compiled_bid_msgs]
+            #                                   [bid_msg for bid_msg in compiled_bid_msgs]
+            #                                 )
+            # compiled_results_msg_dict = compiled_results_msg.to_dict()
             
             # initialize search for broadcast times during access opportunities
             t_broadcasts = set()
@@ -1900,17 +1919,19 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # TODO decide whether to broadcast state and observations as well
                 
                 # check if there are any bid messages to share
-                if compiled_bid_msgs:
+                # if compiled_bid_msgs:
                     # generate results broadcast action
-                    broadcasts.append(BroadcastMessageAction(compiled_results_msg_dict, t_broadcast))
+                    # broadcasts.append(BroadcastMessageAction(compiled_results_msg_dict, t_broadcast))
+                if bidded_tasks:
+                    broadcasts.append(FutureBroadcastMessageAction(FutureBroadcastMessageAction.BIDS, t_broadcast))
 
                 # check if there are any tasks without bids to share
-                if empty_bids:
+                if empty_tasks:
                     # generate plan message to share any task requests generated
                     broadcasts.append(FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, 
                                                                     t_broadcast, 
                                                                     only_own_info=False,
-                                                                    desc = empty_bids))
+                                                                    desc = empty_tasks))
 
             # include established broadcasts from preplan
             preplan_broadcasts = [action for action in self.preplan.actions
@@ -1926,8 +1947,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         finally:
             assert isinstance(broadcasts, list), "Scheduled broadcasts is not a list."
-            assert all(isinstance(broadcast, (BroadcastMessageAction, WaitAction)) for broadcast in broadcasts), \
-                "Not all scheduled broadcasts are of type `BroadcastMessageAction` or `WaitForMessages`."
+            assert all(isinstance(broadcast, BroadcastMessageAction) for broadcast in broadcasts), \
+                "Not all scheduled broadcasts are of type `BroadcastMessageAction`."
 
     """
     REPLAN SCHEDULING
