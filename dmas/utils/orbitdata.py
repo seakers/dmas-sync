@@ -364,6 +364,8 @@ class OrbitData:
             if printouts: tqdm.write("Preprocessing orbit data...")
             OrbitData.preprocess(data_dir, scenario_specs['duration'], overwrite=True, printouts=printouts)
             if printouts: tqdm.write("Preprocessing done!")
+
+        # TODO remove raw data and only keep binaries to save space? Or keep both to allow for future changes to preprocessing methods without needing to re-propagate data? For now, keeping both.
             
         # restore original duration value
         scenario_specs['duration'] = original_duration
