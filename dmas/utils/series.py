@@ -389,16 +389,6 @@ class AccessTable(AbstractTable):
     def _time_to_index_floor(self, t: float) -> int:
         dt = float(self._meta["time_step"])
         return int(t // dt) if not np.isinf(t) else len(self._offsets) - 1
-        # return int(t // dt) if t < self._t[-1] + 1e-6 else len(self._t_idx) - 1
-
-    def _clamp_index(self, ti: int) -> int:
-        T = len(self._offsets) - 1
-        # T = len(self._t_idx) - 1
-        if ti < 0:
-            return 0
-        if ti > T - 1:
-            return T - 1
-        return ti
     
     def _slice_for_index_range(self, ti0: int, ti1: int) -> slice:
         if ti1 < ti0:
@@ -409,9 +399,15 @@ class AccessTable(AbstractTable):
             return slice(0, 0)
         a = int(self._offsets[ti0])
         b = int(self._offsets[ti1 + 1])
-        # a = int(self._t_idx[ti0])
-        # b = int(self._t_idx[ti1 + 1])
         return slice(a, b)
+    
+    def _clamp_index(self, ti: int) -> int:
+        T = len(self._offsets) - 1
+        if ti < 0:
+            return 0
+        if ti > T - 1:
+            return T - 1
+        return ti
            
     def __rows_from_slice(self, s: slice, include_extras: bool = False) -> Dict[str, Any]:
         out = {
