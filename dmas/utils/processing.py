@@ -113,17 +113,17 @@ class ResultsProcessor:
             columns = ['id','requester','lat [deg]','lon [deg]','severity','t start','t end','t corr','Measurment Types']
             task_reqs_df = pd.DataFrame(data=[],columns=columns)
         # remove duplicates
-        task_reqs_df = task_reqs_df.drop_duplicates().reset_index(drop=True)
+        task_reqs_df = task_reqs_df.drop_duplicates(subset='id').reset_index(drop=True)
 
         # convert to list of TaskRequest
         task_reqs = []
         for _,row in task_reqs_df.iterrows():
             matching_events : list[GeophysicalEvent] = [
                 event for event in events
-                if event.id == row['event id']
+                if event.id == row['task']['event']['id']
             ]
             assert matching_events, \
-                f"No matching event found for measurement request with event id `{row['event id']}`"
+                f"No matching event found for measurement request with event id `{row['task']['event']['id']}`"
             
             # get name of agent requesting the task
             requester = row['requester']
@@ -131,14 +131,14 @@ class ResultsProcessor:
             # get matching `EventDrivenObjective`
             relevant_objectives = [objective for objective in agent_missions[requester]
                                     if isinstance(objective, EventDrivenObjective)
-                                    and objective.parameter == row['parameter']]
+                                    and objective.parameter == row['task']['parameter']]
             # ensure exactly one matching objective found
             assert relevant_objectives, \
                 f"No matching EventDrivenObjective found in mission for requester `{requester}` and parameter `{row['parameter']}`."
             
             # create event-driven task 
             task = EventObservationTask(
-                row['parameter'],
+                row['task']['parameter'],
                 event=matching_events[0],
                 objective=relevant_objectives[0]
             )
@@ -149,7 +149,7 @@ class ResultsProcessor:
                 row['requester'],
                 agent_missions[requester].name,
                 row['t_req'],
-                row['event id']
+                row['task']['event']['id']
             )
 
             # add to list of task requests
@@ -731,23 +731,37 @@ class ResultsProcessor:
                                             for (agent_name,instrument),intervals in access_interval_dict.items()
                                             for interval in intervals ])
 
-                # find observations performed at task location while task was active
-                matching_observations = [   (observer, t_obs_start, t_obs_end, img_lat, img_lon, instrument)
-                                    # for observer,gp_idx_img,_,img_lat,img_lon,*__,grid_idx_img,instrument,agent_name,___,t_obs_start,t_obs_end in observations_per_gp[(task_lat, task_lon)].values
-                                    for gp_idx_img,agent_name,grid_idx_img,_,_,_,instrument,img_lat,img_lon,_,_,observer,_,_,t_obs_end,t_obs_start,_ in observations_per_gp[(task_lat, task_lon)].values
-                                                                        
-                                    # check if observation time overlaps with event time
-                                    if Interval(t_obs_start, t_obs_end).overlaps(task.availability)
-                                    # check if instrument matches capability requirements
-                                    and (instrument.lower() in instrument_capability_reqs[agent_name]
-                                            or not instrument_capability_reqs[agent_name])
-                                    
-                                    # observation location sanity checks
-                                    and grid_idx_img == task_grid_idx
-                                    and gp_idx_img == task_gp_idx
-                                    and abs(img_lat - task_lat) <= 1e-3 
-                                    and abs(img_lon - task_lon) <= 1e-3
-                                ] if (task_lat, task_lon) in observations_per_gp else []
+                # find observations performed at task location while task was active                
+                if (task_lat, task_lon) not in observations_per_gp:
+                    # no observations were performed at this task's location
+                    # create empty dataframe with expected columns for consistency
+                    matching_observations = pd.DataFrame(columns=["t_start", "t_end", "instrument", "agent name"])
+                else:
+                    matching_observations : pd.DataFrame = observations_per_gp[(task_lat, task_lon)]
+                
+                # find observations that match the event time
+                time_mask = (
+                    ((task.availability.left <= matching_observations["t_start"]) &
+                    (matching_observations["t_start"] <= task.availability.right))
+                    |
+                    ((task.availability.left <= matching_observations["t_end"]) &
+                    (matching_observations["t_end"] <= task.availability.right))
+                    |
+                    ((matching_observations["t_start"] <= task.availability.left) &
+                    (task.availability.right <= matching_observations["t_end"]))
+                )
+                matching_observations = matching_observations[time_mask]
+
+                # find observations that match the event's instrument capability requirements
+                inst_lower = matching_observations["instrument"].str.lower()
+                agents = matching_observations["agent name"]
+
+                instrument_mask = [
+                    inst in instrument_capability_reqs.get(agent, [])
+                    for inst, agent in zip(inst_lower, agents)
+                ]
+
+                matching_observations = matching_observations[instrument_mask]
                 
                 # append to task lists
                 task_access_windows.extend(access_intervals)

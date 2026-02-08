@@ -54,7 +54,7 @@ class TestDataSink(unittest.TestCase):
         self.assertEqual(sink.owner_name, self.owner_name)
         self.assertEqual(sink.data_name, self.small_data_name)
         self.assertEqual(sink.flush_rows, 2)
-        self.assertEqual(sink._rows, [])
+        self.assertEqual(sink._buffer, [])
         self.assertIsNone(sink._writer)
         self.assertIsNone(sink._path)
 
@@ -72,12 +72,12 @@ class TestDataSink(unittest.TestCase):
 
             if (i + 1) % flush_rows == 0:
                 # after every 2 appends, the data should be flushed and _rows should be cleared
-                self.assertEqual(sink._rows, [])
+                self.assertEqual(sink._buffer, [])
                 self.assertIsNotNone(sink._writer)
                 self.assertIsNotNone(sink._path)
             else:
                 # before threshold is reached, _rows should contain the appended data
-                self.assertEqual(sink._rows[i_mod], self.small_data[i])
+                self.assertEqual(sink._buffer[i_mod], self.small_data[i])
         
         # flush any remaining data and close the sink
         sink.close()
@@ -86,7 +86,7 @@ class TestDataSink(unittest.TestCase):
         self.assertTrue(os.path.exists(sink._path))
 
         # check that the sink is empty
-        self.assertEqual(sink._rows, [])
+        self.assertEqual(sink._buffer, [])
         self.assertIsNone(sink._writer)
         self.assertIsNotNone(sink._path)
         self.assertTrue(sink._closed)
@@ -114,12 +114,12 @@ class TestDataSink(unittest.TestCase):
 
             if (i + 1) % flush_rows == 0:
                 # after every 100 appends, the data should be flushed and _rows should be cleared
-                self.assertEqual(sink._rows, [])
+                self.assertEqual(sink._buffer, [])
                 self.assertIsNotNone(sink._writer)
                 self.assertIsNotNone(sink._path)
             else:
                 # before threshold is reached, _rows should contain the appended data
-                self.assertEqual(sink._rows[i_mod], self.large_data[i])
+                self.assertEqual(sink._buffer[i_mod], self.large_data[i])
         
         # flush any remaining data
         sink.close()
@@ -128,7 +128,7 @@ class TestDataSink(unittest.TestCase):
         self.assertTrue(os.path.exists(sink._path))
 
         # check that the sink is empty
-        self.assertEqual(sink._rows, [])
+        self.assertEqual(sink._buffer, [])
         self.assertIsNone(sink._writer)
         self.assertIsNotNone(sink._path)
         self.assertTrue(sink._closed)
@@ -153,8 +153,8 @@ class TestDataSink(unittest.TestCase):
         sink.extend(list(self.small_data))  
 
         # check that only the last observation is in the buffer (since flush should have occurred after every 2 appends)
-        self.assertEqual(len(sink._rows), 1)
-        self.assertEqual(sink._rows, [self.small_data[-1]])
+        self.assertEqual(len(sink._buffer), 1)
+        self.assertEqual(sink._buffer, [self.small_data[-1]])
         self.assertIsNotNone(sink._writer)
         self.assertIsNotNone(sink._path)
         
@@ -165,7 +165,7 @@ class TestDataSink(unittest.TestCase):
         self.assertTrue(os.path.exists(sink._path))
 
         # check that the sink is empty
-        self.assertEqual(sink._rows, [])
+        self.assertEqual(sink._buffer, [])
         self.assertIsNone(sink._writer)
         self.assertIsNotNone(sink._path)
         self.assertTrue(sink._closed)
@@ -190,8 +190,8 @@ class TestDataSink(unittest.TestCase):
         sink.extend(list(self.large_data))  
 
         # check that only the last observation is in the buffer (since flush should have occurred after every 2 appends)
-        self.assertEqual(len(sink._rows), len(self.large_data) % flush_rows)
-        self.assertEqual(sink._rows, self.large_data[-(len(self.large_data) % flush_rows):])
+        self.assertEqual(len(sink._buffer), len(self.large_data) % flush_rows)
+        self.assertEqual(sink._buffer, self.large_data[-(len(self.large_data) % flush_rows):])
         self.assertIsNotNone(sink._writer)
         self.assertIsNotNone(sink._path)
         
@@ -202,7 +202,7 @@ class TestDataSink(unittest.TestCase):
         self.assertTrue(os.path.exists(sink._path))
 
         # check that the sink is empty
-        self.assertEqual(sink._rows, [])
+        self.assertEqual(sink._buffer, [])
         self.assertIsNone(sink._writer)
         self.assertIsNotNone(sink._path)
         self.assertTrue(sink._closed)

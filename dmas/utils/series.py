@@ -398,6 +398,7 @@ class AccessTable(AbstractTable):
         # get start and end indices for time range
         ti0 = self._time_to_index_floor(t_start)
         ti1 = self._time_to_index_floor(t_end)
+        ti1 += 1 if ti0 == ti1 else 0
 
         # get slice for time index range
         s = self._slice_for_index_range(ti0, ti1)
@@ -423,11 +424,11 @@ class AccessTable(AbstractTable):
             else:
                 out[col] = arr[s].astype(float)
 
-        # filter out any rows that are outside the time range 
-        if s.start != s.stop:
-            mask = (out["time [s]"] >= t_start) & (out["time [s]"] <= t_end)
-            for col in list(out.keys()):
-                out[col] = out[col][mask]
+        # # filter out any rows that are outside the time range 
+        # if s.start != s.stop:
+        #     mask = (t_start <= out["time [s]"]) & (out["time [s]"] <= t_end)
+        #     for col in list(out.keys()):
+        #         out[col] = out[col][mask]
         
         # return output
         return out

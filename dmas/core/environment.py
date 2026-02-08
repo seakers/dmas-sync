@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from dmas.core.messages import BusMessage, ObservationResultsMessage, SimulationMessage, message_from_dict
+from dmas.core.messages import BusMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, message_from_dict
 from dmas.models.trackers import DataSink
 from dmas.utils.orbitdata import OrbitData
 
@@ -96,9 +96,10 @@ class SimulationEnvironment(object):
         self._t_f = None
         self._t_curr = np.NINF
         self._agent_state_update_times = {}
-        self._task_reqs : list[dict] = list()        
 
         # initialize data sinks for historical data
+        # self._task_reqs : list[dict] = list()
+        self._task_reqs = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="requests")       
         self._observation_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="measurements")
         self._broadcasts_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="broadcasts")
 
@@ -251,9 +252,18 @@ class SimulationEnvironment(object):
         # mark state status as messaging
         state.update(t_curr, status=SimulationAgentState.MESSAGING)
 
+        # save broadcast contents according to message type
+        if isinstance(msg_out, BusMessage):
+            for msg in msg_out.msgs:
+                if isinstance(msg, MeasurementRequestMessage):
+                    # save measurement request to history
+                    self._task_reqs.append(msg.req)
+        elif isinstance(msg_out, MeasurementRequestMessage):
+            # save measurement request to history
+            self._task_reqs.append(msg_out.req)
+
+
         # save broadcast to history 
-        #   (if message is a BusMessage, do not save message payload; 
-        #       otherwise save message dict directly)
         if isinstance(msg_out, BusMessage):
             # convert to dict before saving
             msg_dict : dict = msg_out.to_dict()
@@ -268,6 +278,7 @@ class SimulationEnvironment(object):
             # save broadcast to history directly as dict
             self._broadcasts_history.append(msg_out.to_dict())
 
+        
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []
     
@@ -326,7 +337,7 @@ class SimulationEnvironment(object):
     ORBITDATA QUERY METHODS
     ----------------------
     """
-    def _query_measurement_data( self,
+    def _query_measurement_data(self,
                                 agent_state_dict : dict, 
                                 instrument_dict : dict,
                                 t_start : float,
@@ -509,11 +520,17 @@ class SimulationEnvironment(object):
             # broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
 
             # compile list of measurement requests 
-            measurement_reqs : pd.DataFrame = self.compile_requests()
+            self._task_reqs.close()
+            if self._task_reqs.empty():
+                self.log("No observation requests were performed during the simulation.", level=logging.WARNING)
+                # create empty dataframe with appropriate columns
+                task_requests = pd.DataFrame(data=[])
+                task_requests.to_parquet(f"{self._results_path}/requests.parquet", index=False)
+            # measurement_reqs : pd.DataFrame = self.compile_requests()
 
-            # log and save results
-            # self.log(f"MEASUREMENT REQUESTS RECEIVED:\n{len(measurement_reqs.values)}\n\n", level=logging.WARNING)
-            measurement_reqs.to_parquet(f"{self._results_path}/requests.parquet", index=False)
+            # # log and save results
+            # # self.log(f"MEASUREMENT REQUESTS RECEIVED:\n{len(measurement_reqs.values)}\n\n", level=logging.WARNING)
+            # measurement_reqs.to_parquet(f"{self._results_path}/requests.parquet", index=False)
 
             # print connectivity history
             self.__print_connectivity_history()
@@ -521,104 +538,93 @@ class SimulationEnvironment(object):
         except Exception as e:
             print('\n','\n','\n')
             print(e)
-            raise e       
-        
-        finally:
-            # # delete observation history to save memory
-            # del self._observation_history
-
-            # # delete broadcasts history to save memory
-            # del self._broadcasts_history
-
-            # # delete requests history to save memory
-            # del self._task_reqs
-            pass
+            raise e     
                     
-    def compile_observations(self) -> pd.DataFrame:
-        try:
-            columns = None
-            data = []
+    # def compile_observations(self) -> pd.DataFrame:
+    #     try:
+    #         columns = None
+    #         data = []
             
-            for msg_dict in tqdm(self._observation_history, 
-                            desc='Compiling observations results', 
-                            leave=False,
-                            disable=len(self._observation_history)<10 or not self._printouts
-                            ):
-                msg = ObservationResultsMessage(**msg_dict)
-                observation_data : List[dict] = msg.observation_data
-                observer = msg.dst
+    #         for msg_dict in tqdm(self._observation_history, 
+    #                         desc='Compiling observations results', 
+    #                         leave=False,
+    #                         disable=len(self._observation_history)<10 or not self._printouts
+    #                         ):
+    #             msg = ObservationResultsMessage(**msg_dict)
+    #             observation_data : List[dict] = msg.observation_data
+    #             observer = msg.dst
 
-                for obs in observation_data:
+    #             for obs in observation_data:
                     
-                    # find column names 
-                    if columns is None:
-                        columns = sorted([key for key in obs])
-                        columns.insert(0, 'observer')
-                        # columns.insert(2, 't_img')
-                        # columns.remove('t_start')
-                        # columns.remove('t_end')
+    #                 # find column names 
+    #                 if columns is None:
+    #                     columns = sorted([key for key in obs])
+    #                     columns.insert(0, 'observer')
+    #                     # columns.insert(2, 't_img')
+    #                     # columns.remove('t_start')
+    #                     # columns.remove('t_end')
 
-                    # add observation to data list
-                    obs['observer'] = observer.lower()
-                    for key in columns:
-                        val = obs.get(key, None)
-                        if isinstance(val, list):
-                            obs[key] = val[0]
-                            # if len(val) == 1:
-                            #     obs[key] = val[0]
-                            # else:
-                            #     obs[key] = [val[0], val[-1]]
+    #                 # add observation to data list
+    #                 obs['observer'] = observer.lower()
+    #                 for key in columns:
+    #                     val = obs.get(key, None)
+    #                     if isinstance(val, list):
+    #                         obs[key] = val[0]
+    #                         # if len(val) == 1:
+    #                         #     obs[key] = val[0]
+    #                         # else:
+    #                         #     obs[key] = [val[0], val[-1]]
 
-                    # obs['t_img'] = [obs['t_start'], obs['t_end']]
-                    # obs.pop('t_start')
-                    # obs.pop('t_end')
+    #                 # obs['t_img'] = [obs['t_start'], obs['t_end']]
+    #                 # obs.pop('t_start')
+    #                 # obs.pop('t_end')
 
-                    data.append([obs[key] for key in columns])
+    #                 data.append([obs[key] for key in columns])
 
-            observations_df = pd.DataFrame(data=data, columns=columns)
-            observations_df = observations_df.sort_index(axis=1)
+    #         observations_df = pd.DataFrame(data=data, columns=columns)
+    #         observations_df = observations_df.sort_index(axis=1)
 
-            return observations_df
+    #         return observations_df
         
-        except Exception as e:
-            print(e.with_traceback())
-            raise e
+    #     except Exception as e:
+    #         print(e.with_traceback())
+    #         raise e
     
-    def compile_broadcasts(self) -> pd.DataFrame:
-        columns = ['t_msg', 'sender', 'message type', 
-                #    'Message'
-                   ]
+    # def compile_broadcasts(self) -> pd.DataFrame:
+    #     columns = ['t_msg', 'sender', 'message type', 
+    #             #    'Message'
+    #                ]
 
-        data = [[msg['t_msg'], 
-                 msg['src'], 
-                 msg['msg_type'],
-                 #  json.dumps(msg)
-                 ]
-                for msg in self._broadcasts_history]
+    #     data = [[msg['t_msg'], 
+    #              msg['src'], 
+    #              msg['msg_type'],
+    #              #  json.dumps(msg)
+    #              ]
+    #             for msg in self._broadcasts_history]
             
-        return pd.DataFrame(data=data, columns=columns)
+    #     return pd.DataFrame(data=data, columns=columns)
     
-    def compile_requests(self) -> pd.DataFrame:
-        # convert measurement request dictionaries to Task Requests
-        self._task_reqs : list[TaskRequest] = list({
-            TaskRequest.from_dict(req_dict)
-            for req_dict in self._task_reqs})
+    # def compile_requests(self) -> pd.DataFrame:
+    #     # convert measurement request dictionaries to Task Requests
+    #     self._task_reqs : list[TaskRequest] = list({
+    #         TaskRequest.from_dict(req_dict)
+    #         for req_dict in self._task_reqs})
 
-        columns = ['request id', 'requester', 'event id', 'parameter', 't_req', 'mission name']
-        data = [[req.id,
-                 req.requester,
-                 req.task.event.id,
-                 req.task.parameter,
-                 req.t_req,
-                 req.mission_name,
-                 ] 
-                 for req in self._task_reqs
-                 if isinstance(req.task, EventObservationTask)]
+    #     columns = ['request id', 'requester', 'event id', 'parameter', 't_req', 'mission name']
+    #     data = [[req.id,
+    #              req.requester,
+    #              req.task.event.id,
+    #              req.task.parameter,
+    #              req.t_req,
+    #              req.mission_name,
+    #              ] 
+    #              for req in self._task_reqs
+    #              if isinstance(req.task, EventObservationTask)]
         
-        assert all(isinstance(req.task, EventObservationTask) for req in self._task_reqs), \
-            'Only `EventObservationTask` measurement requests are currently supported in the results compilation.'
+    #     assert all(isinstance(req.task, EventObservationTask) for req in self._task_reqs), \
+    #         'Only `EventObservationTask` measurement requests are currently supported in the results compilation.'
 
-        return pd.DataFrame(data=data, columns=columns)    
+    #     return pd.DataFrame(data=data, columns=columns)    
 
     def __print_connectivity_history(self) -> None:
         filename = 'connectivity.md'

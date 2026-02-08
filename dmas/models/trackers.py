@@ -31,7 +31,7 @@ class DataSink:
     data_name: str
     flush_rows: int = 50_000
 
-    _rows: List[Dict[str, Any]] = field(default_factory=list)
+    _buffer: List[Dict[str, Any]] = field(default_factory=list)
     _writer: Optional[pq.ParquetWriter] = None
     _path: Optional[str] = None
     _flush_count: int = 0
@@ -43,11 +43,11 @@ class DataSink:
         # ensure sink is open before appending
         self.__ensure_open()
         
-        # append a single observation to the rows buffer
-        self._rows.append(obs)
+        # append a single observation to the buffer
+        self._buffer.append(obs)
 
         # flush if we exceed the threshold
-        if len(self._rows) >= self.flush_rows:
+        if len(self._buffer) >= self.flush_rows:
             self.flush()
 
     def extend(self, obs_list: List[Dict[str, Any]]) -> None:
@@ -55,14 +55,14 @@ class DataSink:
         # ensure sink is open before extending
         self.__ensure_open()
         
-        # extend current rows with the new list of observations 
-        self._rows.extend(obs_list)
+        # extend current buffer with the new list of observations 
+        self._buffer.extend(obs_list)
 
         # find index of last flush point
-        i_flush = len(self._rows) - len(self._rows) % self.flush_rows
+        i_flush = len(self._buffer) - len(self._buffer) % self.flush_rows
 
         # flush if we exceed the threshold
-        if len(self._rows) >= self.flush_rows:
+        if len(self._buffer) >= self.flush_rows:
             self.flush(i_flush)
 
     def flush(self, i_max : int = -1) -> None:
@@ -71,33 +71,33 @@ class DataSink:
         self.__ensure_open()
         
         # if sink is empty, do nothing
-        if not self._rows: return
+        if not self._buffer: return
 
         # ensure i_max is valid
-        if i_max != -1 and not (0 < i_max <= len(self._rows)):
-            raise ValueError(f"i_max must be -1 or in the range (0, {len(self._rows)}], but got {i_max}")
+        if i_max != -1 and not (0 < i_max <= len(self._buffer)):
+            raise ValueError(f"i_max must be -1 or in the range (0, {len(self._buffer)}], but got {i_max}")
 
         # make sure output directory exists
         os.makedirs(self.out_dir, exist_ok=True)
 
         # convert rows to a PyArrow table
-        table = pa.Table.from_pylist(self._rows[:i_max] if i_max != -1 else self._rows)
+        table = pa.Table.from_pylist(self._buffer[:i_max] if i_max != -1 else self._buffer)
 
         # if writer is not initialized, create it with the schema of the first table
         if self._writer is None:
             self._path = os.path.join(self.out_dir, f"{self.data_name}.parquet")
             self._writer = pq.ParquetWriter(self._path, table.schema, compression="zstd")
 
-        # write the table to the parquet file and clear the rows buffer
+        # write the table to the parquet file and clear the buffer
         self._writer.write_table(table)
 
-        # clear the rows buffer       
+        # clear the buffer       
         if i_max == -1:
             # if i_max is -1, we flushed all rows, so we can clear the entire buffer
-            self._rows.clear()
+            self._buffer.clear()
         else:
             # if i_max is specified, we only flushed up to that index, so we remove those rows from the buffer
-            del self._rows[:i_max]
+            del self._buffer[:i_max]
 
         # increment flush count
         self._flush_count += 1
@@ -128,24 +128,20 @@ class DataSink:
             if getattr(self, "_writer", None) is not None and not getattr(self, "_closed", True):
                 self.close()
         except Exception:
-            # # if any error occurs during __del__, 
-            # #   we ignore it to avoid issues during garbage collection
-            # warnings.warn("An error occurred while deleting DataSink object. \
-            #               This is likely due to an issue during garbage collection. \
-            #               The error has been ignored to prevent potential crashes.", 
-            #               RuntimeWarning)
+            # if any error occurs during __del__, 
+            #   we ignore it to avoid issues during garbage collection
             pass
 
     def __len__(self):
-        return len(self._rows)
+        return len(self._buffer)
     
     def __iter__(self):
-        for row in self._rows:
+        for row in self._buffer:
             yield row
 
     def empty(self) -> bool:
         """ Returns True if the sink has no buffered data, False otherwise."""
-        return len(self._rows) == 0 and self._flush_count == 0
+        return len(self._buffer) == 0 and self._flush_count == 0
 
     def get_flush_count(self) -> int:
         """ Returns the number of times the sink has been flushed to disk."""
