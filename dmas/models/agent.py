@@ -141,8 +141,7 @@ class SimulationAgent(object):
                     # collect all targets matching this grid requirement
                     req_targets = [
                         (lat, lon, grid_index, gp_index)
-                        for grid in orbitdata.grid_data
-                        for lat,lon,grid_index,gp_index in grid.values
+                        for lat,lon,grid_index,gp_index in orbitdata.grid_data
                         if grid_index == req.grid_index and gp_index < req.grid_size
                     ]
                 else: 
@@ -157,8 +156,7 @@ class SimulationAgent(object):
                 #   collect all targets from all grids known to this agent
                 req_targets = list({
                     (lat, lon, grid_index, gp_index)
-                    for grid in orbitdata.grid_data
-                    for lat,lon,grid_index,gp_index in grid.values
+                    for lat,lon,grid_index,gp_index in orbitdata.grid_data
                 })
                 targets.extend(req_targets)
         

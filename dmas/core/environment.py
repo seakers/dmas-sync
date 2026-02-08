@@ -6,11 +6,12 @@ import time
 from typing import Dict, List, Set, Tuple
 from collections import defaultdict, deque
 
+from scipy.sparse import csr_matrix, triu
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from dmas.core.messages import BusMessage, ObservationResultsMessage, SimulationMessage, message_from_dict
+from dmas.core.messages import BusMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, message_from_dict
 from dmas.models.trackers import DataSink
 from dmas.utils.orbitdata import OrbitData
 
@@ -86,7 +87,7 @@ class SimulationEnvironment(object):
 
         # setup agent connectivity
         self._connectivity_level : str = connectivity_level.upper()
-        self.__interval_connectivities : List[Tuple[Interval, Dict, List, Dict]] \
+        self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
             = SimulationEnvironment.__precompute_connectivity(scenario_orbitdata, printouts) # list of (interval, connectivity_matrix, components_list)
 
         # initialize parameters
@@ -95,14 +96,15 @@ class SimulationEnvironment(object):
         self._t_f = None
         self._t_curr = np.NINF
         self._agent_state_update_times = {}
-        self._task_reqs : list[dict] = list()        
 
         # initialize data sinks for historical data
+        # self._task_reqs : list[dict] = list()
+        self._task_reqs = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="requests")       
         self._observation_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="measurements")
         self._broadcasts_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="broadcasts")
 
         # initialize current connectivity to connectivity at t=0.0 
-        self._current_connectivity_interval, self._current_connectivity_matrix, \
+        self._current_connectivity_interval, \
             self._current_connectivity_components, self._current_connectivity_map \
             = self.__get_agent_connectivity(t=0.0) # serve as references for connectivity at current time
         
@@ -124,7 +126,7 @@ class SimulationEnvironment(object):
         # check if connectivity needs to be update
         if t not in self._current_connectivity_interval:
             # update current connectivity matrix and components
-            self._current_connectivity_interval, self._current_connectivity_matrix, \
+            self._current_connectivity_interval, \
                 self._current_connectivity_components, self._current_connectivity_map \
                     = self.__get_agent_connectivity(t)
         
@@ -250,9 +252,18 @@ class SimulationEnvironment(object):
         # mark state status as messaging
         state.update(t_curr, status=SimulationAgentState.MESSAGING)
 
+        # save broadcast contents according to message type
+        if isinstance(msg_out, BusMessage):
+            for msg in msg_out.msgs:
+                if isinstance(msg, MeasurementRequestMessage):
+                    # save measurement request to history
+                    self._task_reqs.append(msg.req)
+        elif isinstance(msg_out, MeasurementRequestMessage):
+            # save measurement request to history
+            self._task_reqs.append(msg_out.req)
+
+
         # save broadcast to history 
-        #   (if message is a BusMessage, do not save message payload; 
-        #       otherwise save message dict directly)
         if isinstance(msg_out, BusMessage):
             # convert to dict before saving
             msg_dict : dict = msg_out.to_dict()
@@ -267,6 +278,7 @@ class SimulationEnvironment(object):
             # save broadcast to history directly as dict
             self._broadcasts_history.append(msg_out.to_dict())
 
+        
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []
     
@@ -325,8 +337,7 @@ class SimulationEnvironment(object):
     ORBITDATA QUERY METHODS
     ----------------------
     """
-
-    def _query_measurement_data( self,
+    def _query_measurement_data(self,
                                 agent_state_dict : dict, 
                                 instrument_dict : dict,
                                 t_start : float,
@@ -509,11 +520,17 @@ class SimulationEnvironment(object):
             # broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
 
             # compile list of measurement requests 
-            measurement_reqs : pd.DataFrame = self.compile_requests()
+            self._task_reqs.close()
+            if self._task_reqs.empty():
+                self.log("No observation requests were performed during the simulation.", level=logging.WARNING)
+                # create empty dataframe with appropriate columns
+                task_requests = pd.DataFrame(data=[])
+                task_requests.to_parquet(f"{self._results_path}/requests.parquet", index=False)
+            # measurement_reqs : pd.DataFrame = self.compile_requests()
 
-            # log and save results
-            # self.log(f"MEASUREMENT REQUESTS RECEIVED:\n{len(measurement_reqs.values)}\n\n", level=logging.WARNING)
-            measurement_reqs.to_parquet(f"{self._results_path}/requests.parquet", index=False)
+            # # log and save results
+            # # self.log(f"MEASUREMENT REQUESTS RECEIVED:\n{len(measurement_reqs.values)}\n\n", level=logging.WARNING)
+            # measurement_reqs.to_parquet(f"{self._results_path}/requests.parquet", index=False)
 
             # print connectivity history
             self.__print_connectivity_history()
@@ -521,104 +538,93 @@ class SimulationEnvironment(object):
         except Exception as e:
             print('\n','\n','\n')
             print(e)
-            raise e       
-        
-        finally:
-            # # delete observation history to save memory
-            # del self._observation_history
-
-            # # delete broadcasts history to save memory
-            # del self._broadcasts_history
-
-            # # delete requests history to save memory
-            # del self._task_reqs
-            pass
+            raise e     
                     
-    def compile_observations(self) -> pd.DataFrame:
-        try:
-            columns = None
-            data = []
+    # def compile_observations(self) -> pd.DataFrame:
+    #     try:
+    #         columns = None
+    #         data = []
             
-            for msg_dict in tqdm(self._observation_history, 
-                            desc='Compiling observations results', 
-                            leave=False,
-                            disable=len(self._observation_history)<10 or not self._printouts
-                            ):
-                msg = ObservationResultsMessage(**msg_dict)
-                observation_data : List[dict] = msg.observation_data
-                observer = msg.dst
+    #         for msg_dict in tqdm(self._observation_history, 
+    #                         desc='Compiling observations results', 
+    #                         leave=False,
+    #                         disable=len(self._observation_history)<10 or not self._printouts
+    #                         ):
+    #             msg = ObservationResultsMessage(**msg_dict)
+    #             observation_data : List[dict] = msg.observation_data
+    #             observer = msg.dst
 
-                for obs in observation_data:
+    #             for obs in observation_data:
                     
-                    # find column names 
-                    if columns is None:
-                        columns = sorted([key for key in obs])
-                        columns.insert(0, 'observer')
-                        # columns.insert(2, 't_img')
-                        # columns.remove('t_start')
-                        # columns.remove('t_end')
+    #                 # find column names 
+    #                 if columns is None:
+    #                     columns = sorted([key for key in obs])
+    #                     columns.insert(0, 'observer')
+    #                     # columns.insert(2, 't_img')
+    #                     # columns.remove('t_start')
+    #                     # columns.remove('t_end')
 
-                    # add observation to data list
-                    obs['observer'] = observer.lower()
-                    for key in columns:
-                        val = obs.get(key, None)
-                        if isinstance(val, list):
-                            obs[key] = val[0]
-                            # if len(val) == 1:
-                            #     obs[key] = val[0]
-                            # else:
-                            #     obs[key] = [val[0], val[-1]]
+    #                 # add observation to data list
+    #                 obs['observer'] = observer.lower()
+    #                 for key in columns:
+    #                     val = obs.get(key, None)
+    #                     if isinstance(val, list):
+    #                         obs[key] = val[0]
+    #                         # if len(val) == 1:
+    #                         #     obs[key] = val[0]
+    #                         # else:
+    #                         #     obs[key] = [val[0], val[-1]]
 
-                    # obs['t_img'] = [obs['t_start'], obs['t_end']]
-                    # obs.pop('t_start')
-                    # obs.pop('t_end')
+    #                 # obs['t_img'] = [obs['t_start'], obs['t_end']]
+    #                 # obs.pop('t_start')
+    #                 # obs.pop('t_end')
 
-                    data.append([obs[key] for key in columns])
+    #                 data.append([obs[key] for key in columns])
 
-            observations_df = pd.DataFrame(data=data, columns=columns)
-            observations_df = observations_df.sort_index(axis=1)
+    #         observations_df = pd.DataFrame(data=data, columns=columns)
+    #         observations_df = observations_df.sort_index(axis=1)
 
-            return observations_df
+    #         return observations_df
         
-        except Exception as e:
-            print(e.with_traceback())
-            raise e
+    #     except Exception as e:
+    #         print(e.with_traceback())
+    #         raise e
     
-    def compile_broadcasts(self) -> pd.DataFrame:
-        columns = ['t_msg', 'sender', 'message type', 
-                #    'Message'
-                   ]
+    # def compile_broadcasts(self) -> pd.DataFrame:
+    #     columns = ['t_msg', 'sender', 'message type', 
+    #             #    'Message'
+    #                ]
 
-        data = [[msg['t_msg'], 
-                 msg['src'], 
-                 msg['msg_type'],
-                 #  json.dumps(msg)
-                 ]
-                for msg in self._broadcasts_history]
+    #     data = [[msg['t_msg'], 
+    #              msg['src'], 
+    #              msg['msg_type'],
+    #              #  json.dumps(msg)
+    #              ]
+    #             for msg in self._broadcasts_history]
             
-        return pd.DataFrame(data=data, columns=columns)
+    #     return pd.DataFrame(data=data, columns=columns)
     
-    def compile_requests(self) -> pd.DataFrame:
-        # convert measurement request dictionaries to Task Requests
-        self._task_reqs : list[TaskRequest] = list({
-            TaskRequest.from_dict(req_dict)
-            for req_dict in self._task_reqs})
+    # def compile_requests(self) -> pd.DataFrame:
+    #     # convert measurement request dictionaries to Task Requests
+    #     self._task_reqs : list[TaskRequest] = list({
+    #         TaskRequest.from_dict(req_dict)
+    #         for req_dict in self._task_reqs})
 
-        columns = ['request id', 'requester', 'event id', 'parameter', 't_req', 'mission name']
-        data = [[req.id,
-                 req.requester,
-                 req.task.event.id,
-                 req.task.parameter,
-                 req.t_req,
-                 req.mission_name,
-                 ] 
-                 for req in self._task_reqs
-                 if isinstance(req.task, EventObservationTask)]
+    #     columns = ['request id', 'requester', 'event id', 'parameter', 't_req', 'mission name']
+    #     data = [[req.id,
+    #              req.requester,
+    #              req.task.event.id,
+    #              req.task.parameter,
+    #              req.t_req,
+    #              req.mission_name,
+    #              ] 
+    #              for req in self._task_reqs
+    #              if isinstance(req.task, EventObservationTask)]
         
-        assert all(isinstance(req.task, EventObservationTask) for req in self._task_reqs), \
-            'Only `EventObservationTask` measurement requests are currently supported in the results compilation.'
+    #     assert all(isinstance(req.task, EventObservationTask) for req in self._task_reqs), \
+    #         'Only `EventObservationTask` measurement requests are currently supported in the results compilation.'
 
-        return pd.DataFrame(data=data, columns=columns)    
+    #     return pd.DataFrame(data=data, columns=columns)    
 
     def __print_connectivity_history(self) -> None:
         filename = 'connectivity.md'
@@ -628,24 +634,30 @@ class SimulationEnvironment(object):
             f.write(f"- Connectivity Level: **{self._connectivity_level}**\n\n")
             f.write(f"- Connectivity Relays Enabled: **{self._connectivity_relays}**\n\n")
 
-            for interval, conn_matrix, components, _ in self.__interval_connectivities:
+            for interval, components, component_map in self.__interval_connectivities:
                 f.write('---\n')
                 f.write(f"**Interval:** {interval} [s]\n\n")
                 
+                # conn_matrix = conn_matrix_sparse.toarray()
+                agent_names = list(component_map.keys())
+                agent_to_idx = {agent: idx for idx, agent in enumerate(agent_names)}
+
                 # print connectivity matrix
                 f.write("**Connectivity Matrix:**\n\n")
                 ## print table header 
-                agent_names = list(conn_matrix.keys())
                 header = "||" + "  |".join([f"`{name:>5}`" for name in agent_names]) + "|\n"
                 f.write(header)
                 f.write("|-|" + "-|"*len(agent_names) + "\n")
                 
-                ## print matrix rows
-                for sender in agent_names:
-                    row = f"|`{sender:>5}`|"
-                    for receiver in agent_names:
-                        row += f"{conn_matrix[sender][receiver]:>3}|"
-                    f.write(row + "\n")
+                # ## print matrix rows
+                # for sender in agent_names:
+                #     row = f"|`{sender:>5}`|"
+                #     u = agent_to_idx[sender]
+                #     for receiver in agent_names:
+                #         v = agent_to_idx[receiver]
+                #         status = int(bool(conn_matrix[u][v]) or bool(conn_matrix[v][u]))
+                #         row += f"{status:>3}|"
+                #     f.write(row + "\n")
 
                 f.write("\n**Connected Components:**\n")
                 for i,comp in enumerate(sorted(components)):
@@ -711,9 +723,7 @@ class SimulationEnvironment(object):
         t_start = unique_event_times[0] if unique_event_times else np.Inf
         prev_interval = Interval(np.NINF, t_start, left_open=True, right_open=True)
         connectivity_intervals.insert(0, prev_interval)
-        prev_connectivity_matrix = {sender : {receiver : 0 for receiver in orbitdata.keys()} 
-                             for sender in orbitdata.keys()}
-        
+                
         # group events by interval 
         events_per_interval : Dict[Interval, List[tuple]] \
             = {interval : [] for interval in connectivity_intervals}
@@ -743,6 +753,9 @@ class SimulationEnvironment(object):
         
         # initialize interval-connectivity list
         interval_connectivities : List[tuple] = []
+        agent_to_idx = {agent: idx for idx, agent in enumerate(orbitdata.keys())}
+        idx_to_agent = [agent for agent in agent_to_idx.keys()]
+        prev_connectivity_matrix = np.zeros((len(orbitdata), len(orbitdata)), dtype=int)
         
         # create adjacency matrix per interval
         for interval in tqdm(connectivity_intervals, 
@@ -752,8 +765,9 @@ class SimulationEnvironment(object):
                              disable=not printouts
                             ):
             # copy previous connectivity state
-            interval_connectivity_matrix \
-                = copy.deepcopy(prev_connectivity_matrix)                    
+            # interval_connectivity_matrix \
+            #     = copy.deepcopy(prev_connectivity_matrix)                    
+            interval_connectivity_matrix = prev_connectivity_matrix.copy()
             
             # get connectivity events that occur during the interval
             # interval_events = [ evt for evt in connectivity_events if evt[0] in interval ]
@@ -761,14 +775,16 @@ class SimulationEnvironment(object):
 
             # update connectivity matrix based on events
             for _,sender,receiver,status in interval_events:
-                interval_connectivity_matrix[sender][receiver] = status
+                u_idx = agent_to_idx[sender]
+                v_idx = agent_to_idx[receiver]
+                interval_connectivity_matrix[u_idx][v_idx] = status
 
             # create component list from connectivity matrix
-            interval_components = SimulationEnvironment.__get_connected_components(interval_connectivity_matrix)
+            interval_components = SimulationEnvironment.__get_connected_components(interval_connectivity_matrix, agent_to_idx, idx_to_agent)
 
             # convert components to dict for easier lookup
             interval_component_map : Dict[str, List[str]] \
-                = { sender : [] for sender in interval_connectivity_matrix.keys() }
+                = { sender : [] for sender in idx_to_agent }
 
             for component in interval_components:
                 for sender in component:
@@ -776,8 +792,14 @@ class SimulationEnvironment(object):
                         if sender != receiver:
                             interval_component_map[sender].append(receiver)
 
+            # convert connectivity matrix to sparse matrix
+            sparse_interval_connectivity_matrix = csr_matrix(interval_connectivity_matrix)
+            
+            # save as upper triangle only to save memory, since connectivity is symmetric 
+            sparse_interval_connectivity_matrix = triu(sparse_interval_connectivity_matrix, k=0)   # keep diagonal + upper triangle only
+
             # store interval connectivity data
-            interval_connectivities.append( (interval, interval_connectivity_matrix, 
+            interval_connectivities.append( (interval, 
                                              interval_components, interval_component_map) )
 
             # set previous connectivity to current for next iteration
@@ -792,12 +814,40 @@ class SimulationEnvironment(object):
             # print('='*50 + '\n')
             # x = 1 # breakpoint
             # -------------------------------
-
+        
         # return compiled list of interval connectivities
-        return interval_connectivities
+        # return interval_connectivities
+
+        merged_intervals : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] = []
+        for interval, components, component_map in tqdm(interval_connectivities, 
+                                                        desc='Merging agent connectivity intervals', 
+                                                        unit=' intervals', 
+                                                        leave=False,
+                                                        disable=not printouts
+                                                    ):
+            if not merged_intervals:
+                merged_intervals.append( (interval, components, component_map) )
+                continue
+
+            # get previous interval data
+            prev_interval, prev_components, prev_component_map = merged_intervals[-1]
+            
+            # compare components to determine if connectivity changed; if not, merge intervals
+            if components == prev_components and prev_interval.overlaps(interval):
+                # merge intervals by updating end time of previous interval to end time of current interval
+                merged_interval = prev_interval.union(interval)
+                merged_intervals[-1] = (merged_interval, prev_components, prev_component_map)
+
+            else:
+                # connectivity changed; add current interval as new entry
+                merged_intervals.append( (interval, components, component_map) )
+        
+        return merged_intervals
+
     
     @staticmethod
-    def __get_connected_components(adj: Dict[str, Dict[str, int]]):
+    # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
+    def __get_connected_components(adj: List[List[int]], agent_to_idx : Dict[str, int], idx_to_agent : List[str]) -> List[List[str]]:
         """
         adj: dict[node] -> dict[neighbor] -> weight/int (nonzero means edge exists)
         Assumes undirected (symmetric) or at least that reachability should be treated undirected.
@@ -805,10 +855,10 @@ class SimulationEnvironment(object):
         """
         # initialize BFS variables
         visited = set()
-        comps = []
+        comps = set()
 
         # BFS to find components
-        for start in adj.keys():
+        for start in range(len(adj)):
             # skip visited nodes
             if start in visited: continue
 
@@ -819,16 +869,16 @@ class SimulationEnvironment(object):
             visited.add(start)
 
             # explore subgraph components starting from root
-            comp = []
+            comp = set()
             while q:
                 # pop next node
                 u = q.popleft()
 
                 # add to component list
-                comp.append(u)
+                comp.add(idx_to_agent[u])
 
                 # iterate neighbors; keep only truthy edges
-                for v, connected in adj[u].items():
+                for v, connected in enumerate(adj[u]):
                     # check if connected to neighbor
                     if not connected: continue
                     
@@ -838,7 +888,7 @@ class SimulationEnvironment(object):
                         q.append(v)
 
             # add component to component list
-            comps.append(comp)
+            comps.add(frozenset(comp))
 
         # return list of components
         return comps
@@ -855,11 +905,11 @@ class SimulationEnvironment(object):
             mid = (low + high) // 2
 
             # unpack interval data
-            interval, connectivity, components, components_map \
+            interval, components, components_map \
                 = self.__interval_connectivities[mid]
 
             # return if time t is in the interval
-            if t in interval: return interval, connectivity, components, components_map
+            if t in interval: return interval, components, components_map
             
             # if not, adjust search bounds
             if t < interval.left:

@@ -1,12 +1,15 @@
+from collections import defaultdict
 import copy
+from dataclasses import dataclass
 from enum import Enum
+import gc
 import json
 from math import ceil
 import os
 import random
 import re
 import time
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 import pandas as pd
 import numpy as np
 from datetime import timedelta
@@ -14,7 +17,7 @@ from tqdm import tqdm
 
 from orbitpy.mission import Mission
 from execsatm.utils import Interval
-from dmas.utils.series import TimeIndexedData,IntervalData
+from dmas.utils.series import AccessTable, IntervalTable, StateTable, TargetGridTable
 
 class ConnectivityLevels(Enum):
     FULL = 'FULL'   # static fully connected network between all agents
@@ -31,107 +34,102 @@ class OrbitData:
     """
     JDUT1 = 'JDUT1'
 
-    def __init__(self, 
-                 agent_name : str, 
+    def __init__(self,
+                 agent_name : str,
                  gs_network_name : str,
-                 time_data : pd.DataFrame, 
-                 eclipse_data : pd.DataFrame, 
-                 position_data : pd.DataFrame, 
-                 satellite_link_data : Dict[str, pd.DataFrame],
-                 ground_operator_link_data : Dict[str, pd.DataFrame],
-                 gs_access_data : pd.DataFrame, 
-                 gp_access_data : pd.DataFrame, 
-                 grid_data : list,
-                 printouts : bool = True
+                 time_step : float,
+                 epoch_type : str,
+                 epoch : float,
+                 duration : float,
+                 eclipse_data : IntervalTable,
+                 state_data : StateTable,
+                 comms_links : Dict[str, IntervalTable],
+                 gs_access_data : IntervalTable,
+                 gp_access_data : AccessTable,
+                 grid_data: TargetGridTable
                 ):
-        # name of agent being represented by this object
+        # assign attributes
         self.agent_name = agent_name
-
-        # name of ground station network the agent is associated with
         self.gs_network_name = gs_network_name
+        self.time_step = time_step
+        self.epoch_type = epoch_type
+        self.epoch = epoch
+        self.duration = duration
 
-        # propagation time specifications
-        self.time_step = time_data['time step']
-        self.epoch_type = time_data['epoch type']
-        self.epoch = time_data['epoch']
-        self.duration = time_data['duration']
+        # agent state data
+        self.eclipse_data = eclipse_data
+        self.state_data = state_data
 
-        # agent position and eclipse information
-        self.eclipse_data : IntervalData = IntervalData.from_dataframe(eclipse_data, self.time_step, 'eclipse', printouts)
-        self.position_data : TimeIndexedData = TimeIndexedData.from_dataframe(position_data, self.time_step, 'position', printouts)   
-
-        # TODO validate access data
-        assert all([('start index' in df.columns and 'end index' in df.columns) 
-                    for df in satellite_link_data.values()]), \
-                        'start index or end index column not found in satellite link data'
+        # agent connectivity data
+        self.comms_links = comms_links
+        self.gs_access_data = gs_access_data
         
-        # access times to other satellites
-        self.satellite_links : Dict[str, IntervalData] = {satellite_name : IntervalData.from_dataframe(satellite_link_data[satellite_name], self.time_step, f"{satellite_name.lower()}-isl", printouts)
-                                                   for satellite_name in satellite_link_data.keys()}
+        # ground point access data
+        self.gp_access_data = gp_access_data
 
-        # access times to ground operators
-        self.ground_operator_links : Dict[str, IntervalData] = {network_name : IntervalData.from_dataframe(ground_operator_link_data[network_name], self.time_step, f'{network_name}-gsn_access', printouts) 
-                                                                for network_name in ground_operator_link_data.keys()}
-        
-        # inter-agent link access times
-        self.comms_links : Dict[str, IntervalData] = {agent_name : IntervalData.from_dataframe(satellite_link_data[agent_name], self.time_step, f"{agent_name.lower()}-comms_link", printouts)
-                                                     for agent_name in satellite_link_data.keys()}
-        self.comms_links.update({network_name : IntervalData.from_dataframe(ground_operator_link_data[network_name], self.time_step, f'{network_name}-comms_link', printouts)
-                                for network_name in ground_operator_link_data.keys()})
-
-        # access times to ground stations 
-        self.ground_station_links : IntervalData = IntervalData.from_dataframe(gs_access_data, self.time_step, 'gs-access', printouts)
-
-        # ground point access times
-        self.gp_access_data : TimeIndexedData = TimeIndexedData.from_dataframe(gp_access_data, self.time_step, 'gp-access', printouts)
-        # grid information
-        assert isinstance(grid_data, list) and all([isinstance(df, pd.DataFrame) for df in grid_data]), 'grid data must be a list of pandas DataFrames'
-        self.grid_data : list[pd.DataFrame] = grid_data
+        # grid data
+        self.grid_data = grid_data   
     
-    # def get_epoc_in_datetime(self, delta_ut1=0.0) -> datetime:
-    #     """
-    #     Converts epoc to a datetime in UTC.
+    """
+    LOAD FROM PRE-COMPUTED DATA
+    """
+    @staticmethod
+    def from_directory(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Dict[str, 'OrbitData']:
+        # TODO check if schemas have already been generated at the provided directory and load from there if so, o
+        # therwise preprocess data and generate schemas before loading
         
-    #     Parameters
-    #     ----------
-    #     delta_ut1 : float, optional
-    #         UT1-UTC offset in seconds (default 0.0, but usually provided by IERS).
+        # define binary output directory
+        bin_dir = os.path.join(orbitdata_dir, 'bin')
+        bin_meta_file = os.path.join(bin_dir, "meta.json")
+
+        if os.path.exists(bin_meta_file):
+            # if metadata file exists, load schemas from metadata
+            with open(bin_meta_file, 'r') as meta_file:
+                schemas : dict[str, dict] = json.load(meta_file)
+                if printouts: tqdm.write('Existing preprocessed data found. Loading from binaries...')
+        else:
+            # preprocess data and store as binarys for faster loading in the future
+            schemas : dict[str, dict] \
+                = OrbitData.preprocess(orbitdata_dir, simulation_duration, printouts=printouts)
         
-    #     Returns
-    #     -------
-    #     datetime
-    #         Corresponding UTC datetime.
-    #     """
-    #     # check epoc type 
-    #     if self.epoc_type == self.JDUT1: # convert JDUT1 to datetime
-    #         JD_UNIX_EPOCH = 2440587.5  # JD of 1970-01-01 00:00:00 UTC
-    #         days_since_unix = self.epoc - JD_UNIX_EPOCH
-    #         seconds_since_unix = days_since_unix * 86400.0 - delta_ut1  # adjust to UTC
-    #         return datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=seconds_since_unix)
+            # force garbage collection after loading data to free up memory
+            gc.collect() 
 
-    #     else:
-    #         raise NotImplementedError(f"Unsupported epoc type: {self.epoc_type}. Only 'JDUT1' is supported.")
+        data = dict()
+        for agent_name, schema in schemas.items():
+            # unpack agent-specific data from schema
+            gs_network_name = schema['gs_network_name']
+            time_step = schema['time_specs']['time step']
+            epoch_type = schema['time_specs']['epoch type']
+            epoch = schema['time_specs']['epoch']
+            duration = schema['time_specs']['duration']
 
-    def copy(self) -> object:
-        return OrbitData(self.agent_name, 
-                         self.gs_network_name,
-                         {'time step': self.time_step, 'epoc type' : self.epoc_type, 'epoc' : self.epoc},
-                         self.eclipse_data,
-                         self.position_data,
-                         self.satellite_links,
-                         self.ground_station_links,
-                         self.gp_access_data,
-                         self.grid_data
-                         )
-    
-    def update_databases(self, t : float) -> None:
-        # exclude outdated data
-        self.eclipse_data.update_expired_values(t)
-        self.position_data.update_expired_values(t)
-        for _, comms_link in self.comms_links.items(): comms_link.update_expired_values(t)
-        for _, isl in self.satellite_links.items(): isl.update_expired_values(t) 
-        self.ground_station_links.update_expired_values(t)
-        self.gp_access_data.update_expired_values(t)
+            # load eclipse data from binary
+            eclipse_data = IntervalTable.from_schema(schema['eclipse'], mmap_mode='r')
+            
+            # load ground station access data from binary
+            gs_access_data = IntervalTable.from_schema(schema['gs_access'], mmap_mode='r')
+
+            # load comms link data from binary
+            comms_links = dict()
+            for link_name, comms_meta in schema['comms_links'].items():
+                comms_links[link_name] = IntervalTable.from_schema(comms_meta, mmap_mode='r')
+
+            # load ground point access data from binary
+            gp_access_data = AccessTable.from_schema(schema['gp_access'], mmap_mode='r')
+
+            # load grid data from binary
+            grid_data = TargetGridTable.from_schema(schema['grid'], mmap_mode='r')
+
+            # load state data from binary 
+            state_data = StateTable.from_schema(schema['state'], mmap_mode='r')
+
+            data[agent_name] = OrbitData(agent_name, gs_network_name, time_step, epoch_type, epoch, 
+                                            duration, eclipse_data, state_data, comms_links, gs_access_data, 
+                                            gp_access_data, grid_data)
+            
+        # return compiled data
+        return data     
 
     """
     GET NEXT methods
@@ -145,58 +143,32 @@ class OrbitData:
         # return next access interval
         return self.__get_next_interval(self.comms_links[target], t, t_max, include_current)
 
-    def get_next_agent_accesses(self, target : str, t: float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
-        """ returns a list of the next access interval to another agent or ground station after or during time `t` up to a given time `t_max`. """
-
-        # check if target is within the list of known agents
-        assert target in self.comms_links.keys(), f'No comms data found for target agent `{target}`.'
-
-        # get next access intervals
-        future_access_intervals = self.__get_next_intervals(self.comms_links[target], t, t_max, include_current)
-
-        # return in interval form
-        return [Interval(t_start,t_end) for t_start,t_end in future_access_intervals] if future_access_intervals else []
-
-    def get_next_isl_access_interval(self, target : str, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
-        """ returns the next access interval to another agent after or during time `t`. """
-
-        # check if target is within the list of known satellite agents
-        assert target in self.satellite_links.keys(), f'No ISL data found for target agent `{target}`.'
-
-        # return next access interval
-        return self.__get_next_interval(self.satellite_links[target], t, t_max, include_current)
-
-    def get_next_ground_operator_access_interval(self, target : str, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
-        """ returns the next access interval to a ground operator agent after or during time `t`. """
-
-        # check if target is within the list of known ground operator agents
-        assert target in self.ground_operator_links.keys(), f'No ground operator data found for target agent `{target}`.'
-
-        # return next access interval
-        return self.__get_next_interval(self.ground_operator_links[target], t, t_max, include_current)
-
     def get_next_gs_access(self, t, t_max: float = np.Inf, include_current: bool = False) -> Interval:
         """ returns the next access interval to a ground station after or during time `t`. """
-        return self.__get_next_interval(self.ground_station_links, t, t_max, include_current)
+        return self.__get_next_interval(self.gs_access_data, t, t_max, include_current)
 
     def get_next_eclipse_interval(self, t: float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
         """ returns the next eclipse interval after or during time `t`. """
         return self.__get_next_interval(self.eclipse_data, t, t_max, include_current)
 
-    def __get_next_interval(self, interval_data : IntervalData, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
+    def __get_next_interval(self, interval_data : IntervalTable, t : float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
         """ returns the next access interval from `interval_data` after or during time `t`. """
+        return interval_data.lookup_interval(t, t_max, include_current)
+        
+        raise NotImplementedError('TODO: need to implement method to return next interval from interval data. This is currently not being used in the code but will be needed for future features such as eclipse-aware planning and ground station access scheduling.')
+        
         # get next intervals
-        future_intervals : list[Interval] = interval_data.lookup_intervals(t, t_max)
+        future_intervals : list[Interval] = interval_data.lookup_interval(t, t_max, include_current)
 
-        # check if current interval should be included
-        if not include_current:
-            # exclude intervals that contain time `t`
-            future_intervals = [interval for interval in future_intervals
-                                if t < interval.left] # interval starts after time `t`
-        else:
-            # include current intervals but clip to start at time `t`
-            future_intervals = [Interval(max(t, interval.left), interval.right) if interval.left <= t <= interval.right else interval
-                                for interval in future_intervals]
+        # # check if current interval should be included
+        # if not include_current:
+        #     # exclude intervals that contain time `t`
+        #     future_intervals = [interval for interval in future_intervals
+        #                         if t < interval.left] # interval starts after time `t`
+        # else:
+        #     # include current intervals but clip to start at time `t`
+        #     future_intervals = [Interval(max(t, interval.left), interval.right) if interval.left <= t <= interval.right else interval
+        #                         for interval in future_intervals]
 
         # check if there are any valid intervals
         if not future_intervals: return None
@@ -206,78 +178,23 @@ class OrbitData:
 
         # return the first interval that starts after or at time `t`
         return Interval(max(t, next_interval.left), min(next_interval.right, t_max))
-        
-        # TEMP previous implementation
-        # # get next intervals
-        # future_intervals: list[tuple[float, float]] = self.__get_next_intervals(interval_data, t, t_max, include_current)
 
-        # # check if there are any valid intervals
-        # if not future_intervals: return None
-
-        # # get interval bounds
-        # t_start,t_end = future_intervals[0]
-
-        # # return the first interval that starts after or at time `t`
-        # return Interval(max(t, t_start), min(t_end, t_max))
-
-    def __get_next_intervals(self, interval_data : IntervalData, t : float, t_max: float = np.Inf, include_current: bool = False) -> List[Tuple[float, float]]:
-        # find all intervals that end after time `t` and start before time `t_max`
-        future_intervals : List[Interval] = interval_data.lookup_intervals(t, t_max)
-        
-        # convert to tuple form
-        future_interval_pairs = [(interval.left, interval.right) for interval in future_intervals]
-        
-        # check if current interval should be included
-        if not include_current:
-            # exclude intervals that contain time `t`
-            future_interval_pairs = [(t_start, t_end) for t_start,t_end in future_interval_pairs
-                                if t < t_start] # interval starts after time `t`
-        else:
-            # include current intervals but clip to start at time `t`
-            future_interval_pairs = [(max(t, t_start), t_end) for t_start,t_end in future_interval_pairs]
-
-        # check if there are any valid intervals
-        if not future_interval_pairs: return None
-        
-        # sort by start time and return
-        return sorted(future_interval_pairs, key=lambda interval: interval[0])
-    
-    def get_latest_agent_access(self, target : str, t: float, t_max: float, include_current: bool = False) -> Interval:
-        """ returns the latest access interval to another agent or ground station after or during time `t`. """
+    def get_next_agent_accesses(self, target : str, t: float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
+        """ returns a list of the next access interval to another agent or ground station after or during time `t` up to a given time `t_max`. """
 
         # check if target is within the list of known agents
         assert target in self.comms_links.keys(), f'No comms data found for target agent `{target}`.'
 
-        # return next access interval
-        return self.__get_latest_interval(self.comms_links[target], t, t_max, include_current)
+        # get next access intervals
+        return self.__get_next_intervals(self.comms_links[target], t, t_max, include_current)
 
-    def __get_latest_interval(self, interval_data : IntervalData, t : float, t_max: float, include_current: bool = False) -> Interval:
-        """ returns the latest access interval from `interval_data` after or during time `t`. """
+    def __get_next_intervals(self, interval_data : IntervalTable, t : float, t_max: float = np.Inf, include_current: bool = False) -> List[Interval]:
         # find all intervals that end after time `t` and start before time `t_max`
-        future_intervals: list[tuple[float, float]] = [(t_start, t_end)
-                                                        for t_start,t_end,*_ in interval_data.data
-                                                        if t <= t_end # interval ends after or at time `t`
-                                                        and t_start <= t_max # interval starts before or at time `t_max`
-                                                        ]
-        
-        # check if current interval should be included
-        if not include_current:
-            # exclude intervals that contain time `t`
-            future_intervals = [(t_start, t_end) for t_start,t_end in future_intervals
-                                if t < t_start] # interval starts after time `t`
-
-        # check if there are any valid intervals
-        if not future_intervals: return None
-        
-        # sort by start time
-        future_intervals.sort(key=lambda interval: interval[0])
-
-        # get interval bounds
-        t_start,t_end = future_intervals[-1]
-
-        # return the last interval that starts after or at time `t`
-        return Interval(max(t, t_start), min(t_end, t_max))
-
+        future_intervals : List[Interval] = interval_data.lookup_intervals(t, t_max, include_current)
+                
+        # return intervals that start after or at time `t` and end before or at time `t_max`
+        return future_intervals
+    
     def get_next_gp_access_interval(self, lat: float, lon: float, t: float, t_max : float = np.Inf) -> Interval:
         """
         Returns the next access to a ground point
@@ -288,29 +205,11 @@ class OrbitData:
     """
     STATE QUERY methods
     """
-    def is_accessing_agent(self, target: str, t: float) -> bool:
-        """ checks if a satellite is currently accessing another agent at time `t`. """
-        # check if the target is the agent itself
-        if target in self.agent_name: return True
-
-        # check if target is within the list of known agents
-        if target not in self.comms_links.keys(): return False
-
-        # get next access interval
-        next_access = self.comms_links[target].lookup(t)
-
-        # check if there is a current access interval
-        return next_access is not None
-
-    def is_accessing_ground_station(self, target : str, t: float) -> bool:
-        raise NotImplementedError('TODO: implement ground station access check.')
-        # t = t/self.time_step
-        # nrows, _ = self.gs_access_data.query('`start index` <= @t & @t <= `end index` & `gndStn name` == @target').shape
-        # return bool(nrows > 0)
 
     def is_eclipse(self, t: float):
         """ checks if a satellite is currently in eclise at time `t`. """
-        return self.eclipse_data.is_active(t)
+        _,_,eclipse = self.get_orbit_state(t)
+        return bool(eclipse)
 
     def get_position(self, t: float):
         pos, _, _ = self.get_orbit_state(t)
@@ -325,7 +224,7 @@ class OrbitData:
         is_eclipse = self.is_eclipse(t)
 
         # get position data
-        position_data = self.position_data.lookup_value(t)
+        position_data = self.state_data.lookup_value(t)
         
         if not position_data:
             raise ValueError(f'No position data found for time {t} [s].')
@@ -337,661 +236,10 @@ class OrbitData:
         return (pos, vel, is_eclipse)
 
     """
-    LOAD FROM PRE-COMPUTED DATA
+    PRECOMPUTATION OF ORBIT DATA
     """
-    def from_directory(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Dict[str, 'OrbitData']:
-        """
-        Loads orbit data from a directory containig a json file specifying the details of the mission being simulated.
-        If the data has not been previously propagated, it will do so and store it in the same directory as the json file
-        being used.
-
-        The data gets stored as a dictionary, with each entry containing the orbit data of each agent in the mission 
-        indexed by the name of the agent.
-        """
-        orbitdata_specs : str = os.path.join(orbitdata_dir, 'MissionSpecs.json')
-        with open(orbitdata_specs, 'r') as scenario_specs:
-            
-            # load json file as dictionary
-            mission_dict : dict = json.load(scenario_specs)
-            data = dict()
-            spacecraft_list : List[dict] = mission_dict.get('spacecraft', None)
-            uav_list : List[dict] = mission_dict.get('uav', None)
-            ground_ops_list : List[dict] = mission_dict.get('groundOperator', None)
-
-            # compile list of all agents to load
-            agents_to_load : List[dict] = []
-            if spacecraft_list: agents_to_load.extend(spacecraft_list)
-            if uav_list: agents_to_load.extend(uav_list)
-            if ground_ops_list: agents_to_load.extend(ground_ops_list)
-
-            # load pre-computed data for each agent
-            for agent in tqdm(agents_to_load, desc='Loading and verifying orbit data', unit='agent', leave=False, disable=not printouts):
-                agent_name = agent.get('name')
-                data[agent_name] = OrbitData.load(orbitdata_dir, agent_name, simulation_duration, printouts=printouts)
-            
-            # return compiled data
-            return data
-
-    def load(orbitdata_path : str, agent_name : str, simulation_duration : float, printouts : bool = True) -> object:
-        """
-        Loads agent orbit data from pre-computed csv files in scenario directory
-        """
-        with open(os.path.join(orbitdata_path, 'MissionSpecs.json'), 'r') as mission_specs:
-            # load mission specifications json file as dictionary
-            mission_dict : dict = json.load(mission_specs)
-            
-            # get spacecraft and ground station specifications
-            spacecraft_list : List[dict] = mission_dict.get('spacecraft', None)
-            ground_station_list : List[dict] = mission_dict.get('groundStation', [])
-            ground_ops_list : List[dict] = mission_dict.get('groundOperator', [])
-            
-            # load orbit data for the specified agent
-            if agent_name in [spacecraft.get('name') for spacecraft in spacecraft_list]:
-                return OrbitData._load_spacecraft_data(agent_name, spacecraft_list, ground_station_list, ground_ops_list, orbitdata_path, mission_dict, simulation_duration, printouts)
-            elif agent_name in [gstat.get('name') for gstat in ground_ops_list]:
-                return OrbitData._load_gstat_data(agent_name, spacecraft_list, ground_station_list, ground_ops_list, orbitdata_path, mission_dict, simulation_duration, printouts)
-            else:
-                raise ValueError(f'Orbitdata for agent `{agent_name}` not found in precomputed data.')
-    
-    @staticmethod
-    def _load_spacecraft_data(
-                             agent_name : str, 
-                             spacecraft_list : List[dict], 
-                             ground_station_list: List[dict],
-                             ground_ops_list : List[dict],
-                             orbitdata_path : str,
-                             mission_dict : dict,   
-                             simulation_duration : float, 
-                             printouts : bool = True
-                            ) -> object:
-        """
-        Loads orbit data for a spacecraft from pre-computed csv files in scenario directory
-        """
-        # define progress bar settings
-        tqdm_config = {
-            'leave': False,
-            'disable': not printouts
-        }
-
-        # get scenario settings
-        scenario_dict : dict = mission_dict.get('scenario', None)
-
-        # get connectivity setting
-        connectivity : str = scenario_dict.get('connectivity', None) \
-            if scenario_dict else ConnectivityLevels.LOS.value # default to LOS if not specified
-
-        # find the desired spacecraft specifications in the mission dictionary
-        for spacecraft_idx,spacecraft in enumerate(spacecraft_list):
-            # get spacecraft name
-            name = spacecraft.get('name')
-
-            # check if this is the desired spacecraft
-            if name != agent_name: continue
-
-            # define agent folder
-            sat_id = "sat" + str(spacecraft_idx)
-            agent_folder = sat_id + '/'
-
-            # load eclipse data
-            eclipse_file = os.path.join(orbitdata_path, agent_folder, "eclipses.csv")
-            eclipse_data = pd.read_csv(eclipse_file, skiprows=range(3))
-            
-            # load position data
-            position_file = os.path.join(orbitdata_path, agent_folder, "state_cartesian.csv")
-            position_data = pd.read_csv(position_file, skiprows=range(4))
-
-            # load propagation time data
-            time_data =  pd.read_csv(position_file, nrows=3)
-            _, epoch_type, _, epoch = time_data.at[0,time_data.axes[1][0]].split(' ')
-            epoch_type = epoch_type[1 : -1]
-            epoch = float(epoch)
-            _, _, _, _, time_step = time_data.at[1,time_data.axes[1][0]].split(' ')
-            time_step = float(time_step)
-            _, _, _, _, prop_duration = time_data.at[2,time_data.axes[1][0]].split(' ')
-            prop_duration = float(prop_duration)
-
-            assert simulation_duration <= prop_duration, \
-                f'Simulation duration ({simulation_duration} days) exceeds pre-computed propagation duration ({prop_duration} days) for spacecraft `{agent_name}`.'
-
-            time_data = { "epoch": epoch, 
-                        "epoch type": epoch_type, 
-                        "time step": time_step,
-                        "duration" : simulation_duration }
-
-            # limit position and eclipse data to simulation duration
-            max_time_index = int(simulation_duration * 24 * 3600 // time_step)
-            position_data = position_data[:max_time_index+1]
-            eclipse_data = eclipse_data[:max_time_index+1]
-
-            # load inter-satellite link data
-            isl_data = dict()
-            comms_path = os.path.join(orbitdata_path, 'comm')
-            for file in tqdm(os.listdir(comms_path), desc=f'Loading ISL data for {agent_name}', unit=' file', **tqdm_config):                
-                # remove file extension and split sender and receiver
-                isl = re.sub(".csv", "", file)
-                sender, _, receiver = isl.split('_')
-                
-                # generate ISL access file path
-                isl_file = os.path.join(comms_path, file)
-
-                # load ISL data depending on whether the current spacecraft is the sender or receiver
-                if sat_id == sender:
-                    # sat_id in sender
-                    receiver_index = int(re.sub("[^0-9]", "", receiver))
-                    receiver_name = spacecraft_list[receiver_index].get('name')
-
-                    # load ISL data
-                    isl_data[receiver_name] = OrbitData.load_isl_data(isl_file, connectivity, simulation_duration, time_step)
-                    
-                elif sat_id == receiver:
-                    # sat_id in receiver
-                    sender_index = int(re.sub("[^0-9]", "", sender))
-                    sender_name = spacecraft_list[sender_index].get('name')
-                    
-                    # load ISL data
-                    isl_data[sender_name] = OrbitData.load_isl_data(isl_file, connectivity, simulation_duration, time_step)
-
-            # compile list of ground stations that are part of the desired network
-            gs_network_name = spacecraft.get('groundStationNetwork', None)
-            gs_network_station_ids : List[str] = [ gs['@id'] for gs in ground_station_list
-                                                   if gs.get('networkName', None) == gs_network_name ]
-
-            # load ground station access data
-            gs_access_data = pd.DataFrame(columns=['start index', 'end index', 'gndStn id', 'gndStn name','lat [deg]','lon [deg]'])
-            agent_orbitdata_path = os.path.join(orbitdata_path, agent_folder)
-            for file in tqdm(os.listdir(agent_orbitdata_path), desc=f'Loading ground station access data for {agent_name}', unit=' file', **tqdm_config):
-                # check if file is a ground station access file
-                if 'gndStn' not in file: continue
-
-                # get ground station index from file name
-                gndStn, _ = file.split('_')
-                gndStn_index = int(re.sub("[^0-9]", "", gndStn))
-                
-                # check if ground station is part of the desired network
-                gndStn_id = ground_station_list[gndStn_index].get('@id')
-                if gs_network_station_ids and gndStn_id not in gs_network_station_ids:
-                    continue
-
-                # load ground station access data
-                gndStn_access_file = os.path.join(orbitdata_path, agent_folder, file)
-                
-                gndStn_access_data : pd.DataFrame \
-                    = OrbitData.load_gstat_comms_data(gndStn_access_file, connectivity, simulation_duration, time_step)
-
-                nrows, _ = gndStn_access_data.shape
-
-                # get ground station information
-                gndStn_name = ground_station_list[gndStn_index].get('name')
-                gndStn_lat = ground_station_list[gndStn_index].get('latitude')
-                gndStn_lon = ground_station_list[gndStn_index].get('longitude')
-
-                # add ground station information to access data
-                gndStn_name_column = [gndStn_name] * nrows
-                gndStn_id_column = [gndStn_id] * nrows
-                gndStn_lat_column = [gndStn_lat] * nrows
-                gndStn_lon_column = [gndStn_lon] * nrows
-
-                gndStn_access_data['gndStn name'] = gndStn_name_column
-                gndStn_access_data['gndStn id'] = gndStn_id_column
-                gndStn_access_data['lat [deg]'] = gndStn_lat_column
-                gndStn_access_data['lon [deg]'] = gndStn_lon_column
-
-                # append to overall ground station access data
-                if len(gs_access_data) == 0:
-                    gs_access_data = gndStn_access_data
-                else:
-                    gs_access_data = pd.concat([gs_access_data, gndStn_access_data])
-
-            # sort gs access data by start index and remove duplicates
-            gs_access_data = gs_access_data.sort_values(by=['start index']).drop_duplicates().reset_index(drop=True)
-
-            # load agent access to ground operator if one exists
-            ground_operator_link_data : Dict[str,pd.DataFrame] = {ground_operator.get('name'): pd.DataFrame(columns=['start index', 'end index'])
-                                                                for ground_operator in ground_ops_list}
-            if gs_network_name: 
-                ground_operator_link_data[gs_network_name] = pd.concat([ground_operator_link_data[gs_network_name], gs_access_data])
-                for col in ground_operator_link_data[gs_network_name].columns:
-                    if col not in ['start index', 'end index']:
-                        ground_operator_link_data[gs_network_name].drop(columns=[col], inplace=True)
-                ground_operator_link_data[gs_network_name] = ground_operator_link_data[gs_network_name].drop_duplicates().reset_index(drop=True)
-
-            # land coverage data metrics data
-            payload = spacecraft.get('instrument', None)
-            if not isinstance(payload, list):
-                payload = [payload]
-
-            gp_access_data = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]', 'agent','instrument',
-                                                            'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
-
-            for instrument in tqdm(payload, desc=f'Loading land coverage data for {agent_name}', unit=' instrument', **tqdm_config):
-                if instrument is None: continue 
-
-                i_ins = payload.index(instrument)
-                gp_acces_by_mode = []
-
-                # TODO implement different viewing modes for payloads
-                # modes = spacecraft.get('instrument', None)
-                # if not isinstance(modes, list):
-                #     modes = [0]
-                modes = [0]
-
-                gp_acces_by_mode = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]','instrument',
-                                                            'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
-                for mode in modes:
-                    i_mode = modes.index(mode)
-                    gp_access_by_grid = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]',
-                                                            'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
-
-                    for grid in mission_dict.get('grid'):
-                        i_grid = mission_dict.get('grid').index(grid)
-                        metrics_file = os.path.join(orbitdata_path, agent_folder, f'datametrics_instru{i_ins}_mode{i_mode}_grid{i_grid}.csv')
-                        
-                        try:
-                            metrics_data = pd.read_csv(metrics_file, skiprows=range(4))
-                            
-                            nrows, _ = metrics_data.shape
-                            grid_id_column = [i_grid] * nrows
-                            metrics_data['grid index'] = grid_id_column
-
-                            if len(gp_access_by_grid) == 0:
-                                gp_access_by_grid = metrics_data
-                            else:
-                                gp_access_by_grid = pd.concat([gp_access_by_grid, metrics_data])
-                        except pd.errors.EmptyDataError:
-                            continue
-
-                    nrows, _ = gp_access_by_grid.shape
-                    gp_access_by_grid['pnt-opt index'] = [mode] * nrows
-
-                    if len(gp_acces_by_mode) == 0:
-                        gp_acces_by_mode = gp_access_by_grid
-                    else:
-                        gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
-                    # gp_acces_by_mode.append(gp_access_by_grid)
-
-                nrows, _ = gp_acces_by_mode.shape
-                gp_access_by_grid['instrument'] = [instrument['name']] * nrows
-                # gp_access_data[ins_name] = gp_acces_by_mode
-
-                if len(gp_access_data) == 0:
-                    gp_access_data = gp_acces_by_mode
-                else:
-                    gp_access_data = pd.concat([gp_access_data, gp_acces_by_mode])
-            
-            nrows, _ = gp_access_data.shape
-            gp_access_data['agent name'] = [spacecraft['name']] * nrows
-
-            # limit gp access data to simulation duration
-            gp_access_data = gp_access_data[gp_access_data['time index'] <= max_time_index]
-
-            grid_data_compiled = []
-            for grid in tqdm(mission_dict.get('grid'), desc=f'Loading grid data for {agent_name}', unit=' grid', **tqdm_config):
-                grid : dict
-                i_grid = mission_dict.get('grid').index(grid)
-                
-                if grid.get('@type').lower() == 'customgrid':
-                    grid_file = grid.get('covGridFilePath')
-                    
-                elif grid.get('@type').lower() == 'autogrid':
-                    grid_file = os.path.join(orbitdata_path, f'grid{i_grid}.csv')
-                else:
-                    raise NotImplementedError(f"Loading of grids of type `{grid.get('@type')} not yet supported.`")
-
-                grid_data = pd.read_csv(grid_file)
-                nrows, _ = grid_data.shape
-                grid_data['grid index'] = [i_grid] * nrows
-                grid_data['GP index'] = [i for i in range(nrows)]
-                grid_data_compiled.append(grid_data)
-
-            return OrbitData(name, gs_network_name, time_data, eclipse_data, position_data, isl_data, ground_operator_link_data, gs_access_data, gp_access_data, grid_data_compiled, printouts)
-        
-        raise ValueError(f'Orbitdata for satellite `{agent_name}` not found in precalculated data.')
-    
-    @staticmethod
-    def load_isl_data(isl_file : str, connectivity : str, duration_days : float, time_step : float) -> pd.DataFrame:
-        if connectivity.upper() == ConnectivityLevels.FULL.value:
-            # fully connected network; modify connectivity 
-            columns = ['start index', 'end index']
-            
-            # generate mission-long connectivity access
-            duration = timedelta(days=float(duration_days))
-            data = [[0.0, duration.total_seconds() // time_step + 1]]
-            assert data[0][1] > 0.0
-
-            # return modified connectivity
-            isl_data = pd.DataFrame(data=data, columns=columns)
-
-        elif connectivity.upper() == ConnectivityLevels.LOS.value:
-            # line-of-sight driven connectivity; load connectivity and store data
-            # TODO if ISL definition is modified in orbitpy, make sure this case is updated accordingly
-            isl_data = pd.read_csv(isl_file, skiprows=range(3))
-
-            # limit ISL data to simulation duration
-            max_time_index = int(duration_days * 24 * 3600 // time_step)
-            isl_data = isl_data[isl_data['start index'] <= max_time_index]
-            isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
-
-        elif connectivity.upper() == ConnectivityLevels.ISL.value:
-            # inter-satellite link driven connectivity; load connectivity and store data
-            # TODO if ISL definition is modified in orbitpy, make sure this case is updated accordingly
-            isl_data = pd.read_csv(isl_file, skiprows=range(3))
-
-            # limit ISL data to simulation duration
-            max_time_index = int(duration_days * 24 * 3600 // time_step)
-            isl_data = isl_data[isl_data['start index'] <= max_time_index]
-            isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
-
-        elif connectivity.upper() == ConnectivityLevels.GS.value:
-            # ground station-only connectivity; create empty dataframe
-            columns = ['start index', 'end index']
-            isl_data = pd.DataFrame(data=[], columns=columns)
-
-        elif connectivity.upper() == ConnectivityLevels.NONE.value:
-            # no inter-agent connectivity; create empty dataframe
-            columns = ['start index', 'end index']
-            isl_data = pd.DataFrame(data=[], columns=columns)
-        else:
-            # fallback case for unsupported connectivity levels
-            raise ValueError(f'Unsupported connectivity level: {connectivity}')
-                
-        # check if ISL data is empty
-        if isl_data.empty:
-            # no ISL access during simulation duration; create empty dataframe
-            columns = ['start index', 'end index']
-            isl_data = pd.DataFrame(data=[], columns=columns)
-
-        # return ISL data
-        return isl_data
-    
-    @staticmethod
-    def load_gstat_comms_data(gndStn_access_file : str, connectivity : str, simulation_duration : float, time_step : float) -> pd.DataFrame:
-        if connectivity.upper() == ConnectivityLevels.FULL.value:
-            # fully connected network; modify connectivity 
-            columns = ['start index', 'end index']
-            
-            # generate mission-long connectivity access                    
-            data = [[0.0, simulation_duration * 24 * 3600 // time_step + 1]]  # full connectivity from start to end of mission
-            assert data[0][1] > 0.0
-
-            # return modified connectivity
-            gndStn_access_data = pd.DataFrame(data=data, columns=columns)
-        
-        elif connectivity.upper() == ConnectivityLevels.LOS.value:
-            # line-of-sight driven connectivity; load ground station access data
-            gndStn_access_data = pd.read_csv(gndStn_access_file, skiprows=range(3))
-
-            # limit ground station access data to simulation duration
-            max_time_index = int(simulation_duration * 24 * 3600 // time_step)
-            gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
-            gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
-        
-        elif connectivity.upper() == ConnectivityLevels.GS.value:
-            # ground station-only connectivity; load ground station access data
-            gndStn_access_data = pd.read_csv(gndStn_access_file, skiprows=range(3))
-
-            # limit ground station access data to simulation duration
-            max_time_index = int(simulation_duration * 24 * 3600 // time_step)
-            gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
-            gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
-
-        elif connectivity.upper() == ConnectivityLevels.ISL.value:
-            # inter-satellite link-driven connectivity; create empty dataframe
-            columns = ['start index', 'end index']
-            gndStn_access_data = pd.DataFrame(data=[], columns=columns)
-
-        elif connectivity.upper() == ConnectivityLevels.NONE.value:
-            # no inter-agent connectivity; create empty dataframe
-            columns = ['start index', 'end index']
-            gndStn_access_data = pd.DataFrame(data=[], columns=columns)
-
-        else:
-            # fallback; unsupported connectivity level
-            raise ValueError(f'Unsupported connectivity level: {connectivity}.')
-        
-        # return ground station access data
-        return gndStn_access_data
-
-    @staticmethod
-    def _load_gstat_data(
-                             agent_name : str, 
-                             spacecraft_list : List[dict], 
-                             ground_station_list: List[dict],
-                             ground_ops_list: List[dict],
-                             orbitdata_path : str,
-                             mission_dict : dict,
-                             simulation_duration : float,
-                             printouts : bool = True
-                            ) -> object:
-        # define progress bar settings
-        tqdm_config = {
-            'leave': False,
-            'disable': not printouts
-        }
-        
-        # get scenario settings
-        scenario_dict : dict = mission_dict.get('scenario', None)
-
-        # get connectivity setting
-        connectivity : str = scenario_dict.get('connectivity', None) \
-            if scenario_dict else ConnectivityLevels.LOS.value # default to LOS if not specified
-        
-        # find the desired ground operator specifications in the mission dictionary
-        for ground_ops in ground_ops_list:
-             # get spacecraft name
-            name = ground_ops.get('name')
-
-            # check if this is the desired spacecraft
-            if name != agent_name: continue
-
-            # compile list of relevant ground stations for this ground operator
-            gs_network_station_indices : List[str] = [ idx for idx,gs in enumerate(ground_station_list)
-                                                   if gs.get('networkName', None) == name ]
-
-            # validate that a network name and a list of ground stations is assigned
-            assert gs_network_station_indices, f'No ground station network found for ground operator `{agent_name}`.'
-
-            # compile time data
-            time_data = None
-            for sat_idx, spacecraft in enumerate(spacecraft_list):
-                # spacecraft is not part of the ground station network; skip
-                if spacecraft.get('groundStationNetwork', None) != name: continue
-
-                # load access time for this spacecraft with each ground_station in the network
-                for file in os.listdir(os.path.join(orbitdata_path,"sat" + str(sat_idx))):
-                    if 'state' not in file: continue
-
-                    # load propagation time data
-                    agent_access_df = os.path.join(orbitdata_path, "sat" + str(sat_idx), file)
-                    time_data =  pd.read_csv(agent_access_df, nrows=3)
-                    _, epoch_type, _, epoch = time_data.at[0,time_data.axes[1][0]].split(' ')
-                    epoch_type = epoch_type[1 : -1]
-                    epoch = float(epoch)
-                    _, _, _, _, time_step = time_data.at[1,time_data.axes[1][0]].split(' ')
-                    time_step = float(time_step)
-                    _, _, _, _, prop_duration = time_data.at[2,time_data.axes[1][0]].split(' ')
-                    prop_duration = float(prop_duration)
-
-                    assert simulation_duration <= prop_duration, \
-                        f'Simulation duration ({simulation_duration} days) exceeds pre-computed propagation duration ({prop_duration} days) for spacecraft `{agent_name}`.'
-
-                    time_data = { "epoch": epoch, 
-                                "epoch type": epoch_type, 
-                                "time step": time_step,
-                                "duration" : simulation_duration }
-
-                    break # only need to load time data once
-
-                if time_data is not None: break # only need to load time data once
-
-            # ensure time data was found
-            assert time_data is not None, \
-                f'No propagation data found for any spacecraft in ground station network `{agent_name}`.'
-
-            # calculate number of propagation steps
-            n_steps = int(ceil(time_data.get('duration') * 24 * 3600 / time_data.get('time step')))
-
-            # load eclipse data
-            # TODO implement eclipse data for ground stations, currently empty
-            eclipse_data = pd.DataFrame(columns=['start index', 'end index'])
-
-            # calculate position data
-            # TODO implement position data for ground stations, currently empty.
-            # Since ground operators consist of a network of ground stations, and the ground stations are static, 
-            # there is no single position data to represent the entire network.
-            position_data = pd.DataFrame(columns=['time index','x [km]','y [km]','z [km]','vx [km/s]','vy [km/s]','vz [km/s]'])
-
-            # compile satellite link interval data
-            satellite_link_data : Dict[str, pd.DataFrame] = dict()
-            for sat_idx, spacecraft in enumerate(spacecraft_list):
-                # spacecraft is not part of the ground station network; skip
-                if spacecraft.get('groundStationNetwork', None) != name: continue
-
-                # initiate access data for this spacecraft
-                satellite_access_data = pd.DataFrame(columns=['start index', 'end index'])
-
-                # load access time for this spacecraft with each ground_station in the network
-                for file in os.listdir(os.path.join(orbitdata_path,"sat" + str(sat_idx))):
-                    if 'gndStn' not in file: continue
-                    
-                    # get ground station index from file name
-                    gndStn_idx = int(re.sub("[^0-9]", "", file))
-
-                    # check if ground station is part of the desired network
-                    if gndStn_idx not in gs_network_station_indices: continue 
-
-                    # load ground station access data
-                    # agent_access_file = os.path.join(orbitdata_path, "sat" + str(sat_idx), file)
-                    if connectivity.upper() == ConnectivityLevels.FULL.value:
-                        # fully connected network; modify connectivity 
-                        columns = ['start index', 'end index']
-                        
-                        # generate mission-long connectivity access                    
-                        data = [[0.0, simulation_duration * 24 * 3600 // time_step + 1]]  # full connectivity from start to end of mission
-                        assert data[0][1] > 0.0
-
-                        # return modified connectivity
-                        agent_access_df = pd.DataFrame(data=data, columns=columns)
-                    
-                    elif connectivity.upper() == ConnectivityLevels.LOS.value:
-                        # line-of-sight driven connectivity; load ground station access data
-                        agent_access_file = os.path.join(orbitdata_path, "sat" + str(sat_idx), file)
-                        agent_access_df = pd.read_csv(agent_access_file, skiprows=range(3))
-
-                        # limit ground station access data to simulation duration
-                        max_time_index = int(simulation_duration * 24 * 3600 // time_step)
-                        agent_access_df = agent_access_df[agent_access_df['start index'] <= max_time_index]
-                        agent_access_df.loc[agent_access_df['end index'] > max_time_index, 'end index'] = max_time_index
-                    
-                    elif connectivity.upper() == ConnectivityLevels.GS.value:
-                        # ground station-only connectivity; load ground station access data
-                        agent_access_file = os.path.join(orbitdata_path, "sat" + str(sat_idx), file)
-                        agent_access_df = pd.read_csv(agent_access_file, skiprows=range(3))
-
-                        # limit ground station access data to simulation duration
-                        max_time_index = int(simulation_duration * 24 * 3600 // time_step)  
-                        agent_access_df = agent_access_df[agent_access_df['start index'] <= max_time_index]
-                        agent_access_df.loc[agent_access_df['end index'] > max_time_index, 'end index'] = max_time_index
-
-                    elif connectivity.upper() == ConnectivityLevels.ISL.value:
-                        # inter-satellite link-driven connectivity; create empty dataframe
-                        columns = ['start index', 'end index']
-                        agent_access_df = pd.DataFrame(data=[], columns=columns)
-
-                    elif connectivity.upper() == ConnectivityLevels.NONE.value:
-                        # no inter-agent connectivity; create empty dataframe
-                        columns = ['start index', 'end index']
-                        agent_access_df = pd.DataFrame(data=[], columns=columns)
-
-                    else:
-                        # fallback; unsupported connectivity level
-                        raise ValueError(f'Unsupported connectivity level: {connectivity}.')
-
-                    satellite_access_data = pd.concat([satellite_access_data, agent_access_df])
-
-                # sort by start index and remove duplicates
-                satellite_access_data = satellite_access_data.sort_values(by='start index').drop_duplicates().reset_index(drop=True)
-
-                # merge any overlapping intervals
-                satellite_access_data = OrbitData.merge_overlapping_intervals(satellite_access_data, merge_touching=True)
-                
-                if satellite_access_data.empty:
-                    # no access during simulation duration; create empty dataframe
-                    columns = ['start index', 'end index']
-                    satellite_access_data = pd.DataFrame(data=[], columns=columns)
-                
-                # save access data for this spacecraft
-                satellite_link_data[spacecraft.get('name')] = satellite_access_data
-            
-            # compile ground operator link interval data; assume constant access to all other ground operators
-            ground_operator_link_data : Dict[str,pd.DataFrame] = {ground_operator.get('name'): pd.DataFrame(columns=['start index', 'end index'], data=[(0, n_steps-1)])
-                                                                  for ground_operator in ground_ops_list
-                                                                  if ground_operator.get('name') != name}
-
-            # load ground station access data
-            columns=['start index', 'end index', 'gndStn id', 'gndStn name','lat [deg]','lon [deg]']
-            data = [(0, n_steps, ground_station.get('@id'), ground_station.get('name'), ground_station.get('latitude'), ground_station.get('longitude'))
-                    for ground_station in ground_station_list
-                    if ground_station.get('networkName', None) == name]
-            gs_access_data = pd.DataFrame(data=data, columns=columns)
-
-            # Ground Operators have no sensing capability; create empty ground point coverage data
-            gp_access_data = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]', 'agent','instrument',
-                                                            'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
-        
-            # compile coverage grid information
-            grid_data_compiled = []
-            for grid in mission_dict.get('grid'):
-                grid : dict
-                i_grid = mission_dict.get('grid').index(grid)
-                
-                if grid.get('@type').lower() == 'customgrid':
-                    grid_file = grid.get('covGridFilePath')
-                    
-                elif grid.get('@type').lower() == 'autogrid':
-                    grid_file = os.path.join(orbitdata_path, f'grid{i_grid}.csv')
-                else:
-                    raise NotImplementedError(f"Loading of grids of type `{grid.get('@type')} not yet supported.`")
-
-                grid_data = pd.read_csv(grid_file)
-                nrows, _ = grid_data.shape
-                grid_data['grid index'] = [i_grid] * nrows
-                grid_data['GP index'] = [i for i in range(nrows)]
-                grid_data_compiled.append(grid_data)
-
-            return OrbitData(agent_name, agent_name, time_data, eclipse_data, position_data, satellite_link_data, ground_operator_link_data, gs_access_data, gp_access_data, grid_data_compiled, printouts)
-                
-        raise ValueError(f'Orbitdata for satellite `{agent_name}` not found in precalculated data.')
-    
-    @staticmethod
-    def merge_overlapping_intervals(df: pd.DataFrame, merge_touching: bool = True) -> pd.DataFrame:
-        # extract relevant columns and sort by start index
-        d = df[["start index", "end index"]].copy()
-        d = d.sort_values("start index", kind="mergesort").reset_index(drop=True)
-
-        # early exit if empty
-        if d.empty: return d
-
-        if merge_touching:
-            # treat [a,b] and [b,c] as overlapping
-            new_group = d["start index"].gt(d["end index"].cummax().shift(fill_value=d.loc[0, "end index"]))
-        else:
-            # touching is NOT overlapping: require strictly greater than previous max end
-            new_group = d["start index"].ge(d["end index"].cummax().shift(fill_value=d.loc[0, "end index"]))
-
-        grp = new_group.cumsum()
-
-        out = d.groupby(grp, as_index=False).agg(start=("start index", "min"), end=("end index", "max"))
-        
-        # rename columns to original names
-        out.rename(columns={"start": "start index", "end": "end index"}, inplace=True)
-
-        # return 
-        return out
-
     def precompute(scenario_specs : dict, overwrite : bool = False, printouts: bool = True) -> str:
-        """
-        Pre-calculates coverage and position data for a given scenario
-        """
+        """ Pre-calculates coverage and position data for all agents described in the scenario specifications """
         
         # get desired orbit data path
         scenario_dir = scenario_specs['scenario']['scenarioPath']
@@ -1110,6 +358,12 @@ class OrbitData:
             mission_specs.write(json.dumps(scenario_specs, indent=4))
             assert os.path.exists(os.path.join(data_dir,'MissionSpecs.json')), \
                 'Mission specifications not saved correctly!'
+            
+        if changes_to_scenario or overwrite:
+            # preprocess data and store as binarys for faster loading in the future
+            if printouts: tqdm.write("Preprocessing orbit data...")
+            OrbitData.preprocess(data_dir, scenario_specs['duration'], overwrite=True, printouts=printouts)
+            if printouts: tqdm.write("Preprocessing done!")
             
         # restore original duration value
         scenario_specs['duration'] = original_duration
@@ -1248,57 +502,1241 @@ class OrbitData:
         return grid_path
     
     """
-    COVERAGE Metrics
+    DATA PREPROCESSING METHODS
     """
-    def calculate_percent_coverage(self) -> float:
-        n_observed = 0
-        n_points = sum([len(grid) for grid in self.grid_data])
-        t_0 = time.perf_counter()
+    @staticmethod
+    def preprocess(orbitdata_dir: str, simulation_duration : float, overwrite : bool = True, printouts : bool = True) -> dict:
+        """
+        Loads orbit data from a directory containig a json file specifying the details of the mission being simulated.
+        Data must have already been pre-computed and stored in the directory using `orbitpy`'s `csv` output option. 
+        The method processes the raw `csv` data, converts it to binary format, and stores it in a structured directory 
+        format for faster loading in the future.
 
-        # for grid in self.grid_data:
-        #     grid : pd.DataFrame
+        The resulting processed data gets stored as a dictionary, with each entry containing the orbit data of each agent 
+        in the mission indexed by the name of the agent.
+        """
 
-        #     for lat,lon,grid_index,gp_index in grid.values:
+        # define binary output directory
+        bin_dir = os.path.join(orbitdata_dir, 'bin')
 
-        #         accesses = [(t_img,lat,lon,lat_img,lon_img)
-        #                     for t_img, gp_index_img, _, lat_img, lon_img, _, _, _, _, grid_index_img, *_ 
-        #                     in self.gp_access_data.values
-        #                     if abs(lat - lat_img) < 1e-3
-        #                     and abs(lon - lon_img) < 1e-3
-        #                     and gp_index == gp_index_img 
-        #                     and grid_index == grid_index_img]
+        # check if data has already been processed
+        if os.path.exists(bin_dir) and overwrite:
+            # path exists and overwrite was enabled; remove existing data before re-processing
+            for root, dirs, files in os.walk(bin_dir, topdown=False):
+                for name in files:
+                    os.remove(os.path.join(root, name))
+                for name in dirs:
+                    os.rmdir(os.path.join(root, name))
+        else:
+            # create binary output directory if it does not exist
+            os.makedirs(bin_dir, exist_ok=True)
+
+        # load raw data as data frames
+        time_specs, agents_loaded, eclipse_dfs, state_dfs, \
+            gs_access_dfs, comms_link_dfs, gp_access_dfs, \
+                grid_data_dfs = OrbitData.__load_csv_data(orbitdata_dir, simulation_duration, printouts)
+            
+        # create instances of OrbitData for each agent and store in dictionary indexed by agent name
+        schemas = dict()
+        for *__,agent_name,gs_network_name in agents_loaded: 
+            # extract relevant data for this agent
+            agent_eclipse_data = eclipse_dfs[agent_name]
+            agent_state_data = state_dfs[agent_name]
+            agent_gs_access_data = gs_access_dfs[agent_name]
+            agent_gp_access_data = gp_access_dfs[agent_name]
+            agent_comms_link_data = { u if u != agent_name else v : comms_links
+                                    for (u,v), comms_links in comms_link_dfs.items()
+                                    if agent_name in (u,v) }                
+            
+            # define agent-specific binary output directory
+            agent_bin_dir = os.path.join(bin_dir, agent_name)
+            
+            # print interval data to binaries 
+            eclipse_meta = OrbitData.__write_interval_data_table(agent_eclipse_data, agent_bin_dir, 'eclipse', time_specs['time step'], allow_overwrite=True)
+            gs_meta = OrbitData.__write_interval_data_table(agent_gs_access_data, agent_bin_dir, 'gs_access', time_specs['time step'], allow_overwrite=True)
+
+            # print comms link data to binaries
+            agent_comms_bin_dir = os.path.join(agent_bin_dir, 'comm')
+            comms_metas = dict()
+            for link_name, comms_links in agent_comms_link_data.items():
+                comms_meta = OrbitData.__write_interval_data_table(comms_links, agent_comms_bin_dir, link_name + '_comm', time_specs['time step'], allow_overwrite=True)
+                comms_metas[link_name] = comms_meta
+
+            # print agent position data to binaries
+            state_meta = OrbitData.__write_state_table(agent_state_data, agent_bin_dir, 'cartesian_state', time_specs['time step'], allow_overwrite=True)
+            
+            # print agent's groundpoint coverage data to binaries
+            gp_access_meta = OrbitData.__write_access_table(agent_gp_access_data, agent_bin_dir, 'gp_access', time_step=time_specs['time step'], n_steps=time_specs['n_steps'], allow_overwrite=True)
+
+            # print grid data to binaries
+            grid_meta = OrbitData.__write_grid_table(grid_data_dfs, agent_bin_dir, 'grid', allow_overwrite=True)
+
+            # compile schema for this agent and store in dictionary
+            schemas[agent_name] = {
+                'gs_network_name': gs_network_name,
+                'time_specs' : time_specs,
+                'dir' : agent_bin_dir,
+                'eclipse': eclipse_meta,
+                'gs_access': gs_meta,
+                'comms_links': comms_metas,
+                'state': state_meta,
+                'gp_access': gp_access_meta,
+                'grid': grid_meta
+            }
+            
+        with open(os.path.join(bin_dir, "meta.json"), "w") as f:
+            json.dump(schemas, f, indent=4)
+
+        # return compiled schemas for all agents
+        return schemas
+        
+    def __load_csv_data(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Tuple:
+        """ 
+        Loads precomputed `csv` outputs from `orbitpy` and collects it to a tuple of dictionaries 
+         maping agents to a `pd.DataFrame` containing that agent's data for each type of data 
+          (eclipse, position, ground station access, comms links, ground point access, grid data).
+        """
+        # ensure that the provided directory exists
+        if not os.path.exists(orbitdata_dir):
+            raise FileNotFoundError(f'Orbit data directory `{orbitdata_dir}` does not exist.')
+
+        # define progress bar settings
+        tqdm_config = {
+            'leave': False,
+            'disable': not printouts
+        }
+
+        # define path to mission specifications json file
+        orbitdata_specs : str = os.path.join(orbitdata_dir, 'MissionSpecs.json')
+
+        # open and load mission specifications file
+        with open(orbitdata_specs, 'r') as scenario_specs:            
+            mission_dict : dict = json.load(scenario_specs)
+            
+        # extract agent information from mission specifications
+        spacecraft_list : List[dict] = mission_dict.get('spacecraft', None)
+        ground_ops_list : List[dict] = mission_dict.get('groundOperator', [])
+
+        # compile list of ground stations in the scenario (if any)
+        ground_station_list : List[dict] = mission_dict.get('groundStation', [])
+
+        # get scenario settings
+        scenario_dict : dict = mission_dict.get('scenario', None)
+
+        # get connectivity setting
+        connectivity : str = scenario_dict.get('connectivity', None) \
+            if scenario_dict else ConnectivityLevels.LOS.value # default to LOS if not specified
+
+        # compile list of all agents to load
+        agents_loaded : List[dict] = []
+        for i,spacecraft_dict in enumerate(spacecraft_list):
+            spacecraft_name : str = spacecraft_dict['name']
+            gs_network_name = spacecraft_dict.get('groundStationNetwork', None)
+            agents_loaded.append(('spacecraft', i, spacecraft_name, gs_network_name))
+        for i,ground_op_dict in enumerate(ground_ops_list):
+            ground_op_name : str = ground_op_dict['name']
+            agents_loaded.append(('groundOperator', i, ground_op_name, ground_op_name))
+
+        # load time specifications
+        position_file = os.path.join(orbitdata_dir, f"sat{agents_loaded[0][1]}", "state_cartesian.csv")
+        time_specs =  pd.read_csv(position_file, nrows=3)
+        _, epoch_type, _, epoch = time_specs.at[0,time_specs.axes[1][0]].split(' ')
+        epoch_type = epoch_type[1 : -1]
+        epoch = float(epoch)
+        _, _, _, _, time_step = time_specs.at[1,time_specs.axes[1][0]].split(' ')
+        time_step = float(time_step)
+        _, _, _, _, prop_duration = time_specs.at[2,time_specs.axes[1][0]].split(' ')
+        prop_duration = float(prop_duration)
+        n_steps = int(simulation_duration * 24 * 3600 // time_step) + 1
+
+        assert simulation_duration <= prop_duration, \
+            f'Simulation duration ({simulation_duration} days) exceeds pre-computed propagation duration ({prop_duration} days).'
+
+        # compile time specifications into dictionary
+        time_specs = {"epoch": epoch, 
+                      "epoch type": epoch_type, 
+                      "time step": time_step,
+                      "duration" : simulation_duration,
+                      "n_steps": n_steps 
+                    }
+        
+        # load agent eclipse data 
+        eclipse_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_eclipse_data(orbitdata_dir, agents_loaded, simulation_duration, time_step)
+
+        # load agent position/vel data
+        state_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_state_data(orbitdata_dir, agents_loaded, simulation_duration, time_step)
+
+        # load ground station access data
+        gs_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gs_access_data(orbitdata_dir, agents_loaded, simulation_duration, time_step, ground_station_list, connectivity, tqdm_config)
+
+        # load comms link data
+        comms_link_dfs : Dict[tuple, pd.DataFrame] = OrbitData.__load_agent_comms_link_data(orbitdata_dir, agents_loaded, simulation_duration, gs_access_dfs, time_step, connectivity)
+
+        # load ground point access data
+        gp_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gp_access_data(orbitdata_dir, agents_loaded, mission_dict, simulation_duration, time_step, spacecraft_list, tqdm_config)
+
+        # load grid data
+        grid_data_dfs : List[pd.DataFrame] = OrbitData.__load_grid_data(orbitdata_dir, mission_dict)
+
+        # return compiled data
+        return time_specs, agents_loaded, eclipse_dfs, state_dfs, gs_access_dfs, comms_link_dfs, gp_access_dfs, grid_data_dfs
+
+
+    @staticmethod
+    def __load_agent_eclipse_data(orbitdata_path : str, 
+                                  agents_to_load : List[tuple],  
+                                  simulation_duration : float,
+                                  time_step : float
+                                ) -> Dict[str, pd.DataFrame]:
+        # initialize eclipse data 
+        data = dict()
+        
+        # iterate through agents to load
+        for agent_type, spacecraft_idx, agent_name, _ in agents_to_load:
+            # load data by agent type
+            if agent_type == 'spacecraft':
+                # define agent folder
+                sat_id = "sat" + str(spacecraft_idx)
+                agent_folder = sat_id + '/' 
+            
+                # load eclipse data
+                eclipse_file = os.path.join(orbitdata_path, agent_folder, "eclipses.csv")
+                eclipse_data = pd.read_csv(eclipse_file, skiprows=range(3))
+
+                # reduce data to only include intervals within the simulation duration
+                max_time_index = int(simulation_duration * 24 * 3600 // time_step)
+                eclipse_data = eclipse_data[eclipse_data['start index'] <= max_time_index]
+                eclipse_data.loc[eclipse_data['end index'] > max_time_index, 'end index'] = max_time_index
                 
-        #         if accesses:
-        #             n_observed += 1
+            elif agent_type == 'groundOperator':
+                # no eclipse data for ground operators; create empty dataframe
+                eclipse_data = pd.DataFrame(columns=['start index', 'end index'])
 
-        gp_observed = { (lat,lon) 
-                        for grid in self.grid_data
-                        for lat,lon,grid_index,gp_index in grid.values
-                        for _, gp_index_img, _, _, _, _, _, _, _, grid_index_img, *_ in self.gp_access_data.values
-                        if gp_index == gp_index_img 
-                        and grid_index == grid_index_img}
-        n_observed = len(gp_observed)
+            else:
+                raise ValueError(f'Unknown agent type `{agent_type}` for agent `{agent_name}`.')
+            
+            # store in dictionary
+            data[agent_name] = eclipse_data
         
-        dt = time.perf_counter() - t_0        
-        
-        return n_points, n_observed, float(n_observed) / float(n_points)
-
-"""
-TESTING
-"""
-if __name__ == '__main__':
-    scenario_dir = './scenarios/sim_test/'
+        # return compiled eclipse data
+        return data
     
-    orbit_data_list = OrbitData.from_directory(scenario_dir)
+    @staticmethod
+    def __load_agent_state_data(orbitdata_path : str, 
+                                agents_to_load : List[tuple],  
+                                simulation_duration : float,
+                                time_step : float
+                            ) -> Dict[str, pd.DataFrame]:
+        # initialize state data 
+        data = dict()
+        
+        # iterate through agents to load
+        for agent_type, spacecraft_idx, agent_name, _ in agents_to_load:
+            # load data by agent type
+            if agent_type == 'spacecraft':
+                # define agent folder
+                sat_id = "sat" + str(spacecraft_idx)
+                agent_folder = sat_id + '/' 
+            
+                ## load agent position and velocity state data
+                state_file = os.path.join(orbitdata_path, agent_folder, "state_cartesian.csv")
+                state_data = pd.read_csv(state_file, skiprows=range(4))
 
-    # expected val: (grid, point) = 0, 0
-    for agent in orbit_data_list:
-        lat = 1.0
-        lon = 158.0
-        t = 210.5
+                # reduce data to only include intervals within the simulation duration
+                max_time_index = int(simulation_duration * 24 * 3600 // time_step)
+                state_data = state_data[state_data['time index'] <= max_time_index]
+                
+            elif agent_type == 'groundOperator':
+                # no state data for ground operators; create empty dataframe
+                state_data = pd.DataFrame(columns=['time index','x [km]','y [km]','z [km]','vx [km/s]','vy [km/s]','vz [km/s]'])
 
-        grid, point, gp_lat, gp_lon = orbit_data_list[agent].find_gp_index(lat, lon)
-        print(f'({lat}, {lon}) = G{grid}, P{point}, Lat{gp_lat}, Lon{gp_lon}')
+            else:
+                raise ValueError(f'Unknown agent type `{agent_type}` for agent `{agent_name}`.')
+            
+            # store in dictionary
+            data[agent_name] = state_data
+        
+        # return compiled state data
+        return data
+                
+    @staticmethod
+    def __load_agent_gs_access_data(orbitdata_path : str, 
+                                   agents_to_load : List[tuple],  
+                                   simulation_duration : float,
+                                   time_step : float,
+                                   ground_station_list : List[dict],
+                                   connectivity : str,
+                                   tqdm_config : dict,
+                                ) -> Dict[str, pd.DataFrame]:
+        # initialize ground station access data
+        data = dict()
 
-        print(orbit_data_list[agent].is_accessing_ground_point(lat, lon, t))
-        break
+        for agent_type, spacecraft_idx, agent_name, gs_network_name in agents_to_load:
+            if agent_type == 'spacecraft':
+                # define agent folder
+                sat_id = "sat" + str(spacecraft_idx)
+                agent_folder = sat_id + '/' 
+
+                # compile list of ground stations that are part of the desired network                
+                gs_network_station_ids : List[str] = [ gs['@id'] for gs in ground_station_list
+                                                    if gs.get('networkName', None) == gs_network_name ]
+
+                # create empty dataframe to store ground station access data for this agent
+                gs_access_data = pd.DataFrame(columns=['start index', 'end index', 'gndStn id', 'gndStn name','lat [deg]','lon [deg]'])
+                
+                # define path to agent's orbit data
+                agent_orbitdata_path = os.path.join(orbitdata_path, agent_folder)
+
+                # load ground station access data
+                for file in tqdm(os.listdir(agent_orbitdata_path), desc=f'Loading ground station access data for {agent_name}', unit=' file', **tqdm_config):
+                    # check if file is a ground station access file
+                    if 'gndStn' not in file: continue
+
+                    # get ground station index from file name
+                    gndStn, _ = file.split('_')
+                    gndStn_index = int(re.sub("[^0-9]", "", gndStn))
+                    
+                    # check if ground station is part of the desired network
+                    gndStn_id = ground_station_list[gndStn_index].get('@id')
+                    if gs_network_station_ids and gndStn_id not in gs_network_station_ids:
+                        continue
+
+                    # load ground station access data
+                    gndStn_access_file = os.path.join(orbitdata_path, agent_folder, file)
+                    
+                    gndStn_access_data : pd.DataFrame \
+                        = OrbitData.__load_gs_access_data(gndStn_access_file, connectivity, simulation_duration, time_step)
+
+                    nrows, _ = gndStn_access_data.shape
+
+                    # get ground station information
+                    gndStn_name = ground_station_list[gndStn_index].get('name')
+                    gndStn_lat = ground_station_list[gndStn_index].get('latitude')
+                    gndStn_lon = ground_station_list[gndStn_index].get('longitude')
+
+                    # add ground station information to access data
+                    gndStn_name_column = [gndStn_name] * nrows
+                    gndStn_id_column = [gndStn_id] * nrows
+                    gndStn_lat_column = [gndStn_lat] * nrows
+                    gndStn_lon_column = [gndStn_lon] * nrows
+
+                    gndStn_access_data['gndStn name'] = gndStn_name_column
+                    gndStn_access_data['gndStn id'] = gndStn_id_column
+                    gndStn_access_data['lat [deg]'] = gndStn_lat_column
+                    gndStn_access_data['lon [deg]'] = gndStn_lon_column
+
+                    # append to overall ground station access data
+                    if len(gs_access_data) == 0:
+                        gs_access_data = gndStn_access_data
+                    else:
+                        gs_access_data = pd.concat([gs_access_data, gndStn_access_data])
+
+                # sort gs access data by start index and remove duplicates
+                gs_access_data = gs_access_data.sort_values(by=['start index']).drop_duplicates().reset_index(drop=True)
+
+            elif agent_type == 'groundOperator':
+                # ground operator agent has constant contact with all ground stations in their network
+                
+                # calculate number of propagation steps
+                n_steps = int(simulation_duration  * 24 * 3600 // time_step) + 1
+
+                # create access intervals spanning the entire simulation duration for each ground station in the network
+                columns=['start index', 'end index', 'gndStn id', 'gndStn name','lat [deg]','lon [deg]']
+                access_data = [(0, n_steps, ground_station.get('@id'), ground_station.get('name'), ground_station.get('latitude'), ground_station.get('longitude'))
+                        for ground_station in ground_station_list
+                    if ground_station.get('networkName', None) == agent_name]
+                
+                # create dataframe from access data
+                gs_access_data = pd.DataFrame(data=access_data, columns=columns)
+                
+            else:
+                raise ValueError(f'Unknown agent type `{agent_type}` for agent `{agent_name}`.')
+
+            # store in dictionary
+            data[agent_name] = gs_access_data
+            
+        # return compiled data
+        return data
+    
+    @staticmethod
+    def __load_gs_access_data(gs_access_file : str, connectivity : str, simulation_duration : float, time_step : float) -> pd.DataFrame:
+        if connectivity.upper() == ConnectivityLevels.FULL.value:
+            # fully connected network; modify connectivity 
+            columns = ['start index', 'end index']
+            
+            # generate mission-long connectivity access                    
+            data = [[0.0, simulation_duration * 24 * 3600 // time_step + 1]]  # full connectivity from start to end of mission
+            assert data[0][1] > 0.0
+
+            # return modified connectivity
+            gndStn_access_data = pd.DataFrame(data=data, columns=columns)
+        
+        elif connectivity.upper() == ConnectivityLevels.LOS.value:
+            # line-of-sight driven connectivity; load ground station access data
+            gndStn_access_data = pd.read_csv(gs_access_file, skiprows=range(3))
+
+            # limit ground station access data to simulation duration
+            max_time_index = int(simulation_duration * 24 * 3600 // time_step)
+            gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
+            gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
+        
+        elif connectivity.upper() == ConnectivityLevels.GS.value:
+            # ground station-only connectivity; load ground station access data
+            gndStn_access_data = pd.read_csv(gs_access_file, skiprows=range(3))
+
+            # limit ground station access data to simulation duration
+            max_time_index = int(simulation_duration * 24 * 3600 // time_step)
+            gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
+            gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
+
+        elif connectivity.upper() == ConnectivityLevels.ISL.value:
+            # inter-satellite link-driven connectivity; create empty dataframe
+            columns = ['start index', 'end index']
+            gndStn_access_data = pd.DataFrame(data=[], columns=columns)
+
+        elif connectivity.upper() == ConnectivityLevels.NONE.value:
+            # no inter-agent connectivity; create empty dataframe
+            columns = ['start index', 'end index']
+            gndStn_access_data = pd.DataFrame(data=[], columns=columns)
+
+        else:
+            # fallback; unsupported connectivity level
+            raise ValueError(f'Unsupported connectivity level: {connectivity}.')
+        
+        # return ground station access data
+        return gndStn_access_data
+
+    @staticmethod
+    def __load_agent_comms_link_data(orbitdata_path : str, 
+                                     agents_to_load : List[tuple],  
+                                     simulation_duration : float,
+                                     gs_access_dfs : Dict[str, pd.DataFrame],
+                                     time_step : float,
+                                     connectivity : str
+                                ) -> Dict[tuple, pd.DataFrame]:
+        # initialize comms link data
+        data = defaultdict(dict)
+
+        # define path to comms data
+        comms_path = os.path.join(orbitdata_path, 'comm')
+
+        # iterate through agents to load
+        for u_type,u_idx,u_name,u_gs_network in agents_to_load:
+            for v_type,v_idx,v_name,v_gs_network in agents_to_load:
+                # skip self-links
+                if u_name == v_name: continue
+                
+                # pair key 
+                key = tuple(sorted([u_name, v_name]))
+                
+                # skip if data for this pair of agents has already been loaded
+                if key in data: continue 
+
+                # load data by agent types
+                if u_type == 'spacecraft' and v_type == 'spacecraft':
+                    # generate ISL access file path
+                    filename = f"sat{u_idx}_to_sat{v_idx}.csv" 
+                    isl_file = os.path.join(comms_path, filename)
+
+                    # check if file exists; if not, try reversed order
+                    if not os.path.exists(isl_file):
+                        filename = f"sat{v_idx}_to_sat{u_idx}.csv"
+                        isl_file = os.path.join(comms_path, filename)
+
+                    # validate that ISL access file exists
+                    if not os.path.exists(isl_file):
+                        raise FileNotFoundError(f'ISL access file not found for satellite pair ({u_name}, {v_name}). Expected file name: `{filename}`.')
+
+                    # load ISL access data
+                    comms_data = OrbitData.__load_isl_data(isl_file, connectivity, simulation_duration, time_step)
+
+                elif u_type == 'groundOperator' and v_type == 'spacecraft':
+                    if u_gs_network == v_gs_network: 
+                        comms_data = gs_access_dfs[v_name]
+                    else:
+                        comms_data = pd.DataFrame(columns=['start index', 'end index'])
+
+                elif u_type == 'spacecraft' and v_type == 'groundOperator':                    
+                    if u_gs_network == v_gs_network: 
+                        comms_data = gs_access_dfs[u_name]
+                    else:
+                        comms_data = pd.DataFrame(columns=['start index', 'end index'])
+                    
+                elif u_type == 'groundOperator' and v_type == 'groundOperator':
+                    # all ground operators can communicate with each other for the entire duration of the simulation
+                    columns = ['start index', 'end index']
+                    
+                    # generate mission-long connectivity access
+                    duration = timedelta(days=float(simulation_duration))
+                    data = [[0.0, duration.total_seconds() // time_step + 1]]
+                    assert data[0][1] > 0.0
+
+                    # return modified connectivity
+                    comms_data = pd.DataFrame(data=data, columns=columns)
+
+                else:
+                    raise ValueError(f'Unknown agent type `{u_type}` for agent `{u_name}`.')
+                
+                # store comms data in dictionary
+                data[key] = comms_data
+
+        # return compiled comms data
+        return data
+    
+    @staticmethod
+    def __load_isl_data(isl_file : str, connectivity : str, duration_days : float, time_step : float) -> pd.DataFrame:        
+        """ Loads ISL access data from a file and modifies it according to the specified connectivity level. """
+        if connectivity.upper() == ConnectivityLevels.FULL.value:
+            # fully connected network; modify connectivity 
+            columns = ['start index', 'end index']
+            
+            # generate mission-long connectivity access
+            duration = timedelta(days=float(duration_days))
+            data = [[0.0, duration.total_seconds() // time_step + 1]]
+            assert data[0][1] > 0.0
+
+            # return modified connectivity
+            isl_data = pd.DataFrame(data=data, columns=columns)
+
+        elif connectivity.upper() == ConnectivityLevels.LOS.value:
+            # line-of-sight driven connectivity; load connectivity and store data
+            # TODO if ISL definition is modified in orbitpy, make sure this case is updated accordingly
+            isl_data = pd.read_csv(isl_file, skiprows=range(3))
+
+            # limit ISL data to simulation duration
+            max_time_index = int(duration_days * 24 * 3600 // time_step)
+            isl_data = isl_data[isl_data['start index'] <= max_time_index]
+            isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
+
+        elif connectivity.upper() == ConnectivityLevels.ISL.value:
+            # inter-satellite link driven connectivity; load connectivity and store data
+            # TODO if ISL definition is modified in orbitpy, make sure this case is updated accordingly
+            isl_data = pd.read_csv(isl_file, skiprows=range(3))
+
+            # limit ISL data to simulation duration
+            max_time_index = int(duration_days * 24 * 3600 // time_step)
+            isl_data = isl_data[isl_data['start index'] <= max_time_index]
+            isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
+
+        elif connectivity.upper() == ConnectivityLevels.GS.value:
+            # ground station-only connectivity; create empty dataframe
+            columns = ['start index', 'end index']
+            isl_data = pd.DataFrame(data=[], columns=columns)
+
+        elif connectivity.upper() == ConnectivityLevels.NONE.value:
+            # no inter-agent connectivity; create empty dataframe
+            columns = ['start index', 'end index']
+            isl_data = pd.DataFrame(data=[], columns=columns)
+        else:
+            # fallback case for unsupported connectivity levels
+            raise ValueError(f'Unsupported connectivity level: {connectivity}')
+                
+        # check if ISL data is empty
+        if isl_data.empty:
+            # no ISL access during simulation duration; create empty dataframe
+            columns = ['start index', 'end index']
+            isl_data = pd.DataFrame(data=[], columns=columns)
+
+        # return ISL data
+        return isl_data
+    
+    @staticmethod
+    def __load_agent_gp_access_data(orbitdata_path : str, 
+                                   agents_to_load : List[tuple],  
+                                   mission_dict : dict,
+                                   simulation_duration : float,
+                                   time_step : float,
+                                   spacecraft_list : List[dict],
+                                   tqdm_config : dict,
+                                ) -> Dict[str, pd.DataFrame]:
+        
+        # initialize ground point access data
+        data = dict()
+
+        # iterate through agents to load
+        for agent_type, spacecraft_idx, agent_name,_ in agents_to_load:
+            if agent_type == 'spacecraft':
+                # define agent folder
+                sat_id = "sat" + str(spacecraft_idx)
+                agent_folder = sat_id + '/' 
+
+                # calculate maximum time index for simulation duration
+                max_time_index = int(simulation_duration * 24 * 3600 // time_step)
+
+                # land coverage data metrics data
+                payload = spacecraft_list[spacecraft_idx].get('instrument', None)
+                if not isinstance(payload, list):
+                    payload = [payload]
+
+                # iintialize dataframe to store ground point access data for this agent
+                gp_access_data = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]', 'agent','instrument',
+                                                                'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
+
+                for instrument in tqdm(payload, desc=f'Loading land coverage data for {agent_name}', unit=' instrument', **tqdm_config):
+                    if instrument is None: continue 
+
+                    i_ins = payload.index(instrument)
+                    gp_acces_by_mode = []
+
+                    # TODO implement different viewing modes for payloads
+                    # modes = spacecraft_list[spacecraft_idx].get('instrument', None)
+                    # if not isinstance(modes, list):
+                    #     modes = [0]
+                    modes = [0]
+
+                    gp_acces_by_mode = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]','instrument',
+                                                                'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
+                    for mode in modes:
+                        i_mode = modes.index(mode)
+                        gp_access_by_grid = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]',
+                                                                'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
+
+                        for grid in mission_dict.get('grid'):
+                            i_grid = mission_dict.get('grid').index(grid)
+                            metrics_file = os.path.join(orbitdata_path, agent_folder, f'datametrics_instru{i_ins}_mode{i_mode}_grid{i_grid}.csv')
+                            
+                            try:
+                                metrics_data = pd.read_csv(metrics_file, skiprows=range(4))
+                                
+                                nrows, _ = metrics_data.shape
+                                grid_id_column = [i_grid] * nrows
+                                metrics_data['grid index'] = grid_id_column
+
+                                if len(gp_access_by_grid) == 0:
+                                    gp_access_by_grid = metrics_data
+                                else:
+                                    gp_access_by_grid = pd.concat([gp_access_by_grid, metrics_data])
+                            except pd.errors.EmptyDataError:
+                                continue
+
+                        nrows, _ = gp_access_by_grid.shape
+                        gp_access_by_grid['pnt-opt index'] = [mode] * nrows
+
+                        if len(gp_acces_by_mode) == 0:
+                            gp_acces_by_mode = gp_access_by_grid
+                        else:
+                            gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
+                        # gp_acces_by_mode.append(gp_access_by_grid)
+
+                    nrows, _ = gp_acces_by_mode.shape
+                    gp_access_by_grid['instrument'] = [instrument['name']] * nrows
+                    # gp_access_data[ins_name] = gp_acces_by_mode
+
+                    if len(gp_access_data) == 0:
+                        gp_access_data = gp_acces_by_mode
+                    else:
+                        gp_access_data = pd.concat([gp_access_data, gp_acces_by_mode])
+                
+                nrows, _ = gp_access_data.shape
+                gp_access_data['agent name'] = [spacecraft_list[spacecraft_idx]['name']] * nrows
+
+                # limit gp access data to simulation duration
+                gp_access_data = gp_access_data[gp_access_data['time index'] <= max_time_index]
+                
+            elif agent_type == 'groundOperator':
+                # Ground Operators have no sensing capability; create empty ground point coverage data
+                gp_access_data = pd.DataFrame(columns=['time index','grid index', 'GP index','pnt-opt index','lat [deg]','lon [deg]', 'agent','instrument',
+                                                        'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
+
+            else:
+                raise ValueError(f'Unknown agent type `{agent_type}` for agent `{agent_name}`.')
+
+            # store in dictionary
+            data[agent_name] = gp_access_data
+
+        # return compiled ground point access data
+        return data
+
+    @staticmethod
+    def __load_grid_data(orbitdata_path : str,
+                         mission_dict : dict
+                        ) -> List[pd.DataFrame]:
+        # initialize grid data
+        grid_data_compiled = []
+
+        # compile coverage grid information
+        for grid in mission_dict.get('grid'):
+            grid : dict
+            i_grid = mission_dict.get('grid').index(grid)
+            
+            if grid.get('@type').lower() == 'customgrid':
+                grid_file = grid.get('covGridFilePath')
+                
+            elif grid.get('@type').lower() == 'autogrid':
+                grid_file = os.path.join(orbitdata_path, f'grid{i_grid}.csv')
+            else:
+                raise NotImplementedError(f"Loading of grids of type `{grid.get('@type')} not yet supported.`")
+
+            grid_data = pd.read_csv(grid_file)
+            nrows, _ = grid_data.shape
+            grid_data['grid index'] = [i_grid] * nrows
+            grid_data['GP index'] = [i for i in range(nrows)]
+            grid_data_compiled.append(grid_data)
+
+        # return compiled grid data
+        return grid_data_compiled
+ 
+    @staticmethod
+    def __write_interval_data_table(df: pd.DataFrame,
+                                    bin_dir: str,
+                                    table_name: str,
+                                    time_step : float,
+                                    *,
+                                    start_col: str = "start index",
+                                    end_col: str = "end index",
+                                    sort_by_time: bool = True,
+                                    string_max_unique: Optional[int] = None, 
+                                    allow_overwrite: bool = True,
+                                ) -> Dict[str, Any]:
+        """
+        Writes interval data to memmap-able .npy arrays + meta.json.
+
+        Required columns: start_col, end_col (integer indices).
+        Additional columns: numeric/bool only (unless you pre-encode strings).
+        """
+        # validate output directory
+        out_dir = os.path.join(bin_dir, table_name) 
+        os.makedirs(out_dir, exist_ok=True)
+
+        # define metadata path
+        meta_path = os.path.join(out_dir, "meta.json")
+        
+        # check if metadata file already exists 
+        if (not allow_overwrite) and os.path.exists(meta_path):
+            # data exists and overwriting is not allowed; raise error
+            raise FileExistsError(f"State table already exists at: {out_dir}")
+
+        # Keep only needed columns (required + extras)
+        cols = list(df.columns)
+        if start_col not in cols or end_col not in cols:
+            raise ValueError("start/end columns not found in df")
+
+        # Copy just the columns we will store
+        work = df.copy(deep=False)
+
+        # extract start and end time data 
+        start, start_dtype = OrbitData.__extract_time_data(work, start_col, time_step)
+        end, end_dtype = OrbitData.__extract_time_data(work, end_col, time_step)
+
+        # sort by time if toggle is enabled
+        if sort_by_time:
+            # stable sort by start then end
+            order = np.lexsort((end, start))
+            start = start[order]
+            end = end[order]
+            work = work.iloc[order].reset_index(drop=True)
+
+        # prefix max end for fast existence checks
+        prefix_max_end = np.maximum.accumulate(end)
+
+        # Write start/end/prefix
+        np.save(os.path.join(out_dir, "start.npy"), start)
+        np.save(os.path.join(out_dir, "end.npy"), end)
+        np.save(os.path.join(out_dir, "prefix_max_end.npy"), prefix_max_end.astype(np.int32, copy=False))
+
+        # select which columns are pending to be written
+        cols_to_write = [c for c in work.columns if c != start_col and c != end_col]
+
+        # initialize metadata dictionary
+        meta: Dict[str, Any] = {
+            "name": table_name,
+            "n": int(len(work)),
+            "columns": {},
+            "dtypes" : {
+                "start" : str(np.dtype(start_dtype)),
+                "end" : str(np.dtype(end_dtype)),
+                "prefix_max_end" : str(np.dtype(end_dtype))
+            },
+            "files": {
+                "start": "start.npy", 
+                "end": "end.npy", 
+                "prefix_max_end": "prefix_max_end.npy"
+            },
+            "sorted_by_time": bool(sort_by_time),
+            "dir" : out_dir
+        }
+
+        # write extra columns and update metadata
+        for col in cols_to_write:
+            # get a safe name for the column to use in file names
+            safe = OrbitData.__safe_name(col)
+            
+            # get data series for working column
+            s : pd.Series = work[col]
+
+            # check if column is string-like (object, string, or categorical dtype)
+            is_stringish = (
+                pd.api.types.is_object_dtype(s.dtype)
+                or pd.api.types.is_string_dtype(s.dtype)
+                or pd.api.types.is_categorical_dtype(s.dtype)
+            )
+
+            if is_stringish:
+                # convert to pandas strings (normalizes NaNs)
+                s2 : pd.Series = s.astype("string")
+
+                # get unique string values
+                uniques = s2.dropna().unique()
+
+                # if a limit is set, ensure number of unique strings is not too large for dictionary encoding
+                if string_max_unique is not None and len(uniques) > string_max_unique:
+                    raise ValueError(f"Column '{col}' has {len(uniques)} unique strings; too many for dictionary encoding.")
+
+                # build string encoding mapping (code 0 reserved for NULL/NaN)
+                uniq_list = [str(x) for x in uniques]
+                str_to_code = {v: i + 1 for i, v in enumerate(uniq_list)}
+                codes = np.zeros(len(s2), dtype=np.int32)
+
+                # Fill codes
+                # (vectorized mapping via pandas map)
+                mapped = s2.map(lambda x: str_to_code.get(str(x), 0) if pd.notna(x) else 0)
+                codes[:] = mapped.to_numpy(dtype=np.int32, na_value=0)
+                vocab = {"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}
+
+                # define file paths for codes and dictionary
+                codes_path = f"col_{safe}__codes.npy"
+                dict_path = f"dict_{safe}.json"
+
+                # save codes and dictionary to files
+                np.save(os.path.join(out_dir, codes_path), codes)
+                with open(os.path.join(out_dir, dict_path), "w") as f:
+                    json.dump(vocab, f, indent=4)
+
+                # update metadata for this column
+                meta["columns"][safe] = {
+                    "col_name" : col,
+                    "kind": "string_dict",
+                    "dict_file": dict_path,
+                    "vocab" : vocab
+                }
+                meta['files'][safe] = codes_path
+                meta['dtypes'][safe] = str(codes.dtype)
+
+            else:
+                # convert series to numpy array 
+                arr : np.ndarray = s.to_numpy()
+                
+                # pick an appropriate dtype for storage
+                dtype = OrbitData.__pick_numpy_dtype(s)
+                arr = arr.astype(dtype, copy=False)
+
+                # save array to .npy file
+                col_path = f"col_{safe}.npy"
+                np.save(os.path.join(out_dir, col_path), arr)
+
+                # update metadata for this column
+                meta["columns"][safe] = {
+                    "col_name" : col,
+                    "kind": "numeric",
+                }
+                meta['files'][safe] = col_path
+                meta['dtypes'][safe] = str(arr.dtype)
+
+        # write metadata to file
+        with open(os.path.join(out_dir, "meta.json"), "w") as f:
+            json.dump(meta, f, indent=4)
+
+        return meta
+    
+    @staticmethod
+    def __extract_time_data(df: pd.DataFrame, 
+                            time_col: str, 
+                            time_step: float, 
+                            dtype=None
+                        ) -> Tuple[np.ndarray, np.dtype]:
+        """ 
+        Extracts time data from a dataframe column and converts to a numpy array with 
+        appropriate scaling and dtype for efficient storage. 
+
+        If time data is expressed as a list of integers, it converts them to time in seconds
+        by multiplying with the time step. 
+        """
+        if time_col in df.columns:
+            # check if start time data is stored as integer indeces
+            if "index" in time_col.lower(): 
+                # convert existing time index data to numpy array
+                t_idx : np.ndarray = df[time_col].to_numpy()
+                
+                # check if time index is already an integer type
+                if not np.issubdtype(t_idx.dtype, np.integer):
+                    # if not, convert to int64
+                    t_idx = t_idx.astype(np.int64, copy=False)
+
+                # pick an appropriate data type in case it's not already provided
+                if dtype is None:
+                    dtype = OrbitData.__pick_numpy_dtype(df[time_col] * time_step)
+
+                # convert time index to time in seconds
+                t : np.ndarray = t_idx * time_step
+
+            else:
+                # convert existing time column to numpy array
+                t : np.ndarray= df[time_col].to_numpy()
+
+                # pick an appropriate data type in case it's not already provided
+                if dtype is None:
+                    dtype = OrbitData.__pick_numpy_dtype(df[time_col])
+        
+        # return time data as numpy array of the desired dtype
+        return t.astype(dtype, copy=False), dtype
+        
+    @staticmethod
+    def __pick_numpy_dtype(series: pd.Series) -> np.dtype:
+        """
+        Choose a stable numpy dtype for a dataframe column.
+        Keep it simple: ints -> int32/int64, floats -> float32/float64, bool -> bool.
+        """
+        if series.empty:
+            # default to float32 for empty series
+            return np.dtype(np.float32)
+        if pd.api.types.is_bool_dtype(series):
+            return np.dtype(np.bool_)
+        if pd.api.types.is_integer_dtype(series):
+            # Use int32 if safe (often time indices fit); else int64
+            # If you know your ranges, you can force int32 for space.
+            return np.dtype(np.int32)
+        if pd.api.types.is_float_dtype(series):
+            # float32 is usually fine for many telemetry-ish fields
+            # return np.dtype(np.float32)
+            return np.dtype(np.float64)
+        raise TypeError(f"Unsupported dtype for column '{series.name}': {series.dtype}. "
+                        f"Encode strings/categories before writing.")
+
+    @staticmethod
+    def __safe_name(col: str) -> str:
+        return col.replace(" ", "_").replace("[", "").replace("]", "").replace("/", "_")
+    
+
+    @staticmethod
+    def __write_state_table(df: pd.DataFrame,
+                            bin_dir: str,
+                            table_name: str,
+                            time_step : float,
+                            *,
+                            t_col: str = "time index",
+                            pos_cols: Tuple[str, str, str] = ("x [km]", "y [km]", "z [km]"),
+                            vel_cols: Tuple[str, str, str] = ("vx [km/s]", "vy [km/s]", "vz [km/s]"),
+                            state_dtype: np.dtype = np.float32,
+                            sort_by_time: bool = True,
+                            allow_overwrite: bool = True,
+                        ) -> Dict[str, Any]:
+        """
+        Writes a time-indexed position/velocity table to memmap-able .npy arrays + meta.json.
+
+        Files:
+        - t.npy (optional if t_col is None)
+        - pos.npy shape (N,3)
+        - vel.npy shape (N,3)
+        - plus any extra numeric columns you decide to add later
+        """
+        # validate output directory
+        out_dir = os.path.join(bin_dir, table_name) 
+        os.makedirs(out_dir, exist_ok=True)
+
+        # define metadata path
+        meta_path = os.path.join(out_dir, "meta.json")
+        
+        # check if metadata file already exists 
+        if (not allow_overwrite) and os.path.exists(meta_path):
+            # data exists and overwriting is not allowed; raise error
+            raise FileExistsError(f"State table already exists at: {out_dir}")
+
+        # ensure required columns are present in dataframe
+        for c in pos_cols + vel_cols:
+            if c not in df.columns:
+                raise KeyError(f"Missing required column '{c}'")
+
+        # Copy just the columns we will store
+        work = df.copy(deep=False)
+
+        # ensure time column is provided
+        if t_col is None:
+            raise ValueError("Time column name (t_col) must be provided for state tables.")
+
+        # ensure desired time column exists in data
+        if t_col not in work.columns: raise KeyError(f"Missing time column '{t_col}'")
+        
+        # convert time index to time in seconds and ensure it's the desired dtype
+        t,t_dtype = OrbitData.__extract_time_data(work, t_col, time_step)
+
+        # sort time if toggle is enabled
+        if sort_by_time:
+            order = np.argsort(t, kind="mergesort")  
+            work = work.iloc[order].reset_index(drop=True)
+            t = t[order]
+
+        # extract position and velocity data from dataframe;
+        #  convert to numpy arrays with desired dtype 
+        pos = work.loc[:, list(pos_cols)].to_numpy(dtype=state_dtype, copy=False)
+        vel = work.loc[:, list(vel_cols)].to_numpy(dtype=state_dtype, copy=False)
+
+        # save time, position, and velocity data to .npy files
+        np.save(os.path.join(out_dir, "t.npy"), t)
+        np.save(os.path.join(out_dir, "pos.npy"), pos)
+        np.save(os.path.join(out_dir, "vel.npy"), vel)
+        
+        # map filenames to columns
+        files = {"t": "t.npy", "pos": "pos.npy", "vel": "vel.npy"}
+
+        # store metadata 
+        meta = {
+            "name": table_name,
+            "n": int(len(work)),
+            "columns":{
+                "pos": list(pos_cols),
+                "vel": list(vel_cols)
+            },
+            "dtypes": {
+                "t" : str(np.dtype(t_dtype)),
+                "pos": str(np.dtype(state_dtype)),
+                "vel": str(np.dtype(state_dtype))
+            },
+            "files": files,
+            "sorted_by_time": bool(sort_by_time),
+            "dir" : out_dir
+        }
+
+        # save metadata to json file
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=4)
+
+        # return metadata 
+        return meta
+
+    @staticmethod
+    def __write_access_table(df: pd.DataFrame,
+                                bin_dir: str,
+                                table_name: str,
+                                time_step : float,
+                                n_steps: int,
+                                *,
+                                t_col: str = 'time index',
+                                required_cols: Sequence[str] = ['GP index','grid index','lat [deg]','lon [deg]', 'instrument'],
+                                sort_within_time: bool = False,
+                                string_max_unique: Optional[int] = None,  # optional guardrail
+                                allow_overwrite: bool = True,
+                            ) -> Dict[str, Any]:
+        """
+        Writes a ragged table with unknown columns to memmap-friendly binaries:
+        - offsets.npy
+        - one .npy per column (numeric) OR codes + dict for strings
+        - meta.json
+        """
+        # validate output directory
+        out_dir = os.path.join(bin_dir, table_name) 
+        os.makedirs(out_dir, exist_ok=True)
+
+        # define metadata path
+        meta_path = os.path.join(out_dir, "meta.json")
+        
+        # check if metadata file already exists 
+        if (not allow_overwrite) and os.path.exists(meta_path):
+            # data exists and overwriting is not allowed; raise error
+            raise FileExistsError(f"State table already exists at: {out_dir}")
+
+
+        # validate required columns are present in dataframe
+        for c in (t_col, *required_cols):
+            if c not in df.columns:
+                raise KeyError(f"Missing required column: {c}")
+
+        # copy just the columns we will store
+        work = df.copy(deep=False)
+
+        # extract time data
+        t,t_dtype = OrbitData.__extract_time_data(work, t_col, time_step)
+        
+        # convert to indices for bucketing
+        t_idx = (t / time_step).astype(np.int64, copy=False) 
+
+        # Determine steps
+        # T = 0 if len(t_idx) == 0 else int(t_idx.max()) + 1
+        if n_steps is None:
+            T = 0 if len(t_idx) == 0 else int(t_idx.max()) + 1
+        else:
+            T = int(n_steps)
+
+        # Filter `t_idx` to [0, T-1]
+        if len(t) > 0:
+            mask = (t_idx >= 0) & (t_idx < T)
+            if not np.all(mask):
+                work = work.loc[mask].copy()
+                t = t[mask]
+                t_idx = t_idx[mask]
+
+        # Sort by time so each bucket is contiguous
+        if sort_within_time:
+            # stable tie-breaker: keep existing row order by using mergesort later
+            order = np.lexsort((np.arange(len(t_idx), dtype=t_dtype), t_idx))
+        else:
+            order = np.argsort(t_idx, kind="mergesort")
+
+        work = work.iloc[order]
+        t = t[order]
+        t_idx = t_idx[order]
+
+        # Offsets
+        counts = np.bincount(t_idx, minlength=T).astype(np.int64, copy=False)
+        offsets = np.empty(T + 1, dtype=np.int64)
+        offsets[0] = 0
+        np.cumsum(counts, out=offsets[1:])
+
+        np.save(os.path.join(out_dir, "offsets.npy"), offsets)
+        np.save(os.path.join(out_dir, "t.npy"), t)
+        np.save(os.path.join(out_dir, "t_index.npy"), t_idx)
+
+        # Decide which columns to write
+        cols_to_write = [c for c in work.columns if c != t_col]
+
+        meta: Dict[str, Any] = {
+            "name": table_name,
+            "n_rows": int(offsets[-1]),
+            "time_step" : float(time_step),
+            "n_steps": int(T),            
+            "format": "ragged_csr_columnar",
+            "t_col": t_col,
+            "columns": {},
+            "dtypes" : {},
+            "files": {
+                "offsets": "offsets.npy",
+                "t": "t.npy",
+                "t_index": "t_index.npy"
+            },
+            "required_cols": list(required_cols),
+            "dir" : out_dir
+        }
+
+        for col in cols_to_write:
+            safe = OrbitData.__safe_name(col)
+            s : pd.Series = work[col]
+
+            # Treat pandas "string/object" as string-like; also category
+            is_stringish = (
+                pd.api.types.is_object_dtype(s.dtype)
+                or pd.api.types.is_string_dtype(s.dtype)
+                or pd.api.types.is_categorical_dtype(s.dtype)
+            )
+
+            if is_stringish:
+                # Convert to pandas strings; normalize NaNs
+                s2 : pd.Series = s.astype("string")
+
+                # Dictionary encode
+                uniques = s2.dropna().unique()
+                if string_max_unique is not None and len(uniques) > string_max_unique:
+                    raise ValueError(f"Column '{col}' has {len(uniques)} unique strings; too many for dictionary encoding.")
+
+                # Build mapping (stable)
+                # code 0 reserved for NULL
+                uniq_list = [str(x) for x in uniques]
+                str_to_code = {v: i + 1 for i, v in enumerate(uniq_list)}
+                codes = np.zeros(len(s2), dtype=np.int32)
+
+                # Fill codes
+                # (vectorized mapping via pandas map)
+                mapped = s2.map(lambda x: str_to_code.get(str(x), 0) if pd.notna(x) else 0)
+                codes[:] = mapped.to_numpy(dtype=np.int32, na_value=0)
+                vocab = {"0": None, **{str(i + 1): v for i, v in enumerate(uniq_list)}}
+
+                codes_path = f"col_{safe}__codes.npy"
+                dict_path = f"dict_{safe}.json"
+                np.save(os.path.join(out_dir, codes_path), codes)
+                with open(os.path.join(out_dir, dict_path), "w") as f:
+                    json.dump(vocab, f, indent=4)
+
+                meta["columns"][safe] = {
+                    "kind": "string_dict",
+                    "col_name": col,
+                    "dict_file": dict_path,
+                    "vocab" : vocab
+                }
+                meta["files"][safe] = codes_path
+                meta["dtypes"][safe] = str(codes.dtype)
+            else:
+                # Numeric/bool → store as array
+                arr : np.ndarray = s.to_numpy()
+                
+                # Choose compact dtypes if you want (example: float64->float32)
+                # arr = arr.astype(np.float32, copy=False) if arr.dtype == np.float64 else arr
+                dtype = OrbitData.__pick_numpy_dtype(s)
+                arr : np.ndarray = arr.astype(dtype, copy=False)
+
+                col_path = f"col_{safe}.npy"
+                np.save(os.path.join(out_dir, col_path), arr)
+                meta["columns"][safe] = {
+                    "kind": "numeric",
+                    "col_name" : col,
+                }
+                meta["files"][safe] = col_path
+                meta["dtypes"][safe] = str(arr.dtype)
+
+        with open(os.path.join(out_dir, "meta.json"), "w") as f:
+            json.dump(meta, f, indent=4)
+
+        return meta
+    
+    @staticmethod
+    def __write_grid_table(dfs: List[pd.DataFrame],
+                            bin_dir: str,
+                            table_name: str,
+                            *,                            
+                            required_cols: Sequence[str] = ['lat [deg]','lon [deg]', 'grid index', 'GP index'],
+                            dtype: np.dtype = np.float32,
+                            allow_overwrite: bool = True,
+                        ) -> Dict[str, Any]:
+        # validate output directory
+        out_dir = os.path.join(bin_dir, table_name) 
+        os.makedirs(out_dir, exist_ok=True)
+        
+        # define metadata path
+        meta_path = os.path.join(out_dir, "meta.json")
+        
+        # check if metadata file already exists 
+        if (not allow_overwrite) and os.path.exists(meta_path):
+            # data exists and overwriting is not allowed; raise error
+            raise FileExistsError(f"State table already exists at: {out_dir}")
+
+        # concatenate grid dataframes
+        work = pd.concat(dfs, ignore_index=True)
+
+        # validate required columns are present
+        for c in required_cols:
+            if c not in work.columns:
+                raise KeyError(f"Missing required column: {c}")
+        if len(work.columns) > len(required_cols):
+            raise ValueError(f"Unexpected extra columns found in grid data: {set(work.columns) - set(required_cols)}")
+
+        # initiate metadata 
+        meta = {
+            "name": table_name,
+            "n": int(len(work)),
+            "columns":{},
+            "dtypes": {},
+            "files": {},
+            "dir" : out_dir
+        }
+
+        # extract and save required columns as .npy files
+        for col in required_cols:
+            # generate a safe name for this column to use in file names
+            safe = OrbitData.__safe_name(col)
+
+            # get appropriate dtype for this column
+            col_dtype = OrbitData.__pick_numpy_dtype(work[col])
+
+            # convert column to numpy array
+            arr = work[col].to_numpy(dtype=col_dtype, copy=False)
+
+            # define file path for this column
+            col_path = f"col_{safe}.npy"
+
+            # save to .npy file
+            np.save(os.path.join(out_dir, col_path), arr)
+
+            # update metadata with file and dtype info
+            meta['columns'][safe] = col
+            meta['files'][safe] = col_path
+            meta['dtypes'][safe] = str(col_dtype)
+        
+        # return metadata
+        return meta 

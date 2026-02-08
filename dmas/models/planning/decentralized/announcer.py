@@ -135,7 +135,6 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                 task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
                 
                 # update list of generated requests 
-                # task_requests.append((event, task_request, task_request_msg.to_dict()))
                 task_requests.append((event, task_request, task_request_msg))
 
         # initialize set of times when broadcasts are scheduled (sets to avoid duplicates)
@@ -163,10 +162,6 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
 
                     # calculate broadcast time to earliest in this access interval
                     t_broadcast : float = max(next_access.left, task_req.t_req)
-                    # t_broadcast : float = max(
-                    #                           min(next_access.left + 5*self.EPS,    # give buffer time for access to start
-                    #                               next_access.right),               # ensure broadcast is before access ends
-                    #                         task_req.t_req)                                # ensure broadcast is not in the past
                     
                     # add broadcast time to set of broadcast times
                     t_broadcasts.add(t_broadcast)

@@ -135,7 +135,7 @@ class AbstractPlanner(ABC):
 
                     # iterate through access indices and merge intervals
                     for idx,t in access_indices[1:]:
-                        if t <= t_end + orbitdata.time_step + self.EPS:
+                        if t <= t_end + orbitdata.time_step + 1e-4:
                             # extend current interval
                             t_end = t
                             indices.append(idx)
