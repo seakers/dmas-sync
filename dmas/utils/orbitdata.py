@@ -78,7 +78,7 @@ class OrbitData:
     LOAD FROM PRE-COMPUTED DATA
     """
     @staticmethod
-    def from_directory(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Dict[str, 'OrbitData']:
+    def from_directory(orbitdata_dir: str, simulation_duration : float, force_preprocess : bool = False, printouts : bool = True) -> Dict[str, 'OrbitData']:
         # TODO check if schemas have already been generated at the provided directory and load from there if so, o
         # therwise preprocess data and generate schemas before loading
         
@@ -86,18 +86,20 @@ class OrbitData:
         bin_dir = os.path.join(orbitdata_dir, 'bin')
         bin_meta_file = os.path.join(bin_dir, "meta.json")
 
-        if os.path.exists(bin_meta_file):
-            # if metadata file exists, load schemas from metadata
-            with open(bin_meta_file, 'r') as meta_file:
-                schemas : dict[str, dict] = json.load(meta_file)
-                if printouts: tqdm.write('Existing preprocessed data found. Loading from binaries...')
-        else:
-            # preprocess data and store as binarys for faster loading in the future
+        # check if preprocessed data already exists
+        if not os.path.exists(bin_meta_file) or force_preprocess:
+            # metadata for processed binaries does not exist or preprocessing is being forced; 
+            #   preprocess data and store as binarys for faster loading in the future
             schemas : dict[str, dict] \
                 = OrbitData.preprocess(orbitdata_dir, simulation_duration, printouts=printouts)
         
             # force garbage collection after loading data to free up memory
             gc.collect() 
+        else:
+            # metadata file exists; load schemas from metadata
+            with open(bin_meta_file, 'r') as meta_file:
+                schemas : dict[str, dict] = json.load(meta_file)
+                if printouts: tqdm.write('Existing preprocessed data found. Loading from binaries...')
 
         data = dict()
         for agent_name, schema in schemas.items():

@@ -26,8 +26,8 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         ## toy cases
         self.toy_1 = False  # single sat    default mission     single target, no events
-        self.toy_2 = False  # single sat    no default mission  one event
-        self.toy_3 = True  # two sats      no default mission  one event
+        self.toy_2 = True  # single sat    no default mission  one event
+        self.toy_3 = False  # two sats      no default mission  one event
         self.toy_4 = False  # two sats      no default mission  one event           optimistic bidding
         self.toy_5 = False  # two sats      no default mission  one event           comm delays
         self.toy_6 = False  # two sats      no default mission  two targets         two events
@@ -1150,7 +1150,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # verify results
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observable'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observed'].values[0][1], 2)
-        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 0)
+        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Re-observed'].values[0][1], 0)
 
         # print done
@@ -1232,7 +1232,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # verify results
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observable'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observed'].values[0][1], 2)
-        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 0)
+        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Re-observed'].values[0][1], 2)
 
         # print done
