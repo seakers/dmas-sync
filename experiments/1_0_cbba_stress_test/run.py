@@ -438,8 +438,9 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         }
 
     except Exception as e:
-        if sim_cfg.reduced:
-            raise e  # re-raise for debugging in reduced mode
+        if sim_cfg.reduced or sim_cfg.exceptions:
+            traceback.print_exc()  # print full traceback for debugging
+            raise e  # re-raise for debugging 
 
         return {
             "scenario_id": scenario_id,
@@ -678,7 +679,13 @@ def parallel_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Si
                     sid = res.get("scenario_id", "???")
                     status = res.get("status")
                     elapsed = res.get("elapsed_s", None)
-                    print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+
+                    if status == "error":
+                        # log error message
+                        print(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                    else:
+                        # log normal status message
+                        print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
 
     finally:
         if pbar is not None:

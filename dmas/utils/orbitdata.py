@@ -165,11 +165,11 @@ class OrbitData:
         # # return next access interval
         # return self.comms_links[target].lookup_interval(t, t_max, include_current)
 
-    def get_next_gs_access(self, t, t_max: float = np.Inf, include_current: bool = False) -> Interval:
+    def get_next_gs_access(self, t, t_max: float = np.Inf, include_current: bool = False) -> Tuple[Interval, ...]:
         """ returns the next access interval to a ground station after or during time `t`. """
         return self.gs_access_data.lookup_interval(t, t_max, include_current)
 
-    def get_next_eclipse_interval(self, t: float, t_max: float = np.Inf, include_current: bool = False) -> Interval:
+    def get_next_eclipse_interval(self, t: float, t_max: float = np.Inf, include_current: bool = False) -> Tuple[Interval, ...]:
         """ returns the next eclipse interval after or during time `t`. """
         return self.eclipse_data.lookup_interval(t, t_max, include_current)
 

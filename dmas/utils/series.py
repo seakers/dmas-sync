@@ -415,6 +415,7 @@ class IntervalTable(AbstractTable):
 
             # return list of intervals
             return intervals    
+        
         except Exception as e:
             x = 1
             raise e

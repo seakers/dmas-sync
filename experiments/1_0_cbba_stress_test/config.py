@@ -28,6 +28,7 @@ class SimulationConfig:
 
     log_level: str = "INFO"
     quiet: bool = False
+    exceptions: bool = False
 
     force_precompute: bool = False
     force_simulate: bool = False
@@ -120,7 +121,8 @@ def parse_study_args() -> SimulationConfig:
                         help="Logging level")
     parser.add_argument("-q", "--quiet", action="store_true",
                     help="Disable progress bars and console output (batch-safe mode)")
-    # parser.add_argument("--")
+    parser.add_argument("-e", "--exceptions", action="store_true",
+                        help="Print full exception tracebacks instead of just messages")
 
     # --------------------------------------------------------------
     # Stage overwrite controls
@@ -195,6 +197,7 @@ def parse_study_args() -> SimulationConfig:
 
         log_level=args.log_level,
         quiet=args.quiet,
+        exceptions=args.exceptions,
 
         force_precompute=force_precompute,
         force_simulate=force_simulate,

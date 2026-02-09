@@ -867,12 +867,12 @@ class AbstractPlanner(ABC):
                                     for col in accessible_gps_performances}
 
         # get agent eclipse data
-        agent_eclipse_intervals : list[Interval] \
+        agent_eclipse_intervals : List[Tuple[Interval, ...]] \
             = orbitdata.eclipse_data.lookup_intervals(t_img, t_img + d_img)
 
         # include eclipse data for each observation in the performance metrics
         observation_performances[ObservationRequirementAttributes.ECLIPSE.value] = [
-            int(any([t in interval for interval in agent_eclipse_intervals]))
+            int(any([t in interval for interval,*_ in agent_eclipse_intervals]))
             for t in observation_performances['time [s]']
         ]
 
