@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cbba_stress_%A_%a
+#SBATCH --job-name=cbba_stress
 #SBATCH --output=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.out
 #SBATCH --error=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.err
 #SBATCH --time=06:00:00
@@ -32,4 +32,4 @@ end=$((i+1))
 python ./experiments/1_0_cbba_stress_test/study.py \
   -t lhs_trials-2_samples-1000_seed \
   --trial-range "${start}:${end}" \
-  --force-simulate --single-thread --quiet --exceptions
+  --single-thread --quiet --exceptions #--force-simulate
