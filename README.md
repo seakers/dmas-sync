@@ -36,16 +36,6 @@ monitoring system.
         ├───planning (planning-based autonomous decision-making tools for agents)
         └───science (onboard data processing modeling tools)
 ```
-<!-- 
-    ├───nodes (`dmas` simulation nodes)
-    └───agents (implementations for all agents)
-        ├───science (science module files)
-        └───planning (planning module files)
-            ├───.backup (To be determined, temporary folder with old files)
-            ├───centralized (centralied planning strategies)
-            └───decentralized (decentralied planning strategies)
-                └───conseunsus (consensus-based planners)
--->
 
 <!-- 
 ---

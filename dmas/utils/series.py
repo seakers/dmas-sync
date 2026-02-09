@@ -368,57 +368,52 @@ class IntervalTable(AbstractTable):
         """
         Returns a list of intervals that start after or at time `t` and end before or at time `t_max`. If `include_current` is True, also includes the interval that contains time `t` if it exists.
         """
-        try:
-            # validate inputs
-            if not isinstance(t, (int, float)) or t < 0.0:
-                raise ValueError("time t must be a non-negative number")
-            if not isinstance(t_max, (int, float)) or t_max < 0.0:
-                raise ValueError("time t_max must be a non-negative number")
-            if t > t_max + 1e-6:
-                raise ValueError("time t must be less than or equal to time t_max")
+        # validate inputs
+        if not isinstance(t, (int, float)) or t < 0.0:
+            raise ValueError("time t must be a non-negative number")
+        if not isinstance(t_max, (int, float)) or t_max < 0.0:
+            raise ValueError("time t_max must be a non-negative number")
+        if t > t_max + 1e-6:
+            raise ValueError("time t must be less than or equal to time t_max")
 
-            # check if there is any data stored in the table
-            if len(self._start) == 0:
-                # no data; return empty list
-                return []
+        # check if there is any data stored in the table
+        if len(self._start) == 0:
+            # no data; return empty list
+            return []
 
-            # check if time `t` is beyond the data in the table
-            if t > self._prefix_max_end[-1] + 1e-6:
-                # time `t` is beyond the end of all intervals; return empty list
-                return []
+        # check if time `t` is beyond the data in the table
+        if t > self._prefix_max_end[-1] + 1e-6:
+            # time `t` is beyond the end of all intervals; return empty list
+            return []
 
-            # search for matching interval index 
-            idx = np.searchsorted(self._prefix_max_end, t, side="left")
-            
-            # iterate through intervals starting from idx until we go past `t_max` 
-            intervals: List[Tuple[Interval, ...]] = []
-            for i in range(idx, len(self._start)):
-                # early stop if start time is beyond `t_max`
-                if self._start[i] > t_max + 1e-6: break
-                if self._end[i] < t - 1e-6: continue  # skip intervals that end before time `t`
-
-                # check if starts after time `t` or is current and `include_current` is True
-                if include_current or self._start[i] > t - 1e-6:
-                    # valid interval found
-
-                    # get row data for this interval index
-                    row = self.__row_from_index(i)
-
-                    # adjust time interval to start at time `t` if needed
-                    t_start = max(self._start[i], t) if include_current else self._start[i]
-
-                    # package interval data 
-                    interval = (Interval(float(t_start), float(self._end[i])), *row[2:])
-
-                    # add to list of intervals to return
-                    intervals.append(interval)
-
-            # return list of intervals
-            return intervals    
+        # search for matching interval index 
+        idx = np.searchsorted(self._prefix_max_end, t, side="left")
         
-        except Exception as e:
-            x = 1
-            raise e
+        # iterate through intervals starting from idx until we go past `t_max` 
+        intervals: List[Tuple[Interval, ...]] = []
+        for i in range(idx, len(self._start)):
+            # early stop if start time is beyond `t_max`
+            if self._start[i] > t_max + 1e-6: break
+            if self._end[i] < t - 1e-6: continue  # skip intervals that end before time `t`
+
+            # check if starts after time `t` or is current and `include_current` is True
+            if include_current or self._start[i] > t - 1e-6:
+                # valid interval found
+
+                # get row data for this interval index
+                row = self.__row_from_index(i)
+
+                # adjust time interval to start at time `t` if needed
+                t_start = max(self._start[i], t) if include_current else self._start[i]
+
+                # package interval data 
+                interval = (Interval(float(t_start), float(self._end[i])), *row[2:])
+
+                # add to list of intervals to return
+                intervals.append(interval)
+
+        # return list of intervals
+        return intervals   
 
     def lookup_interval(self, t: float, t_max: float = np.Inf, include_current: bool = False) -> Tuple[Interval, ...]:
         """

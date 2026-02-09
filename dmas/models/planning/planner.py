@@ -249,66 +249,107 @@ class AbstractPlanner(ABC):
                     continue
 
                 # get access times for this ground point and grid index
-                matching_access_times = [
-                                        (instrument, access_interval, t, th)
-                                        for instrument in access_times[grid_index][gp_index]
-                                        for access_interval,t,th in access_times[grid_index][gp_index][instrument]
-                                        if task.availability.overlaps(access_interval)
-                                        ]
+                # matching_access_times_comp = [
+                #                         (instrument, access_interval, t, th)
+                #                         for instrument in access_times[grid_index][gp_index]
+                #                         for access_interval,t,th in access_times[grid_index][gp_index][instrument]
+                #                         if task.availability.overlaps(access_interval)
+                #                         ]                
                 
-                # create a task observation opportunity for each access time
-                for access_time in matching_access_times:
-                    # unpack access time
-                    instrument_name,accessibility,_,th = access_time
-                    accessibility : Interval
+                # # create a task observation opportunity for each access time
+                # for access_time in matching_access_times:
+                #     # unpack access time
+                #     instrument_name,accessibility,_,th = access_time
+
+                #     # check if instrument can perform the task                    
+                #     if not self.can_perform_task(task, instrument_name): 
+                #         continue # skip if not
+
+                #     # check if access time matches task availability
+                #     if not task.availability.overlaps(accessibility):
+                #         continue # skip if not
                     
-                    if max(th) - min(th) > cross_track_fovs[instrument_name]:
-                        # not all of the accessibility is observable with a single pass
-                        continue
-                        # TODO raise NotImplementedError('No support for tasks that require multiple passes yet.')
-                    else:
+                #     if max(th) - min(th) > cross_track_fovs[instrument_name]:
+                #         # not all of the accessibility is observable with a single pass
+                #         continue
+                #         # TODO raise NotImplementedError('No support for tasks that require multiple passes yet.')
+                #     else:
+                #         off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[instrument_name]/2,
+                #                                     off_axis_angle + cross_track_fovs[instrument_name]/2)
+                #                                     for off_axis_angle in th]
+                #         slew_angles : Interval = reduce(lambda a, b: a.intersection(b), off_axis_angles)
+
+                #     if slew_angles.is_empty(): 
+                #         continue  # skip if no valid slew angles
+
+                #     # check if access time is enough to perform the task
+                #     if min_duration_req > accessibility.span():
+                #         # check if accessibility span is non-zero
+                #         if accessibility.span() <= 0.0: 
+                #             continue # accessibility time is too short; skip
+    
+                #         # check if available timespan longer than the minimum observation duration
+                #         if accessibility.span() - min_duration_req >= threshold: 
+                #             continue # is over the threshold; skip
+
+                #         # create and add task observation opportunity to list of task observation opportunities with a different minimum observation requirement
+                #         observation_opps.append(ObservationOpportunity(task,
+                #                                                         instrument_name,
+                #                                                         accessibility,
+                #                                                         accessibility.span(), # slightly shorter than `min_duration_req`
+                #                                                         slew_angles
+                #                                                         ))
+                #     else:
+                #         # create and add task observation opportunity to list of task observation opportunities
+                #         observation_opps.append(ObservationOpportunity(task,
+                #                                                         instrument_name,
+                #                                                         accessibility,
+                #                                                         min_duration_req,
+                #                                                         slew_angles
+                #                                                         ))
+                
+                # matching_access_times : List[Tuple[str, Interval, List[float]]] = []
+                for instrument_name,access_intervals in access_times[grid_index][gp_index].items():
+                    for access_interval,t,th in access_intervals:
+                        # check if instrument can perform the task
+                        if not self.can_perform_task(task, instrument_name): continue
+
+                        # check if access interval overlaps with task availability
+                        if not task.availability.overlaps(access_interval): continue
+
+                        # calculate intersection of access interval and task availability
+                        overlapping_access_interval = task.availability.intersection(access_interval)
+
+                        # check if overlapping access interval is long enough to perform the task
+                        if overlapping_access_interval.span() < min_duration_req - threshold: continue
+
+                        # reduce time and off-nadir angle lists to only include times within the overlapping access interval
+                        reduced_indeces = [i for i, t_i in enumerate(t) 
+                                        if t_i in overlapping_access_interval]
+                        reduced_t = [t[i] for i in reduced_indeces]
+                        reduced_th = [th[i] for i in reduced_indeces]
+
+                        if max(reduced_th) - min(reduced_th) > cross_track_fovs[instrument_name]:
+                            # not all of the accessibility is observable with a single pass
+                            continue
+                            # TODO raise NotImplementedError('No support for tasks that require multiple passes yet.')
+                        
+                        # calculate slew angle interval 
                         off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[instrument_name]/2,
                                                     off_axis_angle + cross_track_fovs[instrument_name]/2)
-                                                    for off_axis_angle in th]
+                                                    for off_axis_angle in reduced_th]
                         slew_angles : Interval = reduce(lambda a, b: a.intersection(b), off_axis_angles)
 
-                    if slew_angles.is_empty(): 
-                        continue  # skip if no valid slew angles
+                        # skip if no valid slew angles
+                        if slew_angles.is_empty(): continue  
 
-                    # check if instrument can perform the task                    
-                    if not self.can_perform_task(task, instrument_name): 
-                        continue # skip if not
-
-                    # check if access time matches task availability
-                    if not task.availability.overlaps(accessibility):
-                        continue # skip if not
-
-                    # check if access time is enough to perform the task
-                    if min_duration_req > accessibility.span():
-                        # check if accessibility span is non-zero
-                        if accessibility.span() <= 0.0: 
-                            continue # accessibility time is too short; skip
-    
-                        # check if available timespan longer than the minimum observation duration
-                        if accessibility.span() - min_duration_req >= threshold: 
-                            continue # is over the threshold; skip
-
-                        # create and add task observation opportunity to list of task observation opportunities with a different minimum observation requirement
+                        # add task observation opportunity to list of task observation opportunities
                         observation_opps.append(ObservationOpportunity(task,
-                                                                        instrument_name,
-                                                                        accessibility,
-                                                                        accessibility.span(), # slightly shorter than `min_duration_req`
-                                                                        slew_angles
-                                                                        ))
-                    else:
-                        # create and add task observation opportunity to list of task observation opportunities
-                        observation_opps.append(ObservationOpportunity(task,
-                                                                        instrument_name,
-                                                                        accessibility,
-                                                                        min_duration_req,
-                                                                        slew_angles
-                                                                        ))
-
+                                                                       instrument_name,
+                                                                       overlapping_access_interval,
+                                                                       min_duration_req,
+                                                                       slew_angles
+                                                                    ))
         
         # return list of task observation opportunities
         return observation_opps

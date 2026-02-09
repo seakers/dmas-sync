@@ -243,9 +243,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
             # update internal access opportunities
             self.access_opportunities = access_opportunities
-        else:
-            # TODO filter out any access opportunities that are no longer active?
-            pass
 
         # retunrn latest known access opportunities
         return self.access_opportunities
