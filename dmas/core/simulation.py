@@ -446,7 +446,7 @@ class Simulation:
 
         # precompute orbit data
         orbitdata_dir = OrbitData.precompute(d, printouts=printouts) if spacecraft_dict is not None else None
-        simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, scenario_duration, printouts) if orbitdata_dir is not None else {}
+        simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, scenario_duration, printouts=printouts) if orbitdata_dir is not None else {}
         
         # load missions
         simulation_missions : Dict[str, Mission] = Simulation.load_missions(scenario_dict)
