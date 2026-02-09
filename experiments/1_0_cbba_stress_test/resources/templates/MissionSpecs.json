@@ -21,6 +21,6 @@
     "settings" : {
         "coverageType": "GRID COVERAGE",
         "outDir" : "INSERT ORBITDATA OUTDIR HERE",
-        "saveUnprocessedCoverage": "True"
+        "saveUnprocessedCoverage": "False"
     }
 }
