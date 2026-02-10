@@ -12,3 +12,6 @@ class BlankPlanner(AbstractPeriodicPlanner):
     def _schedule_broadcasts(self, *_) -> list:
         """ No broadcasts scheduled. """
         return []
+    
+    def print_results(self):
+        return super().print_results()

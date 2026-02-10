@@ -182,3 +182,8 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
             broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
            
         return sorted(broadcasts, key=lambda action: action.t_start)
+    
+    def print_results(self):
+        return super().print_results()
+    
+        # TODO print out list of announcements and how many events were announced, etc.
