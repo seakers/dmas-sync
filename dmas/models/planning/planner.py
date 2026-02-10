@@ -415,8 +415,8 @@ class AbstractPlanner(ABC):
             # populate adjacency list
             with tqdm(total=len(observation_opportunities), desc="Checking task clusterability", leave=False, disable=not self._printouts) as pbar:
                 for b in bins:
-                    candidates : list[ObservationOpportunity]\
-                          = bins[b] + bins.get(b + 1, [])  # optionally add b-1 for symmetry
+                    candidates : list[ObservationOpportunity] \
+                          = bins[b] + bins.get(b + 1, []) + bins.get(b - 1, [])
                     for i in range(len(candidates)):
                         for j in range(i + 1, len(candidates)):
                             t1, t2 = candidates[i], candidates[j]
@@ -523,6 +523,14 @@ class AbstractPlanner(ABC):
                     # update progress bar
                     pbar.update(1)
 
+                # # TODO update adjacency lists to capture new task requirements and clusterability
+                # for neighbor in adj[p.id]:
+                #     adj[neighbor.id].discard(p)
+                #     adj[p.id].discard(neighbor)
+                #     if p.can_merge(neighbor, must_overlap=must_overlap, max_duration=threshold):
+                #         adj[neighbor.id].add(p)
+                #         adj[p.id].add(neighbor)
+
                 # DEBUGGING--------- 
                 # clique.add(p)
                 # cliques.append(sorted([observation_opportunities.index(t)+1 for t in clique]))
@@ -549,7 +557,12 @@ class AbstractPlanner(ABC):
         degrees : dict = {obs : len(adjacency[obs.id]) for obs in obs_opportunities}
 
         # sort observation opportunities by degree and return
-        return sorted(obs_opportunities, key=lambda p: (degrees[p], sum([parent_task.priority for parent_task in p.tasks]), -p.accessibility.left))
+        return sorted(obs_opportunities, key=lambda p: (degrees[p], 
+                                                        sum([parent_task.priority for parent_task in p.tasks]), 
+                                                        -p.accessibility.left,
+                                                        -p.accessibility.span(),
+                                                        p.id
+                                                        ))
 
     def __sort_observation_opportunities_by_common_neighbors(self, p : ObservationOpportunity, n_p : list, adjacency : dict) -> list:
         # specify types
@@ -570,7 +583,10 @@ class AbstractPlanner(ABC):
                                      -len(neighbors_to_delete[p]),
                                      sum([parent_task.priority for parent_task in p.tasks]), 
                                      -p.accessibility.left,
-                                     -p.accessibility.span()))
+                                     -p.accessibility.span(),
+                                      p.id
+                                    )
+                    )
 
     
     def estimate_observation_opportunity_value(self, 

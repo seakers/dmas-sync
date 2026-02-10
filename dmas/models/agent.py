@@ -1001,11 +1001,11 @@ class SimulationAgent(object):
             df.to_parquet(f"{self._results_path}/known_tasks.parquet", index=False)
 
             # log known and generated requests
-            columns = ['id','requester','lat [deg]','lon [deg]','severity','t start','t end','t corr','event type']
+            columns = ['id','requester','lat [deg]','lon [deg]','grid index', 'GP index','severity','start time [s]','end time [s]','detection time [s]','event type']
             if self._processor is not None:
-                data_known = [(event.id, self._processor.event_requesters[event], event.location[0], event.location[1], event.severity, event.t_start, event.t_start+event.d_exp, np.Inf, event.event_type)
+                data_known = [(event.id, self._processor.event_requesters[event], event.location[0], event.location[1], event.location[2], event.location[3], event.severity, event.t_start, event.t_start+event.d_exp, event.t_detect, event.event_type)
                         for event in self._processor.known_events]
-                data_detected = [(event.id, self._processor.event_requesters[event], event.location[0], event.location[1], event.severity, event.t_start, event.t_start+event.d_exp, np.Inf, event.event_type)
+                data_detected = [(event.id, self._processor.event_requesters[event], event.location[0], event.location[1], event.location[2], event.location[3], event.severity, event.t_start, event.t_start+event.d_exp, event.t_detect, event.event_type)
                         for event in self._processor.detected_events]
             else:
                 data_known, data_detected = [], []

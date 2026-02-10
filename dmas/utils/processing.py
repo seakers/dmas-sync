@@ -89,22 +89,17 @@ class ResultsProcessor:
         
         # convert to list of GeophysicalEvent
         events_detected : list[GeophysicalEvent] = []
-        for _,row in events_detected_df.iterrows():
-
-            # TODO test event detection results collection
-            break
-            raise NotImplementedError('Event detection results collection is imlemented but not yet tested.')
-
-            # event = GeophysicalEvent(
-            #     row['event type'],
-            #     (row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['gp_index']),
-            #     row['t start'],
-            #     row['t end'] - row['t start'],
-            #     row['severity'],
-            #     row['detection time [s]'],
-            #     row.get('id',None)
-            # )
-            # events_detected.append(event)
+        for _,row in events_detected_df.iterrows():           
+            event = GeophysicalEvent(
+                row['event type'],
+                (row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['GP index']),
+                row['detection time [s]'],
+                row['start time [s]'],
+                row['end time [s]'] - row['start time [s]'],
+                row['severity'],
+                row['id']
+            )
+            events_detected.append(event)
 
         # compile measurement requests
         if printouts: print('Collecting measurement request data...')

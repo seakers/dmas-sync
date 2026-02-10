@@ -218,40 +218,18 @@ class Bid:
 
     @bid_comparison_input_checks
     def __lt__(self, other : Union['Bid', dict]) -> bool:       
-        # check if equal
+        # compare bids
         if isinstance(other, dict):
-            # if abs(other['winning_bid'] - self.winning_bid) < self.EPS:
-            #     # if there's a tie, use tie-breaker        
-            #     return not self.__wins_tie_breaker(other)
-
-            # compare bids
             return other['winning_bid'] > self.winning_bid
-        
         else:
-            # if abs(other.winning_bid - self.winning_bid) < self.EPS:
-            #     # if there's a tie, use tie-breaker        
-            #     return not self.__wins_tie_breaker(other)
-
-            # compare bids
             return other.winning_bid > self.winning_bid
 
     @bid_comparison_input_checks
     def __gt__(self, other : Union['Bid', dict]) -> bool:
+        # compare bids
         if isinstance(other, dict):
-            # # check if equal
-            # if abs(other['winning_bid'] - self.winning_bid) < self.EPS:
-            #     # if there's a tie, use tie-breaker        
-            #     return self.__wins_tie_breaker(other)
-
-            # compare bids
             return other['winning_bid'] < self.winning_bid
         else:
-            # # check if equal
-            # if abs(other.winning_bid - self.winning_bid) < self.EPS:
-            #     # if there's a tie, use tie-breaker        
-            #     return self.__wins_tie_breaker(other)
-
-            # compare bids
             return other.winning_bid < self.winning_bid
 
     @bid_comparison_input_checks
@@ -264,11 +242,10 @@ class Bid:
 
     @bid_comparison_input_checks
     def __ne__(self, other : Union['Bid', dict]) -> bool:        
+        # compare bids
         if isinstance(other, dict):
-            # compare bids
             return abs(other['winning_bid'] - self.winning_bid) > self.EPS    # different bid value
         else:
-            # compare bids
             return abs(other.winning_bid - self.winning_bid) > self.EPS    # different bid value
 
     @bid_comparison_input_checks
@@ -297,7 +274,8 @@ class Bid:
         Uses winning bidder names to determine winner, goes by alphabetical order of winning bidder names.
         """
         # validate inputs
-        assert isinstance(bid1, Bid) and isinstance(bid2, (Bid, dict)), f'cannot calculate tie breaker. Both objects must be bids.'
+        assert isinstance(bid1, Bid) and isinstance(bid2, (Bid, dict)), \
+            f'cannot calculate tie breaker. Both objects must be bids.'
 
         if isinstance(bid2, dict):
             # compare bids
@@ -665,8 +643,11 @@ class Bid:
                 if other > self:  
                     # Sending agent's bid is higher and more updated → update info
                     return BidComparisonResults.UPDATE
-                elif other.t_img <= self.t_img:
+                elif other.t_img < self.t_img:
                     # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                    return BidComparisonResults.UPDATE
+                elif other == self and abs(other.t_img - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
+                    # Both bids are tied and sending agent wins tie-breaker → update info
                     return BidComparisonResults.UPDATE
         
         # 2. Receiving agent believes other is the winner already.
@@ -691,16 +672,13 @@ class Bid:
             if other.t_stamps[other.winner] > self.t_stamps.get(other.winner, np.NINF):
                 if other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
                     # Sending agent's bids from all parties are more updated → update info
-                    return BidComparisonResults.UPDATE
-                
+                    return BidComparisonResults.UPDATE                
                 elif other > self:  
                     # Sending agent's bid is higher and more updated → update info
-                    return BidComparisonResults.UPDATE
-                
+                    return BidComparisonResults.UPDATE                
                 elif other.t_img < self.t_img:
                     # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
-                    return BidComparisonResults.UPDATE
-                
+                    return BidComparisonResults.UPDATE                
                 elif other == self and abs(other.t_img - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
                     # Both bids are tied and sending agent wins tie-breaker → update info
                     return BidComparisonResults.UPDATE
@@ -761,16 +739,13 @@ class Bid:
             if other_t_stamps[other_winner] > self.t_stamps.get(other_winner, np.NINF):
                 if other_t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
                     # Sending agent's bids from all parties are more updated → update info
-                    return BidComparisonResults.UPDATE
-                
+                    return BidComparisonResults.UPDATE                
                 elif other > self:  
                     # Sending agent's bid is higher and more updated → update info
-                    return BidComparisonResults.UPDATE
-                
+                    return BidComparisonResults.UPDATE                
                 elif other['t_img'] < self.t_img:
                     # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
-                    return BidComparisonResults.UPDATE
-                
+                    return BidComparisonResults.UPDATE                
                 elif other == self and abs(other['t_img'] - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
                     # Both bids are tied and sending agent wins tie-breaker → update info
                     return BidComparisonResults.UPDATE

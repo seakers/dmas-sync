@@ -153,7 +153,7 @@ class PlannerTester(ABC):
                                 "fieldOfViewGeometry": { 
                                     "shape": "RECTANGULAR", 
                                     "angleHeight": 0.5, 
-                                    "angleWidth": 20.0
+                                    "angleWidth": 22.0
                                 },
                                 "maneuver" : {
                                     "maneuverType":"SINGLE_ROLL_ONLY",

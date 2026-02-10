@@ -8,6 +8,7 @@ from math import ceil
 import os
 import random
 import re
+import shutil
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 import pandas as pd
@@ -268,9 +269,7 @@ class OrbitData:
                 for f in os.listdir(data_dir):
                     f_dir = os.path.join(data_dir, f)
                     if os.path.isdir(f_dir):
-                        for h in os.listdir(f_dir):
-                            os.remove(os.path.join(f_dir, h))
-                        os.rmdir(f_dir)
+                        shutil.rmtree(f_dir)
                     else:
                         os.remove(f_dir) 
             if printouts:
