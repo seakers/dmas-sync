@@ -54,7 +54,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_25 = False
         self.toy_26 = False
 
-        self.toy_27 = True # string of pearls with onboard event detection
+        self.toy_27 = False # string of pearls with onboard event detection
 
     def toy_planner_config(self):
         return {

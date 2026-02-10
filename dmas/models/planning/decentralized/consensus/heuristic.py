@@ -50,10 +50,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         # initialize properties
         # self.observation_opportunities : List[ObservationOpportunity] = None
-        self.access_opportunities : dict[tuple] = None
         self.access_opportunity_horizon : Interval = None
-
-
+        self.access_opportunities : dict[tuple] = None
     
     def _build_bundle_from_preplan(self,
                                     state : SimulationAgentState,
@@ -372,7 +370,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         """ 
         # sort urgent tasks by intrinsic task priority
         task_priorities = [(obs, obs.get_priority()) for obs in observation_opportunities]
-        sorted_observation_opportunities = [task for task, _ in sorted(task_priorities, key=lambda item: (-item[1], item[0].accessibility, item[0].id))]
+        sorted_observation_opportunities = [task for task, _ in sorted(task_priorities, key=lambda item: (-item[1], 
+                                                                                                          item[0].accessibility.left,
+                                                                                                          -item[0].accessibility.span(), 
+                                                                                                          item[0].id,))
+                                            ]
         
         # build bundle using heuristic insertion method
         return self.__heuristic_insertion_bundle_builder(state, specs, cross_track_fovs, sorted_observation_opportunities, orbitdata, mission, observation_history)

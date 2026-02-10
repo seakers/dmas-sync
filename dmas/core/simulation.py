@@ -1,5 +1,4 @@
 
-import collections
 from datetime import timedelta
 from enum import Enum
 import gc
@@ -42,7 +41,7 @@ from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
 from dmas.utils.processing import ResultsProcessor
-from dmas.utils.tools import MessageTracker, SimulationRoles
+from dmas.utils.tools import SimulationRoles
 
 class SimulationClockType(Enum):
     # TODO add support for fixed time-step simulations
@@ -193,7 +192,7 @@ class Simulation:
                     #         else:
                     #             continue # skip unexpected traceback formats
 
-                    #         _,_,call_type,file_path,_,line_num = file_info.split(" ") if " " in file_info else ("Unknown", "Unknown", "Unknown")
+                    #         _,_,_,file_path,_,line_num = file_info.split(" ") if " " in file_info else ("Unknown", "Unknown", "Unknown")
                     #         line_info = line_info.strip()
 
                     #         # scale size to appropriate units
@@ -208,20 +207,16 @@ class Simulation:
                     #             size_str = f"{size} bytes"
 
                     #         # print memory allocation info for this line
-                    #         # tqdm.write(f"{i_stat}: {stat}")
-                    #         # tqdm.write(f"- Call type: {call_type}")
-                    #         # tqdm.write(f"- File: {file_path}")
                     #         tqdm.write(f"{i_stat} : {file_path}:{line_num}")
-                    #         # tqdm.write(f"- Line number: {line_num}")
-                    #         tqdm.write(f"- Size: {size_str}")
-                    #         tqdm.write(f"- Count: {stat.count}")
-                    #         tqdm.write(f"- Traceback: `{line_info}`\n")
+                    #         tqdm.write(f" - Size: {size_str}")
+                    #         tqdm.write(f" - Count: {stat.count}")
+                    #         tqdm.write(f" - Traceback: `{line_info}`\n")
 
                     #     x = 1 # breakpoint
                     # # --------------------------------------------------
 
                     # update simulation states
-                    agent_observations : Dict[str, Tuple] \
+                    agent_observations : Dict[str, Tuple[SimulationAgentState, AgentAction, str, List, List]] \
                         = self._environment.step(state_action_pairs, t)
 
                     # validate that all agents' states were updated
@@ -258,10 +253,7 @@ class Simulation:
                     for *_,msgs,obs_data in agent_observations.values():
                         msgs.clear()
                         obs_data.clear()
-                    agent_observations.clear()
-                    
-                    # force garbage collection
-                    gc.collect()
+                    agent_observations.clear()                    
                     
             # mark simulation as executed
             self.__executed = True

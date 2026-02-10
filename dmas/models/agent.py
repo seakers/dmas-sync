@@ -352,8 +352,6 @@ class SimulationAgent(object):
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 if True:
-                # if 95.0 < state.t < 96.0:
-                # if state.get_time() > 19 and "1" in state.agent_name:
                     # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
@@ -375,11 +373,13 @@ class SimulationAgent(object):
 
         # reset message and observations inbox for next cycle
         incoming_messages.clear(); my_measurements.clear()
+        
         incoming_reqs.clear()
         external_measurements.clear()
         external_states.clear()
         external_action_statuses.clear()
         misc_messages.clear()        
+        
         # del curr_state    # TODO check if needed
         # del action        # TODO check if needed
         

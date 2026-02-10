@@ -85,6 +85,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self.preplan : PeriodicPlan = PeriodicPlan([])
         self.plan : Plan = None
 
+        # initialize agent access interval trackers
+        self.agent_access_horizon : Interval = None
+        self.agent_access_intervals : List[Tuple[Interval, str]] = None
+
         # set parameters
         self.model = model
         self.replan_threshold = replan_threshold
@@ -1849,115 +1853,159 @@ class ConsensusPlanner(AbstractReactivePlanner):
     """
     def _schedule_broadcasts(self, state: SimulationAgentState, orbitdata: OrbitData) -> list:
         """ Schedules broadcasts to be done by this agent """
-        try:
-            if not isinstance(state, (SatelliteAgentState, GroundOperatorAgentState)):
-                raise NotImplementedError(f'Broadcast scheduling for agents of type `{type(state)}` not yet implemented.')
-            elif orbitdata is None:
-                raise ValueError(f'`orbitdata` required for agents of type `{type(state)}`.')
+        # validate inputs
+        if not isinstance(state, (SatelliteAgentState, GroundOperatorAgentState)):
+            raise NotImplementedError(f'Broadcast scheduling for agents of type `{type(state)}` not yet implemented.')
+        elif orbitdata is None:
+            raise ValueError(f'`orbitdata` required for agents of type `{type(state)}`.')
 
-            # -------------------------------
-            # DEBUG BREAKPOINTS
-            # -------------------------------
+        # -------------------------------
+        # DEBUG BREAKPOINTS
+        # x = 1
+        # -------------------------------
 
-            # initialize list of broadcasts to be done
-            broadcasts : List[AgentAction] = []       
+        # initialize list of broadcasts to be done
+        broadcasts : List[AgentAction] = []       
 
-            # # generate bid messages to share bids in results
-            # compiled_bid_msgs = [
-            #     MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
-            #     # MeasurementBidMessage(state.agent_name, state.agent_name, bid)
-            #     for task,bids in self.results.items()
-            #     if isinstance(task, EventObservationTask)  # only share bids for event-driven tasks
-            #     for bid in bids
-            # ]
-            bidded_tasks = [
-                task
-                for task,bids in self.results.items()
-                if isinstance(task, EventObservationTask)   # only consider bids for event-driven tasks
-                if bids                                     # only tasks with bids
-            ]
+        # generate bid messages to share bids in results
+        bidded_tasks = [
+            task
+            for task,bids in self.results.items()
+            if isinstance(task, EventObservationTask)   # only consider bids for event-driven tasks
+            if bids                                     # only tasks with bids
+        ]
 
-            # identify tasks without bids to share
-            empty_tasks = [
-                task
-                for task,bids in self.results.items()
-                if isinstance(task, EventObservationTask)   # only consider bids for event-driven tasks
-                if not bids                                 # no bids to share
-            ]
-
-            # # compile results message containing all bid messages
-            # compiled_results_msg = BusMessage(state.agent_name, 
-            #                                   state.agent_name, 
-            #                                 #   [bid_msg.to_dict() for bid_msg in compiled_bid_msgs]
-            #                                   [bid_msg for bid_msg in compiled_bid_msgs]
-            #                                 )
-            # compiled_results_msg_dict = compiled_results_msg.to_dict()
-            
-            # initialize search for broadcast times during access opportunities
-            t_broadcasts = set()
-
-            # outline planning horizon interval
-            t_next = max(self.preplan.t + self.preplan.horizon, state.get_time())
-            
-            # check if shareble bids to share exist
-            if any([isinstance(task, EventObservationTask) for task in self.results]):
-                # schedule broadcast times and find useful access intervals
-                for target in orbitdata.comms_targets:
-
-                    # get access intervals with target agent
-                    next_access_interval : Interval = orbitdata.get_next_agent_access(state.get_time(), target=target, t_max=t_next, include_current=True)
-                    
-                    # if no access opportunities in this planning horizon, skip scheduling
-                    if next_access_interval is not None:
-                        # get last access interval and calculate broadcast time
-                        t_broadcast : float = max(next_access_interval.left, state.get_time())
-                        
-                        # add to list of broadcast times if not already present
-                        t_broadcasts.add(t_broadcast)
-                                       
-                # check if any communication links are available at all
-                if not orbitdata.comms_targets:
-                    # no communication links available, broadcast task requests into the void
-                    t_broadcasts.add(state.get_time())
-
-                    # set to no bids to share
-                    compiled_bid_msgs = []  
-
-            # crreate broadcast actions for each broadcast time
-            for t_broadcast in t_broadcasts:
-                # TODO decide whether to broadcast state and observations as well
-                
-                # check if there are any bid messages to share
-                # if compiled_bid_msgs:
-                    # generate results broadcast action
-                    # broadcasts.append(BroadcastMessageAction(compiled_results_msg_dict, t_broadcast))
-                if bidded_tasks:
-                    broadcasts.append(FutureBroadcastMessageAction(FutureBroadcastMessageAction.BIDS, t_broadcast))
-
-                # check if there are any tasks without bids to share
-                if empty_tasks:
-                    # generate plan message to share any task requests generated
-                    broadcasts.append(FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, 
-                                                                    t_broadcast, 
-                                                                    only_own_info=False,
-                                                                    desc = empty_tasks))
-
-            # include established broadcasts from preplan
-            preplan_broadcasts = [action for action in self.preplan.actions
-                                    # extract only broadcast actions
-                                    if isinstance(action, BroadcastMessageAction)
-                                    # exclude broadcasts of future information; 
-                                    #  these would be redundant with those scheduled here 
-                                    and not isinstance(action, FutureBroadcastMessageAction)]
-            broadcasts.extend(preplan_broadcasts)
-
-            # return scheduled broadcasts
-            return sorted(broadcasts, key=lambda action: action.t_start) 
+        # identify tasks without bids to share
+        empty_tasks = [
+            task
+            for task,bids in self.results.items()
+            if isinstance(task, EventObservationTask)   # only consider bids for event-driven tasks
+            if not bids                                 # no bids to share
+        ]
         
-        finally:
-            assert isinstance(broadcasts, list), "Scheduled broadcasts is not a list."
-            assert all(isinstance(broadcast, BroadcastMessageAction) for broadcast in broadcasts), \
-                "Not all scheduled broadcasts are of type `BroadcastMessageAction`."
+        # schedule broadcasts at future access opportunities
+        t_broadcasts = self.__get_broadcast_times(state, orbitdata)
+
+        # crreate broadcast actions for each broadcast time
+        for t_broadcast in t_broadcasts:
+            # TODO decide whether to broadcast state and observations as well
+            
+            # check if there are any bid messages to share
+            if bidded_tasks:
+                broadcasts.append(FutureBroadcastMessageAction(FutureBroadcastMessageAction.BIDS, t_broadcast))
+
+            # check if there are any tasks without bids to share
+            if empty_tasks:
+                # generate plan message to share any task requests generated
+                broadcasts.append(FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, 
+                                                                t_broadcast, 
+                                                                only_own_info=False,
+                                                                desc = empty_tasks))
+
+        # include established broadcasts from preplan
+        preplan_broadcasts = [action for action in self.preplan.actions
+                                # extract only broadcast actions
+                                if isinstance(action, BroadcastMessageAction)
+                                # exclude broadcasts of future information; 
+                                #  these would be redundant with those scheduled here 
+                                and not isinstance(action, FutureBroadcastMessageAction)]
+        broadcasts.extend(preplan_broadcasts)
+
+        # return scheduled broadcasts
+        return sorted(broadcasts, key=lambda action: action.t_start) 
+
+    def __get_broadcast_times(self, state : SimulationAgentState, orbitdata : OrbitData) -> List[float]:
+        
+        # check if any shareble bids to share exist
+        if all([not isinstance(task, EventObservationTask) for task in self.results]):
+            # No tasks with bids to share; return empty list
+            return []
+
+        # get current time 
+        t_curr : float = state.get_time()
+        # define end of planning horizon for broadcast scheduling
+        t_next = max(self.preplan.t + self.preplan.horizon, t_curr)
+
+        # check if precomputed agent access intervals need to be loaded
+        if self.agent_access_horizon is None or t_curr not in self.agent_access_horizon:
+            # if so; calculate all future access intervals within the planning horizon and store for future use                        
+            
+            # set current access horizon to planning horizon
+            self.agent_access_horizon = Interval(t_curr, t_next)
+            
+            # initialzie list of access intervals for this horizon
+            self.agent_access_intervals = []
+            
+            # check if any communication links are available at all
+            if not orbitdata.comms_targets:
+                # no communication links available, broadcast task requests into the void
+                self.agent_access_intervals.append((Interval(t_curr, t_next), None))
+            
+            else:
+                # get next access intervals with each communication target within the planning horizon
+                access_data : List[Tuple[Interval, str]] \
+                    = orbitdata.get_next_agent_accesses(t_curr, t_next, include_current=True)
+
+                # store access intervals for future use
+                self.agent_access_intervals.extend(access_data)                    
+                                    
+        # initiate set of broadcast times to be scheduled (avoids duplicates)
+        t_broadcasts = set()
+        agents_considered = set()
+        
+        # extract earliest broadcast time for each target from agent access intervals 
+        for access_interval,target in self.agent_access_intervals:
+            # skip if target agent has already been considered
+            if target in agents_considered:
+                continue
+
+            # get last access interval and calculate broadcast time
+            t_broadcast : float = max(access_interval.left, t_curr)
+            
+            # add to list of broadcast times if not already present
+            t_broadcasts.add(t_broadcast)
+
+            # mark target agent as considered
+            if target is not None: agents_considered.add(target)
+
+            # check if all targets have been considered 
+            if (len(agents_considered) == len(orbitdata.comms_targets)
+                and all(target in agents_considered for target in orbitdata.comms_targets)):
+                # if so, break to avoid unnecessary iterations
+                break
+        
+        # return sorted list of broadcast times
+        return sorted(t_broadcasts)
+    
+        # self.agent_access_horizon : Interval = None
+        # self.agent_access_intervals : List[Interval] = None
+
+        # # initialize search for broadcast times during access opportunities
+        # t_broadcasts = set()
+
+        # # outline planning horizon interval
+        # t_next = max(self.preplan.t + self.preplan.horizon, state.get_time())
+        
+        # # check if shareble bids to share exist
+        # if any([isinstance(task, EventObservationTask) for task in self.results]):
+            # # schedule broadcast times and find useful access intervals
+            # for target in orbitdata.comms_targets:
+
+            #     # get access intervals with target agent
+            #     next_access_interval : Interval = orbitdata.get_next_agent_access(state.get_time(), target=target, t_max=t_next, include_current=True)
+                
+            #     # if no access opportunities in this planning horizon, skip scheduling
+            #     if next_access_interval is not None:
+                    # # get last access interval and calculate broadcast time
+                    # t_broadcast : float = max(next_access_interval.left, state.get_time())
+                    
+                    # # add to list of broadcast times if not already present
+                    # t_broadcasts.add(t_broadcast)
+                                    
+            # # check if any communication links are available at all
+            # if not orbitdata.comms_targets:
+            #     # no communication links available, broadcast task requests into the void
+            #     t_broadcasts.add(state.get_time())
 
     """
     REPLAN SCHEDULING

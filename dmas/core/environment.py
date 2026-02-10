@@ -1,5 +1,3 @@
-import copy
-import gc
 import logging
 import os
 import time
@@ -11,18 +9,16 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from dmas.core.messages import BusMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, message_from_dict
+from dmas.core.messages import BusMessage, MeasurementRequestMessage, SimulationMessage, message_from_dict
 from dmas.models.trackers import DataSink
 from dmas.utils.orbitdata import OrbitData
 
-from execsatm.tasks import EventObservationTask
 from execsatm.events import GeophysicalEvent
 from execsatm.utils import Interval
 
 from dmas.models.actions import *
-from dmas.models.science.requests import TaskRequest
 from dmas.models.states import SimulationAgentState, SimulationAgentTypes
-from dmas.utils.tools import MessageTracker, SimulationRoles
+from dmas.utils.tools import SimulationRoles
 
 
 class SimulationEnvironment(object):
@@ -138,7 +134,7 @@ class SimulationEnvironment(object):
     def step(self, 
              state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]], 
              t_curr : float
-            ) -> Dict[str, List]:
+            ) -> Dict[str, List[Tuple[SimulationAgentState, AgentAction, str, List[SimulationMessage], List[dict]]]]:
         """Updates agent states based on the provided actions at time `t` """
         # update internal time and state
         self.__update_state(t_curr)
