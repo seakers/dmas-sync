@@ -523,13 +523,18 @@ class AbstractPlanner(ABC):
                     # update progress bar
                     pbar.update(1)
 
-                # # TODO update adjacency lists to capture new task requirements and clusterability
-                # for neighbor in adj[p.id]:
-                #     adj[neighbor.id].discard(p)
-                #     adj[p.id].discard(neighbor)
-                #     if p.can_merge(neighbor, must_overlap=must_overlap, max_duration=threshold):
-                #         adj[neighbor.id].add(p)
-                #         adj[p.id].add(neighbor)
+                # Update adjacency lists to capture new task requirements and clusterability
+                for neighbor in adj[p.id]:
+                    # remove p from neighbor's adjacency list and vice versa
+                    adj[neighbor.id].discard(p)
+                    adj[p.id].discard(neighbor)
+
+                    # reevaluate adjacency
+                    if p.can_merge(neighbor, must_overlap=must_overlap, max_duration=threshold):
+                        # if p and neighbor can still be merged;
+                        # add edge back to adjacency list
+                        adj[neighbor.id].add(p)
+                        adj[p.id].add(neighbor)
 
                 # DEBUGGING--------- 
                 # clique.add(p)
@@ -545,9 +550,11 @@ class AbstractPlanner(ABC):
         # return only observation opportunities that have multiple parents (avoid generating duplicate observation opportunities)
         multiple_task_obs = [obs for obs in combined_obs if len(obs.tasks) > 1] 
 
-        # if len(multiple_task_obs) < 2 and observation_opportunities:
-        #     x = 1 # for debugging; ideally we would want to remove this and return all combined observation opportunities, but for now we will only return those that have multiple parents to avoid generating duplicate observation opportunities.
-        
+        # generate new id's for combined observation opportunities to avoid duplicate id's with single-task observation opportunities
+        for obs in multiple_task_obs:
+            obs.regenerate_id()
+
+        # return combined observation opportunities
         return multiple_task_obs
 
     

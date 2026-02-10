@@ -267,7 +267,7 @@
                 // "--single-thread",
                 // "--only-precompute",
                 "--force-simulate",
-                // "--quiet",
+                "--quiet",
                 "--exceptions",
             ]
         },

@@ -151,7 +151,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
             access_intervals : List[Tuple[Interval, str]] = orbitdata.get_next_agent_accesses(task_req.t_req, include_current=True)
 
             # create broadcast actions for each access interval
-            for next_access,target in access_intervals:
+            for next_access,_ in access_intervals:
                 # if no access opportunities in this planning horizon, skip scheduling
                 if next_access.is_empty(): continue
 
