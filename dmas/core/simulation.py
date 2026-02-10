@@ -676,6 +676,7 @@ class Simulation:
                                          agent_mission, 
                                          simulation_missions, 
                                          simulation_orbitdata, 
+                                         simulation_results_path,
                                          logger,
                                          printouts
                                         )  
@@ -820,6 +821,7 @@ class Simulation:
                       agent_mission : Mission, 
                       simulation_missions : Dict[str,Mission], 
                       simulation_orbitdata: Dict[str, OrbitData],
+                      simulation_results_path : str,
                       logger : logging.Logger,
                       printouts : bool
                     ) -> tuple:
@@ -830,7 +832,7 @@ class Simulation:
         preplanner = Simulation.__load_preplanner(planner_dict, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
 
         # load replanner
-        replanner = Simulation.__load_replanner(planner_dict, logger, printouts)
+        replanner = Simulation.__load_replanner(planner_dict, agent_name, simulation_results_path, logger, printouts)
 
         # return loaded planners
         return preplanner, replanner
@@ -965,7 +967,11 @@ class Simulation:
         raise NotImplementedError(f'preplanner of type `{preplanner_dict}` not yet supported.')
         
     @staticmethod
-    def __load_replanner(planner_dict : dict, logger : logging.Logger, printouts : bool) -> AbstractReactivePlanner:
+    def __load_replanner(planner_dict : dict, 
+                         agent_name : str, 
+                         simulation_results_path : str, 
+                         logger : logging.Logger, 
+                         printouts : bool) -> AbstractReactivePlanner:
         """ loads the replanner for the agent """
         # get replanner specs
         replanner_dict = planner_dict.get('replanner', None)
@@ -984,7 +990,8 @@ class Simulation:
 
             if 'heuristic' in model:
                 heuristic = replanner_dict.get('heuristic', 'earliestAccess')
-                return HeuristicInsertionConsensusPlanner(heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
+                agent_results_dir = os.path.join(simulation_results_path, agent_name.lower())
+                return HeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
             else:
                 raise NotImplementedError(f'replanner model `{model}` not yet supported.')
         

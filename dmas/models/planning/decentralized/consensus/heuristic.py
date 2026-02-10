@@ -32,6 +32,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
     HEURISTICS = [EARLIEST_ACCESS, TASK_VALUE, TASK_PRIORITY]
 
     def __init__(self,
+                 agent_results_dir : str,
                  heuristic : str = EARLIEST_ACCESS,
                  replan_threshold : int = 1, 
                  optimistic_bidding_threshold : int = 1,
@@ -40,7 +41,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                  logger : bool = None,
                  printouts : bool = True
                 ):
-        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
+        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, agent_results_dir, debug, logger, printouts)
 
         # validate inputs
         assert heuristic in self.HEURISTICS, f"Invalid heuristic '{heuristic}'. Must be one of {self.HEURISTICS}."
@@ -158,7 +159,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         cross_track_fovs : dict = self._collect_fov_specs(specs)
 
         # Outline planning horizon interval
-        t_next = max(self.preplan.t + self.preplan.horizon, state._t)
+        t_next = max(self._preplan.t + self._preplan.horizon, state._t)
         planning_horizon = Interval(state._t, t_next)
         
         # calculate observation opportunities for this planning horizon
@@ -214,7 +215,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         observation_opportunities : List[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
         
         # extract already planned task observation opportunities from current plan
-        planned_observation_opportunities = [obs.obs_opp for obs in self.path 
+        planned_observation_opportunities = [obs.obs_opp for obs in self._path 
                                              if isinstance(obs,ObservationAction)]
 
         # filter tasks that are already in the current plan or that were just performed
@@ -281,7 +282,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         # get urgent event tasks that are available within planning horizon
         event_tasks = {task 
-                        for task in self.known_event_tasks 
+                        for task in self._known_event_tasks 
                         if task.availability.overlaps(planning_horizon)}
         
         # merge task sets
@@ -407,17 +408,17 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # initialized bundle from current plan
         proposed_bundle : List[Tuple[ObservationOpportunity, 
                                      Dict[GenericObservationTask, int]]] = \
-                [task_tuple for task_tuple in self.bundle]
+                [task_tuple for task_tuple in self._bundle]
         
         # initialize proposed path from current plan
-        proposed_path : List[ObservationAction] = [obs_action for obs_action in self.path]
+        proposed_path : List[ObservationAction] = [obs_action for obs_action in self._path]
         
         # extract existing bids from current bundle
         proposed_bids : Dict[GenericObservationTask, Dict[int, Bid]] = defaultdict(dict)
         for _,obs in proposed_bundle:
             for task,n_obs in obs.items():
                 # find matching existing bid
-                existing_bid = self.results[task][n_obs]
+                existing_bid = self._results[task][n_obs]
 
                 # ensure this bid is assigned to current agent
                 assert existing_bid.winner == state.agent_name, \
@@ -1032,12 +1033,12 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # find best observation sequences for each parent task
         for task in modified_tasks_in_path:
             # assume parent task has been considered in results
-            assert task in self.results, f"Parent task {task} not being bid on by any agent; cannot generate bids."
+            assert task in self._results, f"Parent task {task} not being bid on by any agent; cannot generate bids."
             
             # count all previously performed observations for this parent task
             performed_obs : list[Tuple[float,str,float,ObservationOpportunity]] = \
                             [(bid.t_img,bid.owner,np.NAN,None) 
-                             for bid in self.results[task] 
+                             for bid in self._results[task] 
                              if bid.was_performed()]
             latest_performed_obs_time : Tuple[float,str,float,ObservationOpportunity] \
                 = max(performed_obs, key=lambda obs: obs[0]) if performed_obs else None
@@ -1047,7 +1048,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
             # get all possible observation opportunities from results
             scheduled_obs_times : list[Tuple[float,str,float,ObservationOpportunity]] = \
-                  [(bid.t_img,bid.winner,np.NAN,None) for bid in self.results[task] 
+                  [(bid.t_img,bid.winner,np.NAN,None) for bid in self._results[task] 
                    if bid.winner != state.agent_name
                    and not bid.was_performed()]
 
@@ -1091,7 +1092,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     # get observation value
                     if agent_name != state.agent_name: # observation is to be performed by another agent
                         # get matching bid for this observation
-                        matching_bid : Bid = self.results[task][n_obs]
+                        matching_bid : Bid = self._results[task][n_obs]
 
                         # ensure matching bid is from correct agent
                         assert matching_bid.winner == agent_name, \
@@ -1124,7 +1125,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         # compare task value estimate against existing bids for this observation number
 
                         # if no existing bid for this observation number, accept if:
-                        if n_obs >= len(self.results[task]):
+                        if n_obs >= len(self._results[task]):
                             accept_bid = [
                                 # 1) proposed observation value is positive 
                                 task_value > 0.0
@@ -1135,12 +1136,12 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                             try:
                                 existing_bid : Bid = proposed_bids[task][n_obs]
                             except KeyError:
-                                existing_bid : Bid = self.results[task][n_obs]
+                                existing_bid : Bid = self._results[task][n_obs]
 
                             # get mutex bids for this observation
                             following_bids = [
                                                 mutex_bid
-                                                for mutex_bid in self.results[task]
+                                                for mutex_bid in self._results[task]
                                                 if mutex_bid.n_obs > n_obs
                                                 and mutex_bid.winner != state.agent_name
                                             ]
@@ -1154,7 +1155,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                 all(task_value > mutex_bid.winning_bid for mutex_bid in mutex_bids),
                                 # 3) or if proposed earlier observation time and optimistic bidding counter allows it
                                 t_obs < existing_bid.t_img 
-                                    and self.optimistic_bidding_counters[task][n_obs] > 0
+                                    and self._optimistic_bidding_counters[task][n_obs] > 0
                             ]
 
                         # check if bid is accepted
@@ -1265,10 +1266,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     # get previous matching observations for this task
                     prev_bids_self = [bid for bid in proposed_bids[task].values()
                                         if bid.t_img < obs.t_start]
-                    previous_bids_other = [bid for bid in self.results[task]
+                    previous_bids_other = [bid for bid in self._results[task]
                                         if (bid.winner != state.agent_name)
                                         and bid.t_img < obs.t_start]
-                    prevoous_bids_perf = [bid for bid in self.results[task]
+                    prevoous_bids_perf = [bid for bid in self._results[task]
                                         if bid.was_performed()
                                         and bid.t_img < obs.t_start]
                     prev_bids = prev_bids_self + previous_bids_other + prevoous_bids_perf
@@ -1297,7 +1298,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         feasible_sequences = []
 
         # count number of completed observations for this task
-        performed_bids = [bid for bid in self.results[task] if bid.was_performed()]
+        performed_bids = [bid for bid in self._results[task] if bid.was_performed()]
 
         # count minimum sequence length; use number of occurrences of this agent in available observation times
         min_seq_length = sum(1 for _,agent_name,*_ in available_obs if agent_name == state.agent_name)
@@ -1322,16 +1323,16 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 n_obs = len(current_sequence) + len(performed_bids) - 1
 
                 # check if bid for this observation exists
-                if task not in self.results:
+                if task not in self._results:
                     # no matching bids exist for this task; cannot add as start point
                     continue
-                elif len(self.results[task]) <= n_obs:
+                elif len(self._results[task]) <= n_obs:
                     # matching no bids exist for this observation number; cannot add successor
                     continue
-                elif self.results[task][n_obs].winner != agent_obs:
+                elif self._results[task][n_obs].winner != agent_obs:
                     # known bid for this observation number is from another agent; cannot add as start point
                     continue
-                elif abs(self.results[task][n_obs].t_img - t_img) > self.EPS:
+                elif abs(self._results[task][n_obs].t_img - t_img) > self.EPS:
                     # observation time for this observation number does not match; cannot add as start point
                     continue
                 # --- IGNORE AND PRUNE ---

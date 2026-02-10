@@ -1286,6 +1286,13 @@ class AbstractPlanner(ABC):
                 or abs(dt_measurements - dt_maneuver) < 1e-6)   # there is enough time to maneuver
                 and dt_measurements >= -1e-6)                   # measurement time is after the previous measurement
                  
+    """
+    RESULTS PRINTOUT
+    """
+    @abstractmethod
+    def print_results(self) -> None:
+        """ Prints out the results of the planner's computations. """
+
     # def _print_observation_sequence(self, 
     #                                 state : SatelliteAgentState, 
     #                                 path : list, 

@@ -775,7 +775,7 @@ class SimulationAgent(object):
         compiled_bid_msgs = [
             MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
             # MeasurementBidMessage(state.agent_name, state.agent_name, bid)
-            for task,bids in self._replanner.results.items()
+            for task,bids in self._replanner._results.items()
             if isinstance(task, EventObservationTask)  # only share bids for event-driven tasks
             for bid in bids
         ]
@@ -1045,6 +1045,12 @@ class SimulationAgent(object):
 
             # log state history
             self._state_history.close()
+
+            # log planner results
+            if self._preplanner is not None:
+                self._preplanner.print_results()
+            if self._replanner is not None:
+                self._replanner.print_results()
 
         except Exception as e:
             raise e        
