@@ -220,17 +220,17 @@ class Bid:
     def __lt__(self, other : Union['Bid', dict]) -> bool:       
         # check if equal
         if isinstance(other, dict):
-            if abs(other['winning_bid'] - self.winning_bid) < self.EPS:
-                # if there's a tie, use tie-breaker        
-                return not self.__wins_tie_breaker(other)
+            # if abs(other['winning_bid'] - self.winning_bid) < self.EPS:
+            #     # if there's a tie, use tie-breaker        
+            #     return not self.__wins_tie_breaker(other)
 
             # compare bids
             return other['winning_bid'] > self.winning_bid
         
         else:
-            if abs(other.winning_bid - self.winning_bid) < self.EPS:
-                # if there's a tie, use tie-breaker        
-                return not self.__wins_tie_breaker(other)
+            # if abs(other.winning_bid - self.winning_bid) < self.EPS:
+            #     # if there's a tie, use tie-breaker        
+            #     return not self.__wins_tie_breaker(other)
 
             # compare bids
             return other.winning_bid > self.winning_bid
@@ -238,18 +238,18 @@ class Bid:
     @bid_comparison_input_checks
     def __gt__(self, other : Union['Bid', dict]) -> bool:
         if isinstance(other, dict):
-            # check if equal
-            if abs(other['winning_bid'] - self.winning_bid) < self.EPS:
-                # if there's a tie, use tie-breaker        
-                return self.__wins_tie_breaker(other)
+            # # check if equal
+            # if abs(other['winning_bid'] - self.winning_bid) < self.EPS:
+            #     # if there's a tie, use tie-breaker        
+            #     return self.__wins_tie_breaker(other)
 
             # compare bids
             return other['winning_bid'] < self.winning_bid
         else:
-            # check if equal
-            if abs(other.winning_bid - self.winning_bid) < self.EPS:
-                # if there's a tie, use tie-breaker        
-                return self.__wins_tie_breaker(other)
+            # # check if equal
+            # if abs(other.winning_bid - self.winning_bid) < self.EPS:
+            #     # if there's a tie, use tie-breaker        
+            #     return self.__wins_tie_breaker(other)
 
             # compare bids
             return other.winning_bid < self.winning_bid
@@ -275,17 +275,17 @@ class Bid:
     def __le__(self, other : Union['Bid', dict]) -> bool:
         # compare bids
         if isinstance(other, dict):
-            return other['winning_bid'] >= self.winning_bid or abs(other['winning_bid'] - self.winning_bid) < self.EPS
+            return self < other or abs(other['winning_bid'] - self.winning_bid) < self.EPS
         else:
-            return other.winning_bid >= self.winning_bid or abs(other.winning_bid - self.winning_bid) < self.EPS
+            return self < other or abs(other.winning_bid - self.winning_bid) < self.EPS
     
     @bid_comparison_input_checks
     def __ge__(self, other : Union['Bid', dict]) -> bool:
         # compare bids
         if isinstance(other, dict):
-            return other['winning_bid'] <= self.winning_bid or abs(other['winning_bid'] - self.winning_bid) < self.EPS
+            return self > other or abs(other['winning_bid'] - self.winning_bid) < self.EPS
         else:
-            return other.winning_bid <= self.winning_bid or abs(other.winning_bid - self.winning_bid) < self.EPS
+            return self > other or abs(other.winning_bid - self.winning_bid) < self.EPS
 
     def __wins_tie_breaker(self, other: Union['Bid', dict]) -> bool:
         """ Returns True if, when bids are tied, we should prefer `self` over `other`. """
@@ -522,8 +522,11 @@ class Bid:
             if other > self:  
                 # Sending agent's bid is higher → update info
                 return BidComparisonResults.UPDATE
-            elif other.t_img <= self.t_img:
+            elif other.t_img < self.t_img:
                 # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                return BidComparisonResults.UPDATE
+            elif other == self and abs(other.t_img - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
+                # Both bids are tied and sending agent wins tie-breaker → update info
                 return BidComparisonResults.UPDATE
             
         # 2. Receiving agent believes other is the winner already.
@@ -540,8 +543,11 @@ class Bid:
             elif other > self:
                 # Sending agent's bid is higher → update info
                 return BidComparisonResults.UPDATE
-            elif other.t_img <= self.t_img:
+            elif other.t_img < self.t_img:
                 # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                return BidComparisonResults.UPDATE
+            elif other == self and abs(other.t_img - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
+                # Both bids are tied and sending agent wins tie-breaker → update info
                 return BidComparisonResults.UPDATE
 
         # 4. Receiving agent bid has no winner.
@@ -559,8 +565,11 @@ class Bid:
             if other > self:  
                 # Sending agent's bid is higher → update info
                 return BidComparisonResults.UPDATE
-            elif other['t_img'] <= self.t_img:
+            elif other['t_img'] < self.t_img:
                 # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                return BidComparisonResults.UPDATE
+            elif other == self and abs(other['t_img'] - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
+                # Both bids are tied and sending agent wins tie-breaker → update info
                 return BidComparisonResults.UPDATE
         
         # 2. Receiving agent believes other is the winner already.
@@ -577,8 +586,11 @@ class Bid:
             elif other > self:
                 # Sending agent's bid is higher → update info
                 return BidComparisonResults.UPDATE
-            elif other['t_img'] <= self.t_img:
+            elif other['t_img'] < self.t_img:
                 # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                return BidComparisonResults.UPDATE
+            elif other == self and abs(other['t_img'] - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
+                # Both bids are tied and sending agent wins tie-breaker → update info
                 return BidComparisonResults.UPDATE
             
         # 4. Receiving agent bid has no winner.
@@ -685,8 +697,12 @@ class Bid:
                     # Sending agent's bid is higher and more updated → update info
                     return BidComparisonResults.UPDATE
                 
-                elif other.t_img <= self.t_img:
+                elif other.t_img < self.t_img:
                     # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                    return BidComparisonResults.UPDATE
+                
+                elif other == self and abs(other.t_img - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
+                    # Both bids are tied and sending agent wins tie-breaker → update info
                     return BidComparisonResults.UPDATE
 
             elif other.t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:
@@ -716,8 +732,11 @@ class Bid:
                 if other > self:  
                     # Sending agent's bid is higher and more updated → update info
                     return BidComparisonResults.UPDATE
-                elif other['t_img'] <= self.t_img:
+                elif other['t_img'] < self.t_img:
                     # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                    return BidComparisonResults.UPDATE
+                elif other == self and abs(other['t_img'] - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
+                    # Both bids are tied and sending agent wins tie-breaker → update info
                     return BidComparisonResults.UPDATE
         
         # 2. Receiving agent believes other is the winner already.
@@ -748,8 +767,12 @@ class Bid:
                     # Sending agent's bid is higher and more updated → update info
                     return BidComparisonResults.UPDATE
                 
-                elif other['t_img'] <= self.t_img:
+                elif other['t_img'] < self.t_img:
                     # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
+                    return BidComparisonResults.UPDATE
+                
+                elif other == self and abs(other['t_img'] - self.t_img) < self.EPS and not self.__wins_tie_breaker(other):
+                    # Both bids are tied and sending agent wins tie-breaker → update info
                     return BidComparisonResults.UPDATE
 
             elif other_t_stamps.get(self.winner, np.NINF) > self.t_stamps[self.winner]:

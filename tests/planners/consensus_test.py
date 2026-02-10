@@ -3,6 +3,7 @@ import os
 from typing import List
 import unittest
 
+import numpy as np
 import pandas as pd
 
 from dmas.core.simulation import Simulation
@@ -26,7 +27,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         ## toy cases
         self.toy_1 = False  # single sat    default mission     single target, no events
-        self.toy_2 = True  # single sat    no default mission  one event
+        self.toy_2 = False  # single sat    no default mission  one event
         self.toy_3 = False  # two sats      no default mission  one event
         self.toy_4 = False  # two sats      no default mission  one event           optimistic bidding
         self.toy_5 = False  # two sats      no default mission  one event           comm delays
@@ -52,6 +53,8 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_24 = False
         self.toy_25 = False
         self.toy_26 = False
+
+        self.toy_27 = True # string of pearls with onboard event detection
 
     def toy_planner_config(self):
         return {
@@ -2593,6 +2596,100 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # define ground operator with CBBA + announcer capability
         scenario_specs['groundOperator'] = self.setup_announcing_cbba_ground_operators(event_name, mission_name, [gs_network])
+
+        # initialize mission
+        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+
+        # execute mission
+        self.simulation.execute()
+
+        # print results
+        self.simulation.process_results()
+
+        print(f"{scenario_name}: DONE")
+
+    def test_toy_case_27(self):
+        """
+        ## TOY CASE 27
+        Test case for a two satellites responding to event announcements from a satellite with onboard
+        event-detection capabilities. Satellites fly in a string-of-pearls coniguration where only the 
+        leading satellite can detect the event, but can share information to the other two satellites 
+        via inter-satellite links. The reactive satellites can then bid on performing observations of 
+        the event with a ground station operator.
+
+        Events
+        - Event 1:   0.001[s] - 7200.0[s]
+        - Event 2:  6000.0[s] - 7200.0[s]
+        """
+
+        if not self.toy_27: return
+
+        # setup scenario parameters
+        duration = 2.0 / 24.0
+        grid_name = 'toy_27'
+        scenario_name = f'toy_27-{self.planner_name()}'
+        connectivity = 'LOS'
+        event_name = 'toy_27'
+        mission_filename = 'toy_missions'
+        mission_name = 'toy_mission_27'
+        gs_network = 'gs_toy_27'
+
+        # SAT0 : announcer satellite 
+        announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
+        announcer_spacecraft['@id'] = 'sat0_announcer'
+        announcer_spacecraft['name'] = 'sat0'
+        announcer_spacecraft['planner'] = self.toy_planner_config()
+        announcer_spacecraft['instrument'] = self.instruments['TIR'] # wide swath instrument
+        announcer_spacecraft['orbitState']['state']['inc'] = 0.0
+        announcer_spacecraft['orbitState']['state']['ta'] = 0.0
+        announcer_spacecraft['groundStationNetwork'] = gs_network
+        announcer_spacecraft['mission'] = mission_name
+        announcer_spacecraft['science'] = self.setup_science_config(event_name)
+
+        # SAT1 : reactive satellite with narrow swath instrument
+        ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
+        ractive_spacecraft_1['@id'] = 'sat1_vnir'
+        ractive_spacecraft_1['name'] = 'sat1'
+        ractive_spacecraft_1['planner'] = self.toy_planner_config() # no preplan capability
+        ractive_spacecraft_1['spacecraftBus']['components']['adcs']['maxRate'] = 1.5
+        ractive_spacecraft_1['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_1['orbitState']['state']['inc'] = 0.0
+        ractive_spacecraft_1['orbitState']['state']['ta'] = announcer_spacecraft['orbitState']['state']['ta'] - 15.0 # phase offset
+        ractive_spacecraft_1['groundStationNetwork'] = gs_network
+        ractive_spacecraft_1['mission'] = mission_name
+
+        # SAT2 : reactive satellite with narrow swath instrument
+        ractive_spacecraft_2 : dict = copy.deepcopy(self.spacecraft_template)
+        ractive_spacecraft_2['@id'] = 'sat2_vnir'
+        ractive_spacecraft_2['name'] = 'sat2'
+        ractive_spacecraft_2['planner'] = self.toy_planner_config() # no preplan capability
+        ractive_spacecraft_2['spacecraftBus']['components']['adcs']['maxRate'] = 1.5
+        ractive_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_2['orbitState']['state']['inc'] = 0.0
+        ractive_spacecraft_2['orbitState']['state']['ta'] = ractive_spacecraft_1['orbitState']['state']['ta'] - 15.0 # phase offset
+        ractive_spacecraft_2['groundStationNetwork'] = gs_network
+        ractive_spacecraft_2['mission'] = mission_name
+
+        # terminal welcome message
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
+
+        # Generate scenario
+        scenario_specs = self.setup_scenario_specs(duration,
+                                                   grid_name, 
+                                                   scenario_name, 
+                                                   connectivity,
+                                                   event_name,
+                                                   mission_filename,
+                                                   spacecraft=[
+                                                       announcer_spacecraft,
+                                                       ractive_spacecraft_1,
+                                                       ractive_spacecraft_2
+                                                    ]
+                                                   )
+
+        # # compile ground stations and operators
+        # scenario_specs['groundStation'] = self.compile_ground_stations([gs_network])
+        # scenario_specs['groundOperator'] = self.setup_cbba_ground_operators(mission_name, [gs_network])
 
         # initialize mission
         self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)

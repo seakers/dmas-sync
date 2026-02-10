@@ -760,7 +760,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         if loser_bid.n_obs >= len(current_bids):
                             # add empty bid to results for new observation number
                             current_bids.append(
-                                Bid(loser_bid.task, state.agent_name, loser_bid.n_obs, t_bid=state.get_time())
+                                Bid(loser_bid.task, state.agent_name, loser_bid.n_obs)
                             )
 
                             # initialize optimistic bidding counter for new bid
@@ -779,7 +779,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         #         if not bid.has_winner():
         #             x=1 # debug breakpoint    
         
-        # if modified_completed_bids and self._debug:
+        # if results_updates and self._debug:
         #     self._log_results('CONSENSUS PHASE - RESULTS (AFTER COMPARISON)', state, self.results)
         #     x = 1 # debug breakpoint
         # -------------------------------
@@ -1484,6 +1484,15 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     self.results[task][n_obs] = bid
 
                 except IndexError:
+                    # count bids within results for this task
+                    n_existing_bids = len(self.results[task])                    
+                    
+                    # append missing bids as empty bids with no winner
+                    for i in range(n_existing_bids, n_obs):
+                        empty_bid = Bid(task, state.agent_name, i)
+                        self.results[task].append(empty_bid)
+                        self.optimistic_bidding_counters[task].append(self.optimistic_bidding_threshold)
+
                     # bid for new observation number; add to results
                     self.results[task].append(bid)
 

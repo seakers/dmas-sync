@@ -298,7 +298,7 @@ class SimulationAgent(object):
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
                 if True:
-                    # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -379,12 +379,9 @@ class SimulationAgent(object):
         external_measurements.clear()
         external_states.clear()
         external_action_statuses.clear()
-        misc_messages.clear()
-        # TODO check if needed
-        # del curr_state 
-        # del action
-
-        # TODO clear any temporary variables if needed
+        misc_messages.clear()        
+        # del curr_state    # TODO check if needed
+        # del action        # TODO check if needed
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         if True:
@@ -491,10 +488,11 @@ class SimulationAgent(object):
         if self._processor is None: return []
 
         # process observations and return generated requests
-        new_reqs = self._processor.process_measurements(incoming_reqs, measurements)
+        new_reqs : List[TaskRequest] \
+            = self._processor.process_measurements(incoming_reqs, measurements)
 
         # add to known requests
-        self._known_reqs.update({self._req_key(req): req for req in new_reqs})
+        self._known_reqs.update({self._req_key(req.to_dict()): req for req in new_reqs})
 
         # return generated requests
         return new_reqs
@@ -627,7 +625,7 @@ class SimulationAgent(object):
                 state.to_dict(),
                 action.to_dict(),
                 instrument.to_dict(),
-                t_curr,
+                action.t_start,
                 action.t_end,
             )
 

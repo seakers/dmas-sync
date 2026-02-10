@@ -292,8 +292,8 @@ class SimulationEnvironment(object):
         # unpack message
         agent_state_dict = action.req['agent_state']
         instrument_dict = action.req['instrument']
-        t_start = max(action.req['t_start'], t_curr)
-        t_end = action.req['t_end']
+        t_start = action.req['t_start']
+        t_end = max(action.req['t_end'], t_curr)
 
         assert t_end >= t_start, \
             f"Invalid observation action times: t_start={action.req['t_start']}[s], t_end={t_end}[s], t_img={t_curr}[s]"

@@ -216,12 +216,19 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         observation_opportunities : List[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
         
         # extract already planned task observation opportunities from current plan
-        planned_observation_opportunities = [obs.obs_opp for obs in self.path if isinstance(obs,ObservationAction)]
+        planned_observation_opportunities = [obs.obs_opp for obs in self.path 
+                                             if isinstance(obs,ObservationAction)]
 
         # filter tasks that are already in the current plan or that were just performed
         observation_opportunities = [obs_opp for obs_opp in observation_opportunities
+                                     # check if already planned
                                     if obs_opp not in planned_observation_opportunities
-                                    and obs_opp not in self.latest_performed_observations]
+                                    # check if just performed
+                                    and obs_opp not in self.latest_performed_observations
+                                    # check if mutually exclusive with any already planned observation opportunities
+                                    and all(not obs_opp.is_mutually_exclusive(planned_obs) 
+                                            for planned_obs in planned_observation_opportunities)
+                                    ]
              
         # return observation opportunities
         return observation_opportunities
@@ -370,7 +377,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # build bundle using heuristic insertion method
         return self.__heuristic_insertion_bundle_builder(state, specs, cross_track_fovs, sorted_observation_opportunities, orbitdata, mission, observation_history)
 
-    def _is_task_mutually_exclusive_with_path(self, task : ObservationOpportunity, path : List[ObservationAction]):
+    def _is_obs_opportunity_mutually_exclusive_with_path(self, task : ObservationOpportunity, path : List[ObservationAction]):
         """ Check if task is mutually exclusive with any observations in the given path. """
         return any([task.is_mutually_exclusive(action.obs_opp) for action in path])
 
@@ -651,27 +658,32 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     max_slew_rate : float,
                                     max_torque : float
                                 ) -> Tuple[List[ObservationAction], List[ObservationAction], List[ObservationAction]]:
-        """ Try to directly insert new task into existing path. """
-        # initialize feasible observation time and select observation loook angle for new task
+        """ Try to directly insert new observation opportunity into existing path. """
+        # check if new observation opportunity is mutually exclusive with any observation opportunities in current path
+        if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, current_path):
+            # new observation opportunity cannot be directly inserted into path due to mutual exclusivity
+            return (None, None, None) 
+
+        # initialize feasible observation time and select observation look angle for new observation opportunity
         t_img, th_img = None, np.average([new_obs.slew_angles.left, new_obs.slew_angles.right])
 
         # find possible conflicts in current path
-        ## find observations that are being performed during new task accessibility
+        ## find observations that are being performed during new observation opportunity accessibility
         observations_during_task_access = [action for action in current_path
                                            if action.t_start in new_obs.accessibility
                                            or action.t_end in new_obs.accessibility]
-        ## get latest observation before new task accessibility
+        ## get latest observation before new observation opportunity accessibility
         prev_observations = [action for action in current_path
                              if action.t_end <= new_obs.accessibility.left]
         prev_observation = max(prev_observations, key=lambda action: action.t_end) if prev_observations else None
-        ## get earliest observation after new task accessibility
+        ## get earliest observation after new observation opportunity accessibility
         next_observations = [action for action in current_path
                              if action.t_start >= new_obs.accessibility.right]
         next_observation = min(next_observations, key=lambda action: action.t_start) if next_observations else None
 
         # compile conflicting observations        
         conflicting_observations = {prev_observation, next_observation} if prev_observation else {next_observation} if next_observation else set()
-        ## get unique observations during new task access
+        ## get unique observations during new observation opportunity access
         conflicting_observations.update(observations_during_task_access)
         ## sort conflicting observations by start time
         conflicting_observations = sorted([obs for obs in conflicting_observations 
@@ -680,7 +692,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # set current state as a dummy previous observation
         obs_prev = ObservationAction(new_obs.instrument_name,  state.attitude[0], state._t)
 
-        # check if gaps between observations can accommodate new task
+        # check if gaps between observations can accommodate new observation opportunity
         for obs_next in conflicting_observations: 
             # check maneuver time between new task and current observations
             m_prev = abs(obs_prev.look_angle - th_img) / max_slew_rate
@@ -752,10 +764,15 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                         max_slew_rate : float,
                                         max_torque : float
                                     ) -> Tuple[List[ObservationAction], List[ObservationAction]]:
-        """ Try to right-shift existing path to accommodate new task. """
+        """ Try to right-shift existing path to accommodate new observation. """
         # check if path is empty
         if len(current_path) == 0: 
-            # Current path is empty; cannot right-shift path for new task.
+            # Current path is empty; cannot right-shift path for new observation.
+            return (None, None, None)
+        
+        # check if new observation opportunity is mutually exclusive with any observation opportunities in current path
+        if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, current_path):
+            # new observation opportunity cannot be right-shifted into path due to mutual exclusivity
             return (None, None, None)
 
         # check if path is sorted by start time
@@ -859,23 +876,23 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                                  state : SimulationAgentState,
                                                  specs : object,
                                                  current_path : List[ObservationAction],
-                                                 new_task : ObservationOpportunity,
+                                                 new_obs : ObservationOpportunity,
                                                  max_slew_rate : float,
                                                  max_torque : float
                                             ) -> Tuple[List[ObservationAction], List[ObservationAction]]:
-        """ Try to replace conflicting tasks in existing path with new task. """
+        """ Try to replace conflicting observation opportunities in existing path with new observation opportunity. """
         # check if path is empty
         if len(current_path) == 0: 
-            # Current path is empty; cannot replace conflicting tasks in path for new task.
+            # Current path is empty; cannot replace conflicting observation opportunities in path for new observation opportunity.
             return (None, None, None)
 
         # find possible conflicts in current path
-        ## find observations that are being performed during new task accessibility
+        ## find observations that are being performed during new observation opportunity accessibility
         observations_during_task_access = [(obs_idx,obs) for obs_idx,obs in enumerate(current_path)
-                                           if obs.t_start in new_task.accessibility
-                                           or obs.t_end in new_task.accessibility
-                                           or (obs.t_start < new_task.accessibility.left
-                                               and obs.t_end > new_task.accessibility.right)]
+                                           if obs.t_start in new_obs.accessibility
+                                           or obs.t_end in new_obs.accessibility
+                                           or (obs.t_start < new_obs.accessibility.left
+                                               and obs.t_end > new_obs.accessibility.right)]
 
         conflicting_observations = [obs_tup for obs_tup in observations_during_task_access]
 
@@ -885,7 +902,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             return (None, None, None)
         
         # select observation loook angle for new task
-        th_img = np.average([new_task.slew_angles.left, new_task.slew_angles.right])
+        th_img = np.average([new_obs.slew_angles.left, new_obs.slew_angles.right])
 
         # check if removing conflicting observations can accommodate new task
         for conflict_idx,conflicting_observation in conflicting_observations: 
@@ -898,7 +915,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # get preceeding observation action
             if conflict_idx == 0:
                 # set previous observation as dummy action at current state
-                obs_prev = ObservationAction(new_task.instrument_name, state.attitude[0], state._t)
+                obs_prev = ObservationAction(new_obs.instrument_name, state.attitude[0], state._t)
             else:
                 # select previous observation from path
                 obs_prev = new_path[conflict_idx-1]
@@ -907,7 +924,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             m_prev = abs(obs_prev.look_angle - th_img) / max_slew_rate
 
             # estimate earliest feasible observation time
-            t_img = max(new_task.accessibility.left, obs_prev.t_end + m_prev)
+            t_img = max(new_obs.accessibility.left, obs_prev.t_end + m_prev)
 
             # get next observation time
             try:
@@ -925,17 +942,17 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 # 1) must be able to maneuver from previous observation to new task
                 obs_prev.t_end + m_prev <= t_img,   
                 # 2) must be able to maneuver from new task to next observation
-                t_img + new_task.min_duration + m_next <= t_next, 
+                t_img + new_obs.min_duration + m_next <= t_next, 
                 # 3) must fit within new task accessibility window
-                t_img in new_task.accessibility,
-                t_img + new_task.min_duration in new_task.accessibility
+                t_img in new_obs.accessibility,
+                t_img + new_obs.min_duration in new_obs.accessibility
             ]
 
             # check if new task meets all feasibility constraints
             if not all(feasibility_constraints):  continue # not feasible; try next conflicting observation
 
             # create new observation action for new task
-            new_observation = ObservationAction(new_task.instrument_name, th_img, t_img, new_task.min_duration, new_task)
+            new_observation = ObservationAction(new_obs.instrument_name, th_img, t_img, new_obs.min_duration, new_obs)
             
             # replace conflicting observation with new task
             new_path[conflict_idx] = new_observation
@@ -943,6 +960,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # ensure conflicting observation was replaced
             assert conflicting_observation not in new_path, \
                 "Conflicting observation was not properly replaced in new path."
+
+            # check if new task is mutually exclusive with any tasks in the new path
+            if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, new_path):
+                # new task cannot be right-shifted into path due to mutual exclusivity
+                return (None, None, None)
 
             # return new path if valid
             if self.is_observation_path_valid(state, new_path, max_slew_rate, max_torque, specs):

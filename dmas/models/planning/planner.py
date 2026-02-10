@@ -160,14 +160,13 @@ class AbstractPlanner(ABC):
                                                                                     ) )
 
         return access_opportunities
-
     
     def create_observation_opportunities_from_accesses(self, 
                                     available_tasks : List[GenericObservationTask],
                                     access_times : List[tuple], 
                                     cross_track_fovs : dict,
                                     orbitdata : OrbitData,
-                                    must_overlap : bool = True,
+                                    must_overlap : bool = False,
                                     threshold : float = 5*60
                                     ) -> list:
         """ 
@@ -182,39 +181,39 @@ class AbstractPlanner(ABC):
         - `threshold` : The time threshold for clustering tasks in seconds [s] (default : 300 seconds = 5 minutes).
         """
 
-        if not must_overlap: raise NotImplementedError('Clustering without overlap is not yet fully implemented.')
+        # if not must_overlap: raise NotImplementedError('Clustering without overlap is not yet fully implemented.')
 
         # generate task observation opportunities from access times
-        observation_opps : list[ObservationOpportunity] \
+        atomic_observation_opps : list[ObservationOpportunity] \
             = self.single_task_observation_opportunity_from_accesses(available_tasks, access_times, cross_track_fovs, orbitdata)
         
         # remove duplicates if needed
-        observation_opps = list(set(observation_opps))
+        atomic_observation_opps = list(set(atomic_observation_opps))
 
         # filter out opportunities that have just been performed
-        filtered_observation_opps : list[ObservationOpportunity] \
-            = [obs for obs in observation_opps 
+        observation_opps : list[ObservationOpportunity] \
+            = [obs for obs in atomic_observation_opps 
                if all(not obs.is_mutually_exclusive(performed_obs) 
                       for performed_obs in self.latest_performed_observations)] \
-                if self.latest_performed_observations else observation_opps
+                if self.latest_performed_observations else atomic_observation_opps
         
-        # check if tasks are clusterable
-        task_adjacency : Dict[str, set[ObservationOpportunity]] \
-            = self.check_task_observation_opportunity_clusterability(filtered_observation_opps, must_overlap, threshold)
+        # check if observation opportunities are clusterable
+        obs_adjacency : Dict[str, set[ObservationOpportunity]] \
+            = self.check_task_observation_opportunity_clusterability(observation_opps, must_overlap, threshold)
    
-        # cluster tasks based on adjacency
-        combined_obs : list[ObservationOpportunity] \
-            = self.cluster_task_observation_opportunities(filtered_observation_opps, task_adjacency, must_overlap, threshold)
+        # cluster observation opportunities based on adjacency
+        combined_opps : list[ObservationOpportunity] \
+            = self.cluster_task_observation_opportunities(observation_opps, obs_adjacency, must_overlap, threshold)
 
-        # add clustered tasks to the final list of tasks available for scheduling
-        filtered_observation_opps.extend(combined_obs) 
+        # add clustered observation opportunities to the final list of observation opportunities available for scheduling
+        observation_opps.extend(combined_opps) 
 
         assert all([obs.slew_angles.span()-1e-6 <= cross_track_fovs[obs.instrument_name] 
-                    for obs in filtered_observation_opps]), \
-            f"Tasks have slew angles larger than the maximum allowed field of view."
-
-        # return tasks
-        return sorted(filtered_observation_opps, key=lambda x: x.accessibility)
+                    for obs in observation_opps]), \
+            f"Observation opportunities have slew angles larger than the maximum allowed field of view."
+        
+        # return observation opportunities
+        return observation_opps
         
     
     def single_task_observation_opportunity_from_accesses(self,
@@ -293,7 +292,7 @@ class AbstractPlanner(ABC):
                                                                     ))
         
         # return list of task observation opportunities
-        return observation_opps
+        return sorted(observation_opps, key=lambda x: (x.accessibility, x.id))
     
     def __extract_minimum_duration_req(self, task : GenericObservationTask, orbitdata : OrbitData) -> float:
         """ Extracts the minimum duration requirement for a given task. """
@@ -536,7 +535,12 @@ class AbstractPlanner(ABC):
                 v : list[ObservationOpportunity] = self.__sort_by_degree(v, adj)
         
         # return only observation opportunities that have multiple parents (avoid generating duplicate observation opportunities)
-        return [obs for obs in combined_obs if len(obs.tasks) > 1] 
+        multiple_task_obs = [obs for obs in combined_obs if len(obs.tasks) > 1] 
+
+        # if len(multiple_task_obs) < 2 and observation_opportunities:
+        #     x = 1 # for debugging; ideally we would want to remove this and return all combined observation opportunities, but for now we will only return those that have multiple parents to avoid generating duplicate observation opportunities.
+        
+        return multiple_task_obs
 
     
     def __sort_by_degree(self, obs_opportunities : List[ObservationOpportunity], adjacency : dict) -> list:
@@ -565,7 +569,8 @@ class AbstractPlanner(ABC):
                       key=lambda p: (len(common_neighbors[p]), 
                                      -len(neighbors_to_delete[p]),
                                      sum([parent_task.priority for parent_task in p.tasks]), 
-                                     -p.accessibility.left))
+                                     -p.accessibility.left,
+                                     -p.accessibility.span()))
 
     
     def estimate_observation_opportunity_value(self, 

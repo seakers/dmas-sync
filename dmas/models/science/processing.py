@@ -36,7 +36,7 @@ class ObservationDataProcessor(ABC):
     # @runtime_tracker
     def process_measurements(self, 
                              incoming_reqs : List[TaskRequest], 
-                             measurements : list) -> list:
+                             measurements : list) -> List[TaskRequest]:
         
         # unpack incoming requests
         incoming_detected_events = {req.event for req in incoming_reqs 
@@ -180,14 +180,13 @@ class LookupProcessor(ObservationDataProcessor):
             self.events_lookup = [event for event in self.events_lookup if event.is_active(t_img_start) or event.is_future(t_img_start)]
             self.t_update = t_img_start
 
-        observed_events : List[GeophysicalEvent] = [ event.copy()
+        observed_events : List[GeophysicalEvent] = [event.copy()
                                                     for event in self.events_lookup
                                                     # same location as the observation
                                                     if abs(lat - event.location[0]) <= 1e-3
                                                     and abs(lon - event.location[1]) <= 1e-3
                                                     # availability during the time of observation
-                                                    and (event.t_start <= t_img_start <= event.t_start + event.d_exp
-                                                        or event.t_start <= t_img_end <= event.t_start + event.d_exp)
+                                                    and (t_img_start in event.availability or t_img_end in event.availability)
                                                     # event has not been detected before
                                                     and (event.location[0],event.location[1],event.t_start,event.d_exp,event.severity,event.event_type) not in self.detected_events 
                                                     # event type is detectable by mission
