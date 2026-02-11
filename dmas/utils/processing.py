@@ -1438,8 +1438,8 @@ class ResultsProcessor:
                     continue
 
                 # get observation times - (lat, lon, t_start, duration, severity, observer, t_img, instrument, observations_req)
-                _,_,t_prev_end,*_ = prev_observation
-                _,t_start,*_ = observation
+                t_prev_end = prev_observation['t_end']
+                t_start = observation['t_start']
 
                 # calculate revisit
                 t_reobservation = t_start - t_prev_end

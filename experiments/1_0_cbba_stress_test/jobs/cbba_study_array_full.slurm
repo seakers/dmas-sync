@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cbba_stress
+#SBATCH --job-name=cbba_stress_full
 #SBATCH --output=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.out
 #SBATCH --error=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.err
 #SBATCH --time=06:00:00
