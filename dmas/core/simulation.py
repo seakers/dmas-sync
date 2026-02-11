@@ -262,7 +262,7 @@ class Simulation:
             for agent in self._agents: agent.print_results()
             
             # print results for the simulation itself
-            self.print_results()
+            self.__print_results()
 
             # return execution status
             return self.__executed
@@ -276,12 +276,8 @@ class Simulation:
             # print results for the simulation environment regardless of the execution outcome
             self._environment.print_results()
 
-
-    def print_results(self) -> str:
+    def __print_results(self) -> str:
         """ prints simulation results after execution """
-        if not self.is_executed():
-            raise RuntimeError("Simulation has not been executed yet. Cannot print results.")
-
         # TODO implement results printing
         return "Results printing not yet implemented."
 
@@ -290,16 +286,16 @@ class Simulation:
     """
     def process_results(self, 
                         reevaluate : bool = False, 
-                        display_summary : bool = True,
+                        printouts : bool = True,
                         print_to_csv : bool = True,
                         precision : int = 5
                         ) -> pd.DataFrame:
         """ processes simulation results after execution """
         # validate execution
-        if not self.is_executed(): raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
+        if not self.is_executed(printouts): raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
         
         # print divider
-        if display_summary: print(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
+        if printouts: print(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
 
         # define results summary filename
         summary_path = os.path.join(f"{self._results_path}","summary.csv")
@@ -321,11 +317,11 @@ class Simulation:
                                                self._orbitdata,
                                                agent_missions,
                                                self._events,
-                                               printouts=display_summary,
+                                               printouts=printouts,
                                                precision=precision)
 
         # log results summary
-        if display_summary:
+        if printouts:
             print(f"\n\n{'-'*80}\n")
             print(f"\nSIMULATION RESULTS SUMMARY:\n")
             print(results_summary.to_string(index=False))
@@ -340,16 +336,16 @@ class Simulation:
     """
     UTILITY METHODS
     """
-    def is_executed(self) -> bool:
+    def is_executed(self, printouts : bool = True) -> bool:
         """ returns whether the simulation has been executed """
         # return true if this simulation has been executed or if results exist
-        return self.__executed or self.__check_if_results_exist()
+        return self.__executed or self.__check_if_results_exist(printouts)
 
-    def __check_if_results_exist(self) -> bool:
+    def __check_if_results_exist(self, printouts : bool) -> bool:
         """ checks if the simulation has been executed by looking for result files """
         # check for existence of result files for all agents
-        if not self.__executed:
-            print('WARNING: Simulation instance has not been executed yet. Evaluating existing scenario results...\n')
+        if not self.__executed and printouts:
+            print('WARNING: Simulation instance has not been executed yet. Evaluating pre-existing scenario data...\n')
 
         # ensure all simulation elements have populated their results directories
         results_dirs = [os.path.join(self._results_path, agent.name.lower()) 

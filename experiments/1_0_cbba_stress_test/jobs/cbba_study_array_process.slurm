@@ -32,4 +32,4 @@ end=$((i+1))
 python ./experiments/1_0_cbba_stress_test/study.py \
   -t lhs_trials-2_samples-1000_seed \
   --trial-range "${start}:${end}" \
-  --single-thread --quiet --exceptions --only-postprocess 
+  --single-thread --quiet --exceptions --only-postprocess

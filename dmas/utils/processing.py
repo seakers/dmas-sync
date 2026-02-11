@@ -40,7 +40,7 @@ class ResultsProcessor:
         results_summary : pd.DataFrame \
             = ResultsProcessor.__summarize_results(compiled_orbitdata, agent_missions, observations_performed,
                                     events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, 
-                                        planned_rewards_df, execution_costs_df, precision)
+                                        planned_rewards_df, execution_costs_df, precision, printouts)
         
         # return results summary
         return results_summary
@@ -264,7 +264,8 @@ class ResultsProcessor:
                             agent_broadcasts_df : pd.DataFrame,
                             planned_rewards_df : pd.DataFrame,
                             execution_costs_df : pd.DataFrame,
-                            n_decimals : int = 5
+                            n_decimals : int = 5,
+                            printouts : bool = True
                         ) -> pd.DataFrame:
         
         # classify observations
@@ -281,7 +282,8 @@ class ResultsProcessor:
                                                                                events, 
                                                                                events_detected,
                                                                                task_reqs,
-                                                                               tasks_known)       
+                                                                               tasks_known,
+                                                                               printouts)       
 
         # count observations performed
         # n_events, n_unique_event_obs, n_total_event_obs,
@@ -315,7 +317,8 @@ class ResultsProcessor:
                                                                                 events_co_obs_partially,
                                                                                 tasks_known,
                                                                                 tasks_observable,
-                                                                                tasks_observed)
+                                                                                tasks_observed,
+                                                                                printouts)
             
         # count probabilities of observations performed
         p_gp_accessible, p_gp_observed, p_gp_observed_if_accessible, p_event_at_gp, p_event_detected, \
@@ -513,12 +516,17 @@ class ResultsProcessor:
                                 events : List[GeophysicalEvent], 
                                 events_detected : List[GeophysicalEvent], 
                                 task_reqs : List[TaskRequest],
-                                known_tasks : List[GenericObservationTask]
+                                known_tasks : List[GenericObservationTask],
+                                printouts : bool = True
                             ) -> tuple:
                 
         # classify ground points (GPs) by their accessibility
         gps_accessible = set()
-        for agent_orbitdata in tqdm(compiled_orbitdata.values(), desc='Counting total and accessible ground points', leave=False):
+        for agent_orbitdata in tqdm(compiled_orbitdata.values(), 
+                                    desc='Counting total and accessible ground points', 
+                                    leave=False,
+                                    disable=not printouts
+                                ):
             # get set of accessible ground points
             gps_accessible_temp : set = {(row['grid index'], row['GP index']) 
                                             for _,row in agent_orbitdata.gp_access_data}
@@ -551,7 +559,8 @@ class ResultsProcessor:
         # for event in tqdm(events.values, 
         for event in tqdm(events, 
                             desc='Classifying event accesses, detections, and observations', 
-                            leave=True):
+                            leave=True,
+                            disable=not printouts):
             
             access_intervals, matching_detections, matching_requests, matching_observations \
                 = ResultsProcessor.__collect_event_observation(event, 
@@ -587,7 +596,7 @@ class ResultsProcessor:
 
         # TODO implement co-observation classification
         print('Classifying co-observations... (WARNING: not yet implemented)')
-        # for event, access_intervals in tqdm(events_observable.items(), desc='Compiling possible co-observations', leave=False):
+        # for event, access_intervals in tqdm(events_observable.items(), desc='Compiling possible co-observations', leave=False, disable=not printouts):
         #     # get event characteristics
         #     event_type : str = event.event_type
             
@@ -639,7 +648,7 @@ class ResultsProcessor:
         events_co_obs_partially : Dict[tuple, list] = {}
 
         # TODO
-        # for event, observations in tqdm(events_observed.items(), desc='Compiling co-observations', leave=False):
+        # for event, observations in tqdm(events_observed.items(), desc='Compiling co-observations', leave=False, disable=not printouts):
         #     # get event characteristics
         #     event_type : str = event[3]
             
@@ -705,7 +714,7 @@ class ResultsProcessor:
         tasks_observable : Dict[GenericObservationTask, list] = defaultdict(list)
         tasks_observed : Dict[GenericObservationTask, list] = defaultdict(list)
 
-        for task in tqdm(known_tasks, desc="Processing task observations", leave=True):
+        for task in tqdm(known_tasks, desc="Processing task observations", leave=True, disable=not printouts):
             # compile observation requirements for this task
             instrument_capability_reqs : Dict[str, set] = defaultdict(set)
 
@@ -1010,13 +1019,14 @@ class ResultsProcessor:
                             events_co_obs_partially : dict,
                             tasks_known : list,
                             tasks_observable : dict,
-                            tasks_observed : dict
+                            tasks_observed : dict,
+                            printouts : bool = True
                         ) -> tuple:
         
         # count number of groundpoints and their accessibility
         n_gps = None
         gps_accessible_compiled = set()
-        for _,agent_orbitdata in tqdm(orbitdata.items(), desc='Counting total and accessible ground points', leave=False):
+        for _,agent_orbitdata in tqdm(orbitdata.items(), desc='Counting total and accessible ground points', leave=False, disable=not printouts):
             agent_orbitdata : OrbitData
 
             # count number of ground points
@@ -1174,7 +1184,8 @@ class ResultsProcessor:
                                     events_co_obs_partially : dict,
                                     tasks_known : list,
                                     tasks_observable : dict,
-                                    tasks_observed : dict
+                                    tasks_observed : dict,
+                                    printouts : bool = True
                                 ) -> tuple:
 
         # count observations by type
@@ -1208,7 +1219,8 @@ class ResultsProcessor:
                                                                                 events_co_obs_partially,
                                                                                 tasks_known,
                                                                                 tasks_observable,
-                                                                                tasks_observed)
+                                                                                tasks_observed,
+                                                                                printouts)
                     
         # count number of ground points accessible and observed 
         n_gps_observed_and_accessible = len(observations_per_gp)

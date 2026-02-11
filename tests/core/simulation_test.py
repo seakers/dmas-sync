@@ -255,7 +255,7 @@ class TestSimulationLoading(unittest.TestCase):
 
         # process results
         results_summary : pd.DataFrame\
-              = self.simulation.process_results(display_summary=True, precision=4)
+              = self.simulation.process_results(printouts=True, precision=4)
         
         # check that results summary is a dataframe
         self.assertIsInstance(results_summary, pd.DataFrame)

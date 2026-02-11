@@ -410,7 +410,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                     level=log_level_int
                 )
             # Your code currently has this disabled; enable when ready:
-            mission.process_results()
+            mission.process_results(printouts=not sim_cfg.quiet)
             post_status = "postprocess_ran"  # change to "processed" once enabled
         else:
             post_status = "postprocess_skipped_existing"
@@ -439,7 +439,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     except Exception as e:
         if sim_cfg.reduced or sim_cfg.exceptions:
             traceback.print_exc()  # print full traceback for debugging
-            raise e  # re-raise for debugging 
+            raise e  # re-raise to terminate trials
 
         return {
             "scenario_id": scenario_id,

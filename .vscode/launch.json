@@ -265,11 +265,11 @@
                 // "--reduced",
                 // "--profile-cpu",
                 // "--profile-mem",
-                // "--single-thread",
+                "--single-thread",
                 // "--only-precompute",
                 // "--force-simulate",
                 "--only-postprocess",
-                // "--quiet",
+                "--quiet",
                 "--exceptions",
             ]
         },
