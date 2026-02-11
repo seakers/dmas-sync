@@ -346,13 +346,16 @@ class OrbitData:
             assert os.path.exists(os.path.join(data_dir,'MissionSpecs.json')), \
                 'Mission specifications not saved correctly!'
             
-        if changes_to_scenario or overwrite:
+        # check if data in the directory has already been preprocessed 
+        has_been_preprocessed = os.path.exists(os.path.join(data_dir, 'bin', 'meta.json'))
+
+        # check if data has not been preprocessed or if there have been changes to the scenario specifications since the last propagation or if overwrite is enabled
+        if not has_been_preprocessed or changes_to_scenario or overwrite:
             # preprocess data and store as binarys for faster loading in the future
             if printouts: tqdm.write("Preprocessing orbit data...")
             OrbitData.preprocess(data_dir, scenario_specs['duration'], overwrite=True, printouts=printouts)
             if printouts: tqdm.write("Preprocessing done!")
 
-        # TODO test pending vvv
         # remove raw data and only keep binaries to save space? Or keep both to allow for future changes to preprocessing methods without needing to re-propagate data? For now, keeping both.
         if settings_dict is not None:
             save_unprocessed_coverage = settings_dict.get('saveUnprocessedCoverage', "True").lower() == "true"

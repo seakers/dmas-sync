@@ -49,7 +49,11 @@ def create_grid_specifications(base_path : str, target_distribution : int) -> di
         "covGridFilePath": grid_path
     }]
 
-def create_propagator_settings_specifications(base_path : str, scenario_id : int, num_sats : float, gnd_segment : str, target_distribution) -> dict:
+def create_propagator_settings_specifications(base_path : str, 
+                                              scenario_id : int, 
+                                              num_sats : float, 
+                                              gnd_segment : str, 
+                                              target_distribution) -> dict:
     # define out_dir name
     # scenario_name = f"nsats-{num_sats}_gndseg-{gnd_segment.lower()}_tgtdist-{int(target_distribution)}"
     scenario_name = f"scenario_{scenario_id}"
@@ -62,6 +66,7 @@ def create_propagator_settings_specifications(base_path : str, scenario_id : int
     return {
             "coverageType": "GRID COVERAGE",
             "outDir" : out_dir,
+            "saveUnprocessedCoverage" : "False"
         }
     
 def create_spacecraft_specifications(num_sats : int, 
