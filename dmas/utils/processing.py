@@ -596,7 +596,7 @@ class ResultsProcessor:
         events_co_observable_partially : Dict[GeophysicalEvent, list] = {}
 
         # TODO implement co-observation classification
-        print('Classifying co-observations... (WARNING: not yet implemented)')
+        # if printouts: print('Classifying co-observations... (WARNING: not yet implemented)')
         # for event, access_intervals in tqdm(events_observable.items(), desc='Compiling possible co-observations', leave=False, disable=not printouts):
         #     # get event characteristics
         #     event_type : str = event.event_type

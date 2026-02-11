@@ -270,7 +270,7 @@
                 // "--force-simulate",
                 // "--only-postprocess",
                 "--force-postprocess",
-                // "--quiet",
+                "--quiet",
                 "--exceptions",
             ]
         },
