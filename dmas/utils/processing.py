@@ -352,7 +352,8 @@ class ResultsProcessor:
                                                                                     events_co_obs_partially,
                                                                                     tasks_known,
                                                                                     tasks_observable,
-                                                                                    tasks_observed)
+                                                                                    tasks_observed,
+                                                                                    printouts)
         
         # calculate event revisit times
         t_gp_reobservation = ResultsProcessor.__calc_groundpoint_coverage_metrics(observations_per_gp)

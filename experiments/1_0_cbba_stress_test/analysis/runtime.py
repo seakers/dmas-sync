@@ -7,7 +7,7 @@ def print_runtime_data(trial_name : str, scenario_id : int) -> None:
 
     # define results directory
     results_dir = f'{trial_name}_scenario_{scenario_id}'
-    results_path = os.path.join('results', results_dir)
+    results_path = os.path.join('../results', results_dir)
 
     for dir_name in os.listdir(results_path):
         print(f"Directory: `{dir_name}`")
@@ -28,7 +28,6 @@ def print_runtime_data(trial_name : str, scenario_id : int) -> None:
             x= 1
 
 if __name__ == "__main__":
-
     # define trial parameters
     trial_name = "lhs_trials-2_samples-1000_seed"
     scenario_id = 0

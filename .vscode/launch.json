@@ -269,7 +269,7 @@
                 // "--only-precompute",
                 // "--force-simulate",
                 "--only-postprocess",
-                "--quiet",
+                // "--quiet",
                 "--exceptions",
             ]
         },
