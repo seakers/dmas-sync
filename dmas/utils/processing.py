@@ -235,11 +235,11 @@ class ResultsProcessor:
             dA = np.abs(np.diff(A, axis=0))              # shape (N-1, 3)
             
             cost_temp = pd.DataFrame({
-                'time [s]': state_temp['t'][:-1],  # shape (N-1,)
-                'agent' : [agent_name] * (len(state_temp)-1),  # shape (N-1,)                            
-                'status' : state_temp['status'][:-1],  # shape (N-1,)
-                'attitude [deg]' : state_temp['attitude'][:-1],  # shape (N-1,) 
-                'cost': alpha * np.linalg.norm(dA, axis=1),  # shape (N-1,)
+                'time [s]': state_temp['t'][:-1],               # shape (N-1,)
+                'agent' : [agent_name] * (len(state_temp)-1),   # shape (N-1,)                            
+                'status' : state_temp['status'][:-1],           # shape (N-1,)
+                'attitude [deg]' : state_temp['attitude'][:-1], # shape (N-1,) 
+                'cost': alpha * np.linalg.norm(dA, axis=1),     # shape (N-1,)
             })
 
             # concatenate to main dataframe

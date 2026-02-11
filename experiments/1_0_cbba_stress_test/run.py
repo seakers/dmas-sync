@@ -396,39 +396,33 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # ------------------------------------------------------------
         # Stage 3: Postprocess (controlled by force/only + cache)
         # ------------------------------------------------------------
-        # TODO enable when ready
-        post_status = "postprocess_skipped_not_implemented"
-        # # Decide whether postprocess should run
-        # summary_exists = os.path.isfile(results_summary_path)
-        # should_postprocess = sim_cfg.force_postprocess or (not summary_exists)
+        # Decide whether postprocess should run
+        summary_exists = os.path.isfile(results_summary_path)
+        should_postprocess = sim_cfg.force_postprocess or (not summary_exists)
 
-        # if sim_cfg.only_postprocess:
-        #     # In only_postprocess mode, do it even if exists? usually yes.
-        #     should_postprocess = True
+        if should_postprocess:
+            if mission is None:
+                # Load mission if needed for processing
+                mission = Simulation.from_dict(
+                    mission_specs,
+                    overwrite=False,
+                    printouts=printouts,
+                    level=log_level_int
+                )
+            # Your code currently has this disabled; enable when ready:
+            mission.process_results()
+            post_status = "postprocess_ran"  # change to "processed" once enabled
+        else:
+            post_status = "postprocess_skipped_existing"
 
-        # if should_postprocess:
-        #     if mission is None:
-        #         # Load mission if needed for processing
-        #         mission = Simulation.from_dict(
-        #             mission_specs,
-        #             overwrite=False,
-        #             printouts=printouts,
-        #             level=log_level_int
-        #         )
-        #     # Your code currently has this disabled; enable when ready:
-        #     # mission.process_results()
-        #     post_status = "postprocess_ran"  # change to "processed" once enabled
-        # else:
-        #     post_status = "postprocess_skipped_existing"
-
-        # if sim_cfg.only_postprocess:
-        #     return {
-        #         "scenario_id": scenario_id,
-        #         "status": post_status,
-        #         "results_dir": results_dir,
-        #         "results_summary_path": results_summary_path,
-        #         "elapsed_s": time.time() - t0,
-        #     }
+        if sim_cfg.only_postprocess:
+            return {
+                "scenario_id": scenario_id,
+                "status": post_status,
+                "results_dir": results_dir,
+                "results_summary_path": results_summary_path,
+                "elapsed_s": time.time() - t0,
+            }
 
         # ------------------------------------------------------------
         # Return summary
