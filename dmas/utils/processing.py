@@ -31,14 +31,16 @@ class ResultsProcessor:
         # collect results
         if printouts: print('Collecting observations performed data...')
         compiled_orbitdata, agent_missions, observations_performed, \
-            events, events_detected, task_reqs, tasks_known, agent_broadcasts_df \
-                = ResultsProcessor.__collect_results(results_path, compiled_orbitdata, agent_missions, events, printouts)          
+            events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, \
+                planned_rewards_df, execution_costs_df \
+                    = ResultsProcessor.__collect_results(results_path, compiled_orbitdata, agent_missions, events, printouts)          
 
         # summarize results
         if printouts: print('Generating results summary...')
         results_summary : pd.DataFrame \
-            = ResultsProcessor.__summarize_results(compiled_orbitdata, agent_missions, observations_performed, \
-                                    events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, precision)
+            = ResultsProcessor.__summarize_results(compiled_orbitdata, agent_missions, observations_performed,
+                                    events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, 
+                                        planned_rewards_df, execution_costs_df, precision)
         
         # return results summary
         return results_summary
@@ -201,9 +203,56 @@ class ResultsProcessor:
         # compile broadcast history
         agent_broadcasts_df = pd.read_parquet((os.path.join(environment_results_path, 'broadcasts.parquet')))
 
-        # return collected results
-        return compiled_orbitdata, agent_missions, observations_performed, events, events_detected, task_reqs, tasks_known, agent_broadcasts_df
+        # compile agent reward data
+        planned_rewards_df = None
+        for agent_name in compiled_orbitdata.keys():
+            rewards_path = os.path.join(results_path, agent_name.lower(), 'rewards.parquet')
+            if not os.path.isfile(rewards_path): continue
+            
+            # load rewards data
+            rewards_temp = pd.read_parquet(rewards_path)
 
+            # add agent name column
+            rewards_temp['agent'] = agent_name
+
+            # concatenate to main dataframe
+            if planned_rewards_df is None:
+                planned_rewards_df = rewards_temp   
+            else:
+                planned_rewards_df = pd.concat([planned_rewards_df, rewards_temp], axis=0)
+
+        # compile agent cost data
+        execution_costs_df = None
+        alpha = 1e-6
+        for agent_name in compiled_orbitdata.keys():
+            agent_state_path = os.path.join(results_path, agent_name.lower(), 'state_history.parquet')
+            if not os.path.isfile(agent_state_path): continue
+            
+            # load costs data
+            state_temp = pd.read_parquet(agent_state_path)            
+            
+            A = np.vstack(state_temp["attitude"].to_numpy())          # shape (N, 3)
+            dA = np.abs(np.diff(A, axis=0))              # shape (N-1, 3)
+            
+            cost_temp = pd.DataFrame({
+                'time [s]': state_temp['t'][:-1],  # shape (N-1,)
+                'agent' : [agent_name] * (len(state_temp)-1),  # shape (N-1,)                            
+                'status' : state_temp['status'][:-1],  # shape (N-1,)
+                'attitude [deg]' : state_temp['attitude'][:-1],  # shape (N-1,) 
+                'cost': alpha * np.linalg.norm(dA, axis=1),  # shape (N-1,)
+            })
+
+            # concatenate to main dataframe
+            if execution_costs_df is None:
+                execution_costs_df = cost_temp   
+            else:
+                execution_costs_df = pd.concat([execution_costs_df, cost_temp], axis=0)
+
+        # return collected results
+        return compiled_orbitdata, agent_missions, observations_performed, \
+            events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, \
+                planned_rewards_df, execution_costs_df
+    
     @staticmethod
     def __summarize_results(compiled_orbitdata : Dict[str, OrbitData], 
                             agent_missions : Dict[str, Mission],
@@ -213,6 +262,8 @@ class ResultsProcessor:
                             task_reqs : List[TaskRequest], 
                             tasks_known : List[GenericObservationTask],
                             agent_broadcasts_df : pd.DataFrame,
+                            planned_rewards_df : pd.DataFrame,
+                            execution_costs_df : pd.DataFrame,
                             n_decimals : int = 5
                         ) -> pd.DataFrame:
         
@@ -425,7 +476,29 @@ class ResultsProcessor:
                     ['P(Message Broadcasted | Bid Message )', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='BUS']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
                     ['P(Message Broadcasted | Measurement Request Message )', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='MEASUREMENT_REQ']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
 
-                    # TODO Utility Statistics 
+                    # Reward Statistics 
+                    ['Total Planned Reward', np.round(planned_rewards_df['planned reward'].sum(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    ['Total Planned Task Observations', len(planned_rewards_df) if planned_rewards_df is not None else 0],
+                    
+                    ['Average Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].mean(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    ['Standard Deviation of Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].std(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    ['Median Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].median(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    
+                    ['Average Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    ['Standard Deviation of Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    ['Median Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median(), n_decimals) if planned_rewards_df is not None else 0.0],
+
+                    # Cost Statistics
+                    ['Total Execution Cost', np.round(execution_costs_df['cost'].sum(), n_decimals) if execution_costs_df is not None else 0.0],
+                    ['Average Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().mean(), n_decimals) if execution_costs_df is not None else 0.0],
+                    ['Standard Deviation of Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().std(), n_decimals) if execution_costs_df is not None else 0.0],
+                    ['Median Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().median(), n_decimals) if execution_costs_df is not None else 0.0],
+
+                    # Utility Statistics
+                    ['Total Planned Utility', np.round(planned_rewards_df['planned reward'].sum() - execution_costs_df['cost'].sum(), n_decimals) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Average Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), n_decimals) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Standard Deviation of Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), n_decimals) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Median Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), n_decimals) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
 
                     # Simulation Runtime
                     # ['Total Runtime [s]', round(self.environment.t_f - self.environment.t_0, n_decimals)]

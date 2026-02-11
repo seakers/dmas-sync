@@ -105,7 +105,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._bundle_changes_performed = False
 
         # initialize bid results sinks
-        self._observation_rewards = DataSink(out_dir=agent_results_dir, owner_name='ConsensusPlanner', data_name='bid_results')
+        self._observation_rewards = DataSink(out_dir=agent_results_dir, owner_name='ConsensusPlanner', data_name='rewards')
 
     """
     ---------------------------
