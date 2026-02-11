@@ -100,7 +100,7 @@ def create_spacecraft_specifications(num_sats : int,
         satellite_spec = copy.deepcopy(spacecraft_specs_template)
 
         # planner settings
-        # satellite_spec['planner'].pop('preplanner')
+        satellite_spec['planner'].pop('preplanner')
 
         # assign orbit state
         satellite_spec['orbitState']['state'] = orbit_state
@@ -398,7 +398,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # ------------------------------------------------------------
         # Decide whether postprocess should run
         summary_exists = os.path.isfile(results_summary_path)
-        should_postprocess = sim_cfg.force_postprocess or (not summary_exists)
+        should_postprocess = sim_cfg.force_postprocess or (not summary_exists) or should_run_sim
 
         if should_postprocess:
             if mission is None:
@@ -410,7 +410,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                     level=log_level_int
                 )
             # Your code currently has this disabled; enable when ready:
-            mission.process_results(printouts=not sim_cfg.quiet)
+            mission.process_results(reevaluate=True, printouts=not sim_cfg.quiet)
             post_status = "postprocess_ran"  # change to "processed" once enabled
         else:
             post_status = "postprocess_skipped_existing"

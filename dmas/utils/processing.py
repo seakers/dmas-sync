@@ -273,8 +273,8 @@ class ResultsProcessor:
             events_observable, events_observed, events_detected, events_requested, \
                 events_re_observable, events_re_obs, \
                     events_co_observable, events_co_obs, \
-                    events_co_observable_fully, events_co_obs_fully, \
-                        events_co_observable_partially, events_co_obs_partially, \
+                        events_co_observable_fully, events_co_obs_fully, \
+                            events_co_observable_partially, events_co_obs_partially, \
                                 tasks_observable, tasks_observed \
                                     = ResultsProcessor.__classify_observations(compiled_orbitdata,
                                                                                agent_missions,
@@ -537,19 +537,19 @@ class ResultsProcessor:
 
         # classify observations per GP
         observations_per_gp : Dict[str, pd.DataFrame] \
-                                = {group : data
-                                for group,data in observations_performed.groupby(['lat [deg]', 'lon [deg]'])} \
+                                = {(round(group[0],6), round(group[1],6)) : data
+                                for group,data in observations_performed.groupby(['grid index', 'GP index'])} \
                                 if not observations_performed.empty else dict() # handle empty observations case
 
         # collect all event target GP locations
-        event_targets = {(round(event.location[0],6), round(event.location[1],6))
+        event_targets = {(int(event.location[2]), int(event.location[3]))
                             for event in events}
         
         # classify events per target GP
-        events_per_gp = {(lat, lon): [event for event in events
-                                    if (abs(round(event.location[0],6) - lat) < 1e-6 
-                                    and abs(round(event.location[1],6) - lon) < 1e-6)]
-                            for (lat, lon) in event_targets}
+        events_per_gp = {(grid_idx, gp_idx): [event for event in events
+                                    if (event.location[2] == grid_idx 
+                                    and event.location[3] == gp_idx)]
+                            for (grid_idx, gp_idx) in event_targets}
 
         # count event presense, detections, and observations
         events_observable : Dict[GeophysicalEvent, list] = {}
@@ -769,13 +769,15 @@ class ResultsProcessor:
                 # unpack location
                 task_lat,task_lon,task_grid_idx, task_gp_idx = location
                 task_lat = round(task_lat,6)
-                task_lon = round(task_lon,6)                
+                task_lon = round(task_lon,6)     
+                task_grid_idx = int(task_grid_idx)
+                task_gp_idx = int(task_gp_idx)     
                 
                 matching_accesses = [
                                     (access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
                                     for access_interval in task_accesses
-                                    if abs(task_lat - access_interval['lat [deg]']) < 1e-3 
-                                    and abs(task_lon - access_interval['lon [deg]']) < 1e-3
+                                    if task_grid_idx == access_interval['grid index']
+                                    and task_gp_idx == access_interval['GP index']
                                     and access_interval['instrument'].lower() in instrument_capability_reqs[agent_name]
                                 ]
                 
@@ -811,12 +813,12 @@ class ResultsProcessor:
                                             for interval in intervals ])
 
                 # find observations performed at task location while task was active                
-                if (task_lat, task_lon) not in observations_per_gp:
+                if (task_grid_idx, task_gp_idx) not in observations_per_gp:
                     # no observations were performed at this task's location
                     # create empty dataframe with expected columns for consistency
                     matching_observations = pd.DataFrame(columns=["t_start", "t_end", "instrument", "agent name"])
                 else:
-                    matching_observations : pd.DataFrame = observations_per_gp[(task_lat, task_lon)]
+                    matching_observations : pd.DataFrame = observations_per_gp[(task_grid_idx, task_gp_idx)]
                 
                 # find observations that match the event time
                 time_mask = (
@@ -840,14 +842,14 @@ class ResultsProcessor:
                     for inst, agent in zip(inst_lower, agents)
                 ]
 
-                matching_observations = matching_observations[instrument_mask]
+                matching_observations = [dict(row) for _,row in matching_observations[instrument_mask].iterrows()]
                 
                 # append to task lists
                 task_access_windows.extend(access_intervals)
                 task_observations.extend(matching_observations)
-                            
-            if task_observations: tasks_observed[task] = task_observations
+
             if task_access_windows: tasks_observable[task] = task_access_windows
+            if task_observations: tasks_observed[task] = task_observations
 
         return observations_per_gp, events_per_gp, gps_accessible, \
                 events_observable, events_observed, events_detected, events_requested, \
@@ -869,8 +871,10 @@ class ResultsProcessor:
 
         # unpackage event
         event_lat,event_lon,event_grid_idx,event_gp_idx = event.location
-        event_lat = round(event_lat,6)
-        event_lon = round(event_lon,6)
+        event_lat = round(event_lat,3)
+        event_lon = round(event_lon,3)
+        event_grid_idx = int(event_grid_idx)
+        event_gp_idx = int(event_gp_idx)
         event_type = event.event_type.lower()
         event_id = event.id
 
@@ -890,37 +894,35 @@ class ResultsProcessor:
                         if (isinstance(req, ExplicitCapabilityRequirement) 
                             and req.attribute == 'instrument'):
                             instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
-                            
-        # for _,mission in self.missions.items():
-        #     for objective in mission:
-        #         # find agents belonging to this mission
-        #         agents = [agent for agent in self.agents if agent.mission == mission]
-
-        #         # check if objective matches event type
-        #         if (isinstance(objective, EventDrivenObjective) 
-        #             and objective.event_type.lower() == event_type):
-                    
-        #             # collect instrument capability requirements
-        #             for req in objective:
-        #                 # check if requirement is an instrument capability requirement
-        #                 if (isinstance(req, ExplicitCapabilityRequirement) 
-        #                     and req.attribute == 'instrument'):
-        #                     for agent in agents:
-        #                         instrument_capability_reqs[agent.get_element_name()].update({val.lower() for val in req.valid_values})
-
+        
         if any([len(instrument_capability_reqs[agent_name]) == 0 
                     for agent_name in instrument_capability_reqs]):
             raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type}`. Case not yet supported.")
 
         # find access times that overlook a given event's location
+        # matching_accesses = [
+        #                         (t, row['agent name'], row['instrument'])
+        #                         for agent_name, agent_orbit_data in compiled_orbitdata.items()
+        #                         for t,row in agent_orbit_data.gp_access_data
+        #                         if event.t_start <= t <= event.t_start+event.d_exp
+        #                         and event_grid_idx == row['grid index']
+        #                         and event_gp_idx == row['GP index']
+        #                         and row['instrument'].lower() in instrument_capability_reqs[agent_name]
+        #                     ]
+        
+        event_accesses = []
+        for agent_orbit_data in compiled_orbitdata.values():
+            event_access_intervals = agent_orbit_data.gp_access_data.lookup_interval(event.availability.left, event.availability.right)
+            for i in range(len(event_access_intervals['time [s]'])):
+                row ={col : event_access_intervals[col][i] for col in event_access_intervals}
+                event_accesses.append(row)
+        
         matching_accesses = [
-                                (t, row['agent name'], row['instrument'])
-                                for agent_name, agent_orbit_data in compiled_orbitdata.items()
-                                for t,row in agent_orbit_data.gp_access_data
-                                if event.t_start <= t <= event.t_start+event.d_exp
-                                and abs(event_lat - row['lat [deg]']) < 1e-3 
-                                and abs(event_lon - row['lon [deg]']) < 1e-3
-                                and row['instrument'].lower() in instrument_capability_reqs[agent_name]
+                                (access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
+                                for access_interval in event_accesses
+                                if event_grid_idx == access_interval['grid index']
+                                and event_gp_idx == access_interval['GP index']
+                                and access_interval['instrument'].lower() in instrument_capability_reqs[agent_name]
                             ]
         
         # initialize map of compiled access intervals
@@ -965,13 +967,17 @@ class ResultsProcessor:
             matching_requests = sorted([task_req for task_req in task_reqs if task_req.task.event == event], 
                                         key= lambda a : a.t_req)
 
+
+        if matching_accesses:
+            x = 1 # debugging breakpoint
+
         # get event observations for this event's location
-        if (event_lat, event_lon) not in observations_per_gp:
+        if (event_grid_idx, event_gp_idx) not in observations_per_gp:
             # no observations were performed at this event's location
             # create empty dataframe with expected columns for consistency
             matching_observations = pd.DataFrame(columns=["t_start", "t_end", "instrument", "agent name"])
         else:
-            matching_observations : pd.DataFrame = observations_per_gp[(event_lat, event_lon)]
+            matching_observations : pd.DataFrame = observations_per_gp[(event_grid_idx, event_gp_idx)]
 
         # find observations that match the event time
         time_mask = (
@@ -995,10 +1001,10 @@ class ResultsProcessor:
             for inst, agent in zip(inst_lower, agents)
         ]
 
-        matching_observations = matching_observations[instrument_mask]
+        matching_observations = [dict(row) for _,row in matching_observations[instrument_mask].iterrows()]
 
         # return classified data
-        return access_intervals, matching_detections, matching_requests, list(matching_observations.values)
+        return access_intervals, matching_detections, matching_requests, matching_observations
 
     @staticmethod
     def __count_observations(orbitdata : dict, 
@@ -1031,7 +1037,7 @@ class ResultsProcessor:
             agent_orbitdata : OrbitData
 
             # count number of ground points
-            n_gps = sum([len(gps) for gps in agent_orbitdata.grid_data]) if n_gps is None else n_gps
+            n_gps = len([gps for gps in agent_orbitdata.grid_data]) if n_gps is None else n_gps
 
             # get set of accessible ground points
             gps_accessible : set = {(row['grid index'], row['GP index']) for _,row in agent_orbitdata.gp_access_data}

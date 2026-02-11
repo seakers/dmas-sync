@@ -258,22 +258,17 @@ class SimulationEnvironment(object):
             # save measurement request to history
             self._task_reqs.append(msg_out.req)
 
+        # convert to dict before saving
+        msg_dict : dict = {
+            'src' : msg_out.src,
+            'dst' : msg_out.dst,
+            'msg_type' : msg_out.msg_type,
+            't_broadcast' : t_curr,
+            'id' : msg_out.id
+        }
 
-        # save broadcast to history 
-        if isinstance(msg_out, BusMessage):
-            # convert to dict before saving
-            msg_dict : dict = msg_out.to_dict()
-
-            # remove additional messages to avoid memory issues; only save main message info
-            msg_dict.pop('msgs', None)
-
-            # save main message info to history
-            self._broadcasts_history.append(msg_dict)
-
-        else:
-            # save broadcast to history directly as dict
-            self._broadcasts_history.append(msg_out.to_dict())
-
+        # save broadcast to history directly as dict
+        self._broadcasts_history.append(msg_dict)
         
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []
