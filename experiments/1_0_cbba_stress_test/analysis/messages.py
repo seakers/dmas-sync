@@ -5,20 +5,25 @@ import numpy as np
 import pandas as pd
 
 
-def main(trial_name : str, 
+def generate_plot(trial_name : str, 
          scenario_id : int,
          bin_width: float = 10.0,         # time bin size (seconds)
          title: str = "Messages over time with task releases",
+         base_dir = None,                   
+         max_task : int = 300,
          show_plot : bool = True,
          save_plot : bool = False
         ) -> None:
     """ Generates and saves messages vs time plot from experiment results."""
 
+    if base_dir is None:
+        base_dir = os.path.join('experiments','1_0_cbba_stress_test','results')
+
     # define results directory
     results_dir = f'{trial_name}_scenario_{scenario_id}'
     
     # assumes script is being run from root directory
-    results_path = os.path.join('experiments','1_0_cbba_stress_test','results', results_dir)
+    results_path = os.path.join(base_dir, results_dir)
 
     if not os.path.exists(results_path):
         raise FileNotFoundError(f"Results directory not found at: `{results_path}`")
@@ -30,7 +35,18 @@ def main(trial_name : str,
 
     # load requests 
     requests_file = os.path.join(results_path, 'environment','requests.parquet')
-    requests_df = pd.read_parquet(requests_file)
+    if not os.path.exists(requests_file):
+        print(f"Requests file not found at: `{requests_file}`. Skipping.")
+        return
+    try:
+        requests_df = pd.read_parquet(requests_file)
+    except Exception as e:
+        print(f"Error loading requests from `{requests_file}`: {e}. Skipping.")
+        return
+
+    if len(requests_df) > max_task:
+        print(f"Warning: More than {max_task} requests found in `{requests_file}` ({len(requests_df)}). Skipping.")
+        return
 
     # load broadcasts
     broadcasts_file = os.path.join(results_path, 'environment','broadcasts.parquet')
@@ -115,10 +131,19 @@ def main(trial_name : str,
 
 if __name__ == "__main__":
     # define trial parameters
-    trial_name = "lhs_trials-2_samples-1000_seed"
-    scenario_id = 0
+    base_dir = "/media/aslan15/easystore/Data/1_0_cbba_stress_test/2026_02_11_Grace"
+    # base_dir = os.path.expanduser("/media/aslan15/easystore/Data/1_0_cbba_stress_test/2026_02_11_Grace")
 
-    # print runtime data
-    main(trial_name, scenario_id, show_plot=True, save_plot=True)
+    # trial_name = "lhs_trials-2_samples-1000_seed"
+    trial_name = "full_factorial_trials"
+
+    for dir_name in os.listdir(base_dir):
+        if os.path.isdir(os.path.join(base_dir, dir_name)) and dir_name.startswith(trial_name):
+            # extract scenario ID from directory name
+            scenario_id = dir_name.split('_')[-1]  
+            
+            # generate plot for this scenario
+            generate_plot(trial_name, scenario_id, base_dir=base_dir, show_plot=False, save_plot=True)
+            x = 1
 
     print('DONE')
