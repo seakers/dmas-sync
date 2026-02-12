@@ -81,15 +81,8 @@ class SimulationEnvironment(object):
                 agent_names.append(gs_name)
         self.agents[SimulationAgentTypes.GROUND_OPERATOR] = gs_names
 
-        # setup agent connectivity
-        self._connectivity_level : str = connectivity_level.upper()
-        self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
-            = SimulationEnvironment.__precompute_connectivity(scenario_orbitdata, printouts) # list of (interval, connectivity_matrix, components_list)
-
         # initialize parameters
         self._connectivity_relays : bool = connectivity_relays
-        self._t_0 = None
-        self._t_f = None
         self._t_curr = np.NINF
         self._agent_state_update_times = {}
 
@@ -99,11 +92,27 @@ class SimulationEnvironment(object):
         self._observation_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="measurements")
         self._broadcasts_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="broadcasts")
 
-        # initialize current connectivity to connectivity at t=0.0 
-        self._current_connectivity_interval, \
-            self._current_connectivity_components, self._current_connectivity_map \
-            = self.__get_agent_connectivity(t=0.0) # serve as references for connectivity at current time
+        # # setup agent connectivity
+        # self._connectivity_level : str = connectivity_level.upper()
+        # self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
+        #     = SimulationEnvironment.__precompute_connectivity(scenario_orbitdata, printouts) # list of (interval, connectivity_matrix, components_list)
+
+        # # initialize current connectivity to connectivity at t=0.0 
+        # self._current_connectivity_interval, \
+        #     self._current_connectivity_components, self._current_connectivity_map \
+        #     = self.__get_agent_connectivity(t=0.0) # serve as references for connectivity at current time
         
+        # initialize agent connectivity
+        self._connectivity_level : str = connectivity_level.upper()
+        self.__interval_connectivities \
+            : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
+                = None
+        
+        self._current_connectivity_interval, \
+            self._current_connectivity_components, \
+                self._current_connectivity_map \
+                    = Interval(np.NINF, 0.0, right_open=True), None, None
+
 
     """
     ----------------------
@@ -119,12 +128,19 @@ class SimulationEnvironment(object):
         # update current time
         self._t_curr = t
 
+        # check if connectivity needs to be calculated
+        if self.__interval_connectivities is None:
+            # calculate agent connectivity
+            self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
+                = SimulationEnvironment.__precompute_connectivity(self._orbitdata, self._printouts)
+
         # check if connectivity needs to be update
         if t not in self._current_connectivity_interval:
             # update current connectivity matrix and components
             self._current_connectivity_interval, \
-                self._current_connectivity_components, self._current_connectivity_map \
-                    = self.__get_agent_connectivity(t)
+                self._current_connectivity_components, \
+                    self._current_connectivity_map \
+                        = self.__get_agent_connectivity(t)
         
         # INSERT ADDITIONAL ENVIRONMENT UPDATE LOGIC HERE
 
