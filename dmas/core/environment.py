@@ -92,22 +92,12 @@ class SimulationEnvironment(object):
         self._observation_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="measurements")
         self._broadcasts_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="broadcasts")
 
-        # # setup agent connectivity
-        # self._connectivity_level : str = connectivity_level.upper()
-        # self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
-        #     = SimulationEnvironment.__precompute_connectivity(scenario_orbitdata, printouts) # list of (interval, connectivity_matrix, components_list)
-
-        # # initialize current connectivity to connectivity at t=0.0 
-        # self._current_connectivity_interval, \
-        #     self._current_connectivity_components, self._current_connectivity_map \
-        #     = self.__get_agent_connectivity(t=0.0) # serve as references for connectivity at current time
-        
         # initialize agent connectivity
         self._connectivity_level : str = connectivity_level.upper()
         self.__interval_connectivities \
             : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
                 = None
-        
+
         self._current_connectivity_interval, \
             self._current_connectivity_components, \
                 self._current_connectivity_map \
@@ -493,9 +483,6 @@ class SimulationEnvironment(object):
 
     def print_results(self) -> None:
         try:
-            # set final simulation time
-            self.t_f = time.perf_counter()
-
             # log results compilation start
             self.log('Compiling results...',level=logging.WARNING)
 
@@ -506,12 +493,6 @@ class SimulationEnvironment(object):
                 # create empty dataframe with appropriate columns
                 observations_performed = pd.DataFrame(data=[])
                 observations_performed.to_parquet(f"{self._results_path}/measurements.parquet", index=False)
-
-            # observations_performed : pd.DataFrame = self.compile_observations()
-
-            # # log and save results
-            # # self.log(f"MEASUREMENTS RECEIVED:\n{len(observations_performed.values)}\n\n", level=logging.WARNING)
-            # observations_performed.to_parquet(f"{self._results_path}/measurements.parquet", index=False)
             
             # commpile list of broadcasts performed
             self._broadcasts_history.close()
@@ -520,11 +501,6 @@ class SimulationEnvironment(object):
                 # create empty dataframe with appropriate columns
                 broadcasts_performed = pd.DataFrame(data=[])
                 broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
-            # broadcasts_performed : pd.DataFrame = self.compile_broadcasts()
-
-            # # log and save results
-            # # self.log(f"BROADCASTS RECEIVED:\n{len(broadcasts_performed.values)}\n\n", level=logging.WARNING)
-            # broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
 
             # compile list of measurement requests 
             self._task_reqs.close()
@@ -533,11 +509,6 @@ class SimulationEnvironment(object):
                 # create empty dataframe with appropriate columns
                 task_requests = pd.DataFrame(data=[])
                 task_requests.to_parquet(f"{self._results_path}/requests.parquet", index=False)
-            # measurement_reqs : pd.DataFrame = self.compile_requests()
-
-            # # log and save results
-            # # self.log(f"MEASUREMENT REQUESTS RECEIVED:\n{len(measurement_reqs.values)}\n\n", level=logging.WARNING)
-            # measurement_reqs.to_parquet(f"{self._results_path}/requests.parquet", index=False)
 
             # print connectivity history
             self.__print_connectivity_history()
@@ -545,95 +516,11 @@ class SimulationEnvironment(object):
         except Exception as e:
             print('\n','\n','\n')
             print(e)
-            raise e     
+            raise e    
                     
-    # def compile_observations(self) -> pd.DataFrame:
-    #     try:
-    #         columns = None
-    #         data = []
-            
-    #         for msg_dict in tqdm(self._observation_history, 
-    #                         desc='Compiling observations results', 
-    #                         leave=False,
-    #                         disable=len(self._observation_history)<10 or not self._printouts
-    #                         ):
-    #             msg = ObservationResultsMessage(**msg_dict)
-    #             observation_data : List[dict] = msg.observation_data
-    #             observer = msg.dst
-
-    #             for obs in observation_data:
-                    
-    #                 # find column names 
-    #                 if columns is None:
-    #                     columns = sorted([key for key in obs])
-    #                     columns.insert(0, 'observer')
-    #                     # columns.insert(2, 't_img')
-    #                     # columns.remove('t_start')
-    #                     # columns.remove('t_end')
-
-    #                 # add observation to data list
-    #                 obs['observer'] = observer.lower()
-    #                 for key in columns:
-    #                     val = obs.get(key, None)
-    #                     if isinstance(val, list):
-    #                         obs[key] = val[0]
-    #                         # if len(val) == 1:
-    #                         #     obs[key] = val[0]
-    #                         # else:
-    #                         #     obs[key] = [val[0], val[-1]]
-
-    #                 # obs['t_img'] = [obs['t_start'], obs['t_end']]
-    #                 # obs.pop('t_start')
-    #                 # obs.pop('t_end')
-
-    #                 data.append([obs[key] for key in columns])
-
-    #         observations_df = pd.DataFrame(data=data, columns=columns)
-    #         observations_df = observations_df.sort_index(axis=1)
-
-    #         return observations_df
-        
-    #     except Exception as e:
-    #         print(e.with_traceback())
-    #         raise e
-    
-    # def compile_broadcasts(self) -> pd.DataFrame:
-    #     columns = ['t_msg', 'sender', 'message type', 
-    #             #    'Message'
-    #                ]
-
-    #     data = [[msg['t_msg'], 
-    #              msg['src'], 
-    #              msg['msg_type'],
-    #              #  json.dumps(msg)
-    #              ]
-    #             for msg in self._broadcasts_history]
-            
-    #     return pd.DataFrame(data=data, columns=columns)
-    
-    # def compile_requests(self) -> pd.DataFrame:
-    #     # convert measurement request dictionaries to Task Requests
-    #     self._task_reqs : list[TaskRequest] = list({
-    #         TaskRequest.from_dict(req_dict)
-    #         for req_dict in self._task_reqs})
-
-    #     columns = ['request id', 'requester', 'event id', 'parameter', 't_req', 'mission name']
-    #     data = [[req.id,
-    #              req.requester,
-    #              req.task.event.id,
-    #              req.task.parameter,
-    #              req.t_req,
-    #              req.mission_name,
-    #              ] 
-    #              for req in self._task_reqs
-    #              if isinstance(req.task, EventObservationTask)]
-        
-    #     assert all(isinstance(req.task, EventObservationTask) for req in self._task_reqs), \
-    #         'Only `EventObservationTask` measurement requests are currently supported in the results compilation.'
-
-    #     return pd.DataFrame(data=data, columns=columns)    
 
     def __print_connectivity_history(self) -> None:
+        # create user-readible report of connectivity history
         filename = 'connectivity.md'
         filepath = os.path.join(self._results_path, filename)
         with open(filepath, 'w') as f:
@@ -667,9 +554,27 @@ class SimulationEnvironment(object):
                 #     f.write(row + "\n")
 
                 f.write("\n**Connected Components:**\n")
-                for i,comp in enumerate(sorted(components)):
-                    f.write(f" - Component {i}: [`" + "`, `".join(comp) + "`]\n\n")
+                for component_idx,comp in enumerate(sorted(components)):
+                    f.write(f" - Component {component_idx}: [`" + "`, `".join(comp) + "`]\n\n")
                 f.write("\n\n")
+
+        # compile table of connectivity intervals and components for later analysis
+        data : List[dict]= []
+        for interval_idx,(interval, components, component_map) in enumerate(self.__interval_connectivities):
+            for component_idx,component_members in enumerate(components):
+                members = sorted(list(component_members))
+                data.append({
+                    'start [s]' : interval.left,
+                    'end [s]' : interval.right,
+                    'interval_id' : interval_idx,
+                    'component_id' : component_idx,
+                    'n_nodes' : len(members),
+                    'component' : members
+                })
+        connectivity_history_df = pd.DataFrame(data=data)
+
+        # save to results folder
+        connectivity_history_df.to_parquet(os.path.join(self._results_path, 'connectivity_history.parquet'), index=False)
 
     @staticmethod
     def __display_connectivity_matrix(conn_matrix : Dict[str, Dict[str, int]]) -> None:
