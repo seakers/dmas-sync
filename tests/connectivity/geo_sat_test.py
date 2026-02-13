@@ -1,20 +1,21 @@
+
 from collections import defaultdict
 import copy
 import unittest
 
 from tqdm import tqdm
-
-from dmas.utils.orbitdata import OrbitData, ConnectivityLevels
+from dmas.utils.orbitdata import ConnectivityLevels
 from dmas.utils.tools import print_scenario_banner
 from tests.connectivity.connectivity_tester import AgentConnectivityTester
 
 
-class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
+class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
     """
     ============================================
         MISSION BUILDING UTILITIES
     ============================================
     """
+
     def build_mission(self, connectivity : str) -> dict:
         # copy mission template
         d = copy.deepcopy(self.mission_template)
@@ -29,12 +30,15 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
         sat1['orbitState']['state']['inc'] = 0.0
         sat1['orbitState']['state']['ta'] = 10.0
 
-        # define sat 2
+        # define sat 2: GEO relay satelliteg
         sat2 = copy.deepcopy(self.spacecraft_template)
         sat2['name'] = 'sat_2'
         sat2['@id'] = 'sat_2'
-        sat2['orbitState']['state']['inc'] = 180.0
-        sat2['orbitState']['state']['ta'] = sat1['orbitState']['state']['ta'] - 60.0 # phase offset by 60.0[deg]
+        sat2['orbitState']['state']['sma'] = 42164.2
+        sat2['orbitState']['state']['inc'] = 0.0
+        sat2['orbitState']['state']['raan'] = 0.0
+        sat2['orbitState']['state']['ta'] = 0.0
+        sat2.pop('instrument') 
 
         # compile ground stations
         d['groundStation'] = self.compile_ground_stations()
@@ -55,6 +59,8 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
     """
 
     def test_full_connectivity(self):
+        # return # TODO: re-enable when connectivity case is fixed
+    
         # load orbit data
         *_, orbit_data = self.generate_orbit_data(ConnectivityLevels.FULL.value, False)
 
@@ -62,22 +68,24 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
         mission_duration = self.mission_template['duration'] * 24.0 * 3600 # in seconds
 
         # check connectivity for each agent
-        for sender_name,sender_orbitdata in tqdm(orbit_data.items(), desc=f'Verifying Full Connectivity Case', leave=True):
+        for _,sender_orbitdata in tqdm(orbit_data.items(), desc=f'Verifying Full Connectivity Case', leave=True):
             agent_accesses = sender_orbitdata.get_next_agent_accesses(0.0)
             access_map = defaultdict(list)
-            for interval,receiver_name in agent_accesses:
-                access_map[receiver_name].append(interval)
-            
-            for receiver_name, interval_data in tqdm(access_map.items(), desc=f'  Checking links for {sender_name}', leave=False):
+            for interval,target in agent_accesses:
+                access_map[target].append(interval)
+
+            for target,intervals in access_map.items():
                 # ensure only a single access interval exists between sender and receiver
-                self.assertTrue(len(interval_data) == 1)
-                
+                self.assertTrue(len(intervals) == 1)
+
                 # ensure access interval spans entire mission duration
-                t_start,t_end = interval_data[0].left, interval_data[0].right
+                t_start,t_end = intervals[0].left, intervals[0].right
                 self.assertTrue(abs(t_start - 0.0) <= sender_orbitdata.time_step)
                 self.assertTrue(abs(t_end - mission_duration) <= sender_orbitdata.time_step)
         
-    def test_los_connectivity(self):
+    def test_los_connectivity(self):    
+        # return # TODO: re-enable when connectivity case is fixed
+    
         # load orbit data
         _, ground_operator_names, orbit_data = self.generate_orbit_data(ConnectivityLevels.LOS.value, False)
 
@@ -97,7 +105,7 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                         t_refs = [(5168 * sender_orbitdata.time_step, 5513 * sender_orbitdata.time_step)]
                     
                     elif "2" in sender_name:
-                        t_refs = [(2824 * sender_orbitdata.time_step, 3182 * sender_orbitdata.time_step)]
+                        t_refs = [(0 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)]
 
                     else:
                         raise ValueError(f'Unknown sender name: {sender_name}')
@@ -109,16 +117,15 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                             t_refs = [(5168 * sender_orbitdata.time_step, 5513 * sender_orbitdata.time_step)]
                         
                         elif "2" in receiver_name:
-                            t_refs = [(2824 * sender_orbitdata.time_step, 3182 * sender_orbitdata.time_step)]
+                            t_refs = [(0 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)]
 
                         else:
                             raise ValueError(f'Unknown sender name: {sender_name}')
                     else:
                         # both sender and receiver are satellites; set reference access times 
                         t_refs = [
-                            (1102 * sender_orbitdata.time_step, 1843 * sender_orbitdata.time_step),
-                            (3726 * sender_orbitdata.time_step, 4479 * sender_orbitdata.time_step),
-                            (6336 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)
+                            (0 * sender_orbitdata.time_step, 1510 * sender_orbitdata.time_step),
+                            (3823 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)
                         ]                 
 
                 # debug prints
@@ -137,7 +144,7 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                     self.assertTrue(abs(interval.right - t_rev_end) <= sender_orbitdata.time_step)
         
         
-    def test_isl_connectivity(self):
+    def test_isl_connectivity(self):    
         # load orbit data
         _, ground_operator_names, orbit_data = self.generate_orbit_data(ConnectivityLevels.ISL.value, False)
 
@@ -158,10 +165,9 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                 else:
                     # both sender and receiver are satellites; set reference access times 
                     t_refs = [
-                        (1102 * sender_orbitdata.time_step, 1843 * sender_orbitdata.time_step),
-                        (3726 * sender_orbitdata.time_step, 4479 * sender_orbitdata.time_step),
-                        (6336 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)
-                    ]                 
+                            (0 * sender_orbitdata.time_step, 1510 * sender_orbitdata.time_step),
+                            (3823 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)
+                        ]                 
 
                 # ensure number of accesses match reference times
                 self.assertTrue(len(interval_data) == len(t_refs))
@@ -171,7 +177,7 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                     self.assertTrue(abs(interval.left - t_ref_start) <= sender_orbitdata.time_step)
                     self.assertTrue(abs(interval.right - t_rev_end) <= sender_orbitdata.time_step)
 
-    def test_gs_connectivity(self):
+    def test_gs_connectivity(self):    
         # load orbit data
         _, ground_operator_names, orbit_data = self.generate_orbit_data(ConnectivityLevels.GS.value, False)
 
@@ -187,11 +193,11 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                 # set reference access times depending on receiver type
                 if receiver_name in ground_operator_names or sender_name in ground_operator_names:
                     # either receiver is ground station, sender must be a satellite; set appropriate reference access times 
-                    if "1" in sender_name or "1" in receiver_name:
+                    if "1" in receiver_name or "1" in sender_name:                            
                         t_refs = [(5168 * sender_orbitdata.time_step, 5513 * sender_orbitdata.time_step)]
                     
-                    elif "2" in sender_name or "2" in receiver_name:
-                        t_refs = [(2824 * sender_orbitdata.time_step, 3182 * sender_orbitdata.time_step)]
+                    elif "2" in receiver_name or "2" in sender_name:
+                        t_refs = [(0 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)]
 
                     else:
                         raise ValueError(f'Unknown sender name: {sender_name}')
@@ -208,7 +214,7 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                     self.assertTrue(abs(interval.left - t_ref_start) <= sender_orbitdata.time_step)
                     self.assertTrue(abs(interval.right - t_rev_end) <= sender_orbitdata.time_step)
 
-    def test_no_connectivity(self):
+    def test_no_connectivity(self):    
         # load orbit data
         _, _, orbit_data = self.generate_orbit_data(ConnectivityLevels.NONE.value, False)
 
@@ -218,14 +224,14 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
             access_map = defaultdict(list)
             for interval,receiver_name in agent_accesses:
                 access_map[receiver_name].append(interval)
-
-            for interval_data in tqdm(access_map.values(), desc=f'  Checking links for {sender_name}', leave=False):
+            
+            for receiver_name, interval_data in tqdm(access_map.items(), desc=f'  Checking links for {sender_name}', leave=False):
                 # ensure no access intervals exist between sender and receiver
                 self.assertTrue(len(interval_data) == 0)
 
 if __name__ == '__main__':
     # print banner
-    print_scenario_banner("Connectivity Test Suite")
+    print_scenario_banner("GEO Relay Satellite Test Suite")
 
     # run tests
     unittest.main()

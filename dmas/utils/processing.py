@@ -844,6 +844,11 @@ class ResultsProcessor:
             ]
             matching_observations = matching_observations[instrument_mask]
 
+            # check if any observations remain after filtering by time and instrument capability requirements
+            if matching_observations.empty: 
+                # skip to next event if no matching observations found
+                continue
+
             # Response times
             matching_observations["resp time [s]"] = matching_observations["t_start"] - event.availability.left
 
@@ -974,12 +979,16 @@ class ResultsProcessor:
                 ]
                 matching_observations = matching_observations[instrument_mask]
 
+                # check if any observations remain after filtering by time and instrument capability requirements
+                if matching_observations.empty: 
+                    # skip to next event if no matching observations found
+                    continue
+
                 # Response times
                 matching_observations["resp time [s]"] = matching_observations["t_start"] - task.availability.left
 
                 # Normalized
                 matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / task.availability.span()
-
 
                 # convert matching observations to list of dicts for easier handling
                 matching_observations = [dict(row) for _,row in matching_observations.iterrows()]

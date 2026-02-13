@@ -149,11 +149,6 @@ class DataSink:
 
 @dataclass
 class LatestObservationTracker:
-    # __slots__ = (
-    #     "lut", "G", "P", "N",
-    #     "t_last", "n_obs", "last_actor",
-    #     "actor_to_id", "id_to_actor",
-    # )
 
     lut: np.ndarray          # shape (G, P), dtype int32, -1 => not tracked
     G: int

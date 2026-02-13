@@ -284,11 +284,6 @@ def _is_simulation_complete(results_dir: str) -> bool:
     return True
 
 
-def _summary_path(results_dir: str) -> str:
-    """ Get the path to the summary CSV file for the scenario. """
-    return os.path.join(results_dir, "summary.csv")
-
-
 def _map_log_level(level_str: str) -> int:
     # If Simulation expects an int logging level:
     return getattr(logging, level_str.upper(), logging.INFO)
@@ -324,7 +319,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     trial_stem = os.path.splitext(os.path.basename(sim_cfg.trials_file))[0]
 
     results_dir = _scenario_results_dir(run_cfg, trial_stem, scenario_id)
-    results_summary_path = _summary_path(results_dir)
+    results_summary_path = os.path.join(results_dir, "summary.csv")
 
     # ensure scenario dir exists early (safe even if we skip)
     os.makedirs(results_dir, exist_ok=True)
@@ -365,22 +360,17 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # Stage 2: Simulate / propagate (controlled by force/only + cache)
         # ------------------------------------------------------------
         already_done = _is_simulation_complete(results_dir)
-        should_run_sim = sim_cfg.force_simulate or (not already_done)
-
-        if sim_cfg.only_simulate:
-            # In only_simulate mode, we run simulation even if cached exists?
-            # Usually yes (debug mode should do what you asked), but you can flip this.
-            should_run_sim = True
+        should_run_sim = sim_cfg.force_simulate or (not already_done) or sim_cfg.only_simulate
 
         mission = None
         if should_run_sim:
             mission = Simulation.from_dict(
                 mission_specs,
-                overwrite=sim_cfg.force_simulate,   # you may want overwrite when forcing sim
+                overwrite=sim_cfg.force_simulate,
                 printouts=printouts,
                 level=log_level_int,
             )
-            mission.execute(pbar_pos, pbar_leave=pbar_leave if not sim_cfg.quiet else False)
+            mission.execute(pbar_pos, pbar_leave=pbar_leave)
             sim_status = "executed"
         else:
             sim_status = "skipped_existing"
@@ -397,8 +387,11 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # Stage 3: Postprocess (controlled by force/only + cache)
         # ------------------------------------------------------------
         # Decide whether postprocess should run
-        summary_exists = os.path.isfile(results_summary_path)
-        should_postprocess = sim_cfg.force_postprocess or (not summary_exists) or should_run_sim
+        required_processed_files = ['grid_data.parquet', 'events_detected.parquet', 'events_requested.parquet', 'known_tasks.parquet',
+                                    'accesses_per_event.parquet', 'accesses_per_task.parquet', 'observations_per_event.parquet', 
+                                    'observations_per_task.parquet', 'planned_rewards.parquet', 'execution_costs.parquet']        
+        processing_exists = all(os.path.isfile(os.path.join(results_dir, f)) for f in required_processed_files)
+        should_postprocess = sim_cfg.force_postprocess or (not processing_exists) or sim_cfg.only_postprocess or should_run_sim
 
         if should_postprocess:
             if mission is None:
@@ -410,15 +403,44 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                     level=log_level_int
                 )
             # Your code currently has this disabled; enable when ready:
-            mission.process_results(reevaluate=True, printouts=not sim_cfg.quiet)
-            post_status = "postprocess_ran"  # change to "processed" once enabled
+            mission.process_results(force_process=sim_cfg.force_postprocess, printouts=not sim_cfg.quiet)
+            post_status = "postprocessed" 
         else:
-            post_status = "postprocess_skipped_existing"
+            post_status = "postprocessed_skipped_existing"
 
         if sim_cfg.only_postprocess:
             return {
                 "scenario_id": scenario_id,
                 "status": post_status,
+                "results_dir": results_dir,
+                "results_summary_path": results_summary_path,
+                "elapsed_s": time.time() - t0,
+            }
+        
+        # ------------------------------------------------------------
+        # Stage 4: Summarize (controlled by force/only + cache)
+        # ------------------------------------------------------------
+        summary_exists = os.path.isfile(results_summary_path)
+        should_summarize = sim_cfg.force_summarize or (not summary_exists) or should_run_sim
+
+        if should_summarize:
+            if mission is None:
+                # Load mission if needed for processing
+                mission = Simulation.from_dict(
+                    mission_specs,
+                    overwrite=False,
+                    printouts=printouts,
+                    level=log_level_int
+                )
+            mission.summarize_results(force_summarize=sim_cfg.force_summarize, printouts=not sim_cfg.quiet)
+            sum_status = "summarized"
+        else:
+            sum_status = "summarized_skipped_existing"
+
+        if sim_cfg.only_summarize:
+            return {
+                "scenario_id": scenario_id,
+                "status": sum_status,
                 "results_dir": results_dir,
                 "results_summary_path": results_summary_path,
                 "elapsed_s": time.time() - t0,
@@ -431,6 +453,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             "scenario_id": scenario_id,
             "status": sim_status,
             "postprocess_status": post_status,
+            "summarize_status": sum_status,
             "results_dir": results_dir,
             "results_summary_path": results_summary_path,
             "elapsed_s": time.time() - t0,

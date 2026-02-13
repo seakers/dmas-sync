@@ -33,11 +33,13 @@ class SimulationConfig:
     force_precompute: bool = False
     force_simulate: bool = False
     force_postprocess: bool = False
+    force_summarize: bool = False
     force_all: bool = False
 
     only_precompute: bool = False
     only_simulate: bool = False
     only_postprocess: bool = False
+    only_summarize : bool = False
 
     def normalize_and_validate(self) -> "SimulationConfig":
         if self.trial_range:
@@ -49,8 +51,9 @@ class SimulationConfig:
             self.force_precompute = True
             self.force_simulate = True
             self.force_postprocess = True
+            self.force_summarize = True
 
-        if sum((self.only_precompute, self.only_simulate, self.only_postprocess)) > 1:
+        if sum((self.only_precompute, self.only_simulate, self.only_postprocess, self.only_summarize)) > 1:
             raise ValueError("Only one --only-* flag can be used at a time.")
         return self
     
@@ -133,6 +136,7 @@ def parse_study_args() -> SimulationConfig:
     parser.add_argument("--force-precompute", action="store_true")
     parser.add_argument("--force-simulate", action="store_true")
     parser.add_argument("--force-postprocess", action="store_true")
+    parser.add_argument("--force-summarize", action="store_true")
 
     # --------------------------------------------------------------
     # Stage isolation (debugging)
@@ -140,6 +144,7 @@ def parse_study_args() -> SimulationConfig:
     parser.add_argument("--only-precompute", action="store_true")
     parser.add_argument("--only-simulate", action="store_true")
     parser.add_argument("--only-postprocess", action="store_true")
+    parser.add_argument("--only-summarize", action="store_true")
 
     args = parser.parse_args()
 
@@ -163,11 +168,12 @@ def parse_study_args() -> SimulationConfig:
     force_precompute = args.force_precompute
     force_simulate = args.force_simulate
     force_postprocess = args.force_postprocess
-
+    force_summarize = args.force_summarize
     if args.force_all:
         force_precompute = True
         force_simulate = True
         force_postprocess = True
+        force_summarize = True
 
     # --------------------------------------------------------------
     # Only-stage validation
@@ -176,6 +182,7 @@ def parse_study_args() -> SimulationConfig:
         args.only_precompute,
         args.only_simulate,
         args.only_postprocess,
+        args.only_summarize
     ]
 
     if sum(only_flags) > 1:
@@ -202,8 +209,9 @@ def parse_study_args() -> SimulationConfig:
         force_precompute=force_precompute,
         force_simulate=force_simulate,
         force_postprocess=force_postprocess,
-
+        force_summarize=force_summarize,
         only_precompute=args.only_precompute,
         only_simulate=args.only_simulate,
         only_postprocess=args.only_postprocess,
+        only_summarize=args.only_summarize,
     )

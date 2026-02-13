@@ -395,15 +395,16 @@ class OrbitData:
 
             scenario_specs.pop('settings')
             orbitdata_dict.pop('settings')
-            scenario_specs.pop('scenario')
-            orbitdata_dict.pop('scenario')
+            # scenario_specs.pop('scenario')
+            # orbitdata_dict.pop('scenario')
 
             if (
                     scenario_specs['epoch'] != orbitdata_dict['epoch']
                 or scenario_specs['duration'] > orbitdata_dict['duration']
                 or scenario_specs.get('groundStation', None) != orbitdata_dict.get('groundStation', None)
                 # or scenario_dict['grid'] != orbitdata_dict['grid']
-                # or scenario_dict['scenario']['connectivity'] != mission_dict['scenario']['connectivity']
+                # TODO - TEMP: check if connectivity level is the same. Ideally should only affect how data is loaded, not calculated.
+                or scenario_specs['scenario']['connectivity'] != orbitdata_dict['scenario']['connectivity']
                 ):
                 return True
             
@@ -1113,7 +1114,7 @@ class OrbitData:
                     payload = [payload]
 
                 # iintialize dataframe to store ground point access data for this agent
-                gp_access_data = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]', 'agent','instrument',
+                gp_access_data = pd.DataFrame(columns=['time index','grid index', 'GP index','pnt-opt index','lat [deg]','lon [deg]', 'agent','instrument',
                                                                 'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
 
                 for instrument in tqdm(payload, desc=f'Loading land coverage data for {agent_name}', unit=' instrument', **tqdm_config):
