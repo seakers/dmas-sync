@@ -138,7 +138,8 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                 task_requests.append((event, task_request, task_request_msg))
 
         # initialize set of times when broadcasts are scheduled (sets to avoid duplicates)
-        t_broadcasts = set() 
+        # t_broadcasts = set()
+        t_broadcasts = defaultdict(list)
 
         # create broadcasts for each request
         for event,task_req,task_request_msg in tqdm(task_requests, 
@@ -148,7 +149,9 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                                                 ):
             
             # schedule broadcasts to all available agents
-            access_intervals : List[Tuple[Interval, str]] = orbitdata.get_next_agent_accesses(task_req.t_req, include_current=True)
+            access_intervals : List[Tuple[Interval, str]] = orbitdata.get_next_agent_accesses(task_req.t_req, 
+                                                                                              t_max=event.availability.right, 
+                                                                                              include_current=True)
 
             # create broadcast actions for each access interval
             for next_access,_ in access_intervals:
@@ -162,15 +165,15 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                 t_broadcast : float = max(next_access.left, task_req.t_req)
                 
                 # add broadcast time to set of broadcast times
-                t_broadcasts.add(t_broadcast)
+                # t_broadcasts.add(t_broadcast)
+                t_broadcasts[t_broadcast].append(task_request_msg)
 
         # iterate through access start times to find active requests
-        for t_broadcast in sorted(t_broadcasts):
-            # initiate bus messages list 
-            task_requests_msgs : List[MeasurementRequestMessage] \
-                = [req_msg for event,_,req_msg in task_requests 
-                    if event.is_active(t_broadcast)]
-            
+        for t_broadcast, task_requests_msgs in tqdm(t_broadcasts.items(),
+                                                    desc=f'{state.agent_name}/PREPLANNER: Compiling broadcasts for each scheduled broadcast time',
+                                                    leave=False,
+                                                    disable=(len(t_broadcasts) < 10) or not self._printouts
+                                                ):
             # ensure there is at least one active request to broadcast;
             #  should always be true due to previous checks
             assert len(task_requests_msgs) > 0, "No active task requests found for broadcast time."
@@ -180,6 +183,22 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
 
             # create single broadcast action for all requests
             broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
+            
+        # for t_broadcast in sorted(t_broadcasts):
+        #     # initiate bus messages list 
+        #     task_requests_msgs : List[MeasurementRequestMessage] \
+        #         = [req_msg for event,_,req_msg in task_requests 
+        #             if event.is_active(t_broadcast)]
+            
+        #     # ensure there is at least one active request to broadcast;
+        #     #  should always be true due to previous checks
+        #     assert len(task_requests_msgs) > 0, "No active task requests found for broadcast time."
+            
+        #     # compile all requests into single broadcast message
+        #     bus_broadcast = BusMessage(state.agent_name, state.agent_name, task_requests_msgs)
+
+        #     # create single broadcast action for all requests
+        #     broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
            
         return sorted(broadcasts, key=lambda action: action.t_start)
     
