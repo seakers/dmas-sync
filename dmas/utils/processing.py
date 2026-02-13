@@ -26,14 +26,13 @@ class ResultsProcessor:
                         compiled_orbitdata : Dict[str, OrbitData], 
                         agent_missions : Dict[str, Mission], 
                         events : List[GeophysicalEvent],
-                        printouts: bool = True, 
-                        precision: int = 3
+                        printouts: bool = True
                     ) -> pd.DataFrame:
         """ processes simulation results after execution """
         
         # load results
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
-        task_reqs_df, task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
+        task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         events_detected_df, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
         known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, compiled_orbitdata, agent_missions, task_reqs)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
@@ -65,7 +64,6 @@ class ResultsProcessor:
         os.makedirs(processed_results_path, exist_ok=True)
 
         printable_dfs : Dict[str, pd.DataFrame] = {
-            'task_reqs' : task_reqs_df,
             'events_detected' : events_detected_df,
             'known_tasks' : known_tasks_df,
             'planned_rewards' : planned_rewards_df,
@@ -157,7 +155,7 @@ class ResultsProcessor:
                              agent_missions : Dict[str, Mission], 
                              events : List[GeophysicalEvent], 
                              printouts : bool
-                            ) -> Tuple[pd.DataFrame, List[TaskRequest]]:
+                            ) -> List[TaskRequest]:
         
         # define results path for the environment
         environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())
@@ -213,7 +211,7 @@ class ResultsProcessor:
             # add to list of task requests
             task_reqs.append(req)
 
-        return task_reqs_df, task_reqs
+        return task_reqs
     
     @staticmethod
     def __load_known_tasks(results_path : str,
