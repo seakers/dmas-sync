@@ -2695,10 +2695,11 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # scenario_specs['groundOperator'] = self.setup_cbba_ground_operators(mission_name, [gs_network])
 
         # initialize mission
-        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+        # self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=False)
 
         # execute mission
-        self.simulation.execute()
+        # self.simulation.execute()
 
         # process results
         results = self.simulation.process_results()

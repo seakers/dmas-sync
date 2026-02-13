@@ -37,10 +37,11 @@ class ResultsProcessor:
         known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, compiled_orbitdata, agent_missions, task_reqs)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
+        grid_data_df = ResultsProcessor.__load_grid_data(compiled_orbitdata, printouts)
         
         # compile accessibility information
         ## ground points
-        grid_data_df, accesses_per_gp = ResultsProcessor.__compile_accessible_ground_points(compiled_orbitdata, printouts)
+        accesses_per_gp = ResultsProcessor.__classify_accesses_per_gp(compiled_orbitdata)
 
         ## events
         events_per_gp = ResultsProcessor.__classify_events_per_gp(events)
@@ -65,16 +66,16 @@ class ResultsProcessor:
         os.makedirs(processed_results_path, exist_ok=True)
 
         printable_dfs : Dict[str, pd.DataFrame] = {
-            'events_detected' : events_detected_df,
-            'known_tasks' : known_tasks_df,
-            'planned_rewards' : planned_rewards_df,
-            'execution_costs' : execution_costs_df,
             'grid_data' : grid_data_df,
-            'accesses_per_event': accesses_per_event_df,
+            'events_detected' : events_detected_df,
             'events_requested' : events_requested_df,
+            'known_tasks' : known_tasks_df,
+            'accesses_per_event': accesses_per_event_df,
             'accesses_per_task' : accesses_per_task_df,
             'observations_per_event' : observations_per_event_df,            
             'observations_per_task' : observations_per_task_df,
+            'planned_rewards' : planned_rewards_df,
+            'execution_costs' : execution_costs_df,
         }
 
         for filename,df in printable_dfs.items():
@@ -94,22 +95,25 @@ class ResultsProcessor:
                                 printouts: bool = True
                             ) -> Tuple:
         # TODO 
-        raise NotImplementedError("Loading of processed results into summary generation format not yet implemented.")
+        # raise NotImplementedError("Loading of processed results into summary generation format not yet implemented.")
         
-        # load preprocessed dataframes if they exist, otherwise raise error
+        # load existing results
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
-        events_per_gp = ResultsProcessor.__classify_events_per_gp(events)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
+        _, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
+        _, known_tasks = ResultsProcessor.__load_known_tasks(results_path, compiled_orbitdata, agent_missions, task_reqs)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
+        planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
+        
+        _, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
+        events_per_gp = ResultsProcessor.__classify_events_per_gp(events)
 
+        accesses_per_gp = ResultsProcessor.__classify_accesses_per_gp(compiled_orbitdata)
+        observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df)
+
+        # load preprocessed dataframes if they exist, otherwise raise error     
         loadable_dfs = {
-            'events_detected' : None,
-            'known_tasks' : None,
-            'planned_rewards' : None,
-            'execution_costs' : None,
-            'grid_data' : None,
             'accesses_per_event': None,
-            'events_requested' : None,
             'accesses_per_task' : None,
             'observations_per_event' : None,
             'observations_per_task' : None,
@@ -122,18 +126,16 @@ class ResultsProcessor:
             else:
                 raise FileNotFoundError(f"Processed results file `{filename}.parquet` not found in path `{results_path}`. Expected file to be located at `{filepath}`.")
 
-        events_detected_df = loadable_dfs['events_detected']
-        known_tasks_df = loadable_dfs['known_tasks']
-        planned_rewards_df = loadable_dfs['planned_rewards']
-        execution_costs_df = loadable_dfs['execution_costs']
-        grid_data_df = loadable_dfs['grid_data']
         accesses_per_event_df = loadable_dfs['accesses_per_event']
-        events_requested_df = loadable_dfs['events_requested']
         accesses_per_task_df = loadable_dfs['accesses_per_task']
         observations_per_event_df = loadable_dfs['observations_per_event']
         observations_per_task_df = loadable_dfs['observations_per_task']
 
-        # convert dataframes to lists and dictionaries as needed for summary generation
+        # TODO convert dataframes to lists and dictionaries as needed for summary generation
+        accesses_per_event = ResultsProcessor.__accesses_per_event_from_df(events, accesses_per_event_df)
+        accesses_per_task = ResultsProcessor.__accesses_per_task_from_df(known_tasks, accesses_per_task_df)
+        observations_per_event = ResultsProcessor.__observations_per_event_from_df(events, observations_per_event_df)
+        observations_per_task = ResultsProcessor.__observations_per_task_from_df(known_tasks, observations_per_task_df)
 
         # return compiled data for summary generation
         return task_reqs, known_tasks, events_per_gp, events_detected, events_requested, \
@@ -425,7 +427,7 @@ class ResultsProcessor:
     COMPILATION AND CLASSIFICATION METHODS
     """
     @staticmethod
-    def __compile_accessible_ground_points(compiled_orbitdata : Dict[str, OrbitData], printouts : bool) -> Set[Tuple[int,int]]:
+    def __load_grid_data(compiled_orbitdata : Dict[str, OrbitData], printouts : bool) -> Set[Tuple[int,int]]:
         # compile grids from agent orbitdata
         grid_data = []
         for agent_orbitdata in tqdm(compiled_orbitdata.values(), 
@@ -445,6 +447,11 @@ class ResultsProcessor:
         # remove duplicates
         grid_data_df = grid_data_df_temp.drop_duplicates(subset=['grid index', 'GP index']).reset_index(drop=True)
         
+        # return set of accessible ground points
+        return grid_data_df
+    
+    @staticmethod
+    def __classify_accesses_per_gp(compiled_orbitdata : Dict[str, OrbitData]) -> Dict[Tuple[int,int], List[dict]]:
         # compile acesses from agent orbitdata
         acesses = []
         for agent_orbit_data in compiled_orbitdata.values():
@@ -461,7 +468,7 @@ class ResultsProcessor:
                                 if not accesses_df_temp.empty else dict() # handle empty accesses case       
        
         # return set of accessible ground points
-        return grid_data_df, accesses_per_gp
+        return accesses_per_gp
 
     @staticmethod
     def __classify_events_per_gp(events : List[GeophysicalEvent]) -> Dict[Tuple[int,int], List[GeophysicalEvent]]:
@@ -1013,6 +1020,88 @@ class ResultsProcessor:
         # return task observations dataframe and dictionary of tasks observed with their corresponding observations
         return task_observations_df, tasks_observed
     
+    @staticmethod
+    def __accesses_per_event_from_df(events : List[GeophysicalEvent], 
+                                     accesses_per_event_df : pd.DataFrame
+                                    ) -> Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]]:
+        accesses_per_event = {}
+        for event in events:
+            # get accesses for this event from dataframe
+            accesses : pd.DataFrame = accesses_per_event_df[accesses_per_event_df['event id'] == event.id]
+            
+            # compile information for all matching accesses into proper format
+            access_tuples= [] # (interval,agent_name,instrument) 
+            for _, access in accesses.iterrows():                
+                interval = Interval(access['access start [s]'], access['access end [s]'])
+                access_tuples.append((interval, access['agent name'], access['instrument']))
+
+            # add to map of events to accesses
+            if access_tuples: accesses_per_event[event] = access_tuples
+
+        # return map of events to accesses
+        return accesses_per_event
+    
+    @staticmethod
+    def __accesses_per_task_from_df(tasks_known : List[GenericObservationTask], 
+                                    accesses_per_task_df : pd.DataFrame
+                                ) -> Dict[GenericObservationTask, List[Tuple[Interval, str, str]]]:
+        accesses_per_task = {}
+        for task in tasks_known:
+            # get accesses for this task from dataframe
+            accesses : pd.DataFrame = accesses_per_task_df[accesses_per_task_df['task id'] == task.id]
+            
+            # compile information for all matching accesses into proper format
+            access_tuples= [] # (interval,agent_name,instrument) 
+            for _, access in accesses.iterrows():                
+                interval = Interval(access['t start'], access['t end'])
+                access_tuples.append((interval, access['agent name'], access['instrument']))
+
+            # add to map of tasks to accesses
+            if access_tuples: accesses_per_task[task] = access_tuples
+
+        # return map of tasks to accesses
+        return accesses_per_task
+
+    @staticmethod
+    def __observations_per_event_from_df(events : List[GeophysicalEvent], 
+                                        observations_per_event_df : pd.DataFrame
+                                    ) -> Dict[GeophysicalEvent, List[dict]]:
+        observations_per_event = {}
+        for event in events:
+            # get observations for this event from dataframe
+            observations : pd.DataFrame = observations_per_event_df[observations_per_event_df['event id'] == event.id]
+            
+            # compile information for all matching observations into proper format
+            observation_dicts= [] # (interval,agent_name,instrument) 
+            for _, observation in observations.iterrows():                
+                observation_dicts.append(dict(observation))
+            
+            # add to map of events to observations
+            if observation_dicts: observations_per_event[event] = observation_dicts
+
+        # return map of events to observations
+        return observations_per_event
+    
+    @staticmethod
+    def __observations_per_task_from_df(tasks : List[GenericObservationTask],
+                                        observations_per_task_df : pd.DataFrame
+                                    ) -> Dict[GenericObservationTask, List[dict]]:
+        observations_per_task = {}
+        for task in tasks:
+            # get observations for this task from dataframe
+            observations : pd.DataFrame = observations_per_task_df[observations_per_task_df['task id'] == task.id]
+            
+            # compile information for all matching observations into proper format
+            observation_dicts= [] # (interval,agent_name,instrument) 
+            for _, observation in observations.iterrows():                
+                observation_dicts.append(dict(observation))
+            
+            # add to map of tasks to observations
+            if observation_dicts: observations_per_task[task] = observation_dicts
+
+        # return map of tasks to observations
+        return observations_per_task
+
     """
     RESULTS SUMMARY METHODS
     """

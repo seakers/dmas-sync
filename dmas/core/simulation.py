@@ -302,29 +302,36 @@ class Simulation:
         if not self.is_executed(printouts): 
             raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
         
+        # map agent names to their respective missions
+        agent_missions : Dict[str, Mission] = {agent.name : agent._mission
+                                    for agent in self._agents}
+            
+
         # check if results have already been processed
         if self.__is_processed(printouts) and not force_process:
             if printouts: print("Simulation results have already been processed. Skipping processing step.")
             
             # collect name of processed results files
-            processed_results = ResultsProcessor.load_processed_results(self._results_path, printouts)
+            self.__processed_results = ResultsProcessor.load_processed_results(self._results_path,
+                                                                               self._orbitdata,
+                                                                               agent_missions,
+                                                                               self._events,
+                                                                               printouts
+                                                                            )
 
-        else:
-            # map agent names to their respective missions
-            agent_missions : Dict[str, Mission] = {agent.name : agent._mission
-                                        for agent in self._agents}
-            
-            processed_results = ResultsProcessor.process_results(self._results_path,
+        else:            
+            if printouts: print("Processing simulation results...")
+
+            # process results and store processed 
+            self.__processed_results = ResultsProcessor.process_results(self._results_path,
                                                                  self._orbitdata,
                                                                  agent_missions,
                                                                  self._events,
                                                                  printouts=printouts)
 
-        # store processed results 
-        self.__processed_results = processed_results 
 
         # return processed dataframes
-        return processed_results
+        return self.__processed_results
 
     def __is_processed(self, printouts : bool) -> bool:
         """ Checks if simulation results have already been processed. """
@@ -336,14 +343,11 @@ class Simulation:
             if printouts: print("Processed results already stored in this simulation instance.")
             return True
 
-        return False # TEMP see below
-
-        # TODO: update list of required processed files below V
         # check if data processing output files already exist
         existing_processed_files = [f for f in os.listdir(self._results_path) if f.endswith('.parquet')]
-        required_processed_files = ['agent_broadcasts.parquet', 'planned_rewards.parquet', 'execution_costs.parquet',   
-                                    'accesses_per_gp.parquet', 'accesses_per_event.parquet', 'accesses_per_task.parquet',
-                                    'observations_per_gp.parquet', 'observations_per_event.parquet', 'observations_per_task.parquet']
+        required_processed_files = ['grid_data.parquet', 'events_detected.parquet', 'events_requested.parquet', 'known_tasks.parquet',
+                                    'accesses_per_event.parquet', 'accesses_per_task.parquet', 'observations_per_event.parquet', 
+                                    'observations_per_task.parquet', 'planned_rewards.parquet', 'execution_costs.parquet']        
 
         missing_processed_files = set(required_processed_files) - set(existing_processed_files)
 
