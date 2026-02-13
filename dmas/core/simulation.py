@@ -7,7 +7,7 @@ import logging
 import os
 import shutil
 import sys
-from time import time
+import time
 import tracemalloc
 from typing import Dict, List, Tuple
 import numpy as np
@@ -22,8 +22,7 @@ from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
 from dmas.utils.orbitdata import OrbitData
-from dmas.models import agent
-from dmas.models.actions import AgentAction, BroadcastMessageAction
+from dmas.models.actions import AgentAction
 from dmas.models.agent import SimulationAgent
 from dmas.core.environment import SimulationEnvironment
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
@@ -117,6 +116,10 @@ class Simulation:
         self._level = level
         self._printouts : bool = printouts
 
+        # initialize simulation runtime trackers
+        self._t_0 = np.NAN
+        self._t_f = np.NAN
+
         # initialize execution flag
         self.__executed : bool = False
 
@@ -126,6 +129,9 @@ class Simulation:
     def execute(self, pbar_pos : int = 0, pbar_leave=True) -> None:
         """ executes the simulation """
         try:
+            # start simulation start time tracker
+            self._t_0 = time.perf_counter()
+
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
             
@@ -258,6 +264,9 @@ class Simulation:
             # mark simulation as executed
             self.__executed = True
 
+            # start simulation start time tracker
+            self._t_f = time.perf_counter()
+
             # simulation completed; print results for every agent
             for agent in self._agents: agent.print_results()
             
@@ -273,26 +282,133 @@ class Simulation:
             raise e
 
         finally:
+            
             # print results for the simulation environment regardless of the execution outcome
             self._environment.print_results()
 
-    def __print_results(self) -> str:
+    def __print_results(self) -> None:
         """ prints simulation results after execution """
-        # TODO implement results printing
-        return "Results printing not yet implemented."
+        # TODO add any results printing here
 
     """
     DATA PROCESSING METHODS
     """
+    # def process_results(self, 
+    #                     reevaluate : bool = False, 
+    #                     printouts : bool = True,
+    #                     print_to_csv : bool = True,
+    #                     precision : int = 5
+    #                 ) -> pd.DataFrame:
+        # """ processes simulation results after execution """
+        # # validate execution
+        # if not self.is_executed(printouts): raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
+        
+    #     # print divider
+    #     if printouts: print(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
+
+    #     # define results summary filename
+    #     summary_path = os.path.join(f"{self._results_path}","summary.csv")
+
+    #     # check if results summary file exists 
+    #     if os.path.isfile(summary_path) and not reevaluate:
+    #         # file exists and reevaluate is False; skip results summary generation
+    #         print(f"Results summary already exists at: `{summary_path}`")
+    #         results_summary : pd.DataFrame = pd.read_csv(summary_path)
+
+    #     else:
+    #         # map agent names to their respective missions
+    #         agent_missions : Dict[str, Mission] = {agent.name : agent._mission
+    #                                     for agent in self._agents}
+
+    #         # generate results summary
+    #         results_summary : pd.DataFrame \
+    #             = ResultsProcessor.process_results(self._results_path,
+    #                                            self._orbitdata,
+    #                                            agent_missions,
+    #                                            self._events,
+    #                                            printouts=printouts,
+    #                                            precision=precision)
+
+    #     # log results summary
+    #     if printouts:
+    #         print(f"\n\n{'-'*80}\n")
+    #         print(f"\nSIMULATION RESULTS SUMMARY:\n")
+    #         print(results_summary.to_string(index=False))
+    #         print(f"\n{'='*80}\n")
+
+    #     # save summary to csv if needed
+    #     if print_to_csv: results_summary.to_csv(summary_path, index=False)
+
+    #     # return results summary
+    #     return results_summary
+
     def process_results(self, 
-                        reevaluate : bool = False, 
-                        printouts : bool = True,
-                        print_to_csv : bool = True,
-                        precision : int = 5
-                        ) -> pd.DataFrame:
+                        force_process : bool = False,
+                        printouts : bool = True) -> List[pd.DataFrame]:
         """ processes simulation results after execution """
-        # validate execution
-        if not self.is_executed(printouts): raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
+        # validate simulation execution
+        if not self.is_executed(printouts): 
+            raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
+        
+        # check if results have already been processed
+        if self.__is_processed(printouts) and not force_process:
+            if printouts: print("Simulation results have already been processed. Skipping processing step.")
+            
+            # collect name of processed results files
+            parquet_file_names = [
+                filename for filename in os.listdir(self._results_path)
+                if os.path.isfile(os.path.join(self._results_path, filename)) 
+                and filename.endswith('.parquet')
+            ]
+
+            # load processed results files into dataframes
+            processed_results = [
+                pd.read_parquet(os.path.join(self._results_path, filename)) 
+                for filename in parquet_file_names
+            ]
+
+        else:
+            # map agent names to their respective missions
+            agent_missions : Dict[str, Mission] = {agent.name : agent._mission
+                                        for agent in self._agents}
+            
+            processed_results = ResultsProcessor.process_results(self._results_path,
+                                                                 self._orbitdata,
+                                                                 agent_missions,
+                                                                 self._events,
+                                                                 printouts=printouts)
+            
+        # return processed dataframes
+        return processed_results
+
+
+    def __is_processed(self, printouts : bool) -> bool:
+        """ Checks if simulation results have already been processed. """
+        # check if this instance of the simnulation has been executed or if results files already exist
+        if not self.__executed and printouts:
+            print('WARNING: Simulation instance has not been executed yet. Evaluating pre-existing scenario data...\n')
+        
+        # check if data processing output files already exist
+        for f in os.listdir(self._results_path):
+            # ignore directories and non-csv files
+            if os.path.isdir(os.path.join(self._results_path, f)):
+                continue
+            # check if any parquet files exist in results directory
+            if f.endswith('.parquet'):
+                # data was previously processed
+                return True
+            
+        # no processed data files found
+        return False
+    
+    def summarize_results(self,
+                          force_summarize : bool = False,
+                          printouts : bool = True,
+                          print_to_csv : bool = True,
+                          precision : int = 5
+                        ) -> pd.DataFrame:
+        """ Loads processed data and generates a summary dataframe without reprocessing raw results files. """
+        raise NotImplementedError('TODO, results summary under development')
         
         # print divider
         if printouts: print(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
@@ -301,7 +417,7 @@ class Simulation:
         summary_path = os.path.join(f"{self._results_path}","summary.csv")
 
         # check if results summary file exists 
-        if os.path.isfile(summary_path) and not reevaluate:
+        if os.path.isfile(summary_path) and not force_summarize:
             # file exists and reevaluate is False; skip results summary generation
             print(f"Results summary already exists at: `{summary_path}`")
             results_summary : pd.DataFrame = pd.read_csv(summary_path)

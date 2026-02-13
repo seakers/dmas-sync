@@ -16,10 +16,10 @@ from execsatm.tasks import GenericObservationTask, DefaultMissionTask, EventObse
 from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
 
-from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementBidMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, SimulationMessageTypes, message_from_dict
+from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementBidMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, SimulationMessageTypes
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.utils.orbitdata import OrbitData
-from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction, action_from_dict
+from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.trackers import DataSink, LatestObservationTracker
@@ -988,7 +988,7 @@ class SimulationAgent(object):
     RESULTS HANDLING METHODS
     ----------------------
     """
-    def print_results(self):
+    def print_results(self) -> None:
         try:
             # log known default tasks
             columns = ['id', 'task type', 'requester', 'parameter', 'lat [deg]', 'lon [deg]', 'grid index', 'gp index', 't start', 't end', 'priority']

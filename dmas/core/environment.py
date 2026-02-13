@@ -1,6 +1,6 @@
 import logging
 import os
-import time
+import traceback
 from typing import Dict, List, Set, Tuple
 from collections import defaultdict, deque
 
@@ -102,7 +102,6 @@ class SimulationEnvironment(object):
             self._current_connectivity_components, \
                 self._current_connectivity_map \
                     = Interval(np.NINF, 0.0, right_open=True), None, None
-
 
     """
     ----------------------
@@ -482,42 +481,35 @@ class SimulationEnvironment(object):
             raise e
 
     def print_results(self) -> None:
-        try:
-            # log results compilation start
-            self.log('Compiling results...',level=logging.WARNING)
+        # log results compilation start
+        self.log('Compiling results...',level=logging.WARNING)
 
-            # compile observations performed
-            self._observation_history.close()
-            if self._observation_history.empty():
-                self.log("No observations were performed during the simulation.", level=logging.WARNING)
-                # create empty dataframe with appropriate columns
-                observations_performed = pd.DataFrame(data=[])
-                observations_performed.to_parquet(f"{self._results_path}/measurements.parquet", index=False)
-            
-            # commpile list of broadcasts performed
-            self._broadcasts_history.close()
-            if self._broadcasts_history.empty():
-                self.log("No broadcasts were performed during the simulation.", level=logging.WARNING)
-                # create empty dataframe with appropriate columns
-                broadcasts_performed = pd.DataFrame(data=[])
-                broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
+        # compile observations performed
+        self._observation_history.close()
+        if self._observation_history.empty():
+            self.log("No observations were performed during the simulation.", level=logging.WARNING)
+            # create empty dataframe with appropriate columns
+            observations_performed = pd.DataFrame(data=[])
+            observations_performed.to_parquet(f"{self._results_path}/measurements.parquet", index=False)
+        
+        # commpile list of broadcasts performed
+        self._broadcasts_history.close()
+        if self._broadcasts_history.empty():
+            self.log("No broadcasts were performed during the simulation.", level=logging.WARNING)
+            # create empty dataframe with appropriate columns
+            broadcasts_performed = pd.DataFrame(data=[])
+            broadcasts_performed.to_parquet(f"{self._results_path}/broadcasts.parquet", index=False)
 
-            # compile list of measurement requests 
-            self._task_reqs.close()
-            if self._task_reqs.empty():
-                self.log("No observation requests were performed during the simulation.", level=logging.WARNING)
-                # create empty dataframe with appropriate columns
-                task_requests = pd.DataFrame(data=[])
-                task_requests.to_parquet(f"{self._results_path}/requests.parquet", index=False)
+        # compile list of measurement requests 
+        self._task_reqs.close()
+        if self._task_reqs.empty():
+            self.log("No observation requests were performed during the simulation.", level=logging.WARNING)
+            # create empty dataframe with appropriate columns
+            task_requests = pd.DataFrame(data=[])
+            task_requests.to_parquet(f"{self._results_path}/requests.parquet", index=False)
 
-            # print connectivity history
-            self.__print_connectivity_history()
-
-        except Exception as e:
-            print('\n','\n','\n')
-            print(e)
-            raise e    
-                    
+        # print connectivity history
+        self.__print_connectivity_history()                    
 
     def __print_connectivity_history(self) -> None:
         # create user-readible report of connectivity history

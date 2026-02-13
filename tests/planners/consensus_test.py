@@ -27,7 +27,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         ## toy cases
         self.toy_1 = False  # single sat    default mission     single target, no events
-        self.toy_2 = True  # single sat    no default mission  one event
+        self.toy_2 = False  # single sat    no default mission  one event
         self.toy_3 = False  # two sats      no default mission  one event
         self.toy_4 = False  # two sats      no default mission  one event           optimistic bidding
         self.toy_5 = False  # two sats      no default mission  one event           comm delays
@@ -407,8 +407,11 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # execute mission
         self.simulation.execute()
 
-        # print results
-        self.simulation.process_results()
+        # process results
+        results = self.simulation.process_results()
+        
+        # summarize results
+        self.simulation.summarize_results()
 
         print(f"{scenario_name}: DONE")
 
@@ -2697,8 +2700,11 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # execute mission
         self.simulation.execute()
 
-        # print results
-        self.simulation.process_results()
+        # process results
+        results = self.simulation.process_results()
+        
+        # summarize results
+        self.simulation.summarize_results()
 
         print(f"{scenario_name}: DONE")
 

@@ -1,6 +1,6 @@
 from collections import defaultdict
 import os
-from typing import Dict, List
+from typing import Dict, List, Set, Tuple
 import numpy as np
 
 from tqdm import tqdm
@@ -18,6 +18,9 @@ from dmas.utils.orbitdata import OrbitData
 from dmas.utils.tools import SimulationRoles
 
 class ResultsProcessor:
+    """
+    PROCESSING METHODS
+    """
     @staticmethod
     def process_results(results_path : str,
                         compiled_orbitdata : Dict[str, OrbitData], 
@@ -28,30 +31,66 @@ class ResultsProcessor:
                     ) -> pd.DataFrame:
         """ processes simulation results after execution """
         
-        # collect results
-        if printouts: print('Collecting observations performed data...')
-        compiled_orbitdata, agent_missions, observations_performed, \
-            events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, \
-                planned_rewards_df, execution_costs_df \
-                    = ResultsProcessor.__collect_results(results_path, compiled_orbitdata, agent_missions, events, printouts)          
-
-        # summarize results
-        if printouts: print('Generating results summary...')
-        results_summary : pd.DataFrame \
-            = ResultsProcessor.__summarize_results(compiled_orbitdata, agent_missions, observations_performed,
-                                    events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, 
-                                        planned_rewards_df, execution_costs_df, precision, printouts)
+        # load results
+        observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
+        task_reqs_df, task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
+        events_detected_df, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
+        known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, compiled_orbitdata, agent_missions, task_reqs)
+        agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
+        planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         
-        # return results summary
-        return results_summary
+        # compile accessibility information
+        ## ground points
+        grid_data_df, accesses_per_gp = ResultsProcessor.__compile_accessible_ground_points(compiled_orbitdata, printouts)
 
+        ## events
+        accesses_per_event_df, accesses_per_event = ResultsProcessor.__compile_events_accessibility(events, compiled_orbitdata, agent_missions, printouts)
+        events_requested_df, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
+
+        ## tasks
+        accesses_per_task_df, accesses_per_task = ResultsProcessor.__compile_task_accessibility(compiled_orbitdata, known_tasks, agent_missions, printouts)
+
+        # compile observations
+        ## ground points
+        observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df)
+
+        ## events
+        observations_per_event_df, observations_per_event = ResultsProcessor.__compile_events_observed(events, observations_per_gp, agent_missions, printouts)
+
+        ## tasks
+        observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(compiled_orbitdata, known_tasks, observations_per_gp, agent_missions, printouts)
+
+        # print compiled data
+        processed_results_path = os.path.join(results_path)
+        os.makedirs(processed_results_path, exist_ok=True)
+
+        printable_dfs : Dict[str, pd.DataFrame] = {
+            'task_reqs' : task_reqs_df,
+            'events_detected' : events_detected_df,
+            'known_tasks' : known_tasks_df,
+            'planned_rewards' : planned_rewards_df,
+            'execution_costs' : execution_costs_df,
+            'grid_data' : grid_data_df,
+            'accesses_per_event': accesses_per_event_df,
+            'events_requested' : events_requested_df,
+            'accesses_per_task' : accesses_per_task_df,
+            'observations_per_event' : observations_per_event_df,            
+            'observations_per_task' : observations_per_task_df,
+        }
+
+        for filename,df in printable_dfs.items():
+            df.to_parquet(os.path.join(processed_results_path, f'{filename}.parquet'), index=False)
+
+        # return compiled data for summary generation
+        return task_reqs,known_tasks, events_detected, events_requested, agent_broadcasts_df, planned_rewards_df, execution_costs_df, \
+                accesses_per_gp, events_requested, accesses_per_event, accesses_per_task, \
+                    observations_per_gp, observations_per_event, observations_per_task
+    
+    """
+    RESULTS LOADING METHODS
+    """
     @staticmethod
-    def __collect_results(results_path : str,
-                          compiled_orbitdata : Dict[str, OrbitData], 
-                          agent_missions : Dict[str, Mission], 
-                          events : List[GeophysicalEvent],
-                          printouts : bool = True
-                        ) -> tuple:
+    def __load_observations_performed(results_path : str, printouts : bool) -> pd.DataFrame:
         # define results path for the environment
         environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())
 
@@ -59,13 +98,21 @@ class ResultsProcessor:
         try:
             observations_performed_path = os.path.join(environment_results_path, 'measurements.parquet')
             observations_performed = pd.read_parquet(observations_performed_path)
-            # if printouts: print('SUCCESS!')
+            if printouts: print('Loaded observations performed data successfully!')
 
         except pd.errors.EmptyDataError:
             columns = ['observer','t_img','lat','lon','range','look','incidence','zenith','instrument_name']
             observations_performed = pd.DataFrame(data=[],columns=columns)
-            if printouts: print('No observations were performed during the simulation.')
+            if printouts: print('Loaded observations performed data successfully. No observations were performed during the simulation.')
 
+        # return observations performed        
+        return observations_performed
+
+    @staticmethod    
+    def __load_events_detected(results_path : str, 
+                               compiled_orbitdata : Dict[str, OrbitData], 
+                               printouts : bool
+                            ) -> Tuple[pd.DataFrame, List[GeophysicalEvent]]:
         # compile events detected
         if printouts: print('Collecting event detection data...')
         events_detected_df : pd.DataFrame = None
@@ -103,6 +150,18 @@ class ResultsProcessor:
             )
             events_detected.append(event)
 
+        return events_detected_df, events_detected
+    
+    @staticmethod
+    def __load_task_requests(results_path : str, 
+                             agent_missions : Dict[str, Mission], 
+                             events : List[GeophysicalEvent], 
+                             printouts : bool
+                            ) -> Tuple[pd.DataFrame, List[TaskRequest]]:
+        
+        # define results path for the environment
+        environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())
+        
         # compile measurement requests
         if printouts: print('Collecting measurement request data...')
         try:
@@ -110,6 +169,7 @@ class ResultsProcessor:
         except pd.errors.EmptyDataError:
             columns = ['id','requester','lat [deg]','lon [deg]','severity','t start','t end','t corr','Measurment Types']
             task_reqs_df = pd.DataFrame(data=[],columns=columns)
+        
         # remove duplicates
         task_reqs_df = task_reqs_df.drop_duplicates(subset='id').reset_index(drop=True)
 
@@ -153,10 +213,21 @@ class ResultsProcessor:
             # add to list of task requests
             task_reqs.append(req)
 
+        return task_reqs_df, task_reqs
+    
+    @staticmethod
+    def __load_known_tasks(results_path : str,
+                           compiled_orbitdata : Dict[str, OrbitData],
+                           agent_missions : Dict[str, Mission],
+                           task_reqs : List[TaskRequest]
+                           ) -> Tuple[pd.DataFrame, List[GenericObservationTask]]:
         # compile default tasks from every agent
         default_tasks_df : pd.DataFrame = None
         for agent_name in compiled_orbitdata.keys():
+            # define path to agent's known tasks file
             known_tasks_path = os.path.join(results_path, agent_name.lower(), 'known_tasks.parquet')
+            
+            # skip if file doesn't exist
             if not os.path.isfile(known_tasks_path): continue
             
             # load default tasks
@@ -168,10 +239,10 @@ class ResultsProcessor:
 
         # remove duplicates
         default_tasks_df = default_tasks_df.drop_duplicates().reset_index(drop=True) \
-            if default_tasks_df is not None else pd.DataFrame([])
+            if default_tasks_df is not None else pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])
         
         # convert to list of tasks
-        tasks_known : list[GenericObservationTask] = []
+        known_tasks : list[GenericObservationTask] = []
         for _,row in default_tasks_df.iterrows():
             # get name of agent requesting the task
             requester = row['requester']
@@ -194,16 +265,60 @@ class ResultsProcessor:
                 relevant_objectives[0],
                 row['id']
             )
-            tasks_known.append(task)
+            known_tasks.append(task)
 
         # suplement with event observation tasks
-        tasks_known.extend([req.task for req in task_reqs 
-                            if req.task not in tasks_known])
+        requested_tasks = [req.task for req in task_reqs 
+                            if req.task not in known_tasks]
+        known_tasks.extend(requested_tasks)
+
+        event_tasks = []
+        for req_task in requested_tasks:
+            for lat,lon,grid_index,gp_index in req_task.location:
+                row = {
+                    'id' : req_task.id,
+                    'task type' : req_task.task_type,
+                    'parameter' : req_task.parameter,
+                    'lat [deg]' : lat,
+                    'lon [deg]' : lon,
+                    'grid index' : grid_index,
+                    'gp index' : gp_index,
+                    't start' : req_task.availability.left,
+                    't end' : req_task.availability.right,
+                    'priority' : req_task.priority,
+                }
+                event_tasks.append(row)
+        if event_tasks:
+            event_tasks_df = pd.DataFrame(event_tasks)
+        else:
+            event_tasks_df = pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])
+
+        # merge default tasks and event observation tasks into known tasks dataframe
+        known_tasks_df = pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])
+        if default_tasks_df is not None:
+            known_tasks_df = pd.concat([known_tasks_df, default_tasks_df], axis=0)
+        if not event_tasks_df.empty:
+            known_tasks_df = pd.concat([known_tasks_df, event_tasks_df], axis=0)        
+        
+        # return known tasks dataframe and list of known tasks
+        return known_tasks_df, known_tasks
+
+    @staticmethod
+    def __load_broadcast_history(results_path : str) -> pd.DataFrame:
+        # define results path for the environment
+        environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())        
         
         # compile broadcast history
         agent_broadcasts_df = pd.read_parquet((os.path.join(environment_results_path, 'broadcasts.parquet')))
-
-        # compile agent reward data
+    
+        # return broadcast history dataframe
+        return agent_broadcasts_df
+    
+    @staticmethod
+    def __load_planned_utilities(results_path : str, 
+                                 compiled_orbitdata : Dict[str, OrbitData]
+                                ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        # compile planned agent reward data
         planned_rewards_df = None
         for agent_name in compiled_orbitdata.keys():
             rewards_path = os.path.join(results_path, agent_name.lower(), 'rewards.parquet')
@@ -221,7 +336,7 @@ class ResultsProcessor:
             else:
                 planned_rewards_df = pd.concat([planned_rewards_df, rewards_temp], axis=0)
 
-        # compile agent cost data
+        # compile executed agent cost data
         execution_costs_df = None
         alpha = 1e-6
         for agent_name in compiled_orbitdata.keys():
@@ -248,11 +363,572 @@ class ResultsProcessor:
             else:
                 execution_costs_df = pd.concat([execution_costs_df, cost_temp], axis=0)
 
-        # return collected results
-        return compiled_orbitdata, agent_missions, observations_performed, \
-            events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, \
-                planned_rewards_df, execution_costs_df
+        # return planned rewards and execution costs dataframes
+        return planned_rewards_df, execution_costs_df
+
+    """
+    COMPILATION AND CLASSIFICATION METHODS
+    """
+    @staticmethod
+    def __compile_accessible_ground_points(compiled_orbitdata : Dict[str, OrbitData], printouts : bool) -> Set[Tuple[int,int]]:
+        # compile grids from agent orbitdata
+        grid_data = []
+        for agent_orbitdata in tqdm(compiled_orbitdata.values(), 
+                                    desc='Compiling target grids from agent orbit data', 
+                                    leave=False,
+                                    disable=not printouts
+                                ):
+            # get set of accessible ground points
+            gps_accessible_temp : list = [row for row in agent_orbitdata.grid_data]
+
+            # add to main list
+            grid_data.extend(gps_accessible_temp)
+        
+        # convert to dataframe
+        grid_data_df_temp = pd.DataFrame(grid_data, columns=['lat [deg]', 'lon [deg]','grid index', 'GP index'])
+
+        # remove duplicates
+        grid_data_df = grid_data_df_temp.drop_duplicates(subset=['grid index', 'GP index']).reset_index(drop=True)
+        
+        # compile acesses from agent orbitdata
+        acesses = []
+        for agent_orbit_data in compiled_orbitdata.values():
+            access_intervals = agent_orbit_data.gp_access_data.lookup_interval(0.0)
+            for i in range(len(access_intervals['time [s]'])):
+                row ={col : access_intervals[col][i] for col in access_intervals}
+                acesses.append(row)
+        accesses_df_temp = pd.DataFrame(acesses)
+        
+        # group accesses by ground point
+        accesses_per_gp : Dict[Tuple[int,int], pd.DataFrame] \
+                                = {(int(group[0]), int(group[1])) : data
+                                for group,data in accesses_df_temp.groupby(['grid index', 'GP index'])} \
+                                if not accesses_df_temp.empty else dict() # handle empty accesses case       
+       
+        # return set of accessible ground points
+        return grid_data_df, accesses_per_gp
+
+    @staticmethod
+    def __compile_events_accessibility(events : List[GeophysicalEvent], 
+                                       compiled_orbitdata : Dict[str, OrbitData], 
+                                       agent_missions : Dict[str, Mission], 
+                                       printouts : bool
+                                    ) -> Tuple[pd.DataFrame, List[Tuple[GeophysicalEvent, List[Tuple[Interval, str, str]]]]]:
+        
+        # initiate list of compiled events with access information
+        accesses_per_event_data = []
+        accesses_per_gp = []
+
+        # look for accesses to each event for each agent
+        for event in tqdm(events, 
+                            desc='Classifying event accesses, detections, and observations', 
+                            leave=True,
+                            disable=not printouts):
+            # unpackage event
+            *_,event_grid_idx,event_gp_idx = event.location
+            event_grid_idx = int(event_grid_idx)
+            event_gp_idx = int(event_gp_idx)
+            event_type = event.event_type.lower()   
+
+            # compile observation requirements for this event type
+            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
+
+            # group requirements by agents to avoid double counting
+            for agent_name,mission in agent_missions.items():
+                for objective in mission:
+                    # check if objective matches event type
+                    if (isinstance(objective, EventDrivenObjective) 
+                        and objective.event_type.lower() == event_type):
+                        
+                        # collect instrument capability requirements
+                        for req in objective:
+                            # check if requirement is an instrument capability requirement
+                            if (isinstance(req, ExplicitCapabilityRequirement) 
+                                and req.attribute == 'instrument'):
+                                instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
+            
+            if any([len(instrument_capability_reqs[agent_name]) == 0 
+                        for agent_name in instrument_capability_reqs]):
+                raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type}`. Case not yet supported.")
+
+            # get list of access intervals that occurr during the event's availability window for any agent
+            matching_event_accesses = []
+            for agent_orbit_data in compiled_orbitdata.values():                
+                # get access intervals for this agent that overlap with the event's availability window
+                event_access_intervals = agent_orbit_data.gp_access_data.lookup_interval(event.availability.left, event.availability.right)
+
+                # filter to access intervals that match the event's location and instrument capability requirements
+                for i in range(len(event_access_intervals['time [s]'])):
+                    # ignore access intervals that don't match the event's location (grid index and GP index)
+                    if (event_access_intervals['grid index'][i] != event_grid_idx 
+                        or event_access_intervals['GP index'][i] != event_gp_idx
+                        or event_access_intervals['instrument'][i].lower() not in instrument_capability_reqs[agent_name]):
+                        continue
+
+                    # add to list of access intervals to be filtered by instrument capability requirements
+                    row ={col : event_access_intervals[col][i] for col in event_access_intervals}
+                    matching_event_accesses.append(row)
+            
+            # flatten to list of access intervals
+            matching_event_accesses_flat = [(access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
+                                            for access_interval in matching_event_accesses]
+            
+            # initialize map of compiled access intervals
+            access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)
+
+            # compile list of access intervals
+            for t_access, agent_name, instrument in matching_event_accesses_flat:
+                # get propagation time step for this agent
+                time_step = compiled_orbitdata[agent_name].time_step 
+
+                # create unitary interval for this access time
+                access_interval = Interval(t_access, t_access + time_step)
+
+                # check if this access overlaps with any previous access
+                merged = False
+                for interval in access_interval_dict[(agent_name,instrument)]:
+                    if access_interval.overlaps(interval):
+                        # if so, join intervals
+                        interval.join(access_interval)
+                        merged = True
+                        break
+                
+                # if merged, continue to next interval
+                if merged: continue
+                
+                # otherwise, create a new access interval
+                access_interval_dict[(agent_name,instrument)].append(access_interval)
+
+            # flatten to list of access intervals
+            access_intervals : List[Tuple[Interval, str, str]] \
+                    = sorted([ (interval,agent_name,instrument) 
+                                for (agent_name,instrument),intervals in access_interval_dict.items()
+                                for interval in intervals ])
+            
+            # add to compiled event access data 
+            for interval, agent_name, instrument in access_intervals:
+                accesses_per_event_data.append({
+                    'event id' : event.id,
+                    'event type' : event.event_type,
+                    'lat [deg]' : event.location[0],
+                    'lon [deg]' : event.location[1],
+                    'grid index' : event.location[2],
+                    'GP index' : event.location[3],
+                    'access start [s]' : interval.left,
+                    'access end [s]' : interval.right,
+                    'instrument' : instrument,  
+                    'agent name' : agent_name
+                })
+                
+            # add to compiled event accessibility list
+            accesses_per_gp.append((event, access_intervals))
+
+        # convert to dataframe
+        accesses_per_event_df = pd.DataFrame(accesses_per_event_data)
+        
+        # return compiled event accessibility information
+        return accesses_per_event_df, accesses_per_gp
     
+    @staticmethod
+    def __compile_events_requested(events : List[GeophysicalEvent], task_reqs : List[TaskRequest], printouts : bool) -> Dict[GeophysicalEvent, List[TaskRequest]]:
+        # initialize event to matching requests map
+        requests_per_event : Dict[GeophysicalEvent, List[TaskRequest]] = defaultdict(list)
+        event_rquests_df_data = []
+
+        for event in tqdm(events, 
+                            desc='Classifying event requests', 
+                            leave=True,
+                            disable=not printouts):
+            
+            # find measurement requests that match this event
+            if any(not isinstance(task_req.task, EventObservationTask) for task_req in task_reqs):
+                raise NotImplementedError("Non-event observation tasks are not yet supported in event observation classification.")
+            else:
+                matching_requests = sorted([task_req for task_req in task_reqs if task_req.task.event == event], 
+                                            key= lambda a : a.t_req)
+            
+            # add to map of events to matching requests
+            requests_per_event[event] = matching_requests
+
+            for task_req in matching_requests:
+                event_rquests_df_data.append({
+                    'event id' : event.id,
+                    'event type' : event.event_type,
+                    'lat [deg]' : event.location[0],
+                    'lon [deg]' : event.location[1],
+                    'grid index' : event.location[2],
+                    'GP index' : event.location[3],
+                    'requester' : task_req.requester,
+                    't_req' : task_req.t_req,
+                    'parameter' : task_req.task.parameter
+                })
+
+        # convert to dataframe
+        events_requested_df = pd.DataFrame(event_rquests_df_data)
+
+        # return map of events to matching measurement requests
+        return events_requested_df, requests_per_event
+
+    @staticmethod
+    def __compile_task_accessibility(compiled_orbitdata : Dict[str, OrbitData], 
+                                     known_tasks: List[GenericObservationTask], 
+                                     agent_missions: Dict[str, Mission], 
+                                     printouts: bool
+                                    ) -> Tuple[pd.DataFrame, List[Tuple[GenericObservationTask, List[Tuple[Interval, str, str]]]]]:
+        # initialize map of tasks to access intervals
+        accesses_per_task : Dict[GenericObservationTask, list] = defaultdict(list)
+        accesses_per_task_df_data = []
+
+        for task in tqdm(known_tasks, desc="Processing task accessibility", leave=True, disable=not printouts):
+            # compile observation requirements for this task
+            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
+
+            for agent_name, mission in agent_missions.items():
+                # find objectives matching this task
+                if task.objective not in mission: continue # skip if objective not in mission
+
+                # collect instrument capability requirements
+                for req in task.objective:
+                    # check if requirement is an instrument capability requirement
+                    if (isinstance(req, ExplicitCapabilityRequirement) 
+                        and req.attribute == 'instrument'):
+                        instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
+
+            # find all accesses and observations that match this task
+            task_access_windows = []
+
+            # get matching accesses for this task by time
+            task_accesses = []
+            for agent_name, agent_orbit_data in compiled_orbitdata.items():
+                # get access intervals for an agent observing this task's availability window
+                access_intervals = agent_orbit_data.gp_access_data.lookup_interval(task.availability.left, task.availability.right)
+                
+                # skip if no accesses found
+                if len(access_intervals['time [s]']) == 0: continue
+
+                for i in range(len(access_intervals['time [s]'])):
+                    row ={col : access_intervals[col][i] for col in access_intervals}
+                    # add to task accesses list
+                    task_accesses.append(row)
+                
+            # check all task locations
+            for location in task.location:
+                # unpack location
+                task_lat,task_lon,task_grid_idx, task_gp_idx = location
+                task_lat = round(task_lat,6)
+                task_lon = round(task_lon,6)     
+                task_grid_idx = int(task_grid_idx)
+                task_gp_idx = int(task_gp_idx)     
+                
+                matching_accesses = [
+                                    (access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
+                                    for access_interval in task_accesses
+                                    if task_grid_idx == access_interval['grid index']
+                                    and task_gp_idx == access_interval['GP index']
+                                    and access_interval['instrument'].lower() in instrument_capability_reqs[agent_name]
+                                ]
+                
+                # initialize map of compiled access intervals
+                access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)
+
+                # compile list of access intervals
+                for t_access, agent_name, instrument in matching_accesses:
+                    # get propagation time step for this agent
+                    time_step = compiled_orbitdata[agent_name].time_step 
+
+                    # create unitary interval for this access time
+                    access_interval = Interval(t_access, t_access + time_step)
+
+                    # check if this access overlaps with any previous access
+                    merged = False
+                    for interval in access_interval_dict[(agent_name,instrument)]:
+                        if access_interval.overlaps(interval):
+                            # if so, join intervals
+                            interval.join(access_interval)
+                            merged = True
+                            break
+                    
+                    # if merged, continue to next interval
+                    if merged: continue
+                    
+                    # otherwise, create a new access interval
+                    access_interval_dict[(agent_name,instrument)].append(access_interval)
+
+                # flatten to list of access intervals
+                access_intervals : List[Tuple[Interval, str, str]] \
+                    = sorted([ (interval,agent_name,instrument) 
+                             for (agent_name,instrument),intervals in access_interval_dict.items()
+                             for interval in intervals ])
+                
+                
+                # append to task lists
+                task_access_windows.extend(access_intervals)
+
+                # append to task accesses dataframe
+                for interval, agent_name, instrument in access_intervals:
+                    accesses_per_task_df_data.append({
+                        'task id' : task.id,
+                        'task type' : task.task_type,
+                        'parameter' : task.parameter,
+                        'lat [deg]' : location[0],
+                        'lon [deg]' : location[1],
+                        'grid index' : location[2],
+                        'GP index' : location[3],
+                        't start' : interval.left,
+                        't end' : interval.right,
+                        'agent name' : agent_name,
+                        'instrument' : instrument
+                    })
+
+            if task_access_windows: accesses_per_task[task] = task_access_windows
+    
+        # convert to dataframe
+        accesses_per_task_df = pd.DataFrame(accesses_per_task_df_data)
+
+        # remove duplicates
+        accesses_per_task_df = accesses_per_task_df.drop_duplicates().reset_index(drop=True)
+
+        # return task access information as dataframe and list
+        return accesses_per_task_df, accesses_per_task
+
+    @staticmethod
+    def __classify_observations_per_gp(observations_performed_df : pd.DataFrame) -> Dict[Tuple[int,int], pd.DataFrame]:
+        # classify observations per GP 
+        observations_per_gp : Dict[Tuple[int,int], pd.DataFrame] \
+                                = {(int(group[0]), int(group[1])) : data
+                                for group,data in observations_performed_df.groupby(['grid index', 'GP index'])} \
+                                if not observations_performed_df.empty else dict() # handle empty observations case
+
+        # return observations per GP and set of accessible GPs
+        return observations_per_gp
+
+    @staticmethod
+    def __compile_events_observed(events : List[GeophysicalEvent], 
+                                  observations_per_gp : Dict[Tuple, pd.DataFrame], 
+                                  agent_missions : Dict[str, Mission], 
+                                  printouts : bool
+                                ) -> Dict[tuple, pd.DataFrame]:
+        # initialize list of observations per event
+        observations_per_event = defaultdict(list)
+        observations_per_event_df_data = []
+
+        for event in tqdm(events, 
+                            desc='Classifying event accesses, detections, and observations', 
+                            leave=True,
+                            disable=not printouts):
+            # unpackage event
+            *_,event_grid_idx,event_gp_idx = event.location
+            event_grid_idx = int(event_grid_idx)
+            event_gp_idx = int(event_gp_idx)
+            event_type = event.event_type.lower()   
+
+            # compile observation requirements for this event type
+            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
+
+            # group requirements by agents to avoid double counting
+            for agent_name,mission in agent_missions.items():
+                for objective in mission:
+                    # check if objective matches event type
+                    if (isinstance(objective, EventDrivenObjective) 
+                        and objective.event_type.lower() == event_type):
+                        
+                        # collect instrument capability requirements
+                        for req in objective:
+                            # check if requirement is an instrument capability requirement
+                            if (isinstance(req, ExplicitCapabilityRequirement) 
+                                and req.attribute == 'instrument'):
+                                instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
+            
+            if any([len(instrument_capability_reqs[agent_name]) == 0 
+                        for agent_name in instrument_capability_reqs]):
+                raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type}`. Case not yet supported.")
+
+            # get event observations for this event's location
+            if (event_grid_idx, event_gp_idx) not in observations_per_gp:
+                # no observations were performed at this event's location
+                # create empty dataframe with expected columns for consistency
+                matching_observations = pd.DataFrame(columns=["t_start", "t_end", "instrument", "agent name"])
+            else:
+                matching_observations : pd.DataFrame = observations_per_gp[(event_grid_idx, event_gp_idx)]
+
+            # find observations that match the event time
+            time_mask = (
+                ((event.availability.left <= matching_observations["t_start"]) &
+                (matching_observations["t_start"] <= event.availability.right))
+                |
+                ((event.availability.left <= matching_observations["t_end"]) &
+                (matching_observations["t_end"] <= event.availability.right))
+                |
+                ((matching_observations["t_start"] <= event.availability.left) &
+                (event.availability.right <= matching_observations["t_end"]))
+            )
+            matching_observations = matching_observations[time_mask]
+
+            # find observations that match the event's instrument capability requirements
+            inst_lower = matching_observations["instrument"].str.lower()
+            agents = matching_observations["agent name"]
+
+            instrument_mask = [
+                inst in instrument_capability_reqs.get(agent, [])
+                for inst, agent in zip(inst_lower, agents)
+            ]
+
+            # convert to list of dicts for easier handling downstream
+            matching_observations = [dict(row) for _,row in matching_observations[instrument_mask].iterrows()]
+            
+            # add to observations per event map
+            observations_per_event[event] = matching_observations
+
+            # add to dataframe of observations per event
+            for row in matching_observations:
+                df_data_row = {
+                    'event id' : event.id,
+                    'event type' : event.event_type,
+                    'lat [deg]' : event.location[0],
+                    'lon [deg]' : event.location[1],
+                    'grid index' : event.location[2],
+                    'GP index' : event.location[3],
+                    'agent name' : agent_name
+                }
+                df_data_row.update(row)
+
+                observations_per_event_df_data.append(df_data_row)
+
+        # convert to dataframe
+        observations_per_event_df = pd.DataFrame(observations_per_event_df_data)
+
+        # return observations per event
+        return observations_per_event_df, observations_per_event
+
+    @staticmethod
+    def __compile_tasks_observed(compiled_orbitdata : Dict[str, OrbitData],
+                                 known_tasks: List[GenericObservationTask], 
+                                 observations_per_gp: Dict, 
+                                 agent_missions: Dict[str, Mission], 
+                                 printouts: bool
+                                ) -> Tuple[pd.DataFrame, Dict]:
+        # initiate task observation data structures
+        tasks_observed : Dict[GenericObservationTask, list] = defaultdict(list)
+        task_observations_df_data = []
+
+        # itarate through tasks and find matching observations
+        for task in tqdm(known_tasks, desc="Processing task observations", leave=True, disable=not printouts):
+            # compile observation requirements for this task
+            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
+
+            for agent_name, mission in agent_missions.items():
+                # find objectives matching this task
+                if task.objective not in mission: continue # skip if objective not in mission
+
+                # collect instrument capability requirements
+                for req in task.objective:
+                    # check if requirement is an instrument capability requirement
+                    if (isinstance(req, ExplicitCapabilityRequirement) 
+                        and req.attribute == 'instrument'):
+                        instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
+
+            # find all accesses and observations that match this task
+            task_observations = []
+
+            # get matching accesses for this task by time
+            task_accesses = []
+            for agent_name, agent_orbit_data in compiled_orbitdata.items():
+                # get access intervals for an agent observing this task's availability window
+                access_intervals = agent_orbit_data.gp_access_data.lookup_interval(task.availability.left, task.availability.right)
+                
+                # skip if no accesses found
+                if len(access_intervals['time [s]']) == 0: continue
+
+                for i in range(len(access_intervals['time [s]'])):
+                    row ={col : access_intervals[col][i] for col in access_intervals}
+                    # add to task accesses list
+                    task_accesses.append(row)
+                
+            # check all task locations
+            for location in task.location:
+                # unpack location
+                task_lat,task_lon,task_grid_idx, task_gp_idx = location
+                task_lat = round(task_lat,6)
+                task_lon = round(task_lon,6)     
+                task_grid_idx = int(task_grid_idx)
+                task_gp_idx = int(task_gp_idx)                   
+
+                # find observations performed at task location while task was active                
+                if (task_grid_idx, task_gp_idx) not in observations_per_gp:
+                    # no observations were performed at this task's location
+                    # create empty dataframe with expected columns for consistency
+                    matching_observations = pd.DataFrame(columns=["t_start", "t_end", "instrument", "agent name"])
+                else:
+                    matching_observations : pd.DataFrame = observations_per_gp[(task_grid_idx, task_gp_idx)]
+                
+                # find observations that match the event time
+                time_mask = (
+                    ((task.availability.left <= matching_observations["t_start"]) &
+                    (matching_observations["t_start"] <= task.availability.right))
+                    |
+                    ((task.availability.left <= matching_observations["t_end"]) &
+                    (matching_observations["t_end"] <= task.availability.right))
+                    |
+                    ((matching_observations["t_start"] <= task.availability.left) &
+                    (task.availability.right <= matching_observations["t_end"]))
+                )
+                matching_observations = matching_observations[time_mask]
+
+                # find observations that match the event's instrument capability requirements
+                inst_lower = matching_observations["instrument"].str.lower()
+                agents = matching_observations["agent name"]
+
+                instrument_mask = [
+                    inst in instrument_capability_reqs.get(agent, [])
+                    for inst, agent in zip(inst_lower, agents)
+                ]
+
+                # convert matching observations to list of dicts for easier handling
+                matching_observations = [dict(row) for _,row in matching_observations[instrument_mask].iterrows()]
+
+                for row in matching_observations:
+                    task_observations_df_data.append({
+                        'task id' : task.id,
+                        'parameter' : task.parameter,
+                        'lat [deg]' : task_lat,
+                        'lon [deg]' : task_lon,
+                        'grid index' : task_grid_idx,
+                        'GP index' : task_gp_idx,
+                        **row
+                    })
+                
+                # append to task lists
+                task_observations.extend(matching_observations)
+            
+            if task_observations: tasks_observed[task] = task_observations
+
+        # convert task observations data to dataframe
+        task_observations_df = pd.DataFrame(task_observations_df_data)
+        
+        # return task observations dataframe and dictionary of tasks observed with their corresponding observations
+        return task_observations_df, tasks_observed
+    
+    """
+    RESULTS SUMMARY METHODS
+    """
+    @staticmethod
+    def summarize_results(self) -> pd.DataFrame:
+        raise NotImplementedError('TODO, results summary under development')
+        # summarize results
+        if printouts: print('Generating results summary...')
+        results_summary : pd.DataFrame \
+            = ResultsProcessor.__summarize_results(compiled_orbitdata, agent_missions, observations_performed,
+                                    events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, 
+                                        planned_rewards_df, execution_costs_df, precision, printouts)
+        
+        # return results summary
+        return results_summary
+    
+    @staticmethod
+    def load_processed_results():
+        # TODO use when results have already been processed and saved to disk, to avoid having to re-process results every time
+        pass
+
     @staticmethod
     def __summarize_results(compiled_orbitdata : Dict[str, OrbitData], 
                             agent_missions : Dict[str, Mission],
@@ -966,7 +1642,6 @@ class ResultsProcessor:
         else:
             matching_requests = sorted([task_req for task_req in task_reqs if task_req.task.event == event], 
                                         key= lambda a : a.t_req)
-
 
         if matching_accesses:
             x = 1 # debugging breakpoint
