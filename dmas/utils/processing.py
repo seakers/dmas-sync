@@ -27,7 +27,7 @@ class ResultsProcessor:
                         agent_missions : Dict[str, Mission], 
                         events : List[GeophysicalEvent],
                         printouts: bool = True
-                    ) -> pd.DataFrame:
+                    ) -> Tuple:
         """ processes simulation results after execution """
         
         # load results
@@ -43,6 +43,7 @@ class ResultsProcessor:
         grid_data_df, accesses_per_gp = ResultsProcessor.__compile_accessible_ground_points(compiled_orbitdata, printouts)
 
         ## events
+        events_per_gp = ResultsProcessor.__classify_events_per_gp(events)
         accesses_per_event_df, accesses_per_event = ResultsProcessor.__compile_events_accessibility(events, compiled_orbitdata, agent_missions, printouts)
         events_requested_df, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
 
@@ -80,10 +81,66 @@ class ResultsProcessor:
             df.to_parquet(os.path.join(processed_results_path, f'{filename}.parquet'), index=False)
 
         # return compiled data for summary generation
-        return task_reqs,known_tasks, events_detected, events_requested, agent_broadcasts_df, planned_rewards_df, execution_costs_df, \
-                accesses_per_gp, events_requested, accesses_per_event, accesses_per_task, \
+        return task_reqs, known_tasks, events_per_gp, events_detected, events_requested, \
+            agent_broadcasts_df, planned_rewards_df, execution_costs_df, \
+                accesses_per_gp, accesses_per_event, accesses_per_task, \
                     observations_per_gp, observations_per_event, observations_per_task
     
+    @staticmethod
+    def load_processed_results(results_path : str,
+                                compiled_orbitdata : Dict[str, OrbitData], 
+                                agent_missions : Dict[str, Mission], 
+                                events : List[GeophysicalEvent],
+                                printouts: bool = True
+                            ) -> Tuple:
+        # TODO 
+        raise NotImplementedError("Loading of processed results into summary generation format not yet implemented.")
+        
+        # load preprocessed dataframes if they exist, otherwise raise error
+        observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
+        events_per_gp = ResultsProcessor.__classify_events_per_gp(events)
+        task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
+        agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
+
+        loadable_dfs = {
+            'events_detected' : None,
+            'known_tasks' : None,
+            'planned_rewards' : None,
+            'execution_costs' : None,
+            'grid_data' : None,
+            'accesses_per_event': None,
+            'events_requested' : None,
+            'accesses_per_task' : None,
+            'observations_per_event' : None,
+            'observations_per_task' : None,
+        }
+
+        for filename in loadable_dfs.keys():
+            filepath = os.path.join(results_path, f'{filename}.parquet')
+            if os.path.exists(filepath):
+                loadable_dfs[filename] = pd.read_parquet(filepath)
+            else:
+                raise FileNotFoundError(f"Processed results file `{filename}.parquet` not found in path `{results_path}`. Expected file to be located at `{filepath}`.")
+
+        events_detected_df = loadable_dfs['events_detected']
+        known_tasks_df = loadable_dfs['known_tasks']
+        planned_rewards_df = loadable_dfs['planned_rewards']
+        execution_costs_df = loadable_dfs['execution_costs']
+        grid_data_df = loadable_dfs['grid_data']
+        accesses_per_event_df = loadable_dfs['accesses_per_event']
+        events_requested_df = loadable_dfs['events_requested']
+        accesses_per_task_df = loadable_dfs['accesses_per_task']
+        observations_per_event_df = loadable_dfs['observations_per_event']
+        observations_per_task_df = loadable_dfs['observations_per_task']
+
+        # convert dataframes to lists and dictionaries as needed for summary generation
+
+        # return compiled data for summary generation
+        return task_reqs, known_tasks, events_per_gp, events_detected, events_requested, \
+            agent_broadcasts_df, planned_rewards_df, execution_costs_df, \
+                accesses_per_gp, accesses_per_event, accesses_per_task, \
+                    observations_per_gp, observations_per_event, observations_per_task
+
     """
     RESULTS LOADING METHODS
     """
@@ -407,15 +464,23 @@ class ResultsProcessor:
         return grid_data_df, accesses_per_gp
 
     @staticmethod
+    def __classify_events_per_gp(events : List[GeophysicalEvent]) -> Dict[Tuple[int,int], List[GeophysicalEvent]]:
+        events_per_gp : Dict[Tuple[int,int], List[GeophysicalEvent]] = defaultdict(list)
+        for event in events:
+            *_, grid_index, gp_index = event.location
+            events_per_gp[(int(grid_index), int(gp_index))].append(event)
+        return events_per_gp
+
+    @staticmethod
     def __compile_events_accessibility(events : List[GeophysicalEvent], 
                                        compiled_orbitdata : Dict[str, OrbitData], 
                                        agent_missions : Dict[str, Mission], 
                                        printouts : bool
-                                    ) -> Tuple[pd.DataFrame, List[Tuple[GeophysicalEvent, List[Tuple[Interval, str, str]]]]]:
+                                    ) -> Tuple[pd.DataFrame, Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]]]:
         
         # initiate list of compiled events with access information
         accesses_per_event_data = []
-        accesses_per_gp = []
+        accesses_per_event = dict()
 
         # look for accesses to each event for each agent
         for event in tqdm(events, 
@@ -519,13 +584,13 @@ class ResultsProcessor:
                 })
                 
             # add to compiled event accessibility list
-            accesses_per_gp.append((event, access_intervals))
+            if access_intervals: accesses_per_event[event] = access_intervals
 
         # convert to dataframe
         accesses_per_event_df = pd.DataFrame(accesses_per_event_data)
         
         # return compiled event accessibility information
-        return accesses_per_event_df, accesses_per_gp
+        return accesses_per_event_df, accesses_per_event
     
     @staticmethod
     def __compile_events_requested(events : List[GeophysicalEvent], task_reqs : List[TaskRequest], printouts : bool) -> Dict[GeophysicalEvent, List[TaskRequest]]:
@@ -770,27 +835,47 @@ class ResultsProcessor:
                 inst in instrument_capability_reqs.get(agent, [])
                 for inst, agent in zip(inst_lower, agents)
             ]
+            matching_observations = matching_observations[instrument_mask]
+
+            # Response times
+            matching_observations["resp time [s]"] = matching_observations["t_start"] - event.availability.left
+
+            # Normalized
+            matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / event.availability.span()
 
             # convert to list of dicts for easier handling downstream
-            matching_observations = [dict(row) for _,row in matching_observations[instrument_mask].iterrows()]
-            
-            # add to observations per event map
-            observations_per_event[event] = matching_observations
+            matching_observations = [dict(row) for _,row in matching_observations.iterrows()]
+            matching_observations = sorted(matching_observations, key=lambda x: x['t_start']) # sort by observation start time
 
+            n_obs_data = []
+            t_rev_data = []
+            
             # add to dataframe of observations per event
-            for row in matching_observations:
-                df_data_row = {
+            prev_row = None
+            for n_obs,row in enumerate(matching_observations):
+                t_rev = row['t_start'] - prev_row['t_end'] if prev_row is not None else np.Inf
+                
+                observations_per_event_df_data.append({
                     'event id' : event.id,
                     'event type' : event.event_type,
                     'lat [deg]' : event.location[0],
                     'lon [deg]' : event.location[1],
                     'grid index' : event.location[2],
                     'GP index' : event.location[3],
-                    'agent name' : agent_name
-                }
-                df_data_row.update(row)
+                    'agent name' : agent_name,
+                    **row,
+                    'n_obs' : n_obs,
+                    't_rev' : t_rev
+                })
 
-                observations_per_event_df_data.append(df_data_row)
+                n_obs_data.append(n_obs)
+                t_rev_data.append(t_rev)
+                prev_row = row            
+
+            matching_observations = [{**obs, 'n_obs': n_obs, 't_rev': t_rev} for obs, n_obs, t_rev in zip(matching_observations, n_obs_data, t_rev_data)]
+            
+            # add to observations per event map
+            if matching_observations: observations_per_event[event] = matching_observations        
 
         # convert to dataframe
         observations_per_event_df = pd.DataFrame(observations_per_event_df_data)
@@ -880,11 +965,26 @@ class ResultsProcessor:
                     inst in instrument_capability_reqs.get(agent, [])
                     for inst, agent in zip(inst_lower, agents)
                 ]
+                matching_observations = matching_observations[instrument_mask]
+
+                # Response times
+                matching_observations["resp time [s]"] = matching_observations["t_start"] - task.availability.left
+
+                # Normalized
+                matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / task.availability.span()
+
 
                 # convert matching observations to list of dicts for easier handling
-                matching_observations = [dict(row) for _,row in matching_observations[instrument_mask].iterrows()]
+                matching_observations = [dict(row) for _,row in matching_observations.iterrows()]
+                matching_observations = sorted(matching_observations, key=lambda x: x['t_start']) # sort by observation start time
 
-                for row in matching_observations:
+                n_obs_data = []
+                t_rev_data = []
+
+                prev_row = None
+                for n_obs,row in enumerate(matching_observations):
+                    t_rev = row['t_start'] - prev_row['t_end'] if prev_row is not None else np.Inf
+                    
                     task_observations_df_data.append({
                         'task id' : task.id,
                         'parameter' : task.parameter,
@@ -892,8 +992,15 @@ class ResultsProcessor:
                         'lon [deg]' : task_lon,
                         'grid index' : task_grid_idx,
                         'GP index' : task_gp_idx,
-                        **row
+                        **row,
+                        'n_obs' : n_obs,
+                        't_rev' : t_rev
                     })
+                    n_obs_data.append(n_obs)
+                    t_rev_data.append(t_rev)
+                    prev_row = row
+
+                matching_observations = [{**obs, 'n_obs': n_obs, 't_rev': t_rev} for obs, n_obs, t_rev in zip(matching_observations, n_obs_data, t_rev_data)]
                 
                 # append to task lists
                 task_observations.extend(matching_observations)
@@ -910,54 +1017,39 @@ class ResultsProcessor:
     RESULTS SUMMARY METHODS
     """
     @staticmethod
-    def summarize_results(self) -> pd.DataFrame:
-        raise NotImplementedError('TODO, results summary under development')
-        # summarize results
-        if printouts: print('Generating results summary...')
-        results_summary : pd.DataFrame \
-            = ResultsProcessor.__summarize_results(compiled_orbitdata, agent_missions, observations_performed,
-                                    events, events_detected, task_reqs, tasks_known, agent_broadcasts_df, 
-                                        planned_rewards_df, execution_costs_df, precision, printouts)
-        
-        # return results summary
-        return results_summary
-    
-    @staticmethod
-    def load_processed_results():
-        # TODO use when results have already been processed and saved to disk, to avoid having to re-process results every time
-        pass
+    def summarize_results(compiled_orbitdata : Dict[str, OrbitData], 
+                          events : List[GeophysicalEvent],
+                          task_reqs : List[TaskRequest],
+                          known_tasks : List[GenericObservationTask],
+                          events_per_gp : Dict[Tuple[int,int], List[GeophysicalEvent]],
+                          events_detected : List[GeophysicalEvent], 
+                          events_requested : List[GeophysicalEvent], 
+                          agent_broadcasts_df : pd.DataFrame, 
+                          planned_rewards_df : pd.DataFrame, 
+                          execution_costs_df : pd.DataFrame,
+                          accesses_per_gp : Dict[Tuple[int,int], pd.DataFrame],
+                          accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
+                          accesses_per_task : Dict[GenericObservationTask, list],
+                          observations_per_gp : Dict[Tuple[int,int], pd.DataFrame], 
+                          observations_per_event : Dict[GeophysicalEvent, List[Dict]],
+                          observations_per_task : Dict[GenericObservationTask, list],
+                          precision : int = 5,
+                          printouts : bool = True
+                        ) -> pd.DataFrame:      
 
-    @staticmethod
-    def __summarize_results(compiled_orbitdata : Dict[str, OrbitData], 
-                            agent_missions : Dict[str, Mission],
-                            observations_performed : pd.DataFrame, 
-                            events : List[GeophysicalEvent], 
-                            events_detected : List[GeophysicalEvent], 
-                            task_reqs : List[TaskRequest], 
-                            tasks_known : List[GenericObservationTask],
-                            agent_broadcasts_df : pd.DataFrame,
-                            planned_rewards_df : pd.DataFrame,
-                            execution_costs_df : pd.DataFrame,
-                            n_decimals : int = 5,
-                            printouts : bool = True
-                        ) -> pd.DataFrame:
-        
         # classify observations
-        observations_per_gp, events_per_gp, gps_accessible, \
-            events_observable, events_observed, events_detected, events_requested, \
-                events_re_observable, events_re_obs, \
-                    events_co_observable, events_co_obs, \
-                        events_co_observable_fully, events_co_obs_fully, \
-                            events_co_observable_partially, events_co_obs_partially, \
-                                tasks_observable, tasks_observed \
-                                    = ResultsProcessor.__classify_observations(compiled_orbitdata,
-                                                                               agent_missions,
-                                                                               observations_performed, 
-                                                                               events, 
-                                                                               events_detected,
-                                                                               task_reqs,
-                                                                               tasks_known,
-                                                                               printouts)       
+        events_re_observable = {event : accesses for event, accesses in accesses_per_event.items()
+                                 if len(accesses) > 1}
+        events_re_obs = {event : observations for event, observations in observations_per_event.items()
+                            if len(observations) > 1}
+        
+        # TODO: implement co-observability classification
+        events_co_observable = dict()
+        events_co_observable_fully = dict()
+        events_co_observable_partially = dict()
+        events_co_obs = dict()
+        events_co_obs_fully = dict()
+        events_co_obs_partially = dict()        
 
         # count observations performed
         # n_events, n_unique_event_obs, n_total_event_obs,
@@ -972,27 +1064,26 @@ class ResultsProcessor:
                                         n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
                                             n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
                                                 n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
-                                                    = ResultsProcessor.__count_observations(  compiled_orbitdata, 
-                                                                                observations_performed, 
-                                                                                observations_per_gp,
-                                                                                events, 
-                                                                                events_per_gp,
-                                                                                events_observable,
-                                                                                events_detected, 
-                                                                                events_requested,
-                                                                                events_observed, 
-                                                                                events_re_observable,
-                                                                                events_re_obs, 
-                                                                                events_co_observable,
-                                                                                events_co_obs, 
-                                                                                events_co_observable_fully,
-                                                                                events_co_obs_fully, 
-                                                                                events_co_observable_partially,
-                                                                                events_co_obs_partially,
-                                                                                tasks_known,
-                                                                                tasks_observable,
-                                                                                tasks_observed,
-                                                                                printouts)
+                                                    = ResultsProcessor.__count_observations(compiled_orbitdata, 
+                                                                                            observations_per_gp,
+                                                                                            events, 
+                                                                                            events_per_gp,
+                                                                                            accesses_per_event,
+                                                                                            events_detected, 
+                                                                                            events_requested,
+                                                                                            observations_per_event, 
+                                                                                            events_re_observable,
+                                                                                            events_re_obs, 
+                                                                                            events_co_observable,
+                                                                                            events_co_obs, 
+                                                                                            events_co_observable_fully,
+                                                                                            events_co_obs_fully, 
+                                                                                            events_co_observable_partially,
+                                                                                            events_co_obs_partially,
+                                                                                            known_tasks,
+                                                                                            accesses_per_task,
+                                                                                            observations_per_task,
+                                                                                            printouts)
             
         # count probabilities of observations performed
         p_gp_accessible, p_gp_observed, p_gp_observed_if_accessible, p_event_at_gp, p_event_detected, \
@@ -1007,31 +1098,35 @@ class ResultsProcessor:
                                             p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, \
                                                 p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable \
                                                     = ResultsProcessor.__calc_event_probabilities(compiled_orbitdata, 
-                                                                                    gps_accessible,
-                                                                                    observations_performed, 
-                                                                                    observations_per_gp,
-                                                                                    events, 
-                                                                                    events_per_gp,
-                                                                                    events_observable,
-                                                                                    events_detected, 
-                                                                                    events_requested,
-                                                                                    events_observed, 
-                                                                                    events_re_observable,
-                                                                                    events_re_obs, 
-                                                                                    events_co_observable,
-                                                                                    events_co_obs, 
-                                                                                    events_co_observable_fully,
-                                                                                    events_co_obs_fully, 
-                                                                                    events_co_observable_partially,
-                                                                                    events_co_obs_partially,
-                                                                                    tasks_known,
-                                                                                    tasks_observable,
-                                                                                    tasks_observed,
-                                                                                    printouts)
+                                                                                                  accesses_per_gp,
+                                                                                                  observations_per_gp,
+                                                                                                  events, 
+                                                                                                  events_per_gp,
+                                                                                                  accesses_per_event,
+                                                                                                  events_detected, 
+                                                                                                  events_requested,
+                                                                                                  observations_per_event, 
+                                                                                                  events_re_observable,
+                                                                                                  events_re_obs, 
+                                                                                                  events_co_observable,
+                                                                                                  events_co_obs, 
+                                                                                                  events_co_observable_fully,
+                                                                                                  events_co_obs_fully, 
+                                                                                                  events_co_observable_partially,
+                                                                                                  events_co_obs_partially,
+                                                                                                  known_tasks,
+                                                                                                  accesses_per_task,
+                                                                                                  observations_per_task,
+                                                                                                  printouts)
         
         # calculate event revisit times
-        t_gp_reobservation = ResultsProcessor.__calc_groundpoint_coverage_metrics(observations_per_gp)
-        t_event_reobservation = ResultsProcessor.__calc_event_coverage_metrics(events_observed)
+        t_gp_reobservation = ResultsProcessor.__calc_groundpoint_reobservation_metrics(observations_per_gp)
+        t_event_reobservation = ResultsProcessor.__calc_event_reobservation_metrics(observations_per_event)
+        t_task_reobservation = ResultsProcessor.__calc_task_reobservation_metrics(observations_per_task) 
+        t_response_to_event = ResultsProcessor.__calc_response_time_metrics(observations_per_event)
+        t_response_to_event_norm = ResultsProcessor.__calc_response_time_metrics_normalized(observations_per_event)
+        t_response_to_task = ResultsProcessor.__calc_response_time_metrics(observations_per_task)
+        t_response_to_task_norm = ResultsProcessor.__calc_response_time_metrics_normalized(observations_per_task)
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -1080,608 +1175,133 @@ class ResultsProcessor:
                     ['Average GP Reobservation Time [s]', t_gp_reobservation['mean']],
                     ['Standard Deviation of GP Reobservation Time [s]', t_gp_reobservation['std']],
                     ['Median GP Reobservation Time [s]', t_gp_reobservation['median']],
+                    
                     ['Average Event Reobservation Time [s]', t_event_reobservation['mean']],
                     ['Standard Deviation of Event Reobservation Time [s]', t_event_reobservation['std']],
                     ['Median Event Reobservation Time [s]', t_event_reobservation['median']],
+                    
+                    ['Average Task Reobservation Time [s]', t_task_reobservation['mean']],
+                    ['Standard Deviation of Task Reobservation Time [s]', t_task_reobservation['std']],
+                    ['Median Task Reobservation Time [s]', t_task_reobservation['median']],                    
 
                     # Ground-Point Coverage Probabilities
-                    ['P(Ground Point Accessible)', np.round(p_gp_accessible,n_decimals)],
-                    ['P(Ground Point Observed)', np.round(p_gp_observed,n_decimals)],
-                    ['P(Ground Point Observed | Ground Point Accessible)', np.round(p_gp_observed_if_accessible,n_decimals)],
-                    ['P(Event at a GP)', np.round(p_event_at_gp,n_decimals)],
+                    ['P(Ground Point Accessible)', np.round(p_gp_accessible,precision)],
+                    ['P(Ground Point Observed)', np.round(p_gp_observed,precision)],
+                    ['P(Ground Point Observed | Ground Point Accessible)', np.round(p_gp_observed_if_accessible,precision)],
+                    ['P(Event at a GP)', np.round(p_event_at_gp,precision)],
 
                     # Event Observation Probabilities
                     # TODO add co-observation probabilities
-                    ['P(Event Observable)', np.round(p_event_observable,n_decimals)],
-                    ['P(Event Re-observable)', np.round(p_event_re_observable,n_decimals)],
-                    ['P(Event Co-observable)', np.round(p_event_co_observable,n_decimals)],
-                    ['P(Event Fully Co-observable)', np.round(p_event_co_observable_fully,n_decimals)],
-                    ['P(Event Partially Co-observable)', np.round(p_event_co_observable_partial,n_decimals)],
+                    ['P(Event Observable)', np.round(p_event_observable,precision)],
+                    ['P(Event Re-observable)', np.round(p_event_re_observable,precision)],
+                    ['P(Event Co-observable)', np.round(p_event_co_observable,precision)],
+                    ['P(Event Fully Co-observable)', np.round(p_event_co_observable_fully,precision)],
+                    ['P(Event Partially Co-observable)', np.round(p_event_co_observable_partial,precision)],
                     
-                    ['P(Event Detected)', np.round(p_event_detected,n_decimals)],
-                    ['P(Event Observed)', np.round(p_event_observed,n_decimals)],
-                    ['P(Event Re-observed)', np.round(p_event_re_obs,n_decimals)],
-                    ['P(Event Co-observed)', np.round(p_event_co_obs,n_decimals)],
-                    ['P(Event Fully Co-observed)', np.round(p_event_co_obs_fully,n_decimals)],
-                    ['P(Event Partially Co-observed)', np.round(p_event_co_obs_partial,n_decimals)],
+                    ['P(Event Detected)', np.round(p_event_detected,precision)],
+                    ['P(Event Observed)', np.round(p_event_observed,precision)],
+                    ['P(Event Re-observed)', np.round(p_event_re_obs,precision)],
+                    ['P(Event Co-observed)', np.round(p_event_co_obs,precision)],
+                    ['P(Event Fully Co-observed)', np.round(p_event_co_obs_fully,precision)],
+                    ['P(Event Partially Co-observed)', np.round(p_event_co_obs_partial,precision)],
 
-                    ['P(Event Observation | Observation)', np.round(p_event_obs_if_obs,n_decimals)],
-                    ['P(Event Re-observation | Observation)', np.round(p_event_re_obs_if_obs,n_decimals)],
+                    ['P(Event Observation | Observation)', np.round(p_event_obs_if_obs,precision)],
+                    ['P(Event Re-observation | Observation)', np.round(p_event_re_obs_if_obs,precision)],
                     # ['P(Event Co-observation | Observation)', np.round(p_event_co_obs_if_obs,n_decimals)],
                     # ['P(Event Full Co-observation | Observation)', np.round(p_event_co_obs_partially_if_obs,n_decimals)],
                     # ['P(Event Partial Co-observation | Observation)', np.round(p_event_co_obs_fully_if_obs,n_decimals)],
 
-                    ['P(Event Observed | Observable)', np.round(p_event_observed_if_observable,n_decimals)],
-                    ['P(Event Re-observed | Re-observable)', np.round(p_event_re_obs_if_re_observable,n_decimals)],
+                    ['P(Event Observed | Observable)', np.round(p_event_observed_if_observable,precision)],
+                    ['P(Event Re-observed | Re-observable)', np.round(p_event_re_obs_if_re_observable,precision)],
                     # ['P(Event Co-observed | Co-observable)', np.round(p_event_co_obs_if_co_observable,n_decimals)],
                     # ['P(Event Fully Co-observed | Fully Co-observable)', np.round(p_event_co_obs_fully_if_co_observable_fully,n_decimals)],
                     # ['P(Event Partially Co-observed | Partially Co-observable)', np.round(p_event_co_obs_partial_if_co_observable_partially,n_decimals)],
                     
-                    ['P(Event Observed | Event Detected)', np.round(p_event_observed_if_detected,n_decimals)],
-                    ['P(Event Re-observed | Event Detected)', np.round(p_event_re_obs_if_detected,n_decimals)],
+                    ['P(Event Observed | Event Detected)', np.round(p_event_observed_if_detected,precision)],
+                    ['P(Event Re-observed | Event Detected)', np.round(p_event_re_obs_if_detected,precision)],
                     # ['P(Event Co-observed | Event Detected)', np.round(p_event_co_obs_if_detected,n_decimals)],
                     # ['P(Event Co-observed Fully | Event Detected)', np.round(p_event_co_obs_fully_if_detected,n_decimals)],
                     # ['P(Event Co-observed Partially | Event Detected)', np.round(p_event_co_obs_partial_if_detected,n_decimals)],
 
-                    ['P(Event Observed | Event Observable and Detected)', np.round(p_event_observed_if_detected,n_decimals)],
-                    ['P(Event Re-observed | Event Re-observable and Detected)', np.round(p_event_re_obs_if_detected,n_decimals)],
+                    ['P(Event Observed | Event Observable and Detected)', np.round(p_event_observed_if_detected,precision)],
+                    ['P(Event Re-observed | Event Re-observable and Detected)', np.round(p_event_re_obs_if_detected,precision)],
                     # ['P(Event Co-observed | Event Co-observable and Detected)', np.round(p_event_co_obs_if_detected,n_decimals)],
                     # ['P(Event Co-observed Fully | Event Fully Co-observable and Detected)', np.round(p_event_co_obs_fully_if_detected,n_decimals)],
                     # ['P(Event Co-observed Partially | Event Partially Co-observable and Detected)', np.round(p_event_co_obs_partial_if_detected,n_decimals)],
 
                     # Task Observation Probabilities
                     # TODO add co-observation probabilities
-                    ['P(Task Observable)', np.round(p_task_observable,n_decimals)],
-                    ['P(Task Observed)', np.round(p_task_observed,n_decimals)],
-                    ['P(Task Observed | Task Observable)', np.round(p_task_observed_if_observable,n_decimals)],
-                    ['P(Task Reobserved)', np.round(p_task_reobserved,n_decimals)],
-                    ['P(Task Reobserved | Task Reobservable)', np.round(p_task_reobserved_if_reobservable,n_decimals)],
+                    ['P(Task Observable)', np.round(p_task_observable,precision)],
+                    ['P(Task Observed)', np.round(p_task_observed,precision)],
+                    ['P(Task Observed | Task Observable)', np.round(p_task_observed_if_observable,precision)],
+                    ['P(Task Reobserved)', np.round(p_task_reobserved,precision)],
+                    ['P(Task Reobserved | Task Reobservable)', np.round(p_task_reobserved_if_reobservable,precision)],
                     
-                    ['P(Event-Driven Task Observable)', np.round(p_event_task_observable,n_decimals)],
-                    ['P(Event-Driven Task Observed)', np.round(p_event_task_observed,n_decimals)],
-                    ['P(Event-Driven Task Observed | Event-Driven Task Observable)', np.round(p_event_task_observed_if_observable,n_decimals)],
-                    ['P(Event-Driven Task Reobserved)', np.round(p_event_task_reobserved,n_decimals)],
-                    ['P(Event-Driven Task Reobserved | Event-Driven Task Reobservable)', np.round(p_event_task_reobserved_if_reobservable,n_decimals)],
+                    ['P(Event-Driven Task Observable)', np.round(p_event_task_observable,precision)],
+                    ['P(Event-Driven Task Observed)', np.round(p_event_task_observed,precision)],
+                    ['P(Event-Driven Task Observed | Event-Driven Task Observable)', np.round(p_event_task_observed_if_observable,precision)],
+                    ['P(Event-Driven Task Reobserved)', np.round(p_event_task_reobserved,precision)],
+                    ['P(Event-Driven Task Reobserved | Event-Driven Task Reobservable)', np.round(p_event_task_reobserved_if_reobservable,precision)],
                     
-                    ['P(Default Mission Task Observable)', np.round(p_default_task_observable,n_decimals)],
-                    ['P(Default Mission Task Observed)', np.round(p_default_task_observed,n_decimals)],
-                    ['P(Default Mission Task Observed | Default Mission Task Observable)', np.round(p_default_task_observed_if_observable,n_decimals)],
-                    ['P(Default Mission Task Reobserved)', np.round(p_default_task_reobserved,n_decimals)],
-                    ['P(Default Mission Task Reobserved | Default Mission Task Reobservable)', np.round(p_default_task_reobserved_if_reobservable,n_decimals)],
+                    ['P(Default Mission Task Observable)', np.round(p_default_task_observable,precision)],
+                    ['P(Default Mission Task Observed)', np.round(p_default_task_observed,precision)],
+                    ['P(Default Mission Task Observed | Default Mission Task Observable)', np.round(p_default_task_observed_if_observable,precision)],
+                    ['P(Default Mission Task Reobserved)', np.round(p_default_task_reobserved,precision)],
+                    ['P(Default Mission Task Reobserved | Default Mission Task Reobservable)', np.round(p_default_task_reobserved_if_reobservable,precision)],
                     
                     # Messaging Statistics
                     ['Total Messages Broadcasted', len(agent_broadcasts_df)],
                     ['P(Message Broadcasted | Bid Message )', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='BUS']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
                     ['P(Message Broadcasted | Measurement Request Message )', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='MEASUREMENT_REQ']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
 
+                    # Response Time Statistics
+                    ['Average Response Time to Event [s]', t_response_to_event['mean']],
+                    ['Standard Deviation of Response Time to Event [s]', t_response_to_event['std']],
+                    ['Median Response Time to Event [s]', t_response_to_event['median']],
+
+                    ['Average Normalized Response Time to Event', t_response_to_event_norm['mean']],
+                    ['Standard Deviation of Normalized Response Time to Event', t_response_to_event_norm['std']],
+                    ['Median Normalized Response Time to Event', t_response_to_event_norm['median']],
+                    
+                    ['Average Response Time to Task [s]', t_response_to_task['mean']],
+                    ['Standard Deviation of Response Time to Task [s]', t_response_to_task['std']],
+                    ['Median Response Time to Task [s]', t_response_to_task['median']],
+
+                    ['Average Normalized Response Time to Task', t_response_to_task_norm['mean']],
+                    ['Standard Deviation of Normalized Response Time to Task', t_response_to_task_norm['std']],
+                    ['Median Normalized Response Time to Task', t_response_to_task_norm['median']],
+
                     # Reward Statistics 
-                    ['Total Planned Reward', np.round(planned_rewards_df['planned reward'].sum(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    ['Total Planned Reward', np.round(planned_rewards_df['planned reward'].sum(), precision) if planned_rewards_df is not None else 0.0],
                     ['Total Planned Task Observations', len(planned_rewards_df) if planned_rewards_df is not None else 0],
                     
-                    ['Average Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].mean(), n_decimals) if planned_rewards_df is not None else 0.0],
-                    ['Standard Deviation of Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].std(), n_decimals) if planned_rewards_df is not None else 0.0],
-                    ['Median Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].median(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    ['Average Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].mean(), precision) if planned_rewards_df is not None else 0.0],
+                    ['Standard Deviation of Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].std(), precision) if planned_rewards_df is not None else 0.0],
+                    ['Median Planned Reward per Task Observation', np.round(planned_rewards_df['planned reward'].median(), precision) if planned_rewards_df is not None else 0.0],
                     
-                    ['Average Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean(), n_decimals) if planned_rewards_df is not None else 0.0],
-                    ['Standard Deviation of Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std(), n_decimals) if planned_rewards_df is not None else 0.0],
-                    ['Median Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median(), n_decimals) if planned_rewards_df is not None else 0.0],
+                    ['Average Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean(), precision) if planned_rewards_df is not None else 0.0],
+                    ['Standard Deviation of Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std(), precision) if planned_rewards_df is not None else 0.0],
+                    ['Median Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median(), precision) if planned_rewards_df is not None else 0.0],
 
                     # Cost Statistics
-                    ['Total Execution Cost', np.round(execution_costs_df['cost'].sum(), n_decimals) if execution_costs_df is not None else 0.0],
-                    ['Average Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().mean(), n_decimals) if execution_costs_df is not None else 0.0],
-                    ['Standard Deviation of Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().std(), n_decimals) if execution_costs_df is not None else 0.0],
-                    ['Median Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().median(), n_decimals) if execution_costs_df is not None else 0.0],
+                    ['Total Execution Cost', np.round(execution_costs_df['cost'].sum(), precision) if execution_costs_df is not None else 0.0],
+                    ['Average Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if execution_costs_df is not None else 0.0],
+                    ['Standard Deviation of Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if execution_costs_df is not None else 0.0],
+                    ['Median Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if execution_costs_df is not None else 0.0],
 
                     # Utility Statistics
-                    ['Total Planned Utility', np.round(planned_rewards_df['planned reward'].sum() - execution_costs_df['cost'].sum(), n_decimals) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
-                    ['Average Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), n_decimals) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
-                    ['Standard Deviation of Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), n_decimals) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
-                    ['Median Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), n_decimals) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Total Planned Utility', np.round(planned_rewards_df['planned reward'].sum() - execution_costs_df['cost'].sum(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Average Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Standard Deviation of Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Median Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
 
-                    # Simulation Runtime
-                    # ['Total Runtime [s]', round(self.environment.t_f - self.environment.t_0, n_decimals)]
+                    
                 ]
 
-        return pd.DataFrame(summary_data, columns=summary_headers)
-                        
-    @staticmethod
-    def __classify_observations(compiled_orbitdata : Dict[str, OrbitData], 
-                                agent_missions : Dict[str, Mission],
-                                observations_performed : pd.DataFrame,
-                                events : List[GeophysicalEvent], 
-                                events_detected : List[GeophysicalEvent], 
-                                task_reqs : List[TaskRequest],
-                                known_tasks : List[GenericObservationTask],
-                                printouts : bool = True
-                            ) -> tuple:
-                
-        # classify ground points (GPs) by their accessibility
-        gps_accessible = set()
-        for agent_orbitdata in tqdm(compiled_orbitdata.values(), 
-                                    desc='Counting total and accessible ground points', 
-                                    leave=False,
-                                    disable=not printouts
-                                ):
-            # get set of accessible ground points
-            gps_accessible_temp : set = {(row['grid index'], row['GP index']) 
-                                            for _,row in agent_orbitdata.gp_access_data}
-
-            # update set of accessible ground points
-            gps_accessible.update(gps_accessible_temp)
-
-        # classify observations per GP
-        observations_per_gp : Dict[str, pd.DataFrame] \
-                                = {(round(group[0],6), round(group[1],6)) : data
-                                for group,data in observations_performed.groupby(['grid index', 'GP index'])} \
-                                if not observations_performed.empty else dict() # handle empty observations case
-
-        # collect all event target GP locations
-        event_targets = {(int(event.location[2]), int(event.location[3]))
-                            for event in events}
-        
-        # classify events per target GP
-        events_per_gp = {(grid_idx, gp_idx): [event for event in events
-                                    if (event.location[2] == grid_idx 
-                                    and event.location[3] == gp_idx)]
-                            for (grid_idx, gp_idx) in event_targets}
-
-        # count event presense, detections, and observations
-        events_observable : Dict[GeophysicalEvent, list] = {}
-        events_detected : Dict[GeophysicalEvent, list] = {}
-        events_requested : Dict[GeophysicalEvent, list] = {}
-        events_observed : Dict[GeophysicalEvent, list] = {}
-
-        # for event in tqdm(events.values, 
-        for event in tqdm(events, 
-                            desc='Classifying event accesses, detections, and observations', 
-                            leave=True,
-                            disable=not printouts):
-            
-            access_intervals, matching_detections, matching_requests, matching_observations \
-                = ResultsProcessor.__collect_event_observation(event, 
-                                                               agent_missions,
-                                                               compiled_orbitdata, 
-                                                               events_detected, 
-                                                               task_reqs, 
-                                                               observations_per_gp)
-
-            if access_intervals: events_observable[event] = access_intervals
-            if matching_detections: events_detected[event] = matching_detections
-            if matching_requests: events_requested[event] = matching_requests
-            if matching_observations: events_observed[event] = matching_observations
-
-        # sanity check: ensure all observed events are also observable
-        assert all([event in events_observable for event in events_observed])
-        
-
-        # find reobserved events
-        events_re_observable : Dict[GeophysicalEvent, list] \
-                                    = { event: access_intervals 
-                                        for event,access_intervals in events_observable.items()
-                                        if len(access_intervals) > 1}
-        events_re_obs : Dict[GeophysicalEvent, list] \
-                            = {event: observations[1:] 
-                                for event,observations in events_observed.items()
-                                if len(observations) > 1}
-        
-        # find co-observable events
-        events_co_observable : Dict[GeophysicalEvent, list] = {}
-        events_co_observable_fully : Dict[GeophysicalEvent, list] = {}
-        events_co_observable_partially : Dict[GeophysicalEvent, list] = {}
-
-        # TODO implement co-observation classification
-        # if printouts: print('Classifying co-observations... (WARNING: not yet implemented)')
-        # for event, access_intervals in tqdm(events_observable.items(), desc='Compiling possible co-observations', leave=False, disable=not printouts):
-        #     # get event characteristics
-        #     event_type : str = event.event_type
-            
-        #     # get types of observations that can be performed for this event
-        #     co_observation_params = set()
-        #     observations_required = dict()
-        #     valid_instruments = set()
-
-        #     for _,mission in self.missions.items():
-        #         for objective in mission:
-        #             if (isinstance(objective, EventDrivenObjective) 
-        #                 and objective.event_type.lower() == event_type.lower()):
-                        
-        #                 co_observation_params.add(objective.parameter)
-
-        #                 for req in objective:
-        #                     if isinstance(req, CapabilityRequirement) and req.attribute == 'instrument':
-        #                         valid_instruments.update(set(req.valid_values))
-        #                         observations_required[objective.parameter] = set(req.valid_values)
-        
-        #     raise NotImplementedError("Observation classification is not yet implemented.")
-            
-
-        #     # check if there are observations that satisfy the requirements of the request
-        #     if len(observations_required) > 1:
-        #         # check if valid co-observations match this event
-        #         co_observation_opportunities = {(*_, instrument) 
-        #                                         for param in observations_required
-        #                                         for *_, instrument in access_intervals 
-        #                                         if instrument.lower() in observations_required[param]}
-        #         co_observable_parameters = {param 
-        #                                     for param in observations_required
-        #                                     for *_, instrument in access_intervals 
-        #                                     if instrument.lower() in observations_required[param]}
-
-        #         if co_observation_params.issubset(co_observable_parameters):
-        #             # all required observation types were performed; event was fully co-observed
-        #             events_co_observable_fully[event] = co_observation_opportunities
-        #         else:
-        #             # some required observation types were performed; event was parially co-observed
-        #             events_co_observable_partially[event] = co_observation_opportunities
-
-        #         # event is co-observed
-        #         events_co_observable[event] = co_observation_opportunities
-
-        # find co-observed events
-        events_co_obs : Dict[tuple, list] = {}
-        events_co_obs_fully : Dict[tuple, list] = {}
-        events_co_obs_partially : Dict[tuple, list] = {}
-
-        # TODO
-        # for event, observations in tqdm(events_observed.items(), desc='Compiling co-observations', leave=False, disable=not printouts):
-        #     # get event characteristics
-        #     event_type : str = event[3]
-            
-        #     # get types of observations that can be performed for this event
-        #     co_observation_params = set()
-        #     observations_required = dict()
-        #     valid_instruments = set()
-
-        #     for _,mission in self.missions.items():
-        #         for objective in mission:
-        #             if isinstance(objective, EventDrivenObjective) and objective.event_type.lower() == event_type.lower():
-        #                 co_observation_params.add(objective.parameter)
-
-        #                 for req in objective:
-        #                     if isinstance(req, CapabilityRequirement) and req.attribute == 'instrument':
-        #                         valid_instruments.update(set(req.valid_values))
-        #                         observations_required[objective.parameter] = set(req.valid_values)
-            
-        #     # get required measurements for a given event
-        #     # observations_req = set(str_to_list(event[-1]))
-        #     # instruments = {instrument for *_, instrument in observations if instrument in observations_req}
-
-        #     # check if there are observations that satisfy the requirements of the request
-        #     if len(observations_required) > 1:
-        #         # check if valid co-observations match this even
-        #         co_observations = {(*_, instrument) 
-        #                            for *_, instrument in observations 
-        #                            if any([instrument.lower() in observations_required[param]
-        #                                    for param in observations_required])
-        #                            }
-
-        #         # TODO find which observations may have triggered co-observations
-        #         # if event in events_requested:
-        #         #     requesting_observations = {
-        #         #         (lat, lon, t_start, duration, severity, observer, t_img, instrument)
-        #         #         for lat, lon, t_start, duration, severity, observer, t_img, instrument in co_observations
-        #         #         for _, requester, _, _, _, t_start_req, *_ in events_requested[event]
-        #         #         if abs(t_start_req - t_img) <= 1e-3 and requester == observer
-        #         #     }
-        #         #     # remove requesting observations from co-observations (if any)
-        #         #     co_observations.difference_update(requesting_observations)
-
-        #         co_observed_parameters = {param 
-        #                                     for param in observations_required
-        #                                     for *_, instrument in access_intervals 
-        #                                     if instrument.lower() in observations_required[param]}
-
-        #         if co_observation_params.issubset(co_observed_parameters):
-        #             # all required observation types were performed; event was fully co-observed
-        #             events_co_obs_fully[event] = co_observations
-        #         else:
-        #             # some required observation types were performed; event was parially co-observed
-        #             events_co_obs_partially[event] = co_observations
-
-        #         # event is co-observed
-                # events_co_obs[event] = co_observations
-
-        assert all([event in events_co_observable for event in events_co_obs])
-        assert all([event in events_co_observable and event in events_co_observable_fully for event in events_co_obs_fully])
-        assert all([event in events_co_observable for event in events_co_obs_partially])
-
-        # classify observations by tasks
-        tasks_observable : Dict[GenericObservationTask, list] = defaultdict(list)
-        tasks_observed : Dict[GenericObservationTask, list] = defaultdict(list)
-
-        for task in tqdm(known_tasks, desc="Processing task observations", leave=True, disable=not printouts):
-            # compile observation requirements for this task
-            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
-
-            for agent_name, mission in agent_missions.items():
-                # find objectives matching this task
-                if task.objective not in mission: continue # skip if objective not in mission
-
-                # collect instrument capability requirements
-                for req in task.objective:
-                    # check if requirement is an instrument capability requirement
-                    if (isinstance(req, ExplicitCapabilityRequirement) 
-                        and req.attribute == 'instrument'):
-                        instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
-
-            # # group requirements by agents to avoid double counting
-            # for _,mission in self.missions.items():
-            #     # find objectives matching this task
-            #     if task.objective not in mission: continue # skip if objective not in mission
-
-            #     # find agents belonging to this mission
-            #     agents = [agent for agent in self.agents if agent.mission == mission]
-                    
-            #     # collect instrument capability requirements
-            #     for req in task.objective:
-            #         # check if requirement is an instrument capability requirement
-            #         if (isinstance(req, ExplicitCapabilityRequirement) 
-            #             and req.attribute == 'instrument'):
-            #             for agent in agents:
-            #                 instrument_capability_reqs[agent.get_element_name()].update({val.lower() for val in req.valid_values})
-
-            # find all accesses and observations that match this task
-            task_observations = []
-            task_access_windows = []
-
-            # get matching accesses for this task by time
-            task_accesses = []
-            for agent_name, agent_orbit_data in compiled_orbitdata.items():
-                # get access intervals for an agent observing this task's availability window
-                access_intervals = agent_orbit_data.gp_access_data.lookup_interval(task.availability.left, task.availability.right)
-                
-                # skip if no accesses found
-                if len(access_intervals['time [s]']) == 0: continue
-
-                for i in range(len(access_intervals['time [s]'])):
-                    row ={col : access_intervals[col][i] for col in access_intervals}
-                    # add to task accesses list
-                    task_accesses.append(row)
-                
-            # check all task locations
-            for location in task.location:
-                # unpack location
-                task_lat,task_lon,task_grid_idx, task_gp_idx = location
-                task_lat = round(task_lat,6)
-                task_lon = round(task_lon,6)     
-                task_grid_idx = int(task_grid_idx)
-                task_gp_idx = int(task_gp_idx)     
-                
-                matching_accesses = [
-                                    (access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
-                                    for access_interval in task_accesses
-                                    if task_grid_idx == access_interval['grid index']
-                                    and task_gp_idx == access_interval['GP index']
-                                    and access_interval['instrument'].lower() in instrument_capability_reqs[agent_name]
-                                ]
-                
-                # initialize map of compiled access intervals
-                access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)
-
-                # compile list of access intervals
-                for t_access, agent_name, instrument in matching_accesses:
-                    # get propagation time step for this agent
-                    time_step = compiled_orbitdata[agent_name].time_step 
-
-                    # create unitary interval for this access time
-                    access_interval = Interval(t_access, t_access + time_step)
-
-                    # check if this access overlaps with any previous access
-                    merged = False
-                    for interval in access_interval_dict[(agent_name,instrument)]:
-                        if access_interval.overlaps(interval):
-                            # if so, join intervals
-                            interval.join(access_interval)
-                            merged = True
-                            break
-                    
-                    # if merged, continue to next interval
-                    if merged: continue
-                    
-                    # otherwise, create a new access interval
-                    access_interval_dict[(agent_name,instrument)].append(access_interval)
-
-                # flatten to list of access intervals
-                access_intervals : list = sorted([ (interval,agent_name,instrument) 
-                                            for (agent_name,instrument),intervals in access_interval_dict.items()
-                                            for interval in intervals ])
-
-                # find observations performed at task location while task was active                
-                if (task_grid_idx, task_gp_idx) not in observations_per_gp:
-                    # no observations were performed at this task's location
-                    # create empty dataframe with expected columns for consistency
-                    matching_observations = pd.DataFrame(columns=["t_start", "t_end", "instrument", "agent name"])
-                else:
-                    matching_observations : pd.DataFrame = observations_per_gp[(task_grid_idx, task_gp_idx)]
-                
-                # find observations that match the event time
-                time_mask = (
-                    ((task.availability.left <= matching_observations["t_start"]) &
-                    (matching_observations["t_start"] <= task.availability.right))
-                    |
-                    ((task.availability.left <= matching_observations["t_end"]) &
-                    (matching_observations["t_end"] <= task.availability.right))
-                    |
-                    ((matching_observations["t_start"] <= task.availability.left) &
-                    (task.availability.right <= matching_observations["t_end"]))
-                )
-                matching_observations = matching_observations[time_mask]
-
-                # find observations that match the event's instrument capability requirements
-                inst_lower = matching_observations["instrument"].str.lower()
-                agents = matching_observations["agent name"]
-
-                instrument_mask = [
-                    inst in instrument_capability_reqs.get(agent, [])
-                    for inst, agent in zip(inst_lower, agents)
-                ]
-
-                matching_observations = [dict(row) for _,row in matching_observations[instrument_mask].iterrows()]
-                
-                # append to task lists
-                task_access_windows.extend(access_intervals)
-                task_observations.extend(matching_observations)
-
-            if task_access_windows: tasks_observable[task] = task_access_windows
-            if task_observations: tasks_observed[task] = task_observations
-
-        return observations_per_gp, events_per_gp, gps_accessible, \
-                events_observable, events_observed, events_detected, events_requested, \
-                    events_re_observable, events_re_obs, \
-                        events_co_observable, events_co_obs, \
-                        events_co_observable_fully, events_co_obs_fully, \
-                            events_co_observable_partially, events_co_obs_partially, \
-                                tasks_observable, tasks_observed
-
-    @staticmethod
-    def __collect_event_observation(event : GeophysicalEvent, 
-                                    agent_missions : Dict[str, Mission],
-                                    compiled_orbitdata : Dict[str, OrbitData],
-                                    events_detected : List[GeophysicalEvent], 
-                                    task_reqs :  List[TaskRequest], 
-                                    observations_per_gp : Dict[tuple, pd.DataFrame]
-                                ) -> tuple:
-        """ Finds accesses, detections, requests, and observations that match a given event."""
-
-        # unpackage event
-        event_lat,event_lon,event_grid_idx,event_gp_idx = event.location
-        event_lat = round(event_lat,3)
-        event_lon = round(event_lon,3)
-        event_grid_idx = int(event_grid_idx)
-        event_gp_idx = int(event_gp_idx)
-        event_type = event.event_type.lower()
-        event_id = event.id
-
-        # compile observation requirements for this event type
-        instrument_capability_reqs : Dict[str, set] = defaultdict(set)
-
-        # group requirements by agents to avoid double counting
-        for agent_name,mission in agent_missions.items():
-            for objective in mission:
-                # check if objective matches event type
-                if (isinstance(objective, EventDrivenObjective) 
-                    and objective.event_type.lower() == event_type):
-                    
-                    # collect instrument capability requirements
-                    for req in objective:
-                        # check if requirement is an instrument capability requirement
-                        if (isinstance(req, ExplicitCapabilityRequirement) 
-                            and req.attribute == 'instrument'):
-                            instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
-        
-        if any([len(instrument_capability_reqs[agent_name]) == 0 
-                    for agent_name in instrument_capability_reqs]):
-            raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type}`. Case not yet supported.")
-
-        # find access times that overlook a given event's location
-        # matching_accesses = [
-        #                         (t, row['agent name'], row['instrument'])
-        #                         for agent_name, agent_orbit_data in compiled_orbitdata.items()
-        #                         for t,row in agent_orbit_data.gp_access_data
-        #                         if event.t_start <= t <= event.t_start+event.d_exp
-        #                         and event_grid_idx == row['grid index']
-        #                         and event_gp_idx == row['GP index']
-        #                         and row['instrument'].lower() in instrument_capability_reqs[agent_name]
-        #                     ]
-        
-        event_accesses = []
-        for agent_orbit_data in compiled_orbitdata.values():
-            event_access_intervals = agent_orbit_data.gp_access_data.lookup_interval(event.availability.left, event.availability.right)
-            for i in range(len(event_access_intervals['time [s]'])):
-                row ={col : event_access_intervals[col][i] for col in event_access_intervals}
-                event_accesses.append(row)
-        
-        matching_accesses = [
-                                (access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
-                                for access_interval in event_accesses
-                                if event_grid_idx == access_interval['grid index']
-                                and event_gp_idx == access_interval['GP index']
-                                and access_interval['instrument'].lower() in instrument_capability_reqs[agent_name]
-                            ]
-        
-        # initialize map of compiled access intervals
-        access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)
-
-        # compile list of access intervals
-        for t_access, agent_name, instrument in matching_accesses:
-            # get propagation time step for this agent
-            time_step = compiled_orbitdata[agent_name].time_step 
-
-            # create unitary interval for this access time
-            access_interval = Interval(t_access, t_access + time_step)
-
-            # check if this access overlaps with any previous access
-            merged = False
-            for interval in access_interval_dict[(agent_name,instrument)]:
-                if access_interval.overlaps(interval):
-                    # if so, join intervals
-                    interval.join(access_interval)
-                    merged = True
-                    break
-            
-            # if merged, continue to next interval
-            if merged: continue
-            
-            # otherwise, create a new access interval
-            access_interval_dict[(agent_name,instrument)].append(access_interval)
-
-        # flatten to list of access intervals
-        access_intervals : list = sorted([ (interval,agent_name,instrument) 
-                                    for (agent_name,instrument),intervals in access_interval_dict.items()
-                                    for interval in intervals ])
-
-        # find measurement detections that match this event
-        matching_detections = [event_detected for event_detected in events_detected if event_detected.id == event_id]
-        matching_detections.sort(key= lambda a : a.t_detect)
-        
-        # find measurement requests that match this event
-        if any(not isinstance(task_req.task, EventObservationTask) for task_req in task_reqs):
-            raise NotImplementedError("Non-event observation tasks are not yet supported in event observation classification.")
-        else:
-            matching_requests = sorted([task_req for task_req in task_reqs if task_req.task.event == event], 
-                                        key= lambda a : a.t_req)
-
-        if matching_accesses:
-            x = 1 # debugging breakpoint
-
-        # get event observations for this event's location
-        if (event_grid_idx, event_gp_idx) not in observations_per_gp:
-            # no observations were performed at this event's location
-            # create empty dataframe with expected columns for consistency
-            matching_observations = pd.DataFrame(columns=["t_start", "t_end", "instrument", "agent name"])
-        else:
-            matching_observations : pd.DataFrame = observations_per_gp[(event_grid_idx, event_gp_idx)]
-
-        # find observations that match the event time
-        time_mask = (
-            ((event.availability.left <= matching_observations["t_start"]) &
-            (matching_observations["t_start"] <= event.availability.right))
-            |
-            ((event.availability.left <= matching_observations["t_end"]) &
-            (matching_observations["t_end"] <= event.availability.right))
-            |
-            ((matching_observations["t_start"] <= event.availability.left) &
-            (event.availability.right <= matching_observations["t_end"]))
-        )
-        matching_observations = matching_observations[time_mask]
-
-        # find observations that match the event's instrument capability requirements
-        inst_lower = matching_observations["instrument"].str.lower()
-        agents = matching_observations["agent name"]
-
-        instrument_mask = [
-            inst in instrument_capability_reqs.get(agent, [])
-            for inst, agent in zip(inst_lower, agents)
-        ]
-
-        matching_observations = [dict(row) for _,row in matching_observations[instrument_mask].iterrows()]
-
-        # return classified data
-        return access_intervals, matching_detections, matching_requests, matching_observations
+        return pd.DataFrame(summary_data, columns=summary_headers)    
 
     @staticmethod
     def __count_observations(orbitdata : dict, 
-                            observations_performed : pd.DataFrame, 
                             observations_per_gp : dict,
                             events : List[GeophysicalEvent],
                             events_per_gp : dict,
@@ -1726,7 +1346,7 @@ class ResultsProcessor:
                                 if len(observations) > 1])
         
         # count number of observations performed
-        n_observations = len(observations_performed)
+        n_observations = sum(len(observations) for observations in observations_per_gp.values())
         
         # count number of events
         n_events = len(events)
@@ -1746,8 +1366,7 @@ class ResultsProcessor:
         # count event observations
         n_events_observed = len(events_observed)
         n_total_event_obs = sum([len(observations) for _,observations in events_observed.items()])
-
-        assert n_events_detected <= n_events_observed, f"Detected events ({n_events_detected}) should be a subset of observed events ({n_events_observed})."
+        
         assert n_total_event_obs <= n_observations
 
         # count events reobservable
@@ -1846,7 +1465,6 @@ class ResultsProcessor:
     def __calc_event_probabilities(
                                     orbitdata : dict, 
                                     gps_accessible : dict,
-                                    observations_performed : pd.DataFrame, 
                                     observations_per_gp : dict,
                                     events : pd.DataFrame,
                                     events_per_gp : dict,
@@ -1880,8 +1498,7 @@ class ResultsProcessor:
                                         n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
                                             n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
                                                 n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
-                                                    = ResultsProcessor.__count_observations( orbitdata, 
-                                                                                observations_performed, 
+                                                    = ResultsProcessor.__count_observations( orbitdata,                                                                                 
                                                                                 observations_per_gp,
                                                                                 events, 
                                                                                 events_per_gp,
@@ -2066,7 +1683,7 @@ class ResultsProcessor:
                                             p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable
 
     @staticmethod
-    def __calc_groundpoint_coverage_metrics(observations_per_gp: Dict[tuple, pd.DataFrame]) -> tuple:
+    def __calc_groundpoint_reobservation_metrics(observations_per_gp: Dict[tuple, pd.DataFrame]) -> tuple:
         # event reobservation times
         t_reobservations : list = []
         for _,observations in observations_per_gp.items():
@@ -2101,26 +1718,15 @@ class ResultsProcessor:
         return t_reobservation
 
     @staticmethod
-    def __calc_event_coverage_metrics(events_observed : dict) -> tuple:
+    def __calc_event_reobservation_metrics(events_observed : dict) -> tuple:
         t_reobservations : list = []
-        for event in events_observed:
-            prev_observation = None
-            for observation in events_observed[event]:
-                if prev_observation is None:
-                    prev_observation = observation
-                    continue
+        for event_observations in events_observed.values():
+            for observation in event_observations[1:]:
+                # get revisit
+                t_reobservation = observation['t_rev']
 
-                # get observation times - (lat, lon, t_start, duration, severity, observer, t_img, instrument, observations_req)
-                t_prev_end = prev_observation['t_end']
-                t_start = observation['t_start']
-
-                # calculate revisit
-                t_reobservation = t_start - t_prev_end
                 # add to list
                 t_reobservations.append(t_reobservation)
-
-                # update previous observation
-                prev_observation = observation
 
         # compile statistical data
         t_reobservation : dict = {
@@ -2131,3 +1737,66 @@ class ResultsProcessor:
         }
 
         return t_reobservation
+    
+    @staticmethod
+    def __calc_task_reobservation_metrics(observations_per_task: dict) -> dict:
+        t_reobservations : list = []
+        for task_observations in observations_per_task.values():
+            for observation in task_observations[1:]:
+                # get revisit
+                t_reobservation = observation['t_rev']
+
+                # add to list
+                t_reobservations.append(t_reobservation)
+
+        # compile statistical data
+        t_reobservation : dict = {
+            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
+            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
+            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
+            'data' : t_reobservations
+        }
+
+        return t_reobservation
+
+    @staticmethod
+    def __calc_response_time_metrics(observations_map: dict) -> dict:
+        t_reobservations : list = []
+        for observations in observations_map.values():
+            for observation in observations[1:]:
+                # get revisit
+                t_reobservation = observation['resp time [s]']
+
+                # add to list
+                t_reobservations.append(t_reobservation)
+
+        # compile statistical data
+        t_reobservation : dict = {
+            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
+            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
+            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
+            'data' : t_reobservations
+        }
+
+        return t_reobservation
+    
+    @staticmethod
+    def __calc_response_time_metrics_normalized(observations_map: dict) -> dict:
+        t_reobservations : list = []
+        for observations in observations_map.values():
+            for observation in observations[1:]:
+                # get revisit
+                t_reobservation = observation['resp time [norm]']
+
+                # add to list
+                t_reobservations.append(t_reobservation)
+
+        # compile statistical data
+        t_reobservation : dict = {
+            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
+            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
+            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
+            'data' : t_reobservations
+        }
+
+        return t_reobservation  
