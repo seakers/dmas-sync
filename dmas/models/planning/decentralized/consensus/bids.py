@@ -220,17 +220,17 @@ class Bid:
     def __lt__(self, other : Union['Bid', dict]) -> bool:       
         # compare bids
         if isinstance(other, dict):
-            return other['winning_bid'] > self.winning_bid
+            return other['winning_bid'] > self.winning_bid and self != other
         else:
-            return other.winning_bid > self.winning_bid
+            return other.winning_bid > self.winning_bid and self != other
 
     @bid_comparison_input_checks
     def __gt__(self, other : Union['Bid', dict]) -> bool:
         # compare bids
         if isinstance(other, dict):
-            return other['winning_bid'] < self.winning_bid
+            return other['winning_bid'] < self.winning_bid and self != other
         else:
-            return other.winning_bid < self.winning_bid
+            return other.winning_bid < self.winning_bid and self != other
 
     @bid_comparison_input_checks
     def __eq__(self, other : Union['Bid', dict]) -> bool:        
@@ -301,7 +301,7 @@ class Bid:
             ## Compare bidders alphabetically
             return min(bid1, bid2, key=lambda b: b.winner)
 
-    @bid_comparison_input_checks
+    # @bid_comparison_input_checks
     def has_different_winner_values(self, other : Union['Bid', dict]) -> bool:
         """ Checks if this bid is different from another bid (i.e., any of the winning bid attributes differ) """
         eps = self.EPS  # local binding is faster

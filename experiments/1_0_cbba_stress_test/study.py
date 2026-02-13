@@ -111,7 +111,7 @@ def main_study(sim_cfg: SimulationConfig) -> List[Dict]:
         print(" - Loaded experiment templates from `resources/templates/`")
 
     # duration/step size
-    duration = 12.0 / 24.0 if sim_cfg.reduced else 1.0  # [days]
+    duration = 5_000 / 3600 / 24.0 if sim_cfg.reduced else 1.0  # [days]
     duration = min(duration, 1.0)
     step_size = 10  # [s]
 

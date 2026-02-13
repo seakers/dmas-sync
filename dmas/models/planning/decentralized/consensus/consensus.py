@@ -621,12 +621,177 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return revised bundle and list of performed bids
         return revised_bundle, revised_path, bundle_updates
 
-    # DEPRECATED VERSION OF THIS METHOD
     def __compare_incoming_bids(self,
                        state : SimulationAgentState,
-                       incoming_bids : List[Bid]
+                       incoming_bids : List[Union[Bid, dict]]
                        ) -> Tuple[List[Bid], List[Bid]]:
-        """ Update results from incoming bids. """        
+        # group bids by bidding agent 
+        grouped_bids : Dict[str, Dict[int, List[Bid]]] = self.__group_incoming_bids(incoming_bids)
+
+        # initialize list of updates done to results
+        results_updates = []   
+
+        # keep track of tasks receiving incoming bids
+        tasks_from_incoming_bids : Dict[Tuple, GenericObservationTask] = dict()
+
+        # iterate through grouped bids and compare with existing results
+        for task_key,incoming_task_bids in grouped_bids.items():
+            # check if task has been seen before in this round
+            if task_key in tasks_from_incoming_bids:
+                # retrieve existing task
+                task : GenericObservationTask = tasks_from_incoming_bids[task_key]
+                
+                # task has already been seen before in this round
+                task_is_known : bool = True
+
+            else:
+                # check if task is known in results
+                task_dict = incoming_task_bids[0][0]['task']
+
+                # check if task exists in `id_to_tasks`
+                if task_dict['id'] in self._id_to_tasks:
+                    task : GenericObservationTask = self._id_to_tasks[task_dict['id']]
+                    task_is_known : bool = True
+                else:
+                    # reconstruct task from bids
+                    task : GenericObservationTask = GenericObservationTask.from_dict(task_dict)
+                    task_is_known : bool = task in self._results
+
+                # store task for future reference in this round
+                tasks_from_incoming_bids[task_key] = task
+            
+            # get current results
+            current_task_bids : List[Bid] = self._results[task] if task_is_known else []
+            current_bidding_counters : List[int] = self._optimistic_bidding_counters[task] if task_is_known else []
+
+            # count number of existing and incoming bids
+            n_existing_bids = len(current_task_bids) if task_is_known else 0
+            n_incoming_bids = max(incoming_task_bids.keys()) + 1
+
+            # check if task and bid observation numbers align with existing results
+            if not task_is_known or n_incoming_bids > n_existing_bids:
+                # task does not they exist in results or more incoming bids than existing; 
+                #  initialize missing elements in results with empty bids
+                current_task_bids.extend([
+                    Bid(task, state.agent_name, n_obs, t_bid=np.NINF)
+                    for n_obs in range(n_existing_bids, n_incoming_bids)
+                ])
+
+                # initialize optimistic bidding counter for new bids
+                current_bidding_counters.extend([
+                    self._optimistic_bidding_threshold 
+                    for _ in range(n_existing_bids, n_incoming_bids)
+                ])
+
+            # flatten incoming bids
+            bids = [bid for obs_bids in incoming_task_bids.values() for bid in obs_bids]
+            
+            # sort by bid observation number and owner name
+            bids.sort(key=lambda bid: 
+                            (bid['n_obs'], bid['owner']) if isinstance(bid, dict) 
+                                else (bid.n_obs, bid.owner)) 
+            
+            # initialize queue of incoming bids for processing
+            q = deque(bids)
+
+            # process incoming bids
+            while q:
+                # get next incoming bid
+                incoming_bid : dict = q.popleft()
+
+                # convert Bid object to dictionary if needed
+                if isinstance(incoming_bid, Bid):
+                    incoming_bid = incoming_bid.to_dict()
+
+                # get relevant task
+                task = tasks_from_incoming_bids[self.__task_key(incoming_bid['task'])]
+                    
+                # get current bid for this task and observation number
+                current_bid : Bid = self._results[task][incoming_bid['n_obs']]
+                
+                # compare incoming bid with existing bids for the same task
+                updated_bid : Bid = current_bid.update(incoming_bid, state.get_time())
+
+                # update results with modified bid
+                current_task_bids[incoming_bid['n_obs']] = updated_bid
+
+                # check if current bid was modified
+                current_was_updated = updated_bid.has_different_winner_values(current_bid)
+
+                # check if bid, winner, or observation time were modified
+                if current_was_updated: 
+                    # add updated bid to results updates
+                    results_updates.append(updated_bid)
+                
+                # check if previously unperformed bid was performed 
+                elif not current_bid.was_performed() and incoming_bid['performed']:
+                    # bid was performed; add updated bid to results updates
+                    results_updates.append(updated_bid)                 
+                
+                # check if both bids corresponded to a performed observation
+                if current_bid.was_performed() and incoming_bid['performed']:
+                    # both bids were performed; check which bid was the one that won the comparison
+                    if current_was_updated:
+                        # current bid lost
+                        loser_bid : Bid = current_bid 
+                    elif updated_bid.has_different_winner_values(incoming_bid):
+                        # incoming bid lost
+                        loser_bid : Bid = incoming_bid
+                    else:
+                        # both bids are identical; skip
+                        continue
+
+                    # if reached here there was a bid performed conflict; 
+                    #   both bids need to be reflected in results
+                    
+                    # reconstruct losing bid from dictionary if needed 
+                    if isinstance(loser_bid, dict):
+                        loser_bid = Bid.from_dict(loser_bid)
+
+                    # modify losing bid to reflect updated observation number 
+                    loser_bid.n_obs += 1
+
+                    # check if new bid observation number exceeds existing bids for this task
+                    if loser_bid.n_obs >= len(current_task_bids):
+                        # add empty bid to results for new observation number
+                        current_task_bids.append(
+                            Bid(loser_bid.task, state.agent_name, loser_bid.n_obs)
+                        )
+
+                        # initialize optimistic bidding counter for new bid
+                        current_bidding_counters.append(
+                            self._optimistic_bidding_threshold
+                        )
+
+                    # add updated bid to list of bids to be processed
+                    # bids.append(loser_bid)
+                    q.append(loser_bid)
+
+        # -------------------------------
+        # DEBUG PRINTOUTS
+        # for task, bids in self.results.items():
+        #     for bid in bids:
+        #         if not bid.has_winner():
+        #             x=1 # debug breakpoint    
+        
+        # if results_updates and self._debug:
+        #     self._log_results('CONSENSUS PHASE - RESULTS (AFTER COMPARISON)', state, self.results)
+        #     x = 1 # debug breakpoint
+        # -------------------------------
+
+        # clear grouped bids after processing
+        grouped_bids.clear()
+
+        # return result changes
+        return results_updates
+
+    """
+    # DEPRECATED VERSION OF THIS METHOD
+    def __compare_incoming_bids(self,
+                    state : SimulationAgentState,
+                    incoming_bids : List[Bid]
+                    ) -> Tuple[List[Bid], List[Bid]]:
+        
         # group bids by bidding agent 
         grouped_bids : Dict[str, Dict[str, List[Bid]]] = self.__group_incoming_bids(incoming_bids)
 
@@ -702,11 +867,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     # get next incoming bid
                     incoming_bid : dict = q.popleft()
 
-                # # process incoming bids
-                # while bids:
-                #     # get next incoming bid
-                #     incoming_bid : dict = bids.pop(0)
-
                     # convert Bid object to dictionary if needed
                     if isinstance(incoming_bid, Bid):
                         incoming_bid = incoming_bid.to_dict()
@@ -723,8 +883,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     # update results with modified bid
                     current_bids[incoming_bid['n_obs']] = updated_bid
 
+                    # check if current bid was modified
+                    current_was_updated = updated_bid.has_different_winner_values(current_bid)
+
                     # check if bid, winner, or observation time were modified
-                    if updated_bid.has_different_winner_values(current_bid): 
+                    if current_was_updated: 
                         # add updated bid to results updates
                         results_updates.append(updated_bid)
                     
@@ -736,7 +899,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     # check if both bids corresponded to a performed observation
                     if current_bid.was_performed() and incoming_bid['performed']:
                         # both bids were performed; check which bid was the one that won the comparison
-                        if updated_bid.has_different_winner_values(current_bid):
+                        if current_was_updated:
                             # current bid lost
                             loser_bid : Bid = current_bid 
                         elif updated_bid.has_different_winner_values(incoming_bid):
@@ -789,148 +952,35 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # return result changes
         return results_updates
-
-    # def __compare_incoming_bids(self, state : SimulationAgentState, incoming_bids : List[Bid]) -> Tuple[List[Bid], List[Bid]]:
-    #     # unpack useful information
-    #     t_curr = state.get_time()
-    #     my_name = state.agent_name
-    #     make_empty = ConsensusPlanner.__make_empty_bid_dict
-    #     threshold = self.optimistic_bidding_threshold
-
-    #     # group incoming bids by task_key and owner
-    #     grouped_bids = self.__group_incoming_bids(incoming_bids)
-
-    #     # initialize list of updates done to results
-    #     results_updates = []
-    #     tasks_with_incoming_bids = {}
-
-    #     # iterate through grouped bids and compare with existing results
-    #     for task_key, incoming_results in grouped_bids.items():
-
-    #         # Resolve task once per task_key
-    #         task = tasks_with_incoming_bids.get(task_key, None)
-
-    #         if task is None:
-    #             # pick any agent's first bid to get task dict
-    #             first_agent = next(iter(incoming_results))
-    #             task_dict = incoming_results[first_agent][0]['task']
-
-    #             tid = task_dict['id']
-    #             task = self.id_to_tasks.get(tid)
-    #             if task is None:
-    #                 task = GenericObservationTask.from_dict(task_dict)
-    #                 # if you *need* this check, keep it; otherwise avoid O(n) membership on dict keys
-    #                 # task_is_known = task in self.results
-
-    #             tasks_with_incoming_bids[task_key] = task
-
-    #         # Ensure containers exist once
-    #         current_bids : List[Bid] = self.results.setdefault(task, [])
-    #         current_counters : List[int] = self.optimistic_bidding_counters.setdefault(task, [])
-
-    #         # Iterate through incoming bids for each agent
-    #         for other_agent, bids in incoming_results.items():
-    #             # Count number of existing and incoming bids
-    #             n_existing = len(current_bids)
-    #             n_incoming = len(bids)
-
-    #             # Align lengths (incoming shorter than existing)
-    #             if n_incoming < n_existing:
-    #                 bids.extend(
-    #                     make_empty(task.to_dict(), other_agent, n_obs)
-    #                     for n_obs in range(n_incoming, n_existing)
-    #                 )
-    #                 n_incoming = n_existing
-
-    #             # Ensure results length >= incoming
-    #             need = n_incoming - n_existing
-    #             if need > 0:
-    #                 start = n_existing
-    #                 current_bids.extend(
-    #                     Bid(task, my_name, n_obs, t_bid=np.NINF)
-    #                     for n_obs in range(start, start + need)
-    #                 )
-    #                 current_counters.extend([threshold] * need)
-
-    #             # Use deque to avoid O(n^2) pop(0)
-    #             q = deque(b.to_dict() if isinstance(b, Bid) else b for b in bids)
-
-    #             # Process incoming bids
-    #             while q:
-    #                 # get next incoming bid to process
-    #                 incoming_bid = q.popleft()
-
-    #                 # get relevant bid information
-    #                 n_obs = incoming_bid['n_obs']
-                    
-    #                 # compare incoming bid with existing bids for the same task
-    #                 current_bid : Bid = current_bids[n_obs]
-    #                 updated_bid = current_bid.update(incoming_bid, t_curr)
-                    
-    #                 # update results with modified bid
-    #                 current_bids[n_obs] = updated_bid
-
-    #                 # see if bid was modified
-    #                 changed_vs_current = updated_bid.has_different_winner_values(current_bid)
-    #                 if changed_vs_current:
-    #                     # add updated bid to results updates
-    #                     results_updates.append(updated_bid)
-    #                 elif (not current_bid.was_performed()) and incoming_bid.get('performed', False):
-    #                     # bid was performed; add updated bid to results updates
-    #                     results_updates.append(updated_bid)
-
-    #                 # performed-performed conflict handling
-    #                 if current_bid.was_performed() and incoming_bid.get('performed', False):
-    #                     # figure out loser
-    #                     if changed_vs_current:
-    #                         # current bid lost
-    #                         loser = current_bid
-    #                     elif updated_bid.has_different_winner_values(incoming_bid):
-    #                         # incoming bid lost
-    #                         loser = incoming_bid
-    #                     else:
-    #                         continue
-
-    #                     # reconstruct losing bid from dictionary if needed
-    #                     if isinstance(loser, dict):
-    #                         loser = Bid.from_dict(loser)
-
-    #                     # modify losing bid to reflect updated observation number
-    #                     loser.n_obs += 1
-
-    #                     # check if new bid observation number exceeds existing bids for this task
-    #                     if loser.n_obs >= len(current_bids):
-    #                         # add empty bid to results for new observation number
-    #                         current_bids.append(Bid(loser.task, my_name, loser.n_obs, t_bid=t_curr))
-    #                         # initialize optimistic bidding counter for new bid
-    #                         current_counters.append(threshold)
-
-    #                     # add updated bid to list of bids to be processed
-    #                     q.append(loser.to_dict())
-
-    #     # -------------------------------
-    #     # DEBUG PRINTOUTS
-    #     # for task, bids in self.results.items():
-    #     #     for bid in bids:
-    #     #         if not bid.has_winner():
-    #     #             x=1 # debug breakpoint    
-        
-    #     # if modified_completed_bids and self._debug:
-    #     #     self._log_results('CONSENSUS PHASE - RESULTS (AFTER COMPARISON)', state, self.results)
-    #     #     x = 1 # debug breakpoint
-    #     # -------------------------------
-
-    #     # return result changes
-    #     return results_updates        
-
+        """
     
     def __group_incoming_bids(self,
                               incoming_bids : List[Bid]
-                              ) -> Dict[str, Dict[GenericObservationTask, List[dict]]]:
+                              ) -> Dict[str, Dict[int, List[dict]]]:
         """
         Groups incoming bids by task_key and owner, keeping the max t_bid per n_obs,
         and filling missing n_obs with empty bids once per (task, owner).
         """
+        # task_key -> dict[n_obs, list[bid_dict]]
+        grouped_bids = defaultdict(lambda: defaultdict(list))
+
+        # local bindings (faster than repeated attribute lookups)
+        task_key_fn = self.__task_key
+
+        # Pass 1: keep best bid per (task, owner, n_obs)
+        for bid in incoming_bids:
+            task = bid["task"]
+            n_obs = bid["n_obs"]
+
+            tk = task_key_fn(task)
+            grouped_bids[tk][n_obs].append(bid)
+
+        return grouped_bids  
+
+    """  
+    def __group_incoming_bids(self,
+                              incoming_bids : List[Bid]
+                              ) -> Dict[str, Dict[GenericObservationTask, List[dict]]]:
         # task_key -> owner -> {n_obs: bid_dict}
         best = defaultdict(lambda: defaultdict(dict))
 
@@ -986,7 +1036,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # store completed bids list
                 grouped_bids[tk][owner] = bids_list
 
-        return grouped_bids    
+        return grouped_bids  
+    """
 
     # helper to create empty bids (avoid repeating dict literal everywhere)
     @staticmethod
