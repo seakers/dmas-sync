@@ -961,8 +961,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         Groups incoming bids by task_key and owner, keeping the max t_bid per n_obs,
         and filling missing n_obs with empty bids once per (task, owner).
         """
-        # task_key -> dict[n_obs, list[bid_dict]]
-        grouped_bids = defaultdict(lambda: defaultdict(list))
+        # task_key -> owner -> {n_obs: bid_dict}
+        newest_bids_per_owner = defaultdict(lambda: defaultdict(dict))
 
         # local bindings (faster than repeated attribute lookups)
         task_key_fn = self.__task_key
@@ -970,10 +970,47 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # Pass 1: keep best bid per (task, owner, n_obs)
         for bid in incoming_bids:
             task = bid["task"]
+            owner = bid["owner"]
             n_obs = bid["n_obs"]
+            t_bid = bid["t_bid"]
 
             tk = task_key_fn(task)
-            grouped_bids[tk][n_obs].append(bid)
+            prev = newest_bids_per_owner[tk][owner].get(n_obs, None)
+            if prev is None or t_bid > prev["t_bid"]:
+                newest_bids_per_owner[tk][owner][n_obs] = bid
+
+        # task_key -> n_obs -> list[bid_dict]
+        # Pass 2: materialize dense lists and fill gaps
+        grouped_bids = defaultdict(lambda: defaultdict(list))
+
+        # iterate through each task and owner to fill in missing bids
+        for tk, owners_map in newest_bids_per_owner.items():
+            
+            # find the number of bids for this task in the current results
+            current_task_bids = self._results.get(self._id_to_tasks[tk[3]], [])
+            n_min = len(current_task_bids)
+            
+            # iterate through each owner and fill in missing bids
+            for owner, bids_map in owners_map.items():
+                if not bids_map:
+                    grouped_bids[tk][0] = []
+                    continue
+
+                # choose a representative task dict for empties
+                any_bid = next(iter(bids_map.values()))
+                task_dict = any_bid["task"]
+                
+                # ensure at least as many bids as currently in results for this task
+                max_n = max(max(bids_map.keys()) + 1, n_min) 
+                
+                for n_obs in range(max_n):
+                    if n_obs in bids_map:
+                        bid = bids_map[n_obs]
+                    else:
+                        bid = self.__make_empty_bid_dict(task_dict, owner, n_obs)
+
+                    # store completed bids list
+                    grouped_bids[tk][n_obs].append(bid)
 
         return grouped_bids  
 

@@ -29,7 +29,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_1 = False  # single sat    default mission     single target, no events
         self.toy_2 = False  # single sat    no default mission  one event
         self.toy_3 = False  # two sats      no default mission  one event
-        self.toy_4 = True  # two sats      no default mission  one event           optimistic bidding
+        self.toy_4 = False  # two sats      no default mission  one event           optimistic bidding
         self.toy_5 = False  # two sats      no default mission  one event           comm delays
         self.toy_6 = False  # two sats      no default mission  two targets         two events
         self.toy_7 = False  # two sats      no default mission  two targets         two events at different times
