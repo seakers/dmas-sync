@@ -294,55 +294,6 @@ class Simulation:
     """
     DATA PROCESSING METHODS
     """
-    # def process_results(self, 
-    #                     reevaluate : bool = False, 
-    #                     printouts : bool = True,
-    #                     print_to_csv : bool = True,
-    #                     precision : int = 5
-    #                 ) -> pd.DataFrame:
-        # """ processes simulation results after execution """
-        # # validate execution
-        # if not self.is_executed(printouts): raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
-        
-    #     # print divider
-    #     if printouts: print(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
-
-    #     # define results summary filename
-    #     summary_path = os.path.join(f"{self._results_path}","summary.csv")
-
-    #     # check if results summary file exists 
-    #     if os.path.isfile(summary_path) and not reevaluate:
-    #         # file exists and reevaluate is False; skip results summary generation
-    #         print(f"Results summary already exists at: `{summary_path}`")
-    #         results_summary : pd.DataFrame = pd.read_csv(summary_path)
-
-    #     else:
-    #         # map agent names to their respective missions
-    #         agent_missions : Dict[str, Mission] = {agent.name : agent._mission
-    #                                     for agent in self._agents}
-
-    #         # generate results summary
-    #         results_summary : pd.DataFrame \
-    #             = ResultsProcessor.process_results(self._results_path,
-    #                                            self._orbitdata,
-    #                                            agent_missions,
-    #                                            self._events,
-    #                                            printouts=printouts,
-    #                                            precision=precision)
-
-    #     # log results summary
-    #     if printouts:
-    #         print(f"\n\n{'-'*80}\n")
-    #         print(f"\nSIMULATION RESULTS SUMMARY:\n")
-    #         print(results_summary.to_string(index=False))
-    #         print(f"\n{'='*80}\n")
-
-    #     # save summary to csv if needed
-    #     if print_to_csv: results_summary.to_csv(summary_path, index=False)
-
-    #     # return results summary
-    #     return results_summary
-
     def process_results(self, 
                         force_process : bool = False,
                         printouts : bool = True) -> List[pd.DataFrame]:
