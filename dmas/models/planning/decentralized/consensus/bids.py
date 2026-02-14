@@ -351,15 +351,6 @@ class Bid:
         ### Returns: 
             - comparison (`str`): action to perform to this bid upon comparing this bid to the other bid
         """
-        # if isinstance(other, dict): # bid is of type `dict`
-        #     comp_result = self.__compare_to_dict(other)                
-            
-        # else: # bid is of the same type (i.e., `Bid` class object)
-        #     comp_result = self.__compare_to_bid(other)                 
-                    
-        # # return comparison result
-        # return comp_result
-
         try:
             return self.__compare_to_dict(other)
         except (KeyError, TypeError):
