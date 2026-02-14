@@ -351,19 +351,19 @@ class Bid:
         ### Returns: 
             - comparison (`str`): action to perform to this bid upon comparing this bid to the other bid
         """
+        # if isinstance(other, dict): # bid is of type `dict`
+        #     comp_result = self.__compare_to_dict(other)                
+            
+        # else: # bid is of the same type (i.e., `Bid` class object)
+        #     comp_result = self.__compare_to_bid(other)                 
+                    
+        # # return comparison result
+        # return comp_result
+
         try:
-            if isinstance(other, dict): # bid is of type `dict`
-                comp_result = self.__compare_to_dict(other)                
-                
-            else: # bid is of the same type (i.e., `Bid` class object)
-                comp_result = self.__compare_to_bid(other)                 
-                        
-            # return comparison result
-            return comp_result
-        
-        except KeyError as e:
-            # catch key errors in case bid dictionaries are missing expected keys
-            raise e
+            return self.__compare_to_dict(other)
+        except (KeyError, TypeError):
+            return self.__compare_to_bid(other)
         
     def __compare_to_bid(self, other : 'Bid') -> BidComparisonResults:
         """ Compares this bid with another bid and indicates whether the bid should be updated, left, or reset. """
@@ -397,7 +397,11 @@ class Bid:
     
     def __compare_to_dict(self, other : dict) -> BidComparisonResults:
         """ Compares this bid with another bid in dictionary form and indicates whether the bid should be updated, left, or reset. """
-        # Not implemented; use `_rule_comparison` instead
+        # extract relevant information from other bid dict
+        other_winner = other['winner']
+        other_owner = other['owner']
+        NONE = self.NONE
+        
         # 0. Sending agent claims the bid has been performed.
         if other['performed']:
             return self.__case_other_dict_thinks_bid_was_performed(other)        
@@ -407,19 +411,22 @@ class Bid:
             return BidComparisonResults.LEAVE
 
         # 1. Sending agent claims itself as winner of this bid.
-        elif other['winner'] == other['owner']:
+        elif other_winner == other_owner:
             return self.__case_other_dict_thinks_is_winner(other)
         
         # 2. Sending agent claims I am the winner of this bid.
-        elif other['winner'] == self.owner:
+        elif other_winner == self.owner:
             return self.__case_other_dict_thinks_im_winner(other)
         
         # 3. Sending agent claims some 3rd party as the winner of this bid.
-        elif other['winner'] not in {other['owner'], self.owner, self.NONE}:
+        # elif other_winner not in {other_owner, self.owner, self.NONE}:
+        elif (other_winner !=  other_owner 
+              and other_winner != self.owner 
+              and other_winner != NONE):
             return self.__case_other_dict_thinks_third_party_winner(other)
         
         # 4. Sending agent has no winner for this bid.
-        elif other['winner'] == self.NONE:
+        elif other_winner == NONE:
             return self.__case_other_dict_has_no_winner(other)
         
         # 5. Fallback (should be unreachable)
@@ -1081,10 +1088,11 @@ class Bid:
         # update timestamp for the other bidder if given
         if other is None:
             self.t_stamps[self.owner] = t_comp
-        elif isinstance(other, dict):
-            self.t_stamps[other['owner']] = t_comp
         else:
-            self.t_stamps[other.owner] = t_comp
+            try:
+                self.t_stamps[other['owner']] = t_comp
+            except (KeyError, TypeError):
+                self.t_stamps[other.owner] = t_comp
 
     def __leave(self, other : Union['Bid', dict], t_comp : float) -> None:
         """

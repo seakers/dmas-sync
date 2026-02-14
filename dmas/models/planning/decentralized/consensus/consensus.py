@@ -636,29 +636,59 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # iterate through grouped bids and compare with existing results
         for task_key,incoming_task_bids in grouped_bids.items():
-            # check if task has been seen before in this round
-            if task_key in tasks_from_incoming_bids:
-                # retrieve existing task
-                task : GenericObservationTask = tasks_from_incoming_bids[task_key]
-                
-                # task has already been seen before in this round
-                task_is_known : bool = True
+            
+            # get task object for this task key from incoming bids
+            task = tasks_from_incoming_bids.get(task_key)
+            
+            # check if a matching task was found
+            if task is None:
+                # no matching task found; check if task is known in results
+                task_dict = incoming_task_bids[0][0]["task"]
+                task_id = task_dict["id"]
 
-            else:
-                # check if task is known in results
-                task_dict = incoming_task_bids[0][0]['task']
+                task = self._id_to_tasks.get(task_id)
 
-                # check if task exists in `id_to_tasks`
-                if task_dict['id'] in self._id_to_tasks:
-                    task : GenericObservationTask = self._id_to_tasks[task_dict['id']]
-                    task_is_known : bool = True
+                if task is None:
+                    # task is not known in results; reconstruct task from bids
+                    task = GenericObservationTask.from_dict(task_dict)
+                    task_is_known = task in self._results
                 else:
-                    # reconstruct task from bids
-                    task : GenericObservationTask = GenericObservationTask.from_dict(task_dict)
-                    task_is_known : bool = task in self._results
+                    # task is known in results; use existing task object
+                    task_is_known = True
 
-                # store task for future reference in this round
+                # assign task to task key for future reference in this round
                 tasks_from_incoming_bids[task_key] = task
+            else:
+                # task was found for this task key; use existing task object
+                task_is_known = True
+
+            # # check if task has been seen before in this round
+            # # if task_key in tasks_from_incoming_bids:
+            # try:
+            #     # retrieve existing task
+            #     task : GenericObservationTask = tasks_from_incoming_bids[task_key]
+                
+            #     # task has already been seen before in this round
+            #     task_is_known : bool = True
+
+            # # else:
+            # except KeyError:
+            #     # check if task is known in results
+            #     task_dict = incoming_task_bids[0][0]['task']
+
+            #     # check if task exists in `id_to_tasks`
+            #     # if task_dict['id'] in self._id_to_tasks:
+            #     try:
+            #         task : GenericObservationTask = self._id_to_tasks[task_dict['id']]
+            #         task_is_known : bool = True
+            #     # else:
+            #     except KeyError:
+            #         # reconstruct task from bids
+            #         task : GenericObservationTask = GenericObservationTask.from_dict(task_dict)
+            #         task_is_known : bool = task in self._results
+
+            #     # store task for future reference in this round
+            #     tasks_from_incoming_bids[task_key] = task
             
             # get current results
             current_task_bids : List[Bid] = self._results[task] if task_is_known else []

@@ -138,7 +138,6 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                 task_requests.append((event, task_request, task_request_msg))
 
         # initialize set of times when broadcasts are scheduled (sets to avoid duplicates)
-        # t_broadcasts = set()
         t_broadcasts = defaultdict(list)
 
         # create broadcasts for each request
@@ -164,8 +163,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                 # calculate broadcast time to earliest in this access interval
                 t_broadcast : float = max(next_access.left, task_req.t_req)
                 
-                # add broadcast time to set of broadcast times
-                # t_broadcasts.add(t_broadcast)
+                # add broadcast time to set of broadcast times and assign request to be broadcast at this time
                 t_broadcasts[t_broadcast].append(task_request_msg)
 
         # iterate through access start times to find active requests
@@ -183,23 +181,8 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
 
             # create single broadcast action for all requests
             broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
-            
-        # for t_broadcast in sorted(t_broadcasts):
-        #     # initiate bus messages list 
-        #     task_requests_msgs : List[MeasurementRequestMessage] \
-        #         = [req_msg for event,_,req_msg in task_requests 
-        #             if event.is_active(t_broadcast)]
-            
-        #     # ensure there is at least one active request to broadcast;
-        #     #  should always be true due to previous checks
-        #     assert len(task_requests_msgs) > 0, "No active task requests found for broadcast time."
-            
-        #     # compile all requests into single broadcast message
-        #     bus_broadcast = BusMessage(state.agent_name, state.agent_name, task_requests_msgs)
-
-        #     # create single broadcast action for all requests
-        #     broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
-           
+  
+        # return sorted list of broadcasts by time
         return sorted(broadcasts, key=lambda action: action.t_start)
     
     def print_results(self):
