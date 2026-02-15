@@ -123,26 +123,56 @@ def create_spacecraft_specifications(num_sats : int,
         if gnd_segment.lower() == "none": satellite_spec.pop('groundStationNetwork', None)
 
     # check if there was a ground segment specified
-    if gnd_segment.lower() == "none": # no ground segment; assign announcer role to a copy of the first satellite
-        # create copy of first satellite spec
-        first_satellite_spec = copy.deepcopy(satellite_specifications[0])
+    if gnd_segment.lower() == "none": 
+        # there is no ground segment; task announcemnt will be done by an "announcer" satellite 
+        # that is part of a GEO constellation of relay satellites.
 
-        # rename satellite
-        first_satellite_spec['name'] += '_announcer'
-        first_satellite_spec['@id'] += '_announcer'
+        # define GEO constellation parameters
+        geo_alt = 35_786.0  # [km]
+        geo_inc = 0.0     # [deg]
+        geo_num_sats = 3  # number of GEO satellites
+        geo_num_planes = 1  # number of planes in GEO constellation
+        geo_phasing_factor = 0  # phasing factor for GEO constellation
 
-        # remove instruments from announcer satellite
-        # first_satellite_spec.pop('instrument', None)
-        first_satellite_spec['instruments'] = {}
-
-        # remove replanner spec if it exists
-        first_satellite_spec['planner'].pop('replanner', None)
+        # create GEO constellation instance
+        geo_constellation = WalkerDeltaConstellation(geo_alt, geo_inc, geo_num_sats, geo_num_planes, geo_phasing_factor)
         
-        # assign announcer preplanner 
-        first_satellite_spec['planner'] = setup_announcer_preplanner(base_path, scenario_id)
-        
-        # add to list of satellite specifications
-        satellite_specifications.append(first_satellite_spec)
+        # extract orbital elements
+        geo_orbital_elements : List[dict] = geo_constellation.to_orbital_elements()
+
+        # create satellite specifications list
+        for geo_sat_idx,geo_orbit_state in enumerate(geo_orbital_elements):
+            # create satellite specification from template
+            geo_satellite_spec : dict = copy.deepcopy(spacecraft_specs_template)
+
+            # planner settings
+            geo_satellite_spec['planner'].pop('preplanner')
+
+            # assign orbit state
+            geo_satellite_spec['orbitState']['state'] = geo_orbit_state
+
+            # remove instrument; GEO satellites are just relays in this scenario
+            geo_satellite_spec.pop('instrument', None)
+
+            # assign instrument to satellite
+            geo_satellite_spec['instrument'] = copy.deepcopy(instrument_spec)
+
+            # determine satellite name and ID
+            geo_satellite_spec['name'] = f"{instrument_spec['@id']}_geo_sat_{geo_sat_idx}"
+            geo_satellite_spec['@id'] = f"geo_sat_{geo_sat_idx}"
+
+            # remove ground station network
+            geo_satellite_spec.pop('groundStationNetwork', None)
+
+            if geo_sat_idx == 0:
+                # assign announcer preplanner to the first GEO satellite
+                geo_satellite_spec['planner'] = setup_announcer_preplanner(base_path, scenario_id)
+            else:
+                # other GEO satellites are just relays; no preplanner needed
+                geo_satellite_spec.pop('planner', None)
+
+            # add to list of satellite specifications
+            satellite_specifications.append(geo_satellite_spec)
 
     # return satellite specifications
     return satellite_specifications
@@ -319,6 +349,8 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     trial_stem = os.path.splitext(os.path.basename(sim_cfg.trials_file))[0]
 
     results_dir = _scenario_results_dir(run_cfg, trial_stem, scenario_id)
+    if sim_cfg.reduced: 
+        results_dir = results_dir + "_reduced"
     results_summary_path = os.path.join(results_dir, "summary.csv")
 
     # ensure scenario dir exists early (safe even if we skip)

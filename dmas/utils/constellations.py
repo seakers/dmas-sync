@@ -425,8 +425,8 @@ class WalkerConstellation(Constellation):
                 ):
         """ Describes an abstract Walker constellation."""
         # validate inputs
-        assert isinstance(alt, float) and alt >= 0.0, "Altitude must be a non-negative float"
-        assert isinstance(inc, float), "Inclination must be a float"
+        assert isinstance(alt, (float, int)) and alt >= 0.0, "Altitude must be a non-negative float"
+        assert isinstance(inc, (float, int)), "Inclination must be a float"
         assert isinstance(num_sats, int) and num_sats > 0, "Number of satellites must be a positive integer"
         assert isinstance(num_planes, int) and num_planes > 0, "Number of planes must be a positive integer"
         assert isinstance(phasing_param, int) and 0 <= phasing_param, "Phasing parameter must be a positive integer"
