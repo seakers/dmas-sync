@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --array=0-11
+#SBATCH --array=0-15
 
 set -euo pipefail
 
@@ -25,8 +25,12 @@ conda activate ./.venv
 
 # --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
 i=$SLURM_ARRAY_TASK_ID
-start=$((25+3*i))
-end=$((26+3*i))
+
+GROUP=$(( i / 4 ))
+POS=$(( i % 4 ))
+
+start=$(( 25 + 36*GROUP + 3*POS ))
+end=$(( 26 + 36*GROUP + 3*POS ))
 
 # --- Run ---
 python ./experiments/1_0_cbba_stress_test/study.py \
