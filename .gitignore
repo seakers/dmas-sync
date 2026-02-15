@@ -235,3 +235,5 @@ swifa/
 *.png
 *.zip
 *.out
+
+logs/

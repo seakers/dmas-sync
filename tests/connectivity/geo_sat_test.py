@@ -15,6 +15,43 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
         MISSION BUILDING UTILITIES
     ============================================
     """
+    def setUp(self):
+        super().setUp()
+
+        # define ISL access times
+        self.isl_access_times = {
+            ("sat_1", "sat_2"): [
+                (0, 1510),
+                (3823, 6376)
+            ],
+            ("sat_1", "sat_3"): [
+                (64, 3413),
+                (5667, 6376)
+            ],
+            ("sat_1", "sat_4"): [
+                (1897, 5240)
+            ],
+            ("sat_2", "sat_3"): [
+                (0, 6376)
+            ],
+            ("sat_2", "sat_4"): [
+                (0, 6376)
+            ],
+            ("sat_3", "sat_4"): [
+                (0, 6376)
+            ]
+        }
+
+        self.gs_access_times = {
+            ("gs", "sat_1"): [
+                (5168, 5513)
+            ],
+            ("gs", "sat_2"): [
+                (0, 6376)
+            ],
+            ("gs", "sat_3"): [],
+            ("gs", "sat_4"): []
+        }
 
     def build_mission(self, connectivity : str) -> dict:
         # copy mission template
@@ -40,6 +77,26 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
         sat2['orbitState']['state']['ta'] = 0.0
         sat2.pop('instrument') 
 
+        # define sat 3: GEO relay satelliteg
+        sat3 = copy.deepcopy(self.spacecraft_template)
+        sat3['name'] = 'sat_3'
+        sat3['@id'] = 'sat_3'
+        sat3['orbitState']['state']['sma'] = 42164.2
+        sat3['orbitState']['state']['inc'] = 0.0
+        sat3['orbitState']['state']['raan'] = 0.0
+        sat3['orbitState']['state']['ta'] = 120.0
+        sat3.pop('instrument') 
+
+        # define sat 4: GEO relay satelliteg
+        sat4 = copy.deepcopy(self.spacecraft_template)
+        sat4['name'] = 'sat_4'
+        sat4['@id'] = 'sat_4'
+        sat4['orbitState']['state']['sma'] = 42164.2
+        sat4['orbitState']['state']['inc'] = 0.0
+        sat4['orbitState']['state']['raan'] = 0.0
+        sat4['orbitState']['state']['ta'] = 240.0
+        sat4.pop('instrument') 
+
         # compile ground stations
         d['groundStation'] = self.compile_ground_stations()
 
@@ -47,7 +104,7 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
         d['groundOperator'] = self.define_ground_operators()
 
         # add spacecraft to mission specifications
-        d['spacecraft'] = [sat1, sat2]
+        d['spacecraft'] = [sat1, sat2, sat3, sat4]
         
         # return mission specifications
         return d
@@ -59,8 +116,6 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
     """
 
     def test_full_connectivity(self):
-        # return # TODO: re-enable when connectivity case is fixed
-    
         # load orbit data
         *_, orbit_data = self.generate_orbit_data(ConnectivityLevels.FULL.value, False)
 
@@ -84,8 +139,6 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                 self.assertTrue(abs(t_end - mission_duration) <= sender_orbitdata.time_step)
         
     def test_los_connectivity(self):    
-        # return # TODO: re-enable when connectivity case is fixed
-    
         # load orbit data
         _, ground_operator_names, orbit_data = self.generate_orbit_data(ConnectivityLevels.LOS.value, False)
 
@@ -98,42 +151,20 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
             
             # compare loaded data to printed coverage data
             for receiver_name, interval_data in tqdm(access_map.items(), desc=f'  Checking links for {sender_name}', leave=False):
+                # order sender and receiver names to ensure consistent reference access times
+                name_tuples = tuple(sorted([sender_name, receiver_name]))
+                
                 # set reference access times depending on receiver type
-                if receiver_name in ground_operator_names:
-                    # receiver is ground station, sender must be a satellite; set appropriate reference access times 
-                    if "1" in sender_name:
-                        t_refs = [(5168 * sender_orbitdata.time_step, 5513 * sender_orbitdata.time_step)]
-                    
-                    elif "2" in sender_name:
-                        t_refs = [(0 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)]
-
-                    else:
-                        raise ValueError(f'Unknown sender name: {sender_name}')
+                if receiver_name in ground_operator_names or sender_name in ground_operator_names:
+                    # receiver or sender is ground station, sender must be a satellite; set appropriate reference access times 
+                    t_idx_refs = self.gs_access_times[name_tuples]
+                
                 else:
-                    # receiver is a satellite; check if sender is ground station
-                    if sender_name in ground_operator_names:
-                        # sender is a ground station; set appropriate reference access times 
-                        if "1" in receiver_name:                            
-                            t_refs = [(5168 * sender_orbitdata.time_step, 5513 * sender_orbitdata.time_step)]
-                        
-                        elif "2" in receiver_name:
-                            t_refs = [(0 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)]
-
-                        else:
-                            raise ValueError(f'Unknown sender name: {sender_name}')
-                    else:
-                        # both sender and receiver are satellites; set reference access times 
-                        t_refs = [
-                            (0 * sender_orbitdata.time_step, 1510 * sender_orbitdata.time_step),
-                            (3823 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)
-                        ]                 
-
-                # debug prints
-                # print(f"Checking link {sender_name} -> {receiver_name}")
-                # print(f"  Reference access intervals:")
-                # for t_ref_start,t_ref_end in t_refs: print(f"    ({t_ref_start}, {t_ref_end})")
-                # print(f"  Loaded access intervals:")
-                # for t_start,t_end,*_ in interval_data.data: print(f"    ({t_start}, {t_end})")
+                    # both sender and receiver are satellites; set reference access times 
+                    t_idx_refs = self.isl_access_times[name_tuples]
+            
+                # convert reference access times to seconds
+                t_refs = [(t_start * sender_orbitdata.time_step, t_end * sender_orbitdata.time_step) for t_start,t_end in t_idx_refs]
 
                 # ensure number of accesses match reference times
                 self.assertTrue(len(interval_data) == len(t_refs))
@@ -157,18 +188,21 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
             
             # compare loaded data to printed coverage data
             for receiver_name, interval_data in tqdm(access_map.items(), desc=f'  Checking links for {sender_name}', leave=False):
+                # order sender and receiver names to ensure consistent reference access times
+                name_tuples = tuple(sorted([sender_name, receiver_name]))
+                
                 # set reference access times depending on receiver type
                 if receiver_name in ground_operator_names or sender_name in ground_operator_names:
-                    # eitherreceiver is ground station, sender must be a satellite; no accesses should be available
-                    t_refs = []
-                    
+                    # receiver or sender is ground station, sender must be a satellite; set appropriate reference access times 
+                    t_idx_refs = []
+                
                 else:
                     # both sender and receiver are satellites; set reference access times 
-                    t_refs = [
-                            (0 * sender_orbitdata.time_step, 1510 * sender_orbitdata.time_step),
-                            (3823 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)
-                        ]                 
-
+                    t_idx_refs = self.isl_access_times[name_tuples]
+            
+                # convert reference access times to seconds
+                t_refs = [(t_start * sender_orbitdata.time_step, t_end * sender_orbitdata.time_step) for t_start,t_end in t_idx_refs]
+                                               
                 # ensure number of accesses match reference times
                 self.assertTrue(len(interval_data) == len(t_refs))
 
@@ -190,21 +224,20 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
             
             # compare loaded data to printed coverage data
             for receiver_name, interval_data in tqdm(access_map.items(), desc=f'  Checking links for {sender_name}', leave=False):
+                # order sender and receiver names to ensure consistent reference access times
+                name_tuples = tuple(sorted([sender_name, receiver_name]))
+                
                 # set reference access times depending on receiver type
                 if receiver_name in ground_operator_names or sender_name in ground_operator_names:
-                    # either receiver is ground station, sender must be a satellite; set appropriate reference access times 
-                    if "1" in receiver_name or "1" in sender_name:                            
-                        t_refs = [(5168 * sender_orbitdata.time_step, 5513 * sender_orbitdata.time_step)]
-                    
-                    elif "2" in receiver_name or "2" in sender_name:
-                        t_refs = [(0 * sender_orbitdata.time_step, 6376 * sender_orbitdata.time_step)]
-
-                    else:
-                        raise ValueError(f'Unknown sender name: {sender_name}')
-                    
+                    # receiver or sender is ground station, sender must be a satellite; set appropriate reference access times 
+                    t_idx_refs = self.gs_access_times[name_tuples]
+                
                 else:
-                    # both sender and receiver are satellites; no accesses should be available
-                    t_refs = []                 
+                    # both sender and receiver are satellites; set reference access times 
+                    t_idx_refs = []
+            
+                # convert reference access times to seconds
+                t_refs = [(t_start * sender_orbitdata.time_step, t_end * sender_orbitdata.time_step) for t_start,t_end in t_idx_refs]
 
                 # ensure number of accesses match reference times
                 self.assertTrue(len(interval_data) == len(t_refs))
@@ -214,7 +247,7 @@ class TestGEOSatAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
                     self.assertTrue(abs(interval.left - t_ref_start) <= sender_orbitdata.time_step)
                     self.assertTrue(abs(interval.right - t_rev_end) <= sender_orbitdata.time_step)
 
-    def test_no_connectivity(self):    
+    def test_no_connectivity(self):  
         # load orbit data
         _, _, orbit_data = self.generate_orbit_data(ConnectivityLevels.NONE.value, False)
 
