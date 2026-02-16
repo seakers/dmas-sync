@@ -68,7 +68,7 @@ class SimulationAgent(object):
         self._id : str = agent_id if agent_id is not None else str(uuid.uuid4())
         self._specs : object = specs
         if isinstance(specs, Spacecraft):
-            self._payload = {instrument.name: instrument for instrument in specs.instrument}
+            self._payload = {instrument.name: instrument for instrument in specs.instrument} if specs.instrument is not None else dict()
         elif isinstance(specs, dict):
             self._payload = {instrument['name']: instrument for instrument in specs['instrument']} if 'instrument' in specs else dict()
         else:
