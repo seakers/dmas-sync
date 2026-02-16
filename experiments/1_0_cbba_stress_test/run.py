@@ -154,17 +154,18 @@ def create_spacecraft_specifications(num_sats : int,
             # remove instrument; GEO satellites are just relays in this scenario
             geo_satellite_spec.pop('instrument', None)
 
-            # assign instrument to satellite
-            geo_satellite_spec['instrument'] = copy.deepcopy(instrument_spec)
-
-            # determine satellite name and ID
-            geo_satellite_spec['name'] = f"{instrument_spec['@id']}_geo_sat_{geo_sat_idx}"
+            # define satellite name and ID
+            geo_satellite_spec['name'] = f"geo_sat_{geo_sat_idx}"
             geo_satellite_spec['@id'] = f"geo_sat_{geo_sat_idx}"
 
             # remove ground station network
             geo_satellite_spec.pop('groundStationNetwork', None)
 
             if geo_sat_idx == 0:
+                # mark first GEO sat as announcer 
+                geo_satellite_spec['name'] += "_announcer"
+                geo_satellite_spec['@id'] += "_announcer"
+
                 # assign announcer preplanner to the first GEO satellite
                 geo_satellite_spec['planner'] = setup_announcer_preplanner(base_path, scenario_id)
             else:

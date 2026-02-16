@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cbba_stress_full_run_relays_single
+#SBATCH --job-name=cbba_stress_full_propagate_relays
 #SBATCH --output=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.out
 #SBATCH --error=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.err
 #SBATCH --time=06:00:00
@@ -36,5 +36,5 @@ end=$(( 26 + 36*GROUP + 3*POS ))
 python ./experiments/1_0_cbba_stress_test/study.py \
   -t full_factorial_trials \
   --trial-range "${start}:${end}" \
-  --single-thread --quiet --exceptions --force-postprocess \
-  --profile-cpu --force-simulate # --profile-mem
+  --single-thread --quiet --exceptions \
+  --force-precompute --only-precompute

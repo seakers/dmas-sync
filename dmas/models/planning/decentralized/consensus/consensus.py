@@ -1006,10 +1006,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 max_n = max(max(bids_map.keys()) + 1, n_min) 
                 
                 for n_obs in range(max_n):
-                    if n_obs in bids_map:
-                        bid = bids_map[n_obs]
-                    else:
-                        bid = self.__make_empty_bid_dict(task_dict, owner, n_obs)
+                    # get bid for this observation number or create empty bid if missing
+                    bid = bids_map.get(n_obs, self.__make_empty_bid_dict(task_dict, owner, n_obs))
 
                     # store completed bids list
                     grouped_bids[tk][n_obs].append(bid)
