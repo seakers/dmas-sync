@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --array=0-15
+#SBATCH --array=1-15
 
 set -euo pipefail
 
@@ -37,4 +37,4 @@ python ./experiments/1_0_cbba_stress_test/study.py \
   -t full_factorial_trials \
   --trial-range "${start}:${end}" \
   --single-thread --quiet --exceptions \
-  --profile-cpu --force-simulate # --profile-mem # --force-postprocess 
+  --profile-cpu --force-simulate --only-simulate # --profile-mem # --force-postprocess 
