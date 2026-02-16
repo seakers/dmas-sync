@@ -37,4 +37,4 @@ python ./experiments/1_0_cbba_stress_test/study.py \
   -t full_factorial_trials \
   --trial-range "${start}:${end}" \
   --single-thread --quiet --exceptions --force-postprocess \
-  --profile-cpu --profile-memory --force-simulate
+  --profile-cpu --force-simulate # --profile-mem
