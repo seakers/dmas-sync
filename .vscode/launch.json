@@ -270,7 +270,7 @@
                 // "--trial-range", "9:10",
                 // "--trial-range", "9:12",
                 // "--trial-range", "23:24",
-                "--trial-range", "26:27",
+                "--trial-range", "25:26",
                 // "--trial-range", "58:59",
                 // "--trial-range", "72:73",
                 // "--trial-range", "104:105",
