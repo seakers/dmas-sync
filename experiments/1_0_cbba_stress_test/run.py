@@ -53,10 +53,12 @@ def create_propagator_settings_specifications(base_path : str,
                                               scenario_id : int, 
                                               num_sats : float, 
                                               gnd_segment : str, 
-                                              target_distribution) -> dict:
+                                              target_distribution : float,
+                                              reduced : bool) -> dict:
     # define out_dir name
-    # scenario_name = f"nsats-{num_sats}_gndseg-{gnd_segment.lower()}_tgtdist-{int(target_distribution)}"
-    scenario_name = f"scenario_{scenario_id}"
+    scenario_name = f"nsats-{num_sats}_gndseg-{gnd_segment.lower().split(' ')[-1]}_tgtdist-{int(target_distribution)}"
+    if reduced: scenario_name += "_reduced"
+    # scenario_name = f"scenario_{scenario_id}"
     
     # make out_dir if it does not exist
     out_dir = os.path.join(base_path, 'orbit_data', scenario_name)
@@ -239,7 +241,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
                                     base_path : str, trial_filename : str, scenario_id : int,
                                     num_sats : int, gnd_segment : str, target_distribution : int,
                                     spacecraft_specs_template : dict, instrument_specs : dict,
-                                    ground_operator_specs_template : dict) -> dict:
+                                    ground_operator_specs_template : dict, reduced : bool) -> dict:
     
     """ Generate mission specifications for a given scenario. """
     # create mission specifications from template
@@ -257,7 +259,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
 
     # set propagator settings
     mission_specs['settings'] \
-        = create_propagator_settings_specifications(base_path, scenario_id, num_sats, gnd_segment, target_distribution)
+        = create_propagator_settings_specifications(base_path, scenario_id, num_sats, gnd_segment, target_distribution, reduced)
     
     # create satellite specifications
     mission_specs['spacecraft'] \
@@ -371,7 +373,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             run_cfg.base_path, trial_stem, scenario_id,
             num_sats, gnd_segment, target_distribution,
             run_cfg.spacecraft_specs_template, run_cfg.instrument_specs,
-            run_cfg.ground_operator_specs_template
+            run_cfg.ground_operator_specs_template, sim_cfg.reduced
         )
 
         # ------------------------------------------------------------
