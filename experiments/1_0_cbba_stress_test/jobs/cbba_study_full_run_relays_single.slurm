@@ -36,5 +36,5 @@ end=$(( 26 + 36*GROUP + 3*POS ))
 python ./experiments/1_0_cbba_stress_test/study.py \
   -t full_factorial_trials \
   --trial-range "${start}:${end}" \
-  --single-thread --quiet --exceptions --force-postprocess \
-  --profile-cpu --force-simulate # --profile-mem
+  --single-thread --quiet --exceptions \
+  --profile-cpu --only-simulate --force-simulate # --profile-mem # --force-postprocess
