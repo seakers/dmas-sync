@@ -275,7 +275,7 @@
                 // "--trial-range", "72:73",
                 // "--trial-range", "104:105",
                 // "--trial-range", "116:117",
-                "--reduced",
+                // "--reduced",
                 "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",

@@ -47,7 +47,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_19 = False # single sat    default mission     multiple targets    two events           preplan w/short horizon + replan
         self.toy_20 = False # two sats       default mission     multiple targets    two events           preplan w/short horizon + replan
         self.toy_21 = False # single sat    no default mission     multiple targets    two events announced by GS  replan
-        self.toy_22 = False # two sats      no default mission     multiple targets    two events announced by GS   replan
+        self.toy_22 = True # two sats      no default mission     multiple targets    two events announced by GS   replan
 
         self.toy_23 = False 
         self.toy_24 = False
@@ -55,7 +55,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_26 = False
 
         self.toy_27 = False # string of pearls with onboard event detection
-        self.toy_28 = True # sequence reset case
+        self.toy_28 = False # sequence reset case
 
     def toy_planner_config(self):
         return {
@@ -2160,7 +2160,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # verify results
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observable'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observed'].values[0][1], 1)
-        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 0)
+        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Re-observed'].values[0][1], 1)
 
         # print done

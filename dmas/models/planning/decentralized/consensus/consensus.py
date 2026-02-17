@@ -1080,6 +1080,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 maneuvers : list = self._schedule_maneuvers(state, specs, self._path, orbitdata)
             
             elif isinstance(state, GroundOperatorAgentState):
+                # ground operator does not schedule observations or bids
+                new_bids : list = []
+
                 # ground operator agents do not schedule maneuvers
                 maneuvers : list = []
 
