@@ -542,7 +542,8 @@ class SimulationAgent(object):
         new_task_dicts = {key : msg.req['task']
                             for msg in incoming_reqs
                             if (key := self._task_key(msg.req['task'])) not in self._known_tasks
-                            and key not in new_tasks}
+                            and key not in new_tasks
+                            }
 
         # unpack unique bid tasks
         new_tasks.update({key : GenericObservationTask.from_dict(d) 
