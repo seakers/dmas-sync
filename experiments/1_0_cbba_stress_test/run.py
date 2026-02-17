@@ -56,7 +56,7 @@ def create_propagator_settings_specifications(base_path : str,
                                               target_distribution : float,
                                               reduced : bool) -> dict:
     # define out_dir name
-    scenario_name = f"nsats-{num_sats}_gndseg-{gnd_segment.lower().split(' ')[-1]}_tgtdist-{int(target_distribution)}"
+    scenario_name = f"nsats-{num_sats}_gndseg-{gnd_segment.lower().split(' ')[0]}_tgtdist-{int(target_distribution)}"
     if reduced: scenario_name += "_reduced"
     # scenario_name = f"scenario_{scenario_id}"
     

@@ -1437,7 +1437,7 @@ class OrbitData:
         
         # return time data as numpy array of the desired dtype
         return t.astype(dtype, copy=False), dtype
-        
+
     @staticmethod
     def __pick_numpy_dtype(series: pd.Series) -> np.dtype:
         """
@@ -1447,18 +1447,34 @@ class OrbitData:
         if series.empty:
             # default to float32 for empty series
             return np.dtype(np.float32)
+
+        # If it's already a known dtype, keep your fast paths
         if pd.api.types.is_bool_dtype(series):
             return np.dtype(np.bool_)
         if pd.api.types.is_integer_dtype(series):
-            # Use int32 if safe (often time indices fit); else int64
-            # If you know your ranges, you can force int32 for space.
             return np.dtype(np.int32)
         if pd.api.types.is_float_dtype(series):
-            # float32 is usually fine for many telemetry-ish fields
-            # return np.dtype(np.float32)
             return np.dtype(np.float64)
-        raise TypeError(f"Unsupported dtype for column '{series.name}': {series.dtype}. "
-                        f"Encode strings/categories before writing.")
+
+        # Handle object dtype that is actually numeric strings / python floats
+        if series.dtype == "object":
+            # timedelta objects?
+            inferred = pd.api.types.infer_dtype(series, skipna=True)
+            if inferred in ("timedelta",):
+                # choose a stable representation for storage:
+                # store as int64 nanoseconds (recommended)
+                return np.dtype("int64")
+
+            # try numeric coercion
+            coerced = pd.to_numeric(series, errors="coerce")
+            if coerced.notna().all() or series.isna().all():
+                # numeric (or numeric + NaNs)
+                return np.dtype(np.float64)
+
+        raise TypeError(
+            f"Unsupported dtype for column '{series.name}': {series.dtype} "
+            f"(inferred={pd.api.types.infer_dtype(series, skipna=True)})."
+        )
 
     @staticmethod
     def __safe_name(col: str) -> str:
