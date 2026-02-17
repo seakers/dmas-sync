@@ -2031,7 +2031,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     = orbitdata.get_next_agent_accesses(t_curr, t_next, include_current=True)
 
                 # store access intervals for future use
-                self._agent_access_intervals.extend(access_data)                    
+                self._agent_access_intervals.extend(access_data)     
+        else:
+            # check if precomputed access intervals are still valid for current time; if not, filter for future intervals only
+            earliest_interval,_ = self._agent_access_intervals[0] if self._agent_access_intervals else (None, None)
+
+            if earliest_interval is not None and earliest_interval.right < t_curr:
+                # access intervals already computed for this horizon; filter for future intervals only
+                self._agent_access_intervals = [(interval, target)
+                                                for interval, target in self._agent_access_intervals
+                                                if not interval.is_before(t_curr)]
                                     
         # initiate set of broadcast times to be scheduled (avoids duplicates)
         t_broadcasts = set()
@@ -2042,6 +2051,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # skip if target agent has already been considered
             if target in agents_considered:
                 continue
+            if access_interval.right < t_curr:
+                continue
+            if len(agents_considered) >= len(orbitdata.comms_targets):
+                break
 
             # get last access interval and calculate broadcast time
             t_broadcast : float = max(access_interval.left, t_curr)
@@ -2060,36 +2073,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # return sorted list of broadcast times
         return sorted(t_broadcasts)
-    
-        # self.agent_access_horizon : Interval = None
-        # self.agent_access_intervals : List[Interval] = None
-
-        # # initialize search for broadcast times during access opportunities
-        # t_broadcasts = set()
-
-        # # outline planning horizon interval
-        # t_next = max(self.preplan.t + self.preplan.horizon, state.get_time())
-        
-        # # check if shareble bids to share exist
-        # if any([isinstance(task, EventObservationTask) for task in self.results]):
-            # # schedule broadcast times and find useful access intervals
-            # for target in orbitdata.comms_targets:
-
-            #     # get access intervals with target agent
-            #     next_access_interval : Interval = orbitdata.get_next_agent_access(state.get_time(), target=target, t_max=t_next, include_current=True)
-                
-            #     # if no access opportunities in this planning horizon, skip scheduling
-            #     if next_access_interval is not None:
-                    # # get last access interval and calculate broadcast time
-                    # t_broadcast : float = max(next_access_interval.left, state.get_time())
-                    
-                    # # add to list of broadcast times if not already present
-                    # t_broadcasts.add(t_broadcast)
-                                    
-            # # check if any communication links are available at all
-            # if not orbitdata.comms_targets:
-            #     # no communication links available, broadcast task requests into the void
-            #     t_broadcasts.add(state.get_time())
 
     """
     REPLAN SCHEDULING

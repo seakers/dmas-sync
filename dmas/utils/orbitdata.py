@@ -305,7 +305,6 @@ class OrbitData:
 
         # load comms link table as IntervalTable for future querying
         return IntervalTable.from_schema(comms_links_schema, mmap_mode='r')
-
     
     @staticmethod
     # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
