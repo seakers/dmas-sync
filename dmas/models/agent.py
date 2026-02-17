@@ -352,7 +352,7 @@ class SimulationAgent(object):
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 if True:
-                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
