@@ -889,100 +889,100 @@ class AbstractPlanner(ABC):
         # return estimated observation performances
         return observation_performances
 
-    
-    def _create_broadcast_path(self, 
-                               state : SimulationAgentState, 
-                               orbitdata : OrbitData = None,
-                               t_init : float = None
-                               ) -> tuple:
-        """ Finds the best path for broadcasting a message to all agents using depth-first-search 
+    # DEPRECATED
+    # def _create_broadcast_path(self, 
+    #                            state : SimulationAgentState, 
+    #                            orbitdata : OrbitData = None,
+    #                            t_init : float = None
+    #                            ) -> tuple:
+    #     """ Finds the best path for broadcasting a message to all agents using depth-first-search 
         
-        ### Arguments:
-            - state (`SimulationAgentState`): current state of the agent
-            - orbitdata (`OrbitData`): coverage data of agent if it is of type `SatelliteAgent`
-            - t_init (`float`): ealiest desired broadcast time
-        """
-        if not isinstance(state, SatelliteAgentState):
-            raise NotImplementedError(f'Broadcast routing path not yet supported for agents of type `{type(state)}`')
+    #     ### Arguments:
+    #         - state (`SimulationAgentState`): current state of the agent
+    #         - orbitdata (`OrbitData`): coverage data of agent if it is of type `SatelliteAgent`
+    #         - t_init (`float`): ealiest desired broadcast time
+    #     """
+    #     if not isinstance(state, SatelliteAgentState):
+    #         raise NotImplementedError(f'Broadcast routing path not yet supported for agents of type `{type(state)}`')
         
-        # get earliest desired broadcast time 
-        t_init = state._t if t_init is None or t_init < state._t else t_init
+    #     # get earliest desired broadcast time 
+    #     t_init = state._t if t_init is None or t_init < state._t else t_init
 
-        # populate list of all agents except the parent agent
-        target_agents = [target_agent 
-                         for target_agent in orbitdata.comms_links.keys() 
-                         if target_agent != state.agent_name]
+    #     # populate list of all agents except the parent agent
+    #     target_agents = [target_agent 
+    #                      for target_agent in orbitdata.comms_links.keys() 
+    #                      if target_agent != state.agent_name]
         
-        if not target_agents: 
-            # no other agents in the simulation; no need for relays
-            return ([], t_init)
+    #     if not target_agents: 
+    #         # no other agents in the simulation; no need for relays
+    #         return ([], t_init)
         
-        # check if broadcast needs to be routed
-        earliest_accesses = [   orbitdata.get_next_agent_access(t_init, target=target_agent) 
-                                for target_agent in target_agents]           
+    #     # check if broadcast needs to be routed
+    #     earliest_accesses = [   orbitdata.get_next_agent_access(t_init, target=target_agent) 
+    #                             for target_agent in target_agents]           
         
-        same_access_start = [   abs(access.left - earliest_accesses[0].left) < 1e-3
-                                for access in earliest_accesses 
-                                if isinstance(access, Interval)]
-        same_access_end = [     abs(access.right - earliest_accesses[0].right) < 1e-3
-                                for access in earliest_accesses 
-                                if isinstance(access, Interval)]
+    #     same_access_start = [   abs(access.left - earliest_accesses[0].left) < 1e-3
+    #                             for access in earliest_accesses 
+    #                             if isinstance(access, Interval)]
+    #     same_access_end = [     abs(access.right - earliest_accesses[0].right) < 1e-3
+    #                             for access in earliest_accesses 
+    #                             if isinstance(access, Interval)]
 
-        if all(same_access_start) and all(same_access_end):
-            # all agents are accessing eachother at the same time; no need for mesasge relays
-            return ([], t_init)   
+    #     if all(same_access_start) and all(same_access_end):
+    #         # all agents are accessing eachother at the same time; no need for mesasge relays
+    #         return ([], t_init)   
 
-        # look for relay path using depth-first search
+    #     # look for relay path using depth-first search
 
-        # initialize queue
-        q = queue.Queue()
+    #     # initialize queue
+    #     q = queue.Queue()
         
-        # initialize min path and min path cost
-        min_path = []
-        min_times = []
-        min_cost = np.Inf
+    #     # initialize min path and min path cost
+    #     min_path = []
+    #     min_times = []
+    #     min_cost = np.Inf
 
-        # add parent agent as the root node
-        q.put((state.agent_name, [], [], 0.0))
+    #     # add parent agent as the root node
+    #     q.put((state.agent_name, [], [], 0.0))
 
-        while not q.empty():
-            # get next node in the search
-            _, current_path, current_times, path_cost = q.get()
+    #     while not q.empty():
+    #         # get next node in the search
+    #         _, current_path, current_times, path_cost = q.get()
 
-            # check if path is complete
-            if len(target_agents) == len(current_path):
-                # check if minimum cost
-                if path_cost < min_cost:
-                    min_cost = path_cost
-                    min_path = [path_element for path_element in current_path]
-                    min_times = [path_time for path_time in current_times]
+    #         # check if path is complete
+    #         if len(target_agents) == len(current_path):
+    #             # check if minimum cost
+    #             if path_cost < min_cost:
+    #                 min_cost = path_cost
+    #                 min_path = [path_element for path_element in current_path]
+    #                 min_times = [path_time for path_time in current_times]
 
-            # add children nodes to queue
-            for receiver_agent in [receiver_agent for receiver_agent in target_agents 
-                                    if receiver_agent not in current_path
-                                    and receiver_agent != state.agent_name
-                                    ]:
-                # query next access interval to children nodes
-                t_access : float = state._t + path_cost
+    #         # add children nodes to queue
+    #         for receiver_agent in [receiver_agent for receiver_agent in target_agents 
+    #                                 if receiver_agent not in current_path
+    #                                 and receiver_agent != state.agent_name
+    #                                 ]:
+    #             # query next access interval to children nodes
+    #             t_access : float = state._t + path_cost
 
-                access_interval : Interval = orbitdata.get_next_agent_access(t_access, target=receiver_agent)
+    #             access_interval : Interval = orbitdata.get_next_agent_access(t_access, target=receiver_agent)
                 
-                if access_interval.left < np.Inf:
-                    new_path = [path_element for path_element in current_path]
-                    new_path.append(receiver_agent)
+    #             if access_interval.left < np.Inf:
+    #                 new_path = [path_element for path_element in current_path]
+    #                 new_path.append(receiver_agent)
 
-                    new_cost = access_interval.left - state._t
+    #                 new_cost = access_interval.left - state._t
 
-                    new_times = [path_time for path_time in current_times]
-                    new_times.append(new_cost + state._t)
+    #                 new_times = [path_time for path_time in current_times]
+    #                 new_times.append(new_cost + state._t)
 
-                    q.put((receiver_agent, new_path, new_times, new_cost))
+    #                 q.put((receiver_agent, new_path, new_times, new_cost))
 
-        # check if earliest broadcast time is valid
-        if min_times: assert state._t <= min_times[0]
+    #     # check if earliest broadcast time is valid
+    #     if min_times: assert state._t <= min_times[0]
 
-        # return path and broadcast start time
-        return (min_path, min_times[0]) if min_path else ([], np.Inf)
+    #     # return path and broadcast start time
+    #     return (min_path, min_times[0]) if min_path else ([], np.Inf)
     
     
     def _schedule_relay(self, relay_message : SimulationMessage) -> list:

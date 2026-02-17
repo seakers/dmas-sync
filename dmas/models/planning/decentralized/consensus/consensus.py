@@ -24,7 +24,7 @@ from dmas.models.planning.plan import Plan, PeriodicPlan, ReactivePlan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
-from dmas.core.messages import BusMessage, MeasurementBidMessage, MeasurementRequestMessage
+from dmas.core.messages import MeasurementBidMessage
 from dmas.utils.orbitdata import OrbitData
 
 class ConsensusPlanner(AbstractReactivePlanner):    

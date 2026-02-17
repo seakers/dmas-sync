@@ -215,7 +215,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 t_access_starts.update([access.left for access,_ in access_intervals if not access.is_empty()])
 
                 # create broadcast actions for each access interval
-                for next_access in access_intervals:
+                for next_access,_ in access_intervals:
                     next_access : Interval
 
                     # if no access opportunities in this planning horizon, skip scheduling

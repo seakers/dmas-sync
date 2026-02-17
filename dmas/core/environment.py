@@ -602,111 +602,111 @@ class SimulationEnvironment(object):
         ### Returns 
             - interval_connectivities (`List[tuple]`): list of tuples of the form (interval, connectivity_matrix, components_list)
         """
-        # compile event markers for changes in connectivity 
-        connectivity_events : List[tuple] = []
-        for sender,agent_orbitdata in orbitdata.items():
-            for t_start,t_end,receiver in agent_orbitdata.comms_links:
-                connectivity_events.append( (t_start, sender, receiver, 1) )   # link comes online
-                connectivity_events.append( (t_end, sender, receiver, 0) )     # link goes offline
+        # # compile event markers for changes in connectivity 
+        # connectivity_events : List[tuple] = []
+        # for sender,agent_orbitdata in orbitdata.items():
+        #     for t_start,t_end,receiver in agent_orbitdata.comms_links:
+        #         connectivity_events.append( (t_start, sender, receiver, 1) )   # link comes online
+        #         connectivity_events.append( (t_end, sender, receiver, 0) )     # link goes offline
 
-        # sort events by time
-        connectivity_events.sort(key=lambda x: x[0])
+        # # sort events by time
+        # connectivity_events.sort(key=lambda x: x[0])
 
-        # extract unique event times
-        unique_event_times : List[float] = sorted(set([evt[0] for evt in connectivity_events]))
+        # # extract unique event times
+        # unique_event_times : List[float] = sorted(set([evt[0] for evt in connectivity_events]))
 
-        # group unique event times into intervals 
-        connectivity_intervals : List[Interval] = []
-        for i,_ in enumerate(unique_event_times):
-            t_start = unique_event_times[i]
-            t_end = unique_event_times[i+1] if i + 1 < len(unique_event_times) else np.Inf
-            connectivity_intervals.append( Interval(t_start, t_end, right_open=True) )
+        # # group unique event times into intervals 
+        # connectivity_intervals : List[Interval] = []
+        # for i,_ in enumerate(unique_event_times):
+        #     t_start = unique_event_times[i]
+        #     t_end = unique_event_times[i+1] if i + 1 < len(unique_event_times) else np.Inf
+        #     connectivity_intervals.append( Interval(t_start, t_end, right_open=True) )
 
-        # initialize previous connectivity matrix
-        t_start = unique_event_times[0] if unique_event_times else np.Inf
-        prev_interval = Interval(np.NINF, t_start, left_open=True, right_open=True)
-        connectivity_intervals.insert(0, prev_interval)
+        # # initialize previous connectivity matrix
+        # t_start = unique_event_times[0] if unique_event_times else np.Inf
+        # prev_interval = Interval(np.NINF, t_start, left_open=True, right_open=True)
+        # connectivity_intervals.insert(0, prev_interval)
                 
-        # group events by interval 
-        events_per_interval : Dict[Interval, List[tuple]] \
-            = {interval : [] for interval in connectivity_intervals}
+        # # group events by interval 
+        # events_per_interval : Dict[Interval, List[tuple]] \
+        #     = {interval : [] for interval in connectivity_intervals}
         
-        for evt in tqdm(connectivity_events, 
-                        desc='Grouping connectivity events by interval', 
-                        unit=' events', 
-                        leave=False,
-                        disable=not printouts
-                    ):
-            # group by bisection search, asuuming `connectivity_intervals` is sorted
-            low = 0
-            high = len(connectivity_intervals) - 1
+        # for evt in tqdm(connectivity_events, 
+        #                 desc='Grouping connectivity events by interval', 
+        #                 unit=' events', 
+        #                 leave=False,
+        #                 disable=not printouts
+        #             ):
+        #     # group by bisection search, asuuming `connectivity_intervals` is sorted
+        #     low = 0
+        #     high = len(connectivity_intervals) - 1
 
-            while low <= high:
-                mid = (low + high) // 2
-                interval = connectivity_intervals[mid]
+        #     while low <= high:
+        #         mid = (low + high) // 2
+        #         interval = connectivity_intervals[mid]
 
-                if evt[0] in interval:
-                    events_per_interval[interval].append(evt)
-                    break
+        #         if evt[0] in interval:
+        #             events_per_interval[interval].append(evt)
+        #             break
 
-                if evt[0] < interval.left:
-                    high = mid - 1
-                else:
-                    low = mid + 1  
+        #         if evt[0] < interval.left:
+        #             high = mid - 1
+        #         else:
+        #             low = mid + 1  
         
-        # initialize interval-connectivity list
-        interval_connectivities : List[tuple] = []
-        agent_to_idx = {agent: idx for idx, agent in enumerate(orbitdata.keys())}
-        idx_to_agent = [agent for agent in agent_to_idx.keys()]
-        prev_connectivity_matrix = np.zeros((len(orbitdata), len(orbitdata)), dtype=int)
+        # # initialize interval-connectivity list
+        # interval_connectivities : List[tuple] = []
+        # agent_to_idx = {agent: idx for idx, agent in enumerate(orbitdata.keys())}
+        # idx_to_agent = [agent for agent in agent_to_idx.keys()]
+        # prev_connectivity_matrix = np.zeros((len(orbitdata), len(orbitdata)), dtype=int)
         
-        # create adjacency matrix per interval
-        for interval in tqdm(connectivity_intervals, 
-                             desc='Precomputing agent connectivity intervals', 
-                             unit=' intervals', 
-                             leave=False,
-                             disable=not printouts
-                            ):
-            # copy previous connectivity state
-            # interval_connectivity_matrix \
-            #     = copy.deepcopy(prev_connectivity_matrix)                    
-            interval_connectivity_matrix = prev_connectivity_matrix.copy()
+        # # create adjacency matrix per interval
+        # for interval in tqdm(connectivity_intervals, 
+        #                      desc='Precomputing agent connectivity intervals', 
+        #                      unit=' intervals', 
+        #                      leave=False,
+        #                      disable=not printouts
+        #                     ):
+        #     # copy previous connectivity state
+        #     # interval_connectivity_matrix \
+        #     #     = copy.deepcopy(prev_connectivity_matrix)                    
+        #     interval_connectivity_matrix = prev_connectivity_matrix.copy()
             
-            # get connectivity events that occur during the interval
-            # interval_events = [ evt for evt in connectivity_events if evt[0] in interval ]
-            interval_events = events_per_interval[interval]
+        #     # get connectivity events that occur during the interval
+        #     # interval_events = [ evt for evt in connectivity_events if evt[0] in interval ]
+        #     interval_events = events_per_interval[interval]
 
-            # update connectivity matrix based on events
-            for _,sender,receiver,status in interval_events:
-                u_idx = agent_to_idx[sender]
-                v_idx = agent_to_idx[receiver]
-                interval_connectivity_matrix[u_idx][v_idx] = status
+        #     # update connectivity matrix based on events
+        #     for _,sender,receiver,status in interval_events:
+        #         u_idx = agent_to_idx[sender]
+        #         v_idx = agent_to_idx[receiver]
+        #         interval_connectivity_matrix[u_idx][v_idx] = status
 
-            # create component list from connectivity matrix
-            interval_components = SimulationEnvironment.__get_connected_components(interval_connectivity_matrix, agent_to_idx, idx_to_agent)
+        #     # create component list from connectivity matrix
+        #     interval_components = SimulationEnvironment.__get_connected_components(interval_connectivity_matrix, agent_to_idx, idx_to_agent)
 
-            # convert components to dict for easier lookup
-            interval_component_map : Dict[str, List[str]] \
-                = { sender : [] for sender in idx_to_agent }
+            # # convert components to dict for easier lookup
+            # interval_component_map : Dict[str, List[str]] \
+            #     = { sender : [] for sender in idx_to_agent }
 
-            for component in interval_components:
-                for sender in component:
-                    for receiver in component:
-                        if sender != receiver:
-                            interval_component_map[sender].append(receiver)
+            # for component in interval_components:
+            #     for sender in component:
+            #         for receiver in component:
+            #             if sender != receiver:
+            #                 interval_component_map[sender].append(receiver)
 
-            # convert connectivity matrix to sparse matrix
-            sparse_interval_connectivity_matrix = csr_matrix(interval_connectivity_matrix)
+        #     # convert connectivity matrix to sparse matrix
+        #     sparse_interval_connectivity_matrix = csr_matrix(interval_connectivity_matrix)
             
-            # save as upper triangle only to save memory, since connectivity is symmetric 
-            sparse_interval_connectivity_matrix = triu(sparse_interval_connectivity_matrix, k=0)   # keep diagonal + upper triangle only
+        #     # save as upper triangle only to save memory, since connectivity is symmetric 
+        #     sparse_interval_connectivity_matrix = triu(sparse_interval_connectivity_matrix, k=0)   # keep diagonal + upper triangle only
 
-            # store interval connectivity data
-            interval_connectivities.append( (interval, 
-                                             interval_components, interval_component_map) )
+        #     # store interval connectivity data
+        #     interval_connectivities.append( (interval, 
+        #                                      interval_components, interval_component_map) )
 
-            # set previous connectivity to current for next iteration
-            prev_connectivity_matrix = interval_connectivity_matrix
+        #     # set previous connectivity to current for next iteration
+        #     prev_connectivity_matrix = interval_connectivity_matrix
 
             # DEBUG PRINTOUTS -------------
             # print(F"Connectivity during interval {interval}:")
@@ -718,32 +718,68 @@ class SimulationEnvironment(object):
             # x = 1 # breakpoint
             # -------------------------------
         
-        # return compiled list of interval connectivities
-        # return interval_connectivities
+        # get orbit data for any agent to use for interval connectivity computations; we assume that all agents have access to the same time intervals for connectivity changes, so we can use any agent's orbit data to extract these intervals
+        if not orbitdata: raise ValueError("No orbit data provided for any agents; cannot compute connectivity.")
+        agent_orbitdata : OrbitData = next(iter(orbitdata.values()))
 
+        # get agent names and mapping to indices for matrix construction
+        idx_to_agent = list(agent_orbitdata.comms_links._meta['columns'].keys())        
+        agent_to_idx = {agent: idx for idx, agent in enumerate(idx_to_agent)}
+    
+        # iterate through connectivity intervals and extract components
+        interval_connectivities = []
+        for t_start,t_end,*agent_components in tqdm(agent_orbitdata.comms_links, 
+                                                    desc='Precomputing agent connectivity intervals', 
+                                                    unit=' intervals', 
+                                                    leave=False,
+                                                    disable=not printouts
+                                                ):
+            # create interval object
+            interval = Interval(t_start, t_end, right_open=True)
+            
+            # get component membership for each agent and convert to component list
+            interval_components = defaultdict(set)
+            for agent_idx,component_idx in enumerate(agent_components):
+                agent_name = idx_to_agent[agent_idx]
+                interval_components[component_idx].add(agent_name)
+            interval_components = set(frozenset(members) for members in interval_components.values())
+
+            # convert components to dict for easier lookup
+            interval_component_map : Dict[str, List[str]] \
+                = { sender : [] for sender in idx_to_agent }
+
+            for component in interval_components:
+                for sender in component:
+                    for receiver in component:
+                        if sender != receiver:
+                            interval_component_map[sender].append(receiver)
+
+            interval_connectivities.append( (interval, interval_components, interval_component_map) )
+
+        # merge consecutive intervals with the same connectivity components to save memory and speed up connectivity lookups
         merged_intervals : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] = []
-        for interval, components, component_map in tqdm(interval_connectivities, 
+        for interval, interval_components, component_map in tqdm(interval_connectivities, 
                                                         desc='Merging agent connectivity intervals', 
                                                         unit=' intervals', 
                                                         leave=False,
                                                         disable=not printouts
                                                     ):
             if not merged_intervals:
-                merged_intervals.append( (interval, components, component_map) )
+                merged_intervals.append( (interval, interval_components, component_map) )
                 continue
 
             # get previous interval data
             prev_interval, prev_components, prev_component_map = merged_intervals[-1]
             
             # compare components to determine if connectivity changed; if not, merge intervals
-            if components == prev_components and prev_interval.overlaps(interval):
+            if interval_components == prev_components and prev_interval.overlaps(interval):
                 # merge intervals by updating end time of previous interval to end time of current interval
                 merged_interval = prev_interval.union(interval)
                 merged_intervals[-1] = (merged_interval, prev_components, prev_component_map)
 
             else:
                 # connectivity changed; add current interval as new entry
-                merged_intervals.append( (interval, components, component_map) )
+                merged_intervals.append( (interval, interval_components, component_map) )
         
         return merged_intervals
 

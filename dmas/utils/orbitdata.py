@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 import copy
 from enum import Enum
 import gc
@@ -8,6 +8,8 @@ import random
 import re
 import shutil
 from typing import Any, Dict, List, Optional, Sequence, Tuple
+
+from scipy.sparse import csr_matrix, triu
 import pandas as pd
 import numpy as np
 from datetime import timedelta
@@ -60,8 +62,14 @@ class OrbitData:
 
         # agent connectivity data
         self.comms_links = comms_links
-        self.comms_targets = set(comms_links._meta['columns']['target']['vocab'].values())
-        self.comms_targets.discard(None)
+
+        comms_targets = list(comms_links._meta['columns'].keys())
+        comms_target_indices = {target : idx for idx, target in enumerate(comms_targets)}
+
+        self.comms_targets = set(comms_targets)
+        self.comms_targets.discard(agent_name)
+        self.comms_target_columns = comms_targets
+        self.comms_target_indices = comms_target_indices
 
         # ground station access data
         self.gs_access_data = gs_access_data
@@ -99,8 +107,14 @@ class OrbitData:
                 schemas : dict[str, dict] = json.load(meta_file)
                 if printouts: tqdm.write('Existing preprocessed data found. Loading from binaries...')
 
+        # load connectivity data for each agent and store in dictionary indexed by agent name
+        agent_comms_links : IntervalTable = OrbitData.__load_comms_links(orbitdata_dir, schemas, printouts)
+
         data = dict()
         for agent_name, schema in schemas.items():
+            # skip comms data
+            if 'data' in agent_name or 'comms' in agent_name: continue 
+
             # unpack agent-specific data from schema
             gs_network_name = schema['gs_network_name']
             time_step = schema['time_specs']['time step']
@@ -115,7 +129,7 @@ class OrbitData:
             gs_access_data = IntervalTable.from_schema(schema['gs_access'], mmap_mode='r')
 
             # load comms link data from binary
-            comms_links = IntervalTable.from_schema(schema['comms_links'], mmap_mode='r')
+            comms_links = agent_comms_links
 
             # load ground point access data from binary
             gp_access_data = AccessTable.from_schema(schema['gp_access'], mmap_mode='r')
@@ -132,6 +146,214 @@ class OrbitData:
             
         # return compiled data
         return data     
+    
+    @staticmethod
+    def __load_comms_links(orbitdata_dir : str, schemas : dict, printouts : bool = False) -> IntervalTable:
+        # define mission specifications file path
+        mission_specs_file = os.path.join(orbitdata_dir, 'MissionSpecs.json')
+        assert os.path.exists(mission_specs_file), f'Mission specifications file not found at: {mission_specs_file}'
+        # load mission specifications to get mission duration and other relevant details
+        with open(mission_specs_file, 'r') as mission_specs:
+            mission_specs_dict : dict = json.load(mission_specs)
+
+        # get list of satellite names 
+        satellite_names = {sat['name'] : sat for sat in mission_specs_dict['spacecraft']}
+
+        # get list of ground opertors
+        ground_operators = {gs['name'] : gs for gs in mission_specs_dict.get('groundOperator', [])}
+
+        # combine into list of agent names
+        agent_names = { **satellite_names, **ground_operators }
+
+        # get connectivity level from mission specifications
+        connectivity_level : str = mission_specs_dict['scenario'].get('connectivity', 'full').upper()
+
+        # get relay specs from mission specifications 
+        relay_toggle : bool = mission_specs_dict['scenario'].get('enabledRelays', 'True').lower() == 'true'
+
+        if not relay_toggle: raise NotImplementedError('Currently only supports relay-enabled scenarios.')
+
+        # load comms link data 
+        comm_data = IntervalTable.from_schema(schemas['comms_data'], mmap_mode='r')
+
+        # convert connectivity intervals to events
+        connectivity_events = []
+        for t_start,t_end,u,v in comm_data:
+            # check if access is valid based on connectivity level
+            if connectivity_level == ConnectivityLevels.NONE.value:
+                # no connectivity between any agents
+                break
+
+            elif connectivity_level == ConnectivityLevels.GS.value:
+                # ignore any links that do not involve a ground station
+                if not (u in ground_operators or v in ground_operators):
+                    continue
+
+            elif connectivity_level == ConnectivityLevels.ISL.value:
+                # ignore any links that involve a ground station
+                if u in ground_operators or v in ground_operators:
+                    continue
+
+            elif connectivity_level == ConnectivityLevels.LOS.value:
+                # accept all links
+                pass
+
+            # decompose interval to event start and event end
+            event_start = (t_start, u, v, 1)
+            event_end = (t_end, u, v, 0)
+
+            # add events to list of connectivity events
+            connectivity_events.extend([event_start, event_end])
+        
+        # sort events by time
+        connectivity_events.sort(key=lambda x: x[0])
+
+        # extract unique event times
+        unique_event_times : List[float] = sorted(set([evt[0] for evt in connectivity_events]))
+
+        # group unique event times into intervals 
+        connectivity_intervals : List[Interval] = []
+        for i,_ in enumerate(unique_event_times):
+            t_start = unique_event_times[i]
+            t_end = unique_event_times[i+1] if i + 1 < len(unique_event_times) else np.Inf
+            connectivity_intervals.append( Interval(t_start, t_end, right_open=True) )
+
+        # initialize previous connectivity matrix
+        t_start = unique_event_times[0] if unique_event_times else np.Inf
+        prev_interval = Interval(np.NINF, t_start, left_open=True, right_open=True)
+        connectivity_intervals.insert(0, prev_interval)
+                
+        # group events by interval 
+        events_per_interval : Dict[Interval, List[tuple]] \
+            = {interval : [] for interval in connectivity_intervals}
+        
+        for evt in tqdm(connectivity_events, 
+                        desc='Grouping connectivity events by interval', 
+                        unit=' events', 
+                        leave=False,
+                        disable=not printouts
+                    ):
+            # group by bisection search, asuuming `connectivity_intervals` is sorted
+            low = 0
+            high = len(connectivity_intervals) - 1
+
+            while low <= high:
+                mid = (low + high) // 2
+                interval = connectivity_intervals[mid]
+
+                if evt[0] in interval:
+                    events_per_interval[interval].append(evt)
+                    break
+
+                if evt[0] < interval.left:
+                    high = mid - 1
+                else:
+                    low = mid + 1  
+        
+        # initialize interval-connectivity list
+        interval_connectivities : List[dict] = []
+        agent_to_idx = {agent: idx for idx, agent in enumerate(agent_names.keys())}
+        idx_to_agent = [agent for agent in agent_to_idx.keys()]
+        prev_connectivity_matrix = np.zeros((len(agent_names), len(agent_names)), dtype=int)
+        
+        # create adjacency matrix per interval
+        for interval in tqdm(connectivity_intervals, 
+                             desc='Precomputing agent connectivity intervals', 
+                             unit=' intervals', 
+                             leave=False,
+                             disable=not printouts
+                            ):
+            # copy previous connectivity state              
+            interval_connectivity_matrix = prev_connectivity_matrix.copy()
+            
+            # get connectivity events that occur during the interval
+            interval_events = events_per_interval[interval]
+
+            # update connectivity matrix based on events
+            for _,sender,receiver,status in interval_events:
+                u_idx = agent_to_idx[sender]
+                v_idx = agent_to_idx[receiver]
+                interval_connectivity_matrix[u_idx][v_idx] = status
+                interval_connectivity_matrix[v_idx][u_idx] = status
+
+            # create component list from connectivity matrix
+            interval_components = OrbitData.__get_connected_components(interval_connectivity_matrix, agent_to_idx, idx_to_agent)
+
+            # convert components to dict for easier lookup
+            interval_component_map : Dict[str, int] \
+                = { sender : -1 for sender in idx_to_agent }
+
+            for component_idx, component in enumerate(interval_components):
+                for member in component:
+                    interval_component_map[member] = component_idx
+    
+
+            # store interval connectivity data
+            interval_connectivities.append({
+                'start' : interval.left,
+                'end' : interval.right,
+                **interval_component_map
+            })
+
+            # set previous connectivity to current for next iteration
+            prev_connectivity_matrix = interval_connectivity_matrix
+
+        # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
+        comms_links_df = pd.DataFrame(interval_connectivities)
+        bin_dir = os.path.join(orbitdata_dir, 'bin')
+        comms_links_schema = OrbitData.__write_interval_data_table(comms_links_df, bin_dir, 'comms_links', schemas['comms_data']['time_specs']['time step'], start_col='start', end_col='end', allow_overwrite=True)
+
+        # load comms link table as IntervalTable for future querying
+        return IntervalTable.from_schema(comms_links_schema, mmap_mode='r')
+
+    
+    @staticmethod
+    # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
+    def __get_connected_components(adj: List[List[int]], agent_to_idx : Dict[str, int], idx_to_agent : List[str]) -> List[List[str]]:
+        """
+        adj: dict[node] -> dict[neighbor] -> weight/int (nonzero means edge exists)
+        Assumes undirected (symmetric) or at least that reachability should be treated undirected.
+        Returns: list of components (each is list of node names)
+        """
+        # initialize BFS variables
+        visited = set()
+        comps = list()
+
+        # BFS to find components
+        for start in range(len(adj)):
+            # skip visited nodes
+            if start in visited: continue
+
+            # initialize queue with starting node as root
+            q = deque([start])
+
+            # mark root as visited 
+            visited.add(start)
+
+            # explore subgraph components starting from root
+            comp = set()
+            while q:
+                # pop next node
+                u = q.popleft()
+
+                # add to component list
+                comp.add(idx_to_agent[u])
+
+                # iterate neighbors; keep only truthy edges
+                for v, connected in enumerate(adj[u]):
+                    # check if connected to neighbor
+                    if not connected: continue
+                    
+                    # check neighbor has been visited
+                    if v not in visited:                        
+                        visited.add(v)
+                        q.append(v)
+
+            # add component to component list
+            comps.append(frozenset(comp))
+
+        # return list of components
+        return comps
 
     """
     GET NEXT methods
@@ -172,17 +394,54 @@ class OrbitData:
         return self.eclipse_data.lookup_interval(t, t_max, include_current)
 
     def get_next_agent_accesses(self, t: float, t_max: float = np.Inf,  target : str = None, include_current: bool = False) -> List[Tuple[Interval, str]]:
-        """ returns a list of the next access interval to another agent or ground station after or during time `t` up to a given time `t_max`. """
+        """ returns a list of the next access interval to another agent after or during time `t` up to a given time `t_max`. """
 
         # get next access intervals
         future_intervals : List[Tuple[Interval, ... ]] = self.comms_links.lookup_intervals(t, t_max, include_current)
 
         # if no target specified, return all future access intervals
-        if target is None:  return future_intervals
-        
-        # else, filter for target of interest
-        return [ interval for interval,interval_target in future_intervals
-                if interval_target == target]            
+        if target is None:  
+            # initialize compiled list of access intervals
+            out = []
+
+            # get column index of this agent in the comms links table
+            u_column_idx = self.comms_target_indices[self.agent_name]
+
+            # iterate through list of intervals in this time period 
+            for interval, *component_indices in future_intervals:
+                
+                # get component index of this agent during this interval
+                u_component_idx = int(component_indices[u_column_idx])
+                
+                # find all matching agents with the same component index and add to output list
+                for v_column_idx,v_component_idx in enumerate(component_indices):
+                    if v_column_idx != u_column_idx and v_component_idx == u_component_idx:
+                        out.append((interval, self.comms_target_columns[v_column_idx]))           
+
+            # return output list                        
+            return out
+
+        # else if a target is specified, filter for target of interest
+
+        # initialize compiled list of access intervals
+        out = []
+
+        # get column index of this agent and the target in the comms links table
+        u_column_idx = self.comms_target_indices[self.agent_name]
+        v_column_idx = self.comms_target_indices[target]
+
+        # iterate through list of intervals in this time period 
+        for interval, *component_indices in future_intervals:
+            
+            # get component index of this agent during this interval
+            u_component_idx = int(component_indices[u_column_idx])
+            v_component_idx = int(component_indices[v_column_idx])
+
+            if u_component_idx == v_component_idx:
+                out.append((interval, target))                   
+
+        # return output list                    
+        return out   
     
     def get_next_gp_access_interval(self, lat: float, lon: float, t: float, t_max : float = np.Inf) -> Interval:
         """
@@ -395,16 +654,15 @@ class OrbitData:
 
             scenario_specs.pop('settings')
             orbitdata_dict.pop('settings')
-            # scenario_specs.pop('scenario')
-            # orbitdata_dict.pop('scenario')
+            scenario_specs.pop('scenario')
+            orbitdata_dict.pop('scenario')
 
             if (
                     scenario_specs['epoch'] != orbitdata_dict['epoch']
                 or scenario_specs['duration'] > orbitdata_dict['duration']
                 or scenario_specs.get('groundStation', None) != orbitdata_dict.get('groundStation', None)
                 # or scenario_dict['grid'] != orbitdata_dict['grid']
-                # TODO - TEMP: check if connectivity level is the same. Ideally should only affect how data is loaded, not calculated.
-                or scenario_specs['scenario']['connectivity'] != orbitdata_dict['scenario']['connectivity']
+                # or scenario_specs['scenario']['connectivity'] != orbitdata_dict['scenario']['connectivity']
                 ):
                 return True
             
@@ -549,9 +807,6 @@ class OrbitData:
             agent_state_data = state_dfs[agent_name]
             agent_gs_access_data = gs_access_dfs[agent_name]
             agent_gp_access_data = gp_access_dfs[agent_name]
-            agent_comms_link_data = { u if u != agent_name else v : comms_links
-                                    for (u,v), comms_links in comms_link_dfs.items()
-                                    if agent_name in (u,v) }                
             
             # define agent-specific binary output directory
             agent_bin_dir = os.path.join(bin_dir, agent_name)
@@ -559,13 +814,6 @@ class OrbitData:
             # print interval data to binaries 
             eclipse_meta = OrbitData.__write_interval_data_table(agent_eclipse_data, agent_bin_dir, 'eclipse', time_specs['time step'], allow_overwrite=True)
             gs_meta = OrbitData.__write_interval_data_table(agent_gs_access_data, agent_bin_dir, 'gs_access', time_specs['time step'], allow_overwrite=True)
-
-            # concatenate comms link dataframes for different targets 
-            comms_links_concat :pd.DataFrame = OrbitData.__compile_agent_comms_data(agent_comms_link_data)
-                
-            # print comms link data to binaries
-            agent_comms_bin_dir = os.path.join(agent_bin_dir, 'comm')
-            comms_meta = OrbitData.__write_interval_data_table(comms_links_concat, agent_comms_bin_dir, 'comm', time_specs['time step'], allow_overwrite=True)
 
             # print agent position data to binaries
             state_meta = OrbitData.__write_state_table(agent_state_data, agent_bin_dir, 'cartesian_state', time_specs['time step'], allow_overwrite=True)
@@ -583,12 +831,16 @@ class OrbitData:
                 'dir' : agent_bin_dir,
                 'eclipse': eclipse_meta,
                 'gs_access': gs_meta,
-                # 'comms_links': comms_metas,
-                'comms_links': comms_meta,
                 'state': state_meta,
                 'gp_access': gp_access_meta,
                 'grid': grid_meta
             }
+
+        # save agent comms link data into single dataframe and print to binary
+        comms_data_concat :pd.DataFrame = OrbitData.__compile_agent_comms_data(comms_link_dfs)
+        comms_meta = OrbitData.__write_interval_data_table(comms_data_concat, bin_dir, 'comms_data', time_specs['time step'], allow_overwrite=True)
+        schemas['comms_data'] = comms_meta
+        schemas['comms_data']['time_specs'] = time_specs
         
         # save schemas for all agents to metadata file in binary directory for future loading
         with open(os.path.join(bin_dir, "meta.json"), "w") as f:
@@ -601,7 +853,7 @@ class OrbitData:
     def __compile_agent_comms_data(agent_comms_link_data : Dict[str, pd.DataFrame]) -> pd.DataFrame:
         comms_req_columns = ["start index", "end index"]
         working_dfs = []
-        for peer, comms_links in agent_comms_link_data.items():
+        for (u,v), comms_links in agent_comms_link_data.items():
             # take only the required cols (this avoids mutating the original DF)
             work = comms_links.loc[:, comms_req_columns].copy()
 
@@ -613,7 +865,7 @@ class OrbitData:
             if work[comms_req_columns].isna().any().any():
                 bad = work[work[comms_req_columns].isna().any(axis=1)].head(5)
                 raise ValueError(
-                    f"Non-numeric or missing start/end values after coercion for peer={peer}. "
+                    f"Non-numeric or missing start/end values after coercion for {u}-->{v}. "
                     f"Examples:\n{bad}"
                 )
 
@@ -621,7 +873,8 @@ class OrbitData:
             work["start index"] = work["start index"].astype(np.int32)
             work["end index"]   = work["end index"].astype(np.int32)
 
-            work["target"] = peer
+            work["u"] = u
+            work["v"] = v
             working_dfs.append(work)
         
         if working_dfs:
@@ -631,7 +884,7 @@ class OrbitData:
                 .reset_index(drop=True)
             )
         else:
-            comms_links_concat = pd.DataFrame(columns=[*comms_req_columns, "target"])
+            comms_links_concat = pd.DataFrame(columns=[*comms_req_columns, "u", "v"])
 
         return comms_links_concat
         
@@ -664,13 +917,6 @@ class OrbitData:
 
         # compile list of ground stations in the scenario (if any)
         ground_station_list : List[dict] = mission_dict.get('groundStation', [])
-
-        # get scenario settings
-        scenario_dict : dict = mission_dict.get('scenario', None)
-
-        # get connectivity setting
-        connectivity : str = scenario_dict.get('connectivity', None) \
-            if scenario_dict else ConnectivityLevels.LOS.value # default to LOS if not specified
 
         # compile list of all agents to load
         agents_loaded : List[dict] = []
@@ -712,10 +958,10 @@ class OrbitData:
         state_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_state_data(orbitdata_dir, agents_loaded, simulation_duration, time_step)
 
         # load ground station access data
-        gs_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gs_access_data(orbitdata_dir, agents_loaded, simulation_duration, time_step, ground_station_list, connectivity, tqdm_config)
+        gs_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gs_access_data(orbitdata_dir, agents_loaded, simulation_duration, time_step, ground_station_list, tqdm_config)
 
         # load comms link data
-        comms_link_dfs : Dict[tuple, pd.DataFrame] = OrbitData.__load_agent_comms_link_data(orbitdata_dir, agents_loaded, simulation_duration, gs_access_dfs, time_step, connectivity)
+        comms_link_dfs : Dict[tuple, pd.DataFrame] = OrbitData.__load_agent_comms_link_data(orbitdata_dir, agents_loaded, simulation_duration, gs_access_dfs, time_step)
 
         # load ground point access data
         gp_access_dfs : Dict[str, pd.DataFrame] = OrbitData.__load_agent_gp_access_data(orbitdata_dir, agents_loaded, mission_dict, simulation_duration, time_step, spacecraft_list, tqdm_config)
@@ -810,7 +1056,6 @@ class OrbitData:
                                    simulation_duration : float,
                                    time_step : float,
                                    ground_station_list : List[dict],
-                                   connectivity : str,
                                    tqdm_config : dict,
                                 ) -> Dict[str, pd.DataFrame]:
         # initialize ground station access data
@@ -850,7 +1095,7 @@ class OrbitData:
                     gndStn_access_file = os.path.join(orbitdata_path, agent_folder, file)
                     
                     gndStn_access_data : pd.DataFrame \
-                        = OrbitData.__load_gs_access_data(gndStn_access_file, connectivity, simulation_duration, time_step)
+                        = OrbitData.__load_gs_access_data(gndStn_access_file, simulation_duration, time_step)
 
                     nrows, _ = gndStn_access_data.shape
 
@@ -904,50 +1149,64 @@ class OrbitData:
         return data
     
     @staticmethod
-    def __load_gs_access_data(gs_access_file : str, connectivity : str, simulation_duration : float, time_step : float) -> pd.DataFrame:
-        if connectivity.upper() == ConnectivityLevels.FULL.value:
-            # fully connected network; modify connectivity 
-            columns = ['start index', 'end index']
+    def __load_gs_access_data(gs_access_file : str, simulation_duration : float, time_step : float) -> pd.DataFrame:
+        # if connectivity.upper() == ConnectivityLevels.FULL.value:
+        #     # fully connected network; modify connectivity 
+        #     columns = ['start index', 'end index']
             
-            # generate mission-long connectivity access                    
-            data = [[0.0, simulation_duration * 24 * 3600 // time_step + 1]]  # full connectivity from start to end of mission
-            assert data[0][1] > 0.0
+        #     # generate mission-long connectivity access                    
+        #     data = [[0.0, simulation_duration * 24 * 3600 // time_step + 1]]  # full connectivity from start to end of mission
+        #     assert data[0][1] > 0.0
 
-            # return modified connectivity
-            gndStn_access_data = pd.DataFrame(data=data, columns=columns)
+        #     # return modified connectivity
+        #     gndStn_access_data = pd.DataFrame(data=data, columns=columns)
         
-        elif connectivity.upper() == ConnectivityLevels.LOS.value:
-            # line-of-sight driven connectivity; load ground station access data
-            gndStn_access_data = pd.read_csv(gs_access_file, skiprows=range(3))
+        # elif connectivity.upper() == ConnectivityLevels.LOS.value:
+        #     # line-of-sight driven connectivity; load ground station access data
+        #     gndStn_access_data = pd.read_csv(gs_access_file, skiprows=range(3))
 
-            # limit ground station access data to simulation duration
-            max_time_index = int(simulation_duration * 24 * 3600 // time_step)
-            gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
-            gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
+        #     # limit ground station access data to simulation duration
+        #     max_time_index = int(simulation_duration * 24 * 3600 // time_step)
+        #     gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
+        #     gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
         
-        elif connectivity.upper() == ConnectivityLevels.GS.value:
-            # ground station-only connectivity; load ground station access data
-            gndStn_access_data = pd.read_csv(gs_access_file, skiprows=range(3))
+        # elif connectivity.upper() == ConnectivityLevels.GS.value:
+        #     # ground station-only connectivity; load ground station access data
+        #     gndStn_access_data = pd.read_csv(gs_access_file, skiprows=range(3))
 
-            # limit ground station access data to simulation duration
-            max_time_index = int(simulation_duration * 24 * 3600 // time_step)
-            gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
-            gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
+        #     # limit ground station access data to simulation duration
+        #     max_time_index = int(simulation_duration * 24 * 3600 // time_step)
+        #     gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
+        #     gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
 
-        elif connectivity.upper() == ConnectivityLevels.ISL.value:
-            # inter-satellite link-driven connectivity; create empty dataframe
+        # elif connectivity.upper() == ConnectivityLevels.ISL.value:
+        #     # inter-satellite link-driven connectivity; create empty dataframe
+        #     columns = ['start index', 'end index']
+        #     gndStn_access_data = pd.DataFrame(data=[], columns=columns)
+
+        # elif connectivity.upper() == ConnectivityLevels.NONE.value:
+        #     # no inter-agent connectivity; create empty dataframe
+        #     columns = ['start index', 'end index']
+        #     gndStn_access_data = pd.DataFrame(data=[], columns=columns)
+
+        # else:
+        #     # fallback; unsupported connectivity level
+        #     raise ValueError(f'Unsupported connectivity level: {connectivity}.')
+        
+        # load ground station access data
+        gndStn_access_data = pd.read_csv(gs_access_file, skiprows=range(3))
+
+        # limit ground station access data to simulation duration
+        max_time_index = int(simulation_duration * 24 * 3600 // time_step)
+        gndStn_access_data = gndStn_access_data[gndStn_access_data['start index'] <= max_time_index]
+        gndStn_access_data.loc[gndStn_access_data['end index'] > max_time_index, 'end index'] = max_time_index
+
+        # if no access intervals remain after limiting to simulation duration, create empty dataframe with correct columns
+        if gndStn_access_data.empty:
+            # no ISL access during simulation duration; create empty dataframe
             columns = ['start index', 'end index']
             gndStn_access_data = pd.DataFrame(data=[], columns=columns)
 
-        elif connectivity.upper() == ConnectivityLevels.NONE.value:
-            # no inter-agent connectivity; create empty dataframe
-            columns = ['start index', 'end index']
-            gndStn_access_data = pd.DataFrame(data=[], columns=columns)
-
-        else:
-            # fallback; unsupported connectivity level
-            raise ValueError(f'Unsupported connectivity level: {connectivity}.')
-        
         # return ground station access data
         return gndStn_access_data
 
@@ -957,7 +1216,6 @@ class OrbitData:
                                      simulation_duration : float,
                                      gs_access_dfs : Dict[str, pd.DataFrame],
                                      time_step : float,
-                                     connectivity : str
                                 ) -> Dict[tuple, pd.DataFrame]:
         # initialize comms link data
         data = defaultdict(dict)
@@ -975,7 +1233,8 @@ class OrbitData:
                 key = tuple(sorted([u_name, v_name]))
                 
                 # skip if data for this pair of agents has already been loaded
-                if key in data: continue 
+                key_data = data.get(key, None)
+                if key_data is not None: continue 
 
                 # load data by agent types
                 if u_type == 'spacecraft' and v_type == 'spacecraft':
@@ -993,7 +1252,7 @@ class OrbitData:
                         raise FileNotFoundError(f'ISL access file not found for satellite pair ({u_name}, {v_name}). Expected file name: `{filename}`.')
 
                     # load ISL access data
-                    comms_data = OrbitData.__load_isl_data(isl_file, connectivity, simulation_duration, time_step)
+                    comms_data = OrbitData.__load_isl_data(isl_file, simulation_duration, time_step)
 
                 elif u_type == 'groundOperator' and v_type == 'spacecraft':
                     if u_gs_network == v_gs_network: 
@@ -1029,53 +1288,67 @@ class OrbitData:
         return data
     
     @staticmethod
-    def __load_isl_data(isl_file : str, connectivity : str, duration_days : float, time_step : float) -> pd.DataFrame:        
+    def __load_isl_data(isl_file : str, duration_days : float, time_step : float) -> pd.DataFrame:        
         """ Loads ISL access data from a file and modifies it according to the specified connectivity level. """
-        if connectivity.upper() == ConnectivityLevels.FULL.value:
-            # fully connected network; modify connectivity 
-            columns = ['start index', 'end index']
+        # if connectivity.upper() == ConnectivityLevels.FULL.value:
+        #     # fully connected network; modify connectivity 
+        #     columns = ['start index', 'end index']
             
-            # generate mission-long connectivity access
-            duration = timedelta(days=float(duration_days))
-            data = [[0.0, duration.total_seconds() // time_step + 1]]
-            assert data[0][1] > 0.0
+        #     # generate mission-long connectivity access
+        #     duration = timedelta(days=float(duration_days))
+        #     data = [[0.0, duration.total_seconds() // time_step + 1]]
+        #     assert data[0][1] > 0.0
 
-            # return modified connectivity
-            isl_data = pd.DataFrame(data=data, columns=columns)
+        #     # return modified connectivity
+        #     isl_data = pd.DataFrame(data=data, columns=columns)
 
-        elif connectivity.upper() == ConnectivityLevels.LOS.value:
-            # line-of-sight driven connectivity; load connectivity and store data
-            # TODO if ISL definition is modified in orbitpy, make sure this case is updated accordingly
-            isl_data = pd.read_csv(isl_file, skiprows=range(3))
+        # elif connectivity.upper() == ConnectivityLevels.LOS.value:
+        #     # line-of-sight driven connectivity; load connectivity and store data
+        #     # TODO if ISL definition is modified in orbitpy, make sure this case is updated accordingly
+        #     isl_data = pd.read_csv(isl_file, skiprows=range(3))
 
-            # limit ISL data to simulation duration
-            max_time_index = int(duration_days * 24 * 3600 // time_step)
-            isl_data = isl_data[isl_data['start index'] <= max_time_index]
-            isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
+        #     # limit ISL data to simulation duration
+        #     max_time_index = int(duration_days * 24 * 3600 // time_step)
+        #     isl_data = isl_data[isl_data['start index'] <= max_time_index]
+        #     isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
 
-        elif connectivity.upper() == ConnectivityLevels.ISL.value:
-            # inter-satellite link driven connectivity; load connectivity and store data
-            # TODO if ISL definition is modified in orbitpy, make sure this case is updated accordingly
-            isl_data = pd.read_csv(isl_file, skiprows=range(3))
+        # elif connectivity.upper() == ConnectivityLevels.ISL.value:
+        #     # inter-satellite link driven connectivity; load connectivity and store data
+        #     # TODO if ISL definition is modified in orbitpy, make sure this case is updated accordingly
+        #     isl_data = pd.read_csv(isl_file, skiprows=range(3))
 
-            # limit ISL data to simulation duration
-            max_time_index = int(duration_days * 24 * 3600 // time_step)
-            isl_data = isl_data[isl_data['start index'] <= max_time_index]
-            isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
+        #     # limit ISL data to simulation duration
+        #     max_time_index = int(duration_days * 24 * 3600 // time_step)
+        #     isl_data = isl_data[isl_data['start index'] <= max_time_index]
+        #     isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
 
-        elif connectivity.upper() == ConnectivityLevels.GS.value:
-            # ground station-only connectivity; create empty dataframe
-            columns = ['start index', 'end index']
-            isl_data = pd.DataFrame(data=[], columns=columns)
+        # elif connectivity.upper() == ConnectivityLevels.GS.value:
+        #     # ground station-only connectivity; create empty dataframe
+        #     columns = ['start index', 'end index']
+        #     isl_data = pd.DataFrame(data=[], columns=columns)
 
-        elif connectivity.upper() == ConnectivityLevels.NONE.value:
-            # no inter-agent connectivity; create empty dataframe
-            columns = ['start index', 'end index']
-            isl_data = pd.DataFrame(data=[], columns=columns)
-        else:
-            # fallback case for unsupported connectivity levels
-            raise ValueError(f'Unsupported connectivity level: {connectivity}')
+        # elif connectivity.upper() == ConnectivityLevels.NONE.value:
+        #     # no inter-agent connectivity; create empty dataframe
+        #     columns = ['start index', 'end index']
+        #     isl_data = pd.DataFrame(data=[], columns=columns)
+        # else:
+        #     # fallback case for unsupported connectivity levels
+        #     raise ValueError(f'Unsupported connectivity level: {connectivity}')
                 
+        # # check if ISL data is empty
+        # if isl_data.empty:
+        #     # no ISL access during simulation duration; create empty dataframe
+        #     columns = ['start index', 'end index']
+        #     isl_data = pd.DataFrame(data=[], columns=columns)
+
+        # load ISL access data
+        isl_data = pd.read_csv(isl_file, skiprows=range(3))
+
+        # limit ISL data to simulation duration
+        max_time_index = int(duration_days * 24 * 3600 // time_step)
+        isl_data = isl_data[isl_data['start index'] <= max_time_index]
+        isl_data.loc[isl_data['end index'] > max_time_index, 'end index'] = max_time_index
+
         # check if ISL data is empty
         if isl_data.empty:
             # no ISL access during simulation duration; create empty dataframe
