@@ -1056,12 +1056,12 @@ class Bid:
             if other.owner != other.winner:
                 self.t_stamps[other.winner] = max(self.t_stamps.get(other.winner, np.NINF), other.t_bid)
 
-    def reset(self, t_comp : float, other : Union['Bid', dict] = None) -> None:
+    def reset(self, t : float, other : Union['Bid', dict] = None) -> None:
         """
         Resets the values of this bid while keeping track of lates update time
         
         ### Arguments:
-            - t_comp (`float` or `int`): latest time when this bid was updated
+            - t (`float` or `int`): time when this bid is being updated
             - other (`Bid`): equivalent bid being used to update information
         """
         # if own bid, update internal bid value to 0
@@ -1073,17 +1073,17 @@ class Bid:
 
         # reset other bid information
         self.t_img = np.NINF
-        self.t_bid = np.NINF
+        self.t_bid = t
         self.main_measurement = self.NONE
 
         # update timestamp for the other bidder if given
         if other is None:
-            self.t_stamps[self.owner] = t_comp
+            self.t_stamps[self.owner] = t
         else:
             try:
-                self.t_stamps[other['owner']] = t_comp
+                self.t_stamps[other['owner']] = t
             except (KeyError, TypeError):
-                self.t_stamps[other.owner] = t_comp
+                self.t_stamps[other.owner] = t
 
     def __leave(self, other : Union['Bid', dict], t_comp : float) -> None:
         """
