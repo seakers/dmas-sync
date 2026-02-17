@@ -26,15 +26,14 @@ conda activate ./.venv
 # --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
 SCENARIOS=(1 13 25 37 49 61 73 85 97 109 121 133)
 
-SCENARIO=${SCENARIOS[$SLURM_ARRAY_TASK_ID]}
+START=${SCENARIOS[$SLURM_ARRAY_TASK_ID]}
+END=$((START + 1))
 
-echo "Running scenario $SCENARIO"
-
-python ./experiments/1_0_cbba_stress_test/study.py -s $SCENARIO
+echo "Running scenario $START"
 
 # --- Run ---
 python ./experiments/1_0_cbba_stress_test/study.py \
   -t full_factorial_trials \
-  --trial-range "${start}:${end}" \
+  --trial-range "${START}:${END}" \
   --single-thread --quiet --exceptions \
   --force-precompute --only-precompute
