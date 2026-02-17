@@ -23,7 +23,9 @@ from dmas.utils.tools import print_scenario_banner
 # Run setup helper functions
 # ------------------------------------------------------------------
 
-def create_scenario_specifications(base_path : str, trial_filename : str, scenario_id : int) -> dict:
+def create_scenario_specifications(base_path : str, trial_filename : str, scenario_id : int, reduced : bool) -> dict:
+    results_dir = f"{trial_filename}_scenario_{scenario_id}"
+    if reduced: results_dir += "_reduced"
     return {
             "connectivity": "LOS",
             "events": {
@@ -34,7 +36,7 @@ def create_scenario_specifications(base_path : str, trial_filename : str, scenar
                 "@type" : "EVENT"
             },
             "scenarioPath" : base_path,
-            "name" : f"{trial_filename}_scenario_{scenario_id}",
+            "name" : results_dir,
             "missionsPath" : os.path.join(base_path, 'resources','missions',f'missions.json')
         }
 
@@ -252,7 +254,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
     mission_specs['propagator']['stepSize'] = step_size
 
     # set scenario specifications
-    mission_specs['scenario'] = create_scenario_specifications(base_path, trial_filename, scenario_id)
+    mission_specs['scenario'] = create_scenario_specifications(base_path, trial_filename, scenario_id, reduced)
 
     # set target distribution type
     mission_specs['grid'] = create_grid_specifications(base_path, target_distribution)

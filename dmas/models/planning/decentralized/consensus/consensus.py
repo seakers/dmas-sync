@@ -2007,54 +2007,57 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # get current time 
         t_curr : float = state.get_time()
+
         # define end of planning horizon for broadcast scheduling
         t_next = max(self._preplan.t + self._preplan.horizon, t_curr)
 
         # check if precomputed agent access intervals need to be loaded
         if self._agent_access_horizon is None or t_curr not in self._agent_access_horizon:
             # if so; calculate all future access intervals within the planning horizon and store for future use                        
-            
-            # set current access horizon to planning horizon
-            self._agent_access_horizon = Interval(t_curr, t_next)
-            
+                        
             # initialzie list of access intervals for this horizon
             self._agent_access_intervals = []
             
             # check if any communication links are available at all
             if not orbitdata.comms_targets:
                 # no communication links available, broadcast task requests into the void
-                self._agent_access_intervals.append((Interval(t_curr, t_next), None))
+                self._agent_access_intervals.append((Interval(t_curr, t_next), []))
             
             else:
                 # get next access intervals with each communication target within the planning horizon
                 access_data : List[Tuple[Interval, str]] \
                     = orbitdata.get_next_agent_accesses(t_curr, t_next, include_current=True)
 
-                # store access intervals for future use
-                self._agent_access_intervals.extend(access_data)     
-        else:
-            # check if precomputed access intervals are still valid for current time; if not, filter for future intervals only
-            earliest_interval,_ = self._agent_access_intervals[0] if self._agent_access_intervals else (None, None)
+                # group access data by interval and targets
+                access_intervals_dict : Dict[Interval, List[str]] = defaultdict(list)
+                for interval, target in access_data:
+                    access_intervals_dict[interval].append(target)
 
-            if earliest_interval is not None and earliest_interval.right < t_curr:
-                # access intervals already computed for this horizon; filter for future intervals only
-                self._agent_access_intervals = [(interval, target)
-                                                for interval, target in self._agent_access_intervals
-                                                if not interval.is_before(t_curr)]
+                # convert to tuple list 
+                access_intervals = [(interval, targets) for interval, targets in access_intervals_dict.items()]
+            
+                # store access intervals for future use
+                self._agent_access_intervals.extend(access_intervals)     
+            
+            # update agent access horizon to current planning horizon
+            self._agent_access_horizon = Interval(t_curr, t_next)
                                     
         # initiate set of broadcast times to be scheduled (avoids duplicates)
         t_broadcasts = set()
         agents_considered = set()
         
+        # initiate list of outdated access intervals 
+        outdated_access_intervals = []
+
         # extract earliest broadcast time for each target from agent access intervals 
-        for access_interval,target in self._agent_access_intervals:
-            # skip if target agent has already been considered
-            if target in agents_considered:
-                continue
+        for access_interval,targets in self._agent_access_intervals:
+            # skip if access interval is in the past
             if access_interval.right < t_curr:
+                outdated_access_intervals.append((access_interval,targets))
                 continue
-            if len(agents_considered) >= len(orbitdata.comms_targets):
-                break
+            # skip if target agent has already been considered
+            if all(target in agents_considered for target in targets):
+                continue
 
             # get last access interval and calculate broadcast time
             t_broadcast : float = max(access_interval.left, t_curr)
@@ -2063,7 +2066,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             t_broadcasts.add(t_broadcast)
 
             # mark target agent as considered
-            if target is not None: agents_considered.add(target)
+            # if target is not None: agents_considered.add(target)
+            agents_considered.update(targets)
 
             # check if all targets have been considered 
             if (len(agents_considered) == len(orbitdata.comms_targets)
@@ -2071,6 +2075,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # if so, break to avoid unnecessary iterations
                 break
         
+        # remove outdated access intervals from stored access intervals
+        for outdated_interval in outdated_access_intervals:
+            self._agent_access_intervals.remove(outdated_interval)
+
         # return sorted list of broadcast times
         return sorted(t_broadcasts)
 
