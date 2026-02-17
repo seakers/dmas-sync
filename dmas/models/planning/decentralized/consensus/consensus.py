@@ -435,10 +435,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
             if task in self._results: continue # already processed; skip
 
             # initialize results for new event tasks
-            self._results[task] = []
+            self._results[task].append(Bid(task, state.agent_name, t_bid=state.get_time()))
 
             # initialize optimistic bidding counter for new task
-            self._optimistic_bidding_counters[task] = []
+            self._optimistic_bidding_counters[task] = [self._optimistic_bidding_threshold]
 
             # add task to known tasks
             self._id_to_tasks[task.id] = task
