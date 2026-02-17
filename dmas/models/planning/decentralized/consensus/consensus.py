@@ -358,16 +358,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # process each default task
         for task in unknown_tasks:
             # initialize results for new default tasks
-            self._results[task] = []
+            self._results[task].append(Bid.make_empty_bid(task, state.agent_name, 0))
 
             # initialize optimistic bidding counter for new task
-            self._optimistic_bidding_counters[task] = []
+            self._optimistic_bidding_counters[task].append(self._optimistic_bidding_threshold)
 
             # add task to known tasks
             self._id_to_tasks[task.id] = task
 
             # create empty bid for new task and add to list of changes
-            new_task_added.append(Bid(task, state.agent_name, t_bid=state.get_time()))
+            new_task_added.append(self._results[task][-1].to_dict())
 
         # return list of new task bids added to results
         return new_task_added    
@@ -436,10 +436,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
             if task in self._results: continue # already processed; skip
 
             # initialize results for new event tasks
-            self._results[task].append(Bid(task, state.agent_name, t_bid=state.get_time()))
+            self._results[task].append(Bid.make_empty_bid(task, state.agent_name, 0))
 
             # initialize optimistic bidding counter for new task
-            self._optimistic_bidding_counters[task] = [self._optimistic_bidding_threshold]
+            self._optimistic_bidding_counters[task].append(self._optimistic_bidding_threshold)
 
             # add task to known tasks
             self._id_to_tasks[task.id] = task
@@ -776,7 +776,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         #             x=1 # debug breakpoint    
         
         # if results_updates and self._debug:
-        #     self._log_results('CONSENSUS PHASE - RESULTS (AFTER COMPARISON)', state, self.results)
+        #     self._log_results('CONSENSUS PHASE - RESULTS (AFTER COMPARISON)', state, self._results)
         #     x = 1 # debug breakpoint
         # -------------------------------
 
@@ -1233,8 +1233,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
                 # define constraints
                 constraints : List[bool] = [
-                    # Constraint 0: Previous bid must be assigned to a winner
-                    prev_bid.has_winner(),
+                    # Constraint 0: Previous bid must be assigned to a winner if the bid has a winner
+                    not bid.has_winner() or (prev_bid.has_winner() and bid.has_winner()),
                     # Constraint 1: Observation number must be consecutive
                     prev_bid.n_obs + 1 == bid.n_obs,
                     # Constraint 2: Imaging time must be after previous imaging time
@@ -1253,15 +1253,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
             if invalid_bid_idx is None: continue # no violations for this task; continue to next task
 
             # reset invalid bid along with all subsequent bids
-            while len(bids) > invalid_bid_idx:
-                # get bid to reset and remove from results
-                bid_to_reset : Bid = bids.pop(invalid_bid_idx)
+            # while len(bids) > invalid_bid_idx:
+            for bid_idx in range(invalid_bid_idx, len(bids)):
+                # get bid to reset 
+                bid_to_reset : Bid = bids[bid_idx]
 
                 # reset bid
-                reset_bid = bid_to_reset.reset(t_curr)
+                bid_to_reset.reset(t_curr)
 
                 # add to violations list
-                bids_in_violation.append(reset_bid)                
+                bids_in_violation.append(bid_to_reset.to_dict())                
 
         # return list of bids in violation
         return bids_in_violation   
@@ -1384,6 +1385,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # update results with initial periodic plan bundle
             self.__update_results_from_bundle(state, new_bids)
 
+             # -------------------------------
+            # DEBUG PRINTOUTS
+            if self._debug and new_bids:
+            # if new_bids:
+                self._log_results('PLANNING PHASE - RESULTS (AFTER LOADING PREPLAN)', state, self._results)
+                self._log_bundle('PLANNING PHASE - BUNDLE (AFTER LOADING PREPLAN)', state, self._bundle)
+                print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
+                x = 1 # breakpoint
+            # -------------------------------
+
         # update bundle and path according to replanning model
         self._bundle, self._path, new_bids = \
             self._bundle_building_phase(state, specs, current_plan, tasks, 
@@ -1499,8 +1510,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     n_existing_bids = len(self._results[task])                    
                     
                     # append missing bids as empty bids with no winner
-                    for i in range(n_existing_bids, n_obs):
-                        empty_bid = Bid(task, state.agent_name, i)
+                    for i_obs in range(n_existing_bids, n_obs):
+                        empty_bid = Bid.make_empty_bid(task, state.agent_name, i_obs)
                         self._results[task].append(empty_bid)
                         self._optimistic_bidding_counters[task].append(self._optimistic_bidding_threshold)
 
@@ -1532,11 +1543,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # update results
             self._results[task][n_obs] = bid_to_reset
 
-        # remove any trailing bids without a winner
-        for task, bids in self._results.items():
-            while bids and not bids[-1].has_winner():
-                bids.pop(-1)
-                self._optimistic_bidding_counters[task].pop(-1)
+        # # remove any trailing bids without a winner
+        # for task, bids in self._results.items():
+        #     while bids and not bids[-1].has_winner():
+        #         bids.pop(-1)
+        #         self._optimistic_bidding_counters[task].pop(-1)
                 
         # ==========================================================
         #  ENSURE RESULTS CONSISTENCY
@@ -1889,6 +1900,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
             if isinstance(task, EventObservationTask)   # only consider bids for event-driven tasks
             if not bids                                 # no bids to share
         ]
+
+        assert not empty_tasks, \
+            "Tasks without bids should not be shared; these should be filtered out during bundle-building phase and not included in results."
         
         # schedule broadcasts at future access opportunities
         t_broadcasts = self.__get_broadcast_times(state, orbitdata)

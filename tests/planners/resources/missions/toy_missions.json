@@ -1048,7 +1048,7 @@
             ]
         },
         {
-            "name": "toy_mission_27_2",
+            "name": "toy_mission_28",
             "objectives" : [                
                 {
                     "objective_type" : "event_driven",
@@ -1073,8 +1073,15 @@
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
                             "strategy" : "discrete_intervals",
-                            "thresholds": [0, 10],
-                            "scores": [0.5, 1.0]
+                            "thresholds": [0, 0.1, 1000, 1100],
+                            "scores": [0.5, 0.0, 0.0, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 1],
+                            "scores": [1, 0.1]
                         }
                     ]
                 }

@@ -238,7 +238,7 @@ class SimulationAgent(object):
         # -------------------------------------
 
         # update known tasks and requests from incoming tasks requests
-        new_reqs, new_tasks = self.__update_requests_and_tasks(incoming_reqs)
+        new_reqs,new_tasks = self.__update_requests_and_tasks(incoming_reqs)
 
         # update plan completion
         self.__update_plan_completion(completed_actions, 
