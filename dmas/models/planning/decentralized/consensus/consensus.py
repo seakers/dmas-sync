@@ -985,9 +985,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # check every task for constraint violations
         for bids in self._results.values():            
-            # assume the index of every bid matches their observation number
-            assert all(bid.n_obs == i_obs for i_obs, bid in enumerate(bids)), \
-                "Results bids are not sorted by observation number."
+            # ensure the index of every bid matches their observation number
+            for i in range(len(bids)):
+                if bids[i].n_obs != i:
+                    raise AssertionError("Results bids are not sorted by observation number.")
             
             if len(bids) <= 1: continue # no observation sequence to check for constraints
             
@@ -999,23 +1000,20 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # get previous bid to compare constraints with
                 prev_bid : Bid = bids[n_obs_idx - 1]
 
-                # define constraints
-                constraints : List[bool] = [
-                    # Constraint 0: Previous bid must be assigned to a winner if the bid has a winner
-                    not bid.has_winner() or (prev_bid.has_winner() and bid.has_winner()),
-                    # Constraint 1: Observation number must be consecutive
-                    prev_bid.n_obs + 1 == bid.n_obs,
-                    # Constraint 2: Imaging time must be after previous imaging time
-                    prev_bid.t_img <= bid.t_img
-                ]
-                    
-                # check if any constraint is violated
-                if not all(constraints):
-                    # mark this bid as invalid
+                # Constraint 0: Previous bid must be assigned to a winner if the bid has a winner
+                if bid.has_winner() and not prev_bid.has_winner():
                     invalid_bid_idx = n_obs_idx
+                    break # stop searching for constraint violations for this task
 
-                    # stop searching for constraint violations for this task
-                    break                
+                # Constraint 1: Observation number must be consecutive
+                if prev_bid.n_obs + 1 != bid.n_obs:
+                    invalid_bid_idx = n_obs_idx
+                    break # stop searching for constraint violations for this task
+
+                # Constraint 2: Imaging time must be after previous imaging time
+                if prev_bid.t_img > bid.t_img:
+                    invalid_bid_idx = n_obs_idx
+                    break # stop searching for constraint violations for this task         
             
             # check if invalid bid was found
             if invalid_bid_idx is None: continue # no violations for this task; continue to next task
@@ -1656,7 +1654,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         ]
         
         # schedule broadcasts at future access opportunities
-        t_broadcasts = self.__get_broadcast_times(state, orbitdata, new_bids)
+        t_broadcasts = self.__schedule_broadcast_times(state, orbitdata, new_bids)
 
         # crreate broadcast actions for each broadcast time
         for t_broadcast in t_broadcasts:
@@ -1678,7 +1676,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return scheduled broadcasts
         return sorted(broadcasts, key=lambda action: action.t_start) 
 
-    def __get_broadcast_times(self, state : SimulationAgentState, orbitdata : OrbitData, new_bids : dict) -> List[float]:
+    def __schedule_broadcast_times(self, state : SimulationAgentState, orbitdata : OrbitData, new_bids : dict) -> List[float]:
+        """ Schedule broadcast times for sharing bids in results with other agents."""
         
         # check if any shareble bids to share exist
         if all([not isinstance(task, EventObservationTask) for task in self._results]):
@@ -1760,38 +1759,46 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return sorted list of broadcast times
         return sorted(t_broadcasts)
 
-    def __compute_broadcast_times(self, state : SimulationAgentState, orbitdata : OrbitData, t_curr : float, t_next : float) -> List[float]:
-        # initialzie list of access intervals for this horizon
-        agent_access_intervals = []
+    def __compute_broadcast_times(self, 
+                                  state : SimulationAgentState, 
+                                  orbitdata : OrbitData, 
+                                  t_curr : float, 
+                                  t_next : float) -> List[float]:
+        # create agent access horizon based on current planning horizon
+        agent_access_horizon = Interval(t_curr, t_next)
         
         # check if any communication links are available at all
         if not orbitdata.comms_targets:
-            # no communication links available, broadcast task requests into the void
-            agent_access_intervals.append((Interval(t_curr, t_next), []))
+            # no communication links available; broadcast task requests into the void
+            return agent_access_horizon, [(Interval(t_curr, t_next), [])]
         
-        else:
-            # get next access intervals with each communication target within the planning horizon
-            access_data : List[Tuple[Interval, str]] \
-                = orbitdata.get_next_agent_accesses(t_curr, t_next, include_current=True)
+        # get next access intervals with each communication target within the planning horizon
+        access_data : List[Tuple[Interval, str]] \
+            = orbitdata.get_next_agent_accesses(t_curr, t_next, include_current=True)
 
-            # group access data by interval and targets
-            access_intervals_dict : Dict[Interval, Set[str]] = defaultdict(set)
-            for interval, target in access_data:
-                access_intervals_dict[interval].add(target)
+        # group access data by interval and targets
+        access_intervals_dict : Dict[tuple, Set[str]] = defaultdict(set)
+        key_to_interval = dict()
+        for interval, target in access_data:
+            # create simplified key for hashing
+            key = (interval.left, interval.right)
+            # check if this interval has already been seen
+            known_interval = key_to_interval.get(key, None)
+            if known_interval is None:
+                # new interval; add to dictionary
+                key_to_interval[key] = interval
+            # add target to set of targets for this interval
+            access_intervals_dict[key].add(target)
 
-            # remove self from targets
-            for targets in access_intervals_dict.values():
-                targets.discard(state.agent_name)
+        # remove self from targets
+        for targets in access_intervals_dict.values():
+            targets.discard(state.agent_name)
 
-            # convert to tuple list 
-            access_intervals = [(interval, targets) for interval, targets in access_intervals_dict.items()]
-        
-            # store access intervals for future use
-            agent_access_intervals.extend(access_intervals)     
-        
-        # update agent access horizon to current planning horizon
-        agent_access_horizon = Interval(t_curr, t_next)
-
+        # convert to list of tuples of (interval, targets)
+        agent_access_intervals = [(key_to_interval[key], targets) 
+                                  for key, targets in access_intervals_dict.items()]        
+    
+        # return agent access horizon and intervals
         return agent_access_horizon, agent_access_intervals
     
     def __is_participating_in_consensus(self, new_bids : dict) -> bool:
