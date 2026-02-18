@@ -120,11 +120,10 @@ class OrbitData:
             time_step = schema['time_specs']['time step']
             epoch_type = schema['time_specs']['epoch type']
             epoch = schema['time_specs']['epoch']
-            duration = schema['time_specs']['duration']
 
-            if abs(simulation_duration - duration) > 1e-6:
-                raise NotImplementedError(f"Simulation duration {simulation_duration} does not match preprocessed data duration {duration}. Currently requires an exact match.")
-                duration = min(schema['time_specs']['duration'], simulation_duration)
+            assert schema['time_specs']['duration'] > simulation_duration or abs(schema['time_specs']['duration'] - simulation_duration) < 1e-6, \
+                f"Preprocessed data duration ({schema['time_specs']['duration']} [days]) is less than the desired simulation duration ({simulation_duration} [days])."
+            duration = min(schema['time_specs']['duration'], simulation_duration)
 
             # load eclipse data from binary
             eclipse_data = IntervalTable.from_schema(schema['eclipse'], mmap_mode='r')
