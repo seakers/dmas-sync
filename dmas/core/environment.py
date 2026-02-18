@@ -87,16 +87,12 @@ class SimulationEnvironment(object):
         self._agent_state_update_times = {}
 
         # initialize data sinks for historical data
-        # self._task_reqs : list[dict] = list()
         self._task_reqs = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="requests")       
         self._observation_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="measurements")
         self._broadcasts_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="broadcasts")
 
         # initialize agent connectivity
         self._connectivity_level : str = connectivity_level.upper()
-        self.__interval_connectivities \
-            : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
-                = None
 
         self._current_connectivity_interval, \
             self._current_connectivity_components, \
@@ -117,15 +113,8 @@ class SimulationEnvironment(object):
         # update current time
         self._t_curr = t
 
-        # # check if connectivity needs to be calculated
-        # if self.__interval_connectivities is None:
-        #     # calculate agent connectivity
-        #     self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
-        #         = SimulationEnvironment.__precompute_connectivity(self._orbitdata, self._printouts)
-
         # check if connectivity needs to be update
-        if (self.__interval_connectivities is None 
-            or t not in self._current_connectivity_interval):
+        if t not in self._current_connectivity_interval:
             # update current connectivity matrix and components
             self._current_connectivity_interval, \
                 self._current_connectivity_components, \
@@ -521,20 +510,30 @@ class SimulationEnvironment(object):
             f.write(f"- Connectivity Level: **{self._connectivity_level}**\n\n")
             f.write(f"- Connectivity Relays Enabled: **{self._connectivity_relays}**\n\n")
 
-            for interval, components, component_map in self.__interval_connectivities:
+            # get orbitdata for any agent 
+            #   (all agents share the same comms links and connectivity interval data)
+            agent_orbitdata : OrbitData = next(iter(self._orbitdata.values()))
+
+            # initialize temp connectivity data container
+            connectivity_data : List[Tuple[Interval, Set[frozenset], Dict[str, Set[str]]]] = []
+
+            # iterate through list of intervals within the simulation data
+            for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=0, t_max=self._t_curr, include_current=True):
+                interval, components, component_map \
+                    = self.__interpret_agent_connectivity_data(agent_orbitdata, t_start, t_end, *component_indices)
+                
                 f.write('---\n')
                 f.write(f"**Interval:** {interval} [s]\n\n")
-                
-                # conn_matrix = conn_matrix_sparse.toarray()
-                agent_names = list(component_map.keys())
-                agent_to_idx = {agent: idx for idx, agent in enumerate(agent_names)}
 
-                # print connectivity matrix
-                f.write("**Connectivity Matrix:**\n\n")
-                ## print table header 
-                header = "||" + "  |".join([f"`{name:>5}`" for name in agent_names]) + "|\n"
-                f.write(header)
-                f.write("|-|" + "-|"*len(agent_names) + "\n")
+                # conn_matrix = conn_matrix_sparse.toarray()
+                # agent_names = list(component_map.keys())
+
+                # TODO print connectivity matrix
+                # f.write("**Connectivity Matrix:**\n\n")
+                # ## print table header 
+                # header = "||" + "  |".join([f"`{name:>5}`" for name in agent_names]) + "|\n"
+                # f.write(header)
+                # f.write("|-|" + "-|"*len(agent_names) + "\n")
                 
                 # ## print matrix rows
                 # for sender in agent_names:
@@ -551,9 +550,11 @@ class SimulationEnvironment(object):
                     f.write(f" - Component {component_idx}: [`" + "`, `".join(comp) + "`]\n\n")
                 f.write("\n\n")
 
+                connectivity_data.append((interval, components, component_map))
+
         # compile table of connectivity intervals and components for later analysis
         data : List[dict]= []
-        for interval_idx,(interval, components, component_map) in enumerate(self.__interval_connectivities):
+        for interval_idx,(interval, components, component_map) in enumerate(connectivity_data):
             for component_idx,component_members in enumerate(components):
                 members = sorted(list(component_members))
                 data.append({
@@ -569,218 +570,87 @@ class SimulationEnvironment(object):
         # save to results folder
         connectivity_history_df.to_parquet(os.path.join(self._results_path, 'connectivity_history.parquet'), index=False)
 
-    @staticmethod
-    def __display_connectivity_matrix(conn_matrix : Dict[str, Dict[str, int]]) -> None:
-        """ Prints connectivity matrix to console """
-        agent_names = list(conn_matrix.keys())
-        header = "\t\t" + "  ".join([f"{name:>5}" for name in agent_names])
-        print(header)
-        for sender in agent_names:
-            row = f"{sender:>5}\t"
-            if len(sender) < 8:
-                row += "\t"
-            for receiver in agent_names:
-                row += f"{conn_matrix[sender][receiver]:>3}\t"
-            print(row)
+    # DEPRECATED
+    # @staticmethod
+    # def __display_connectivity_matrix(conn_matrix : Dict[str, Dict[str, int]]) -> None:
+    #     """ Prints connectivity matrix to console """
+    #     agent_names = list(conn_matrix.keys())
+    #     header = "\t\t" + "  ".join([f"{name:>5}" for name in agent_names])
+    #     print(header)
+    #     for sender in agent_names:
+    #         row = f"{sender:>5}\t"
+    #         if len(sender) < 8:
+    #             row += "\t"
+    #         for receiver in agent_names:
+    #             row += f"{conn_matrix[sender][receiver]:>3}\t"
+    #         print(row)
 
-    @staticmethod
-    def __display_connected_components(components : List[Set[str]]) -> None:
-        """ Prints connected components to console """
-        print("Connected Components:")
-        for i,comp in enumerate(sorted(components)):
-            print(f" - Component {i}: " + ", ".join(comp))
+    # DEPRECATED
+    # @staticmethod
+    # def __display_connected_components(components : List[Set[str]]) -> None:
+    #     """ Prints connected components to console """
+    #     print("Connected Components:")
+    #     for i,comp in enumerate(sorted(components)):
+    #         print(f" - Component {i}: " + ", ".join(comp))
 
     """
     ---------------------------
     UTILITY METHODS
     ---------------------------
-    """
-    @staticmethod
-    def __precompute_connectivity(orbitdata : Dict[str, OrbitData], printouts : bool) -> List[tuple]:
-        """ 
-        Precomputes initial connectivity matrix for all agents 
-        
-        ### Returns 
-            - interval_connectivities (`List[tuple]`): list of tuples of the form (interval, connectivity_matrix, components_list)
-        """
-
-        # get orbit data for any agent to use for interval connectivity computations; we assume that all agents have access to the same time intervals for connectivity changes, so we can use any agent's orbit data to extract these intervals
-        if not orbitdata: raise ValueError("No orbit data provided for any agents; cannot compute connectivity.")
-        agent_orbitdata : OrbitData = next(iter(orbitdata.values()))
-
-        # get agent names and mapping to indices for matrix construction
-        idx_to_agent = list(agent_orbitdata.comms_links._meta['columns'].keys())        
-    
-        # iterate through connectivity intervals and extract components
-        interval_connectivities = []
-        for t_start,t_end,*agent_components in tqdm(agent_orbitdata.comms_links, 
-                                                    desc='Precomputing agent connectivity intervals', 
-                                                    unit=' intervals', 
-                                                    leave=False,
-                                                    disable=not printouts
-                                                ):
-            # create interval object
-            interval = Interval(t_start, t_end, right_open=True)
-            
-            # get component membership for each agent and convert to component list
-            interval_components = defaultdict(set)
-            for agent_idx,component_idx in enumerate(agent_components):
-                agent_name = idx_to_agent[agent_idx]
-                interval_components[component_idx].add(agent_name)
-            interval_components = set(frozenset(members) for members in interval_components.values())
-
-            # convert components to dict for easier lookup
-            interval_component_map : Dict[str, List[str]] \
-                = { sender : [] for sender in idx_to_agent }
-
-            for component in interval_components:
-                for sender in component:
-                    for receiver in component:
-                        if sender != receiver:
-                            interval_component_map[sender].append(receiver)
-
-            interval_connectivities.append( (interval, interval_components, interval_component_map) )
-
-        # merge consecutive intervals with the same connectivity components to save memory and speed up connectivity lookups
-        merged_intervals : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] = []
-        for interval, interval_components, component_map in tqdm(interval_connectivities, 
-                                                        desc='Merging agent connectivity intervals', 
-                                                        unit=' intervals', 
-                                                        leave=False,
-                                                        disable=not printouts
-                                                    ):
-            if not merged_intervals:
-                merged_intervals.append( (interval, interval_components, component_map) )
-                continue
-
-            # get previous interval data
-            prev_interval, prev_components, prev_component_map = merged_intervals[-1]
-            
-            # compare components to determine if connectivity changed; if not, merge intervals
-            if interval_components == prev_components and prev_interval.overlaps(interval):
-                # merge intervals by updating end time of previous interval to end time of current interval
-                merged_interval = prev_interval.union(interval)
-                merged_intervals[-1] = (merged_interval, prev_components, prev_component_map)
-
-            else:
-                # connectivity changed; add current interval as new entry
-                merged_intervals.append( (interval, interval_components, component_map) )
-        
-        return merged_intervals
-    
-    @staticmethod
-    # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
-    def __get_connected_components(adj: List[List[int]], agent_to_idx : Dict[str, int], idx_to_agent : List[str]) -> List[List[str]]:
-        """
-        adj: dict[node] -> dict[neighbor] -> weight/int (nonzero means edge exists)
-        Assumes undirected (symmetric) or at least that reachability should be treated undirected.
-        Returns: list of components (each is list of node names)
-        """
-        # initialize BFS variables
-        visited = set()
-        comps = set()
-
-        # BFS to find components
-        for start in range(len(adj)):
-            # skip visited nodes
-            if start in visited: continue
-
-            # initialize queue with starting node as root
-            q = deque([start])
-
-            # mark root as visited 
-            visited.add(start)
-
-            # explore subgraph components starting from root
-            comp = set()
-            while q:
-                # pop next node
-                u = q.popleft()
-
-                # add to component list
-                comp.add(idx_to_agent[u])
-
-                # iterate neighbors; keep only truthy edges
-                for v, connected in enumerate(adj[u]):
-                    # check if connected to neighbor
-                    if not connected: continue
-                    
-                    # check neighbor has been visited
-                    if v not in visited:                        
-                        visited.add(v)
-                        q.append(v)
-
-            # add component to component list
-            comps.add(frozenset(comp))
-
-        # return list of components
-        return comps
+    """    
     
     def __get_agent_connectivity(self, t : float) -> tuple:
         """ Searches and returns the current connectivity matrix and components for agents at time `t` """
         
-        agent_orbitdata = next(iter(self._orbitdata.values()))
+        # get orbitdata for any agent 
+        #   (all agents share the same comms links and connectivity interval data)
+        agent_orbitdata : OrbitData = next(iter(self._orbitdata.values()))
 
         # iterate through list of intervals in this time period 
-        for t_start,t_end, *component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=t, 
-                                                                                           include_current=True):
-            # skip if time t is not in this interval
+        for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=t, include_current=True):
+            # skip if time `t` is not in this interval
             if not (t_start <= t < t_end):
                 continue
-
-            # initialize component membership dict for this interval
-            component_membership : Dict[int, Set[str]] = defaultdict(set)
-
-            # group agents by component membership for this interval
-            for agent_idx, component_idx in enumerate(component_indices):
-                agent_name = agent_orbitdata.comms_target_columns[agent_idx]
-                # add agent to component membership dict
-                component_membership[component_idx].add(agent_name)
-
-            # convert component membership dict to list of components (as sets)
-            components = set(frozenset(members) for members in component_membership.values())
-
-            # create component map for this interval
-            component_map : Dict[str, List[str]] \
-                = { sender : [] for sender in agent_orbitdata.comms_target_columns }
             
-            # populate component map with agents in each component
-            for component_idx, members in component_membership.items():
-                for member in members:
-                    # add all other members of the same component to its connectivity list
-                    component_map[member] = set(members)
-                    
-                    # remove self from list of connected agents
-                    component_map[member].remove(member) 
-
-            # create connectivity interval
-            interval = Interval(t_start, t_end, right_open=True)
-
             # return connectivity data for this interval
-            return interval, components, component_map
+            return self.__interpret_agent_connectivity_data(agent_orbitdata, t_start, t_end, *component_indices)
 
         raise ValueError(f"Time {t}[s] not found in any precomputed connectivity interval.")
+    
+    def __interpret_agent_connectivity_data(self, 
+                                            agent_orbitdata : OrbitData, 
+                                            t_start : float, 
+                                            t_end : float, 
+                                            *component_indices
+                                        ) -> Tuple[Interval, Set[frozenset], Dict[str, Set[str]]]:
+        """ Interprets raw connectivity interval data into a list of components and a connectivity map for the agents in the scenario for the given interval """
+        # create connectivity interval
+        interval = Interval(t_start, t_end, right_open=True)
 
-        # # use binary search to find the correct interval
-        # low = 0
-        # high = len(self.__interval_connectivities) - 1
+        # initialize component membership dict for this interval
+        component_membership : Dict[int, Set[str]] = defaultdict(set)
+
+        # group agents by component membership for this interval
+        for agent_idx, component_idx in enumerate(component_indices):
+            agent_name = agent_orbitdata.comms_target_columns[agent_idx]
+            # add agent to component membership dict
+            component_membership[component_idx].add(agent_name)
+
+        # convert component membership dict to list of components (as sets)
+        components = set(frozenset(members) for members in component_membership.values())
+
+        # create component map for this interval
+        component_map : Dict[str, List[str]] \
+            = { sender : [] for sender in agent_orbitdata.comms_target_columns }
         
-        # while low <= high:
-        #     # find mid index
-        #     mid = (low + high) // 2
+        # populate component map with agents in each component
+        for component_idx, members in component_membership.items():
+            for member in members:
+                # add all other members of the same component to its connectivity list
+                component_map[member] = set(members)
+                
+                # remove self from list of connected agents
+                component_map[member].remove(member) 
 
-        #     # unpack interval data
-        #     interval, components, components_map \
-        #         = self.__interval_connectivities[mid]
-
-        #     # return if time t is in the interval
-        #     if t in interval: return interval, components, components_map
-            
-        #     # if not, adjust search bounds
-        #     if t < interval.left:
-        #         high = mid - 1
-        #     else:
-        #         low = mid + 1
-
-        # # time t not found in any interval
-        # raise ValueError(f'Time {t}[s] not found in any precomputed connectivity interval.')
+        # return connectivity data for this interval
+        return interval, components, component_map
