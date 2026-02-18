@@ -393,6 +393,11 @@ class ResultsProcessor:
             else:
                 planned_rewards_df = pd.concat([planned_rewards_df, rewards_temp], axis=0)
 
+        # handle case where no rewards data was printed
+        if planned_rewards_df is None:
+            # generate empty dataframe with appropriate columns
+            planned_rewards_df = pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent_name', 'planned reward', 'performed reward', 'agent'])
+
         # compile executed agent cost data
         execution_costs_df = None
         alpha = 1e-6

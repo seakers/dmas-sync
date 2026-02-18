@@ -143,17 +143,6 @@ class Simulation:
                 for agent in self._agents
             }
 
-            # # TODO DEBUG memory profiling checkpoints --------------
-            # T_mem_checks = [
-            #     0.0,        # memory check at the start of the simulation
-            #     686.3123128772789,     # memory check after environment 1 announcement
-            #     1276.0877482762173,    # memory check after environment 2 announcement
-            #     1478.7129913353597,    # memory check after environment 3 announcement
-            #     1500.0/2.0  # memory check at half of the simulation duration
-            # ]
-            # tf = 15_000.0
-            # # --------------------------------------------------
-
             # execute simulation loop
             with tqdm(total=tf, 
                       desc=f'{self._name}: Simulating', 
@@ -167,60 +156,6 @@ class Simulation:
                 
                 # event-driven simulation loop
                 while t < tf:
-                    
-                    # # TODO DEBUG memory profiling checkpoint eval-------
-                    # mem_checkpoint = any(abs(t - t_check) < 1e-3 for t_check in T_mem_checks)
-                    # broadcast_checkpoint = any(isinstance(action, BroadcastMessageAction) 
-                    #                            for _,action in state_action_pairs.values())
-
-                    # if mem_checkpoint or broadcast_checkpoint:
-                    #     # capture memory profiling results            
-                    #     current, peak = tracemalloc.get_traced_memory()
-                        
-                    #     # get performance snaptshot
-                    #     snapshot = tracemalloc.take_snapshot()
-
-                    #     # perform garbage collection and print memory usage
-                    #     tqdm.write(f"\n\n{'='*13} MEMORY CHECKPOINT at t={t:.1f}s {'='*12}\n")               
-                    #     tqdm.write(f"- Current memory usage is {current / 10**6:.2f} MB; Peak was {peak / 10**6:.2f}MB")
-                    #     tqdm.write(" - Traceback Limit : " + str(tracemalloc.get_traceback_limit()) + " Frames")
-                    #     tqdm.write(" - Traced Memory (Current, Peak): " + str(tracemalloc.get_traced_memory()))
-                    #     tqdm.write(" - Memory Usage by tracemalloc Module : " + str(tracemalloc.get_tracemalloc_memory()) + " bytes")
-                    #     tqdm.write(" - Tracing Status : " + str(tracemalloc.is_tracing()))
-
-                    #     tqdm.write("\n================= MEMORY SNAPSHOT ====================\n")
-                    #     stats = snapshot.statistics("lineno")
-                    #     n_lines_min = 8
-                    #     n_lines = min(n_lines_min, len(stats))
-                    #     for i_stat,stat in enumerate(stats[:n_lines], 1):  # print top 10 lines responsible for memory allocation
-                    #         formatted = stat.traceback.format()
-                    #         if len(formatted) == 2:
-                    #             file_info,line_info = formatted
-                    #         else:
-                    #             continue # skip unexpected traceback formats
-
-                    #         _,_,_,file_path,_,line_num = file_info.split(" ") if " " in file_info else ("Unknown", "Unknown", "Unknown")
-                    #         line_info = line_info.strip()
-
-                    #         # scale size to appropriate units
-                    #         size = stat.size                            
-                    #         if size >= 10**9:
-                    #             size_str = f"{size / 10**9:.2f} GB"
-                    #         elif size >= 10**6:
-                    #             size_str = f"{size / 10**6:.2f} MB"
-                    #         elif size >= 10**3:
-                    #             size_str = f"{size / 10**3:.2f} kB"
-                    #         else:
-                    #             size_str = f"{size} bytes"
-
-                    #         # print memory allocation info for this line
-                    #         tqdm.write(f"{i_stat} : {file_path}:{line_num}")
-                    #         tqdm.write(f" - Size: {size_str}")
-                    #         tqdm.write(f" - Count: {stat.count}")
-                    #         tqdm.write(f" - Traceback: `{line_info}`\n")
-
-                    #     x = 1 # breakpoint
-                    # # --------------------------------------------------
 
                     # update simulation states
                     agent_observations : Dict[str, Tuple[SimulationAgentState, AgentAction, str, List, List]] \

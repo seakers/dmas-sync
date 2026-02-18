@@ -1010,8 +1010,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     invalid_bid_idx = n_obs_idx
                     break # stop searching for constraint violations for this task
 
-                # Constraint 2: Imaging time must be after previous imaging time
-                if prev_bid.t_img > bid.t_img:
+                # Constraint 2: If assigned, imaging time must be after previous imaging time
+                if prev_bid.t_img > bid.t_img and bid.has_winner():
                     invalid_bid_idx = n_obs_idx
                     break # stop searching for constraint violations for this task         
             
@@ -1019,7 +1019,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
             if invalid_bid_idx is None: continue # no violations for this task; continue to next task
 
             # reset invalid bid along with all subsequent bids
-            # while len(bids) > invalid_bid_idx:
             for bid_idx in range(invalid_bid_idx, len(bids)):
                 # get bid to reset 
                 bid_to_reset : Bid = bids[bid_idx]
