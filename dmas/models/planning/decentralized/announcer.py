@@ -147,25 +147,16 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                                                     disable=(len(task_requests) < 10) or not self._printouts
                                                 ):
             
-            # schedule broadcasts to all available agents
-            access_intervals : List[Tuple[Interval, str]] = orbitdata.get_next_agent_accesses(task_req.t_req, 
-                                                                                              t_max=event.availability.right, 
-                                                                                              include_current=True)
-
-            # create broadcast actions for each access interval
-            for next_access,_ in access_intervals:
-                # if no access opportunities in this planning horizon, skip scheduling
-                if next_access.is_empty(): continue
-
-                # check if the task is available during the given access interval
-                if not event.availability.overlaps(next_access): continue
-
+            # iterate through list of intervals in this time period 
+            for t_start,*_ in orbitdata.comms_links.iter_rows_raw(t=event.availability.left, 
+                                                                  t_max=event.availability.right, 
+                                                                  include_current=True):
                 # calculate broadcast time to earliest in this access interval
-                t_broadcast : float = max(next_access.left, task_req.t_req)
+                t_broadcast : float = max(t_start, task_req.t_req)
                 
                 # add broadcast time to set of broadcast times and assign request to be broadcast at this time
                 t_broadcasts[t_broadcast].append(task_request_msg)
-
+                
         # iterate through access start times to find active requests
         for t_broadcast, task_requests_msgs in tqdm(t_broadcasts.items(),
                                                     desc=f'{state.agent_name}/PREPLANNER: Compiling broadcasts for each scheduled broadcast time',

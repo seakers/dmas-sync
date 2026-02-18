@@ -361,6 +361,32 @@ class IntervalTable(AbstractTable):
         for i in range(len(self._start)):
             yield self.__row_from_index(i)
 
+    def iter_rows_raw(self, t: float, t_max: float = np.Inf, include_current: bool = False):        
+        # find starting index using prefix max end times
+        idx = np.searchsorted(self._prefix_max_end, t, side="left")
+
+        # iterate through intervals starting from `idx`
+        for i in range(idx, len(self._start)):
+            # get interval start time
+            s = self._start[i]
+            
+            # early stop if start time is beyond `t_max`
+            if s > t_max + 1e-6:
+                break
+            
+            # get interval end time
+            e = self._end[i]
+
+            # ignore if interval ends before time `t`
+            if e < t - 1e-6:
+                continue
+
+            # if reached, t <= e and s is either current or in the future;
+            # return raw row data if starts after time `t` or is current and `include_current` is True
+            if include_current or s > t - 1e-6:
+                yield self.__row_from_index(i)
+
+
     def __len__(self):
         return len(self._start)
     

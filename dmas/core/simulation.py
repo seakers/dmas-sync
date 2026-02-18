@@ -154,7 +154,7 @@ class Simulation:
                       disable=not self._printouts
                     ) as pbar:
                 
-                # event-driven simulation loop
+                # ----- main event-driven simulation loop -----
                 while t < tf:
 
                     # update simulation states
@@ -195,7 +195,21 @@ class Simulation:
                     for *_,msgs,obs_data in agent_observations.values():
                         msgs.clear()
                         obs_data.clear()
-                    agent_observations.clear()                    
+                    agent_observations.clear()   
+
+                # ----- final simulation step at tf -----
+                # Step environment one last time so any actions ending at tf produce results
+                agent_observations = self._environment.step(state_action_pairs, tf)
+
+                # Let agents record/consume any final messages/results
+                for agent in self._agents:
+                    agent.decide_action(*agent_observations[agent.name])
+
+                # cleanup agent percepts
+                for *_, msgs, obs_data in agent_observations.values():
+                    msgs.clear()
+                    obs_data.clear()
+                agent_observations.clear()
                     
             # mark simulation as executed
             self.__executed = True

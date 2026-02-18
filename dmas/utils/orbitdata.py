@@ -298,8 +298,37 @@ class OrbitData:
             # set previous connectivity to current for next iteration
             prev_connectivity_matrix = interval_connectivity_matrix
 
+        # merge connectivity intervals if the connectivity maps are the same and intervals are contiguous
+        merged_interval_connectivities : List[dict] = []
+        for interval_connectivity in tqdm(interval_connectivities, 
+                                          desc='Merging agent connectivity intervals', 
+                                          unit=' intervals', 
+                                          leave=False,
+                                          disable=not printouts
+                                        ):
+            if not merged_interval_connectivities:
+                merged_interval_connectivities.append(interval_connectivity)
+                continue
+
+            prev_interval_connectivity = merged_interval_connectivities[-1]
+
+            # check if interval overlaps
+            if abs(prev_interval_connectivity['end'] - interval_connectivity['start']) > 1e-6:
+                # if not, add new interval connectivity to list
+                merged_interval_connectivities.append(interval_connectivity)
+                continue
+
+            # check if connectivity maps are the same and intervals are contiguous
+            if all(prev_interval_connectivity[agent] == interval_connectivity[agent] for agent in agent_names.keys()) and prev_interval_connectivity['end'] == interval_connectivity['start']:
+                # if so, merge intervals by updating end time of previous interval
+                prev_interval_connectivity['end'] = interval_connectivity['end']
+            else:
+                # otherwise, add new interval connectivity to list
+                merged_interval_connectivities.append(interval_connectivity)
+
         # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
-        comms_links_df = pd.DataFrame(interval_connectivities)
+        comms_links_df = pd.DataFrame(merged_interval_connectivities)
+        # comms_links_df = pd.DataFrame(interval_connectivities)
         bin_dir = os.path.join(orbitdata_dir, 'bin')
         comms_links_schema = OrbitData.__write_interval_data_table(comms_links_df, bin_dir, 'comms_links', schemas['comms_data']['time_specs']['time step'], start_col='start', end_col='end', allow_overwrite=True)
 

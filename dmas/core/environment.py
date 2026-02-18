@@ -117,14 +117,15 @@ class SimulationEnvironment(object):
         # update current time
         self._t_curr = t
 
-        # check if connectivity needs to be calculated
-        if self.__interval_connectivities is None:
-            # calculate agent connectivity
-            self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
-                = SimulationEnvironment.__precompute_connectivity(self._orbitdata, self._printouts)
+        # # check if connectivity needs to be calculated
+        # if self.__interval_connectivities is None:
+        #     # calculate agent connectivity
+        #     self.__interval_connectivities : List[Tuple[Interval, Set[frozenset], Dict[str, List[str]]]] \
+        #         = SimulationEnvironment.__precompute_connectivity(self._orbitdata, self._printouts)
 
         # check if connectivity needs to be update
-        if t not in self._current_connectivity_interval:
+        if (self.__interval_connectivities is None 
+            or t not in self._current_connectivity_interval):
             # update current connectivity matrix and components
             self._current_connectivity_interval, \
                 self._current_connectivity_components, \
@@ -666,7 +667,6 @@ class SimulationEnvironment(object):
                 merged_intervals.append( (interval, interval_components, component_map) )
         
         return merged_intervals
-
     
     @staticmethod
     # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
@@ -719,26 +719,68 @@ class SimulationEnvironment(object):
     def __get_agent_connectivity(self, t : float) -> tuple:
         """ Searches and returns the current connectivity matrix and components for agents at time `t` """
         
-        # use binary search to find the correct interval
-        low = 0
-        high = len(self.__interval_connectivities) - 1
-        
-        while low <= high:
-            # find mid index
-            mid = (low + high) // 2
+        agent_orbitdata = next(iter(self._orbitdata.values()))
 
-            # unpack interval data
-            interval, components, components_map \
-                = self.__interval_connectivities[mid]
+        # iterate through list of intervals in this time period 
+        for t_start,t_end, *component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=t, 
+                                                                                           include_current=True):
+            # skip if time t is not in this interval
+            if not (t_start <= t < t_end):
+                continue
 
-            # return if time t is in the interval
-            if t in interval: return interval, components, components_map
+            # initialize component membership dict for this interval
+            component_membership : Dict[int, Set[str]] = defaultdict(set)
+
+            # group agents by component membership for this interval
+            for agent_idx, component_idx in enumerate(component_indices):
+                agent_name = agent_orbitdata.comms_target_columns[agent_idx]
+                # add agent to component membership dict
+                component_membership[component_idx].add(agent_name)
+
+            # convert component membership dict to list of components (as sets)
+            components = set(frozenset(members) for members in component_membership.values())
+
+            # create component map for this interval
+            component_map : Dict[str, List[str]] \
+                = { sender : [] for sender in agent_orbitdata.comms_target_columns }
             
-            # if not, adjust search bounds
-            if t < interval.left:
-                high = mid - 1
-            else:
-                low = mid + 1
+            # populate component map with agents in each component
+            for component_idx, members in component_membership.items():
+                for member in members:
+                    # add all other members of the same component to its connectivity list
+                    component_map[member] = set(members)
+                    
+                    # remove self from list of connected agents
+                    component_map[member].remove(member) 
 
-        # time t not found in any interval
-        raise ValueError(f'Time {t}[s] not found in any precomputed connectivity interval.')
+            # create connectivity interval
+            interval = Interval(t_start, t_end, right_open=True)
+
+            # return connectivity data for this interval
+            return interval, components, component_map
+
+        raise ValueError(f"Time {t}[s] not found in any precomputed connectivity interval.")
+
+        # # use binary search to find the correct interval
+        # low = 0
+        # high = len(self.__interval_connectivities) - 1
+        
+        # while low <= high:
+        #     # find mid index
+        #     mid = (low + high) // 2
+
+        #     # unpack interval data
+        #     interval, components, components_map \
+        #         = self.__interval_connectivities[mid]
+
+        #     # return if time t is in the interval
+        #     if t in interval: return interval, components, components_map
+            
+        #     # if not, adjust search bounds
+        #     if t < interval.left:
+        #         high = mid - 1
+        #     else:
+        #         low = mid + 1
+
+        # # time t not found in any interval
+        # raise ValueError(f'Time {t}[s] not found in any precomputed connectivity interval.')

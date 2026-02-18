@@ -50,7 +50,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         self.heuristic = heuristic
 
         # initialize properties
-        # self.observation_opportunities : List[ObservationOpportunity] = None
         self.access_opportunity_horizon : Interval = None
         self.access_opportunities : dict[tuple] = None
     
@@ -412,6 +411,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         
         # initialize proposed path from current plan
         proposed_path : List[ObservationAction] = [obs_action for obs_action in self._path]
+
+        assert self.is_observation_path_valid(state, proposed_path, None, None, specs), \
+            "Initial proposed path is not valid according to current state and specifications."
         
         # extract existing bids from current bundle
         proposed_bids : Dict[GenericObservationTask, Dict[int, Bid]] = defaultdict(dict)
@@ -1366,3 +1368,14 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         # return feasible sequences
         return feasible_sequences
+    
+    """
+    PRINTOUTS
+    """
+    def print_results(self):
+        # 
+        super().print_results()
+
+        # clear any cashed data
+        self.access_opportunity_horizon = None
+        if self.access_opportunities: self.access_opportunities.clear()

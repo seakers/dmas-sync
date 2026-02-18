@@ -29,7 +29,6 @@ from dmas.models.science.requests import TaskRequest
 from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
 from dmas.utils.tools import SimulationRoles
 
-
 class SimulationAgent(object):
     def __init__(self, 
                  agent_name : str, 
@@ -351,8 +350,9 @@ class SimulationAgent(object):
                 pending_actions = []
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
-                if True:
-                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                # if True:
+                if "imager_a_sat_15" in curr_state.agent_name and curr_state._t >= 	4_737.0:
+                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -384,9 +384,10 @@ class SimulationAgent(object):
         # del action        # TODO check if needed
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
-        if True:
+        # if True:
+        if "imager_a_sat_15" in curr_state.agent_name and curr_state._t >= 	4_737.0:
             # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-            # self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
+            self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
             x = 1 # breakpoint
         # -------------------------------------        
         

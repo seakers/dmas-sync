@@ -345,7 +345,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     t0 = time.time()
 
     # Unpack trial row
-    scenario_id, num_sats, gnd_segment, task_arrival_rate, target_distribution = trial_row
+    scenario_id, num_sats, gnd_segment, _, target_distribution = trial_row
 
     # make gnd segment deterministic
     gnd_segment = "None" if not isinstance(gnd_segment, str) else gnd_segment
