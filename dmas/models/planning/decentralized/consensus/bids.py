@@ -1056,12 +1056,12 @@ class Bid:
             if other.owner != other.winner:
                 self.t_stamps[other.winner] = max(self.t_stamps.get(other.winner, np.NINF), other.t_bid)
 
-    def reset(self, t_comp : float, other : Union['Bid', dict] = None) -> None:
+    def reset(self, t : float, other : Union['Bid', dict] = None) -> None:
         """
         Resets the values of this bid while keeping track of lates update time
         
         ### Arguments:
-            - t_comp (`float` or `int`): latest time when this bid was updated
+            - t (`float` or `int`): time when this bid is being updated
             - other (`Bid`): equivalent bid being used to update information
         """
         # if own bid, update internal bid value to 0
@@ -1073,17 +1073,17 @@ class Bid:
 
         # reset other bid information
         self.t_img = np.NINF
-        self.t_bid = np.NINF
+        self.t_bid = t
         self.main_measurement = self.NONE
 
         # update timestamp for the other bidder if given
         if other is None:
-            self.t_stamps[self.owner] = t_comp
+            self.t_stamps[self.owner] = t
         else:
             try:
-                self.t_stamps[other['owner']] = t_comp
+                self.t_stamps[other['owner']] = t
             except (KeyError, TypeError):
-                self.t_stamps[other.owner] = t_comp
+                self.t_stamps[other.owner] = t
 
     def __leave(self, other : Union['Bid', dict], t_comp : float) -> None:
         """
@@ -1159,3 +1159,28 @@ class Bid:
     def __hash__(self) -> int:
         return hash(self.task.id) ^ hash(self.n_obs) ^ hash(self.owner)
 
+    """
+    ---------------------------
+    EMPTY BID FACTORY METHODS
+    ---------------------------
+    """
+    @staticmethod
+    def make_empty_bid(task : GenericObservationTask, owner : str, n_obs : int, t_bid : float = np.NINF) -> 'Bid':
+        return Bid(task, owner, n_obs, t_bid)
+
+    @staticmethod
+    def make_empty_bid_dict(task_dict : dict, owner : str, n_obs : int, t_bid : float = np.NINF) -> dict:
+        return {
+            "task": task_dict,
+            "owner": owner,
+            "n_obs": n_obs,
+            "owner_bid": np.NaN,
+            "winning_bid": 0,
+            "winner": Bid.NONE,
+            "t_img": np.NINF,
+            "t_bid": t_bid,
+            "t_stamps": None,
+            "main_measurement": Bid.NONE,
+            "performed": False,
+        }
+    

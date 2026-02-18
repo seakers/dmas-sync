@@ -238,7 +238,7 @@ class SimulationAgent(object):
         # -------------------------------------
 
         # update known tasks and requests from incoming tasks requests
-        new_reqs, new_tasks = self.__update_requests_and_tasks(incoming_reqs)
+        new_reqs,new_tasks = self.__update_requests_and_tasks(incoming_reqs)
 
         # update plan completion
         self.__update_plan_completion(completed_actions, 
@@ -519,11 +519,11 @@ class SimulationAgent(object):
     def __update_requests_and_tasks(self,
                                     incoming_reqs : List[MeasurementRequestMessage] = []
                                 ) -> Tuple[List[TaskRequest], List[GenericObservationTask]]:
-        
+        # ---- 1) Unique + new requests (dicts) ----
         # find unique and new requests in incoming requests
-        unique_new_reqs = {self._req_key(msg.req): msg.req
+        unique_new_reqs = {key : msg.req
                           for msg in incoming_reqs
-                          if self._req_key(msg.req) not in self._known_reqs}
+                          if (key := self._req_key(msg.req)) not in self._known_reqs}
 
         # unpack unique new task requests
         new_reqs = {key : TaskRequest.from_dict(req_dict) 
@@ -532,16 +532,18 @@ class SimulationAgent(object):
         # add new requests to known requests
         self._known_reqs.update(new_reqs)
 
+        # ---- 2) Unique + new tasks ----
         # find unique and new tasks in new requests
-        new_tasks = {self._task_key(req.task.to_dict()): req.task
-                                for req in new_reqs.values()
-                                if self._task_key(req.task.to_dict()) not in self._known_tasks}
+        new_tasks = {key : req.task
+                        for req in new_reqs.values()
+                        if (key := self._task_key(req.task.to_dict())) not in self._known_tasks}
         
         # find unique and new tasks in incoming requests
-        new_task_dicts = {self._task_key(msg.req['task']): msg.req['task']
-                                for msg in incoming_reqs
-                                if self._task_key(msg.req['task']) not in self._known_tasks
-                                and self._task_key(msg.req['task']) not in new_tasks}
+        new_task_dicts = {key : msg.req['task']
+                            for msg in incoming_reqs
+                            if (key := self._task_key(msg.req['task'])) not in self._known_tasks
+                            and key not in new_tasks
+                            }
 
         # unpack unique bid tasks
         new_tasks.update({key : GenericObservationTask.from_dict(d) 

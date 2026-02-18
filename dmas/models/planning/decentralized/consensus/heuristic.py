@@ -1049,7 +1049,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # get all possible observation opportunities from results
             scheduled_obs_times : list[Tuple[float,str,float,ObservationOpportunity]] = \
                   [(bid.t_img,bid.winner,np.NAN,None) for bid in self._results[task] 
-                   if bid.winner != state.agent_name
+                   if bid.winner != state.agent_name and bid.has_winner()
                    and not bid.was_performed()]
 
             # include proposed task imaging time 
@@ -1221,7 +1221,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                "Not all observations from other agents were removed from best sequences."
         
         # initiate bid lists for tasks in the proposed path based on best observation numbers and previous observation times
-        new_bids : Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]] = defaultdict(dict)
+        new_bids : Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]] \
+            = defaultdict(dict)
 
         # initiate list of best observation numbers and previous observation times for each observation in candidate path
         n_obs_candidate = [dict() for _ in candidate_path]
