@@ -887,6 +887,7 @@ class SimulationAgent(object):
         # next_state : SimulationAgentState = copy.copy(curr_state)
 
         # reset attitude rates to zero; let next action modify as needed
+        # TODO move this to the appropriate action handlers (e.g., ManeuverAction handler) 
         next_state.attitude_rates = [0.0, 0.0, 0.0]
         
         # ensure next state time matches current time

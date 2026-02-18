@@ -97,6 +97,9 @@ def parse_study_args() -> SimulationConfig:
 
     parser.add_argument("--trial-range",
                         help="Trial range in format START:END (overrides start/end)")
+    
+    # parser.add_argument("--trial-ids", nargs="+", type=int,
+    #                     help="Specific trial IDs to run (overrides start/end and range)")
 
     # --------------------------------------------------------------
     # Profiling
@@ -161,6 +164,11 @@ def parse_study_args() -> SimulationConfig:
             trial_end = int(end)
         except Exception:
             raise ValueError("Invalid --trial-range format. Use START:END")
+        
+    # if args.trial_ids is not None:
+    #     trials = sorted(set(args.trial_ids))
+    # else:
+    #     trials = None  # Will be determined by trial_start and trial_end later
 
     # --------------------------------------------------------------
     # Force logic

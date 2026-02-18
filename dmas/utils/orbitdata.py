@@ -122,6 +122,10 @@ class OrbitData:
             epoch = schema['time_specs']['epoch']
             duration = schema['time_specs']['duration']
 
+            if abs(simulation_duration - duration) > 1e-6:
+                raise NotImplementedError(f"Simulation duration {simulation_duration} does not match preprocessed data duration {duration}. Currently requires an exact match.")
+                duration = min(schema['time_specs']['duration'], simulation_duration)
+
             # load eclipse data from binary
             eclipse_data = IntervalTable.from_schema(schema['eclipse'], mmap_mode='r')
             
@@ -609,23 +613,29 @@ class OrbitData:
             mission.execute(printouts=printouts)                
             if printouts: tqdm.write("Propagation done!")
 
-        # update mission duration if needed
-        orbitdata_filename = os.path.join(data_dir, 'MissionSpecs.json')
-        ## check if mission specs file exists
-        original_duration = scenario_specs['duration']
-        if os.path.exists(orbitdata_filename):
-            with open(orbitdata_filename, 'r') as orbitdata_specs:
-                # load existing mission specs
-                orbitdata_dict : dict = json.load(orbitdata_specs)
+            # save specifications of propagation in the orbit data directory
+            with open(os.path.join(data_dir,'MissionSpecs.json'), 'w') as mission_specs:
+                mission_specs.write(json.dumps(scenario_specs, indent=4))
+                assert os.path.exists(os.path.join(data_dir,'MissionSpecs.json')), \
+                    'Mission specifications not saved correctly!'
 
-                # update duration to that of the longest mission
-                scenario_specs['duration'] = max(scenario_specs['duration'], orbitdata_dict['duration'])
+        # # update mission duration if needed
+        # orbitdata_filename = os.path.join(data_dir, 'MissionSpecs.json')
+        # ## check if mission specs file already exists
+        # original_duration = scenario_specs['duration']
+        # if os.path.exists(orbitdata_filename):
+        #     with open(orbitdata_filename, 'r') as orbitdata_specs:
+        #         # load existing mission specs
+        #         orbitdata_dict : dict = json.load(orbitdata_specs)
 
-        # save specifications of propagation in the orbit data directory
-        with open(os.path.join(data_dir,'MissionSpecs.json'), 'w') as mission_specs:
-            mission_specs.write(json.dumps(scenario_specs, indent=4))
-            assert os.path.exists(os.path.join(data_dir,'MissionSpecs.json')), \
-                'Mission specifications not saved correctly!'
+        #         # update duration to that of the longest mission
+        #         scenario_specs['duration'] = max(scenario_specs['duration'], orbitdata_dict['duration'])
+
+        # # save specifications of propagation in the orbit data directory
+        # with open(os.path.join(data_dir,'MissionSpecs.json'), 'w') as mission_specs:
+        #     mission_specs.write(json.dumps(scenario_specs, indent=4))
+        #     assert os.path.exists(os.path.join(data_dir,'MissionSpecs.json')), \
+        #         'Mission specifications not saved correctly!'
             
         # check if data in the directory has already been preprocessed 
         has_been_preprocessed = os.path.exists(os.path.join(data_dir, 'bin', 'meta.json'))
@@ -637,12 +647,11 @@ class OrbitData:
             OrbitData.preprocess(data_dir, scenario_specs['duration'], overwrite=True, printouts=printouts)
             if printouts: tqdm.write("Preprocessing done!")
 
-        # remove raw data and only keep binaries to save space? Or keep both to allow for future changes to preprocessing methods without needing to re-propagate data? For now, keeping both.
+        # remove raw data and only keep binaries to save space (if enabled)
         if settings_dict is not None:
             save_unprocessed_coverage = settings_dict.get('saveUnprocessedCoverage', "True").lower() == "true"
             if not save_unprocessed_coverage:
                 # remove raw coverage data to save space but maintain mission specifications 
-                # raise NotImplementedError('Not tested yet')
                 for f in os.listdir(data_dir):
                     f_dir = os.path.join(data_dir, f)
                     if os.path.isdir(f_dir) and f != 'bin':
@@ -650,8 +659,8 @@ class OrbitData:
                             os.remove(os.path.join(f_dir, h))
                         os.rmdir(f_dir)
 
-        # restore original duration value
-        scenario_specs['duration'] = original_duration
+        # # restore original duration value
+        # scenario_specs['duration'] = original_duration
 
         # return orbit data directory
         return data_dir

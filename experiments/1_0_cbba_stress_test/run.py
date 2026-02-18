@@ -1,6 +1,7 @@
 import cProfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import copy
+import random
 import sys
 import tracemalloc
 
@@ -370,6 +371,8 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # ------------------------------------------------------------
         # Stage 0: Build mission specs (always needed)
         # ------------------------------------------------------------
+        # generate scenario specifications from templates and trial parameters
+        if printouts: tqdm.write(f" - Generated mission specifications for scenario {scenario_id}")
         mission_specs: dict = generate_scenario_mission_specs(
             run_cfg.mission_specs_template, run_cfg.duration, run_cfg.step_size,
             run_cfg.base_path, trial_stem, scenario_id,
@@ -377,6 +380,12 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             run_cfg.spacecraft_specs_template, run_cfg.instrument_specs,
             run_cfg.ground_operator_specs_template, sim_cfg.reduced
         )
+
+        # random wait for staggering
+        if not sim_cfg.reduced:
+            t_wait = random.uniform(0, 1)
+            if printouts: tqdm.write(f" - Staggering start time with random wait or {t_wait:.2f} [s]...")
+            time.sleep(t_wait)
 
         # ------------------------------------------------------------
         # Stage 1: Precompute (controlled by force/only)
@@ -505,7 +514,8 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             "scenario_id": scenario_id,
             "status": "error",
             "error": repr(e),
-            "traceback": traceback.format_exc(),
+            # "traceback": traceback.format_exc(),
+            "traceback": traceback.print_exc(),
             "results_dir": results_dir,
             "elapsed_s": time.time() - t0,
         }

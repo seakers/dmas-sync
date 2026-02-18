@@ -453,7 +453,7 @@ class Simulation:
         # load events        
         grid_dict : dict = d.get('grid', None) # TODO for use in random event generation
         events_path : str = Simulation.generate_events(scenario_dict)
-        events : List[GeophysicalEvent] = Simulation.__load_events(events_path, simulation_orbitdata, printouts)
+        events : List[GeophysicalEvent] = Simulation.__load_events(events_path, scenario_duration, printouts)
 
         # setup logging
         logger = logging.getLogger(f'Simulation-{scenario_name}')
@@ -610,21 +610,16 @@ class Simulation:
         raise NotImplementedError(f'Event generation of type `{events_type}` not yet implemented.')
     
     @staticmethod
-    def __load_events(events_path : str, orbitdata : dict, printouts : bool) -> List[GeophysicalEvent]:
+    def __load_events(events_path : str, scenario_duration : float, printouts : bool) -> List[GeophysicalEvent]:
         """ Loads events present in the simulation """
         # checks if event path exists
         if events_path is None: return None
         if not os.path.isfile(events_path): raise ValueError(f'List of events not found in `{events_path}`')
 
         # get simulation duration 
-        agent_names = list(orbitdata.keys())
-        if agent_names:
-            temp_agent = agent_names.pop()
-            temp_agent_orbit_data : OrbitData = orbitdata[temp_agent]
-            sim_duration : float = temp_agent_orbit_data.duration*24*3600
-        else:
-            sim_duration = np.Inf
+        sim_duration = timedelta(days=scenario_duration).total_seconds()
 
+        # check if events file exists
         if not os.path.isfile(events_path):
             raise ValueError('`events_path` must point to an existing file.')
         
