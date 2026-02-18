@@ -885,7 +885,11 @@ class SimulationAgent(object):
         # create copy of current state
         next_state : SimulationAgentState = curr_state.copy()
         # next_state : SimulationAgentState = copy.copy(curr_state)
+
+        # reset attitude rates to zero; let next action modify as needed
+        next_state.attitude_rates = [0.0, 0.0, 0.0]
         
+        # ensure next state time matches current time
         assert abs(next_state.get_time() - t) < 1e-6, \
             "State time must match the provided time."
 
