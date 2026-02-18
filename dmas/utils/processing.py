@@ -612,7 +612,7 @@ class ResultsProcessor:
 
         for event in tqdm(events, 
                             desc='Classifying event requests', 
-                            leave=True,
+                            leave=False,
                             disable=not printouts):
             
             # find measurement requests that match this event
@@ -1417,7 +1417,7 @@ class ResultsProcessor:
         return pd.DataFrame(summary_data, columns=summary_headers)    
 
     @staticmethod
-    def __count_observations(orbitdata : dict, 
+    def __count_observations(orbitdata : Dict[str, OrbitData], 
                             observations_per_gp : dict,
                             events : List[GeophysicalEvent],
                             events_per_gp : dict,
@@ -1438,18 +1438,18 @@ class ResultsProcessor:
                             tasks_observed : dict,
                             printouts : bool = True
                         ) -> tuple:
-        
+        # get a representative agent orbitdata for time and ground point information
+        agent_orbitdata : OrbitData = next(iter(orbitdata.values()))
+
         # count number of groundpoints and their accessibility
         n_gps = None
         gps_accessible_compiled = set()
-        for _,agent_orbitdata in tqdm(orbitdata.items(), desc='Counting total and accessible ground points', leave=False, disable=not printouts):
-            agent_orbitdata : OrbitData
-
+        for _,agent_orbitdata_temp in tqdm(orbitdata.items(), desc='Counting total and accessible ground points', leave=False, disable=not printouts):
             # count number of ground points
-            n_gps = len([gps for gps in agent_orbitdata.grid_data]) if n_gps is None else n_gps
+            n_gps = len([gps for gps in agent_orbitdata_temp.grid_data]) if n_gps is None else n_gps
 
             # get set of accessible ground points
-            gps_accessible : set = {(row['grid index'], row['GP index']) for _,row in agent_orbitdata.gp_access_data}
+            gps_accessible : set = {(row['grid index'], row['GP index']) for _,row in agent_orbitdata_temp.gp_access_data}
 
             # update set of accessible ground points
             gps_accessible_compiled.update(gps_accessible)
@@ -1544,11 +1544,20 @@ class ResultsProcessor:
 
         # count reobservations per task
         n_tasks_reobservable = len([task for task,access_intervals in tasks_observable.items() 
-                                    if len(access_intervals) > 1])
-        n_event_tasks_reobservable = len([task for task in tasks_observable if isinstance(task, EventObservationTask)
-                                        and len(tasks_observable[task]) > 1])
-        n_default_tasks_reobservable = len([task for task in tasks_observable if isinstance(task, DefaultMissionTask)
-                                        and len(tasks_observable[task]) > 1])
+                                    if len(access_intervals) > 1 
+                                    or any(access_interval.span() > agent_orbitdata.time_step for access_interval,*_ in access_intervals)])
+        n_event_tasks_reobservable = len([task for task,access_intervals in tasks_observable.items() 
+                                            if isinstance(task, EventObservationTask)
+                                            and (len(access_intervals) > 1
+                                                or any(access_interval.span() > agent_orbitdata.time_step*2
+                                                       for access_interval,*_ in access_intervals))
+                                        ])
+        n_default_tasks_reobservable = len([task for task,access_intervals in tasks_observable.items() 
+                                            if isinstance(task, DefaultMissionTask)
+                                            and (len(access_intervals) > 1
+                                                or any(access_interval.span() > agent_orbitdata.time_step*2
+                                                       for access_interval,*_ in access_intervals))
+                                        ])
         
         assert n_tasks_reobservable <= n_tasks_observable
         assert n_event_tasks_reobservable + n_default_tasks_reobservable <= n_tasks_reobservable
@@ -1560,6 +1569,16 @@ class ResultsProcessor:
         n_default_tasks_reobserved = len([task for task in tasks_observed if isinstance(task, DefaultMissionTask)
                                         and len(tasks_observed[task]) > 1])
         
+        # --- DEBUG BREAKPOINTS ---
+        for task in tasks_observable:
+            task_accesses = tasks_observable[task]
+            task_observations = tasks_observed[task] if task in tasks_observed else []
+
+            if len(task_accesses) < len(task_observations):
+                x = 1
+        # -------------------------
+
+
         assert n_tasks_reobserved <= n_tasks_reobservable 
         assert n_tasks_reobserved <= n_tasks_observed
         assert n_event_tasks_reobserved + n_default_tasks_reobserved <= n_tasks_reobserved
