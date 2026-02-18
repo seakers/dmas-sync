@@ -1011,7 +1011,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     break # stop searching for constraint violations for this task
 
                 # Constraint 2: If assigned, imaging time must be after previous imaging time
-                if prev_bid.t_img > bid.t_img and bid.has_winner():
+                if bid.has_winner() and prev_bid.t_img > bid.t_img:
                     invalid_bid_idx = n_obs_idx
                     break # stop searching for constraint violations for this task         
             
@@ -1034,13 +1034,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
     
     def needs_planning(self, *_) -> bool:
         # -------------------------------
-        # DEBUG BREAKPOINTS
-        if self._task_announcements_received:
-            x = 1 # breakpoint
-        if self._results_changes_performed:
-            x = 1  # breakpoint
-        if self._bundle_changes_performed:
-            x = 1  # breakpoint
+        # # DEBUG BREAKPOINTS
+        # if self._task_announcements_received:
+        #     x = 1 # breakpoint
+        # if self._results_changes_performed:
+        #     x = 1  # breakpoint
+        # if self._bundle_changes_performed:
+        #     x = 1  # breakpoint
         # -------------------------------
 
         # trigger replan if either...

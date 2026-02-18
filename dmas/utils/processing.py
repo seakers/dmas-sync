@@ -1239,7 +1239,7 @@ class ResultsProcessor:
 
         total_planned_utility = np.round(planned_rewards_df['planned reward'].sum() - execution_costs_df['cost'].sum(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0
 
-        total_available_utility = ResultsProcessor.__calculate_total_available_utility(accesses_per_task)
+        total_task_priority, total_available_utility = ResultsProcessor.__calculate_total_available_utility(accesses_per_task)
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -1410,6 +1410,7 @@ class ResultsProcessor:
                     ['Median Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
 
                     # Available Reward and Utility Statistics
+                    ['Total Task Priority Available', total_task_priority],
                     ['Total Available Utility', total_available_utility]
                 ]
 
@@ -1920,6 +1921,7 @@ class ResultsProcessor:
     def __calculate_total_available_utility(accesses_per_task: Dict[GenericObservationTask, List]) -> float:
         # TODO include objectives and priorities in task data structures to properly calculate this;
         #   currently assumes that each access has a maximum performance value of 1 
+        total_task_priority = sum([task.priority for task in accesses_per_task.keys()])
         total_available_utility = sum([task.priority*len(accesses) for task,accesses in accesses_per_task.items()])
         
-        return total_available_utility
+        return total_task_priority, total_available_utility
