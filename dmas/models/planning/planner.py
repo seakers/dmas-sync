@@ -934,30 +934,29 @@ class AbstractPlanner(ABC):
             # estimate previous state
             if i == 0:
                 t_prev = state._t
-                prev_state : SatelliteAgentState = state.copy()
+                # prev_state : SatelliteAgentState = state.copy()
+                prev_attitude = list(state.attitude)
                 
             else:
                 prev_observation : ObservationAction = observations[i-1]
                 t_prev = prev_observation.t_end
-                prev_state : SimulationAgentState = state.propagate(t_prev)
-                prev_state.attitude = [prev_observation.look_angle, 0.0, 0.0]
+                # prev_state : SimulationAgentState = state.propagate(t_prev)
+                prev_attitude = [prev_observation.look_angle, 0.0, 0.0]
 
             # maneuver to point to target
-            if isinstance(state, SatelliteAgentState):
-                prev_state : SatelliteAgentState
-                
-                dth_req = abs(curr_observation.look_angle - prev_state.attitude[0])
-                dth_max = (curr_observation.t_start - prev_state._t) * max_slew_rate
+            if isinstance(state, SatelliteAgentState):                
+                dth_req = abs(curr_observation.look_angle - prev_attitude[0])
+                dth_max = (curr_observation.t_start - t_prev) * max_slew_rate
 
-                if dth_req > dth_max and abs(dth_req - dth_max) >= 1e-6: 
+                if dth_req > dth_max and abs(dth_req - dth_max) >= self.EPS: 
                     # maneuver impossible within timeframe
                     raise ValueError(f'Cannot schedule maneuver. Not enough time between observations')\
                 
                 # check if attitude maneuver is required
-                if abs(dth_req) <= 1e-3: continue # already pointing in the same direction; ignore maneuver
+                if abs(dth_req) <= self.EPS: continue # already pointing in the same direction; ignore maneuver
 
                 # calculate attitude duration    
-                th_0 = prev_state.attitude[0]
+                th_0 = prev_attitude[0]
                 th_f = curr_observation.look_angle
                 slew_rate = (th_f - th_0) / dth_req * max_slew_rate
                 dt = abs(th_f - th_0) / max_slew_rate
@@ -967,7 +966,7 @@ class AbstractPlanner(ABC):
                 t_maneuver_end = curr_observation.t_start
 
                 # check if mnaeuver time is non-zero
-                if abs(t_maneuver_start - t_maneuver_end) >= 1e-3:
+                if abs(t_maneuver_start - t_maneuver_end) >= self.EPS:
                     # maneuver has non-zero duration; perform maneuver
                     maneuvers.append(ManeuverAction([th_0, 0, 0],
                                                     [th_f, 0, 0], 

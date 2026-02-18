@@ -307,7 +307,7 @@ class SimulationAgent(object):
             # there is a replanner assigned to this planner
 
             # update replanner precepts
-            self._replanner.update_percepts( curr_state,
+            self._replanner.update_percepts(curr_state,
                                             self._plan, 
                                             self._known_tasks.values(),
                                             new_reqs,
@@ -324,6 +324,9 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # self.__log_plan(plan, "ORIGINAL PLAN", logging.WARNING)
                 # x = 1 # breakpoint
+                if "imager_c_sat_0" in curr_state.agent_name and curr_state._t >= 5_575.0:
+                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    x = 1 # breakpoint
                 # -------------------------------------
 
                 # update tasks for only tasks that are available
@@ -337,7 +340,7 @@ class SimulationAgent(object):
                                                                 self._mission,
                                                                 self._known_tasks.values(),
                                                                 self._observations_tracker
-                                                                )
+                                                            )
 
                 # update last time plan was updated
                 t_plan = curr_state.get_time()
@@ -351,7 +354,7 @@ class SimulationAgent(object):
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if True:
-                if "imager_a_sat_15" in curr_state.agent_name and curr_state._t >= 	4_737.0:
+                if "imager_c_sat_0" in curr_state.agent_name and curr_state._t >= 5_575.0:
                     self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
@@ -385,7 +388,7 @@ class SimulationAgent(object):
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         # if True:
-        if "imager_a_sat_15" in curr_state.agent_name and curr_state._t >= 	4_737.0:
+        if "imager_c_sat_0" in curr_state.agent_name and curr_state._t >= 5_575.0:
             # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
             self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
             x = 1 # breakpoint
