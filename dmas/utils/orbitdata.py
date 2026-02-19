@@ -25,6 +25,7 @@ class ConnectivityLevels(Enum):
     ISL = 'ISL'     # inter-satellite links only
     GS = 'GS'       # satellite-to-ground station links only
     NONE = 'NONE'   # no inter-agent connectivity
+    PREDEF = 'PREDEF'   # pre-defined connectivity specified in mission specifications
         
 class OrbitData:
     """
@@ -36,7 +37,6 @@ class OrbitData:
 
     def __init__(self,
                  agent_name : str,
-                 gs_network_name : str,
                  time_step : float,
                  epoch_type : str,
                  epoch : float,
@@ -50,7 +50,6 @@ class OrbitData:
                 ):
         # assign attributes
         self.agent_name = agent_name
-        self.gs_network_name = gs_network_name
         self.time_step = time_step
         self.epoch_type = epoch_type
         self.epoch = epoch
@@ -84,13 +83,16 @@ class OrbitData:
     LOAD FROM PRE-COMPUTED DATA
     """
     @staticmethod
-    def from_directory(orbitdata_dir: str, simulation_duration : float, force_preprocess : bool = False, printouts : bool = True) -> Dict[str, 'OrbitData']:
+    def from_directory(orbitdata_dir: str, mission_specs : dict, force_preprocess : bool = False, printouts : bool = True) -> Dict[str, 'OrbitData']:
         # TODO check if schemas have already been generated at the provided directory and load from there if so, o
         # therwise preprocess data and generate schemas before loading
         
         # define binary output directory
         bin_dir = os.path.join(orbitdata_dir, 'bin')
         bin_meta_file = os.path.join(bin_dir, "meta.json")
+
+        # get simulation duration from mission specifications
+        simulation_duration = mission_specs['duration']
 
         # check if preprocessed data already exists
         if not os.path.exists(bin_meta_file) or force_preprocess:
@@ -107,8 +109,12 @@ class OrbitData:
                 schemas : dict[str, dict] = json.load(meta_file)
                 if printouts: tqdm.write('Existing preprocessed data found. Loading from binaries...')
 
+        # get connectivity level from mission specifications
+        connectivity_specs : dict = mission_specs.get('scenario',{}).get('connectivity', None)
+        if connectivity_specs is None: raise ValueError('Connectivity specifications not found in mission specifications under `scenario.connectivity`. Please ensure connectivity specifications are included in the mission specifications.')
+
         # load connectivity data for each agent and store in dictionary indexed by agent name
-        agent_comms_links : IntervalTable = OrbitData.__load_comms_links(orbitdata_dir, schemas, printouts)
+        agent_comms_links : IntervalTable = OrbitData.__load_comms_links(orbitdata_dir, connectivity_specs, schemas, printouts)
 
         data = dict()
         for agent_name, schema in schemas.items():
@@ -116,7 +122,6 @@ class OrbitData:
             if 'data' in agent_name or 'comms' in agent_name: continue 
 
             # unpack agent-specific data from schema
-            gs_network_name = schema['gs_network_name']
             time_step = schema['time_specs']['time step']
             epoch_type = schema['time_specs']['epoch type']
             epoch = schema['time_specs']['epoch']
@@ -143,7 +148,7 @@ class OrbitData:
             # load state data from binary 
             state_data = StateTable.from_schema(schema['state'], mmap_mode='r')
 
-            data[agent_name] = OrbitData(agent_name, gs_network_name, time_step, epoch_type, epoch, 
+            data[agent_name] = OrbitData(agent_name, time_step, epoch_type, epoch, 
                                             duration, eclipse_data, state_data, comms_links, gs_access_data, 
                                             gp_access_data, grid_data)
             
@@ -151,7 +156,7 @@ class OrbitData:
         return data     
     
     @staticmethod
-    def __load_comms_links(orbitdata_dir : str, schemas : dict, printouts : bool = False) -> IntervalTable:
+    def __load_comms_links(orbitdata_dir : str, connectivity_specs : dict, schemas : dict, printouts : bool = False) -> IntervalTable:
         # define mission specifications file path
         mission_specs_file = os.path.join(orbitdata_dir, 'MissionSpecs.json')
         assert os.path.exists(mission_specs_file), \
@@ -170,38 +175,33 @@ class OrbitData:
         # combine into list of agent names
         agent_names = { **satellite_names, **ground_operators }
 
-        # get connectivity level from mission specifications
-        connectivity_level : str = mission_specs_dict['scenario'].get('connectivity', 'full').upper()
-
         # get relay specs from mission specifications 
         relay_toggle : bool = mission_specs_dict['scenario'].get('enabledRelays', 'True').lower() == 'true'
 
         if not relay_toggle: raise NotImplementedError('Currently only supports relay-enabled scenarios.')
 
         # load comms link data 
-        comm_data = IntervalTable.from_schema(schemas['comms_data'], mmap_mode='r')
+        ## check if full connectivity is specified
+        if connectivity_specs.get('@type', None) == ConnectivityLevels.FULL.value:
+            # generate full comms link data
+            comm_data = OrbitData.__generate_full_comms_links(agent_names, schemas)
+        else:
+            # load preprocessed comms link data from binary
+            comm_data = IntervalTable.from_schema(schemas['comms_data'], mmap_mode='r')
+
+        # generate connectivity mask based on connectivity level specified in mission specifications
+        connectivity_mask = OrbitData.__generate_connectivity_mask(connectivity_specs, agent_names, ground_operators)
+
 
         # convert connectivity intervals to events
         connectivity_events = []
         for t_start,t_end,u,v in comm_data:
             # check if access is valid based on connectivity level
-            if connectivity_level == ConnectivityLevels.NONE.value:
-                # no connectivity between any agents
-                break
-
-            elif connectivity_level == ConnectivityLevels.GS.value:
-                # ignore any links that do not involve a ground station
-                if not (u in ground_operators or v in ground_operators):
-                    continue
-
-            elif connectivity_level == ConnectivityLevels.ISL.value:
-                # ignore any links that involve a ground station
-                if u in ground_operators or v in ground_operators:
-                    continue
-
-            elif connectivity_level == ConnectivityLevels.LOS.value:
-                # accept all links
-                pass
+            key = tuple(sorted([u,v]))
+            if not connectivity_mask.get(key, False):
+                # access between agents `u` and `v` is not allowed;
+                #   skip this access interval
+                continue
 
             # decompose interval to event start and event end
             event_start = (t_start, u, v, 1)
@@ -339,6 +339,79 @@ class OrbitData:
 
         # load comms link table as IntervalTable for future querying
         return IntervalTable.from_schema(comms_links_schema, mmap_mode='r')
+    
+    @staticmethod
+    def __generate_full_comms_links(agent_names : List[str], schemas : dict) -> List[Tuple]:
+        # get simulation duration from schemas
+        simulation_duration = schemas['comms_data']['time_specs']['duration']
+
+        # convert duration from days to seconds
+        simulation_duration *= 3600*24
+        
+        # create list of unique agent pairs from list of agent names
+        agent_pairs = set()
+        for u_name in agent_names:
+            for v_name in agent_names:
+                # skip self-pairs
+                if u_name == v_name: continue
+                
+                # pair key 
+                key = tuple(sorted([u_name, v_name]))
+                agent_pairs.add(key)
+
+        # create comms link data with one interval spanning the entire simulation duration for each unique agent pair
+        comms_links = [(0.0, simulation_duration, u, v)
+                       for u,v in agent_pairs]
+        
+        # return comms link data
+        return comms_links
+
+    @staticmethod
+    def __generate_connectivity_mask(connectivity_dict : dict, agent_names : List[str], ground_operators : List[str]) -> Dict[Tuple[str, str], bool]:
+        # get type of connectivity specified in mission specifications
+        connectivity_level = connectivity_dict.get('@type', None)
+
+        # create list of unique agent pairs from list of agent names
+        agent_pairs = set()
+        for u_name in agent_names:
+            for v_name in agent_names:
+                # skip self-pairs
+                if u_name == v_name: continue
+                
+                # pair key 
+                key = tuple(sorted([u_name, v_name]))
+                agent_pairs.add(key)
+
+        # initialize connectivity mask as dictionary mapping agent pairs to boolean indicating whether connectivity is allowed based on specified connectivity level
+        connectivity_mask : Dict[Tuple[str, str], bool] = dict()
+
+        for u,v in agent_pairs:        
+            # check if access is valid based on connectivity level
+            if connectivity_level == ConnectivityLevels.NONE.value:
+                # no connectivity between any agents
+                connectivity_mask[(u,v)] = False
+
+            elif connectivity_level == ConnectivityLevels.GS.value:
+                # ignore any links that do not involve a ground station
+                connectivity_mask[(u,v)] = u in ground_operators or v in ground_operators
+
+            elif connectivity_level == ConnectivityLevels.ISL.value:
+                # ignore any links that involve a ground station                
+                connectivity_mask[(u,v)] = u not in ground_operators and v not in ground_operators
+
+            elif connectivity_level == ConnectivityLevels.LOS.value:
+                # accept all links
+                connectivity_mask[(u,v)] = True            
+            
+            elif connectivity_level == ConnectivityLevels.FULL.value:
+                # accept all links
+                connectivity_mask[(u,v)] = True
+
+            else:
+                raise NotImplementedError("TODO: need to implement generation of connectivity mask based on connectivity level specified in mission specifications.")
+            
+        # return connectivity mask
+        return connectivity_mask
     
     @staticmethod
     # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
@@ -833,7 +906,7 @@ class OrbitData:
             
         # create instances of OrbitData for each agent and store in dictionary indexed by agent name
         schemas = dict()
-        for *__,agent_name,gs_network_name in agents_loaded: 
+        for *__,agent_name in agents_loaded: 
             # extract relevant data for this agent
             agent_eclipse_data = eclipse_dfs[agent_name]
             agent_state_data = state_dfs[agent_name]
@@ -858,7 +931,6 @@ class OrbitData:
 
             # compile schema for this agent and store in dictionary
             schemas[agent_name] = {
-                'gs_network_name': gs_network_name,
                 'time_specs' : time_specs,
                 'dir' : agent_bin_dir,
                 'eclipse': eclipse_meta,
@@ -868,9 +940,13 @@ class OrbitData:
                 'grid': grid_meta
             }
 
-        # save agent comms link data into single dataframe and print to binary
+        # compile comms link data for all agents into single dataframe
         comms_data_concat :pd.DataFrame = OrbitData.__compile_agent_comms_data(comms_link_dfs)
+        
+        # save agent comms link data into single dataframe and print to binary
         comms_meta = OrbitData.__write_interval_data_table(comms_data_concat, bin_dir, 'comms_data', time_specs['time step'], allow_overwrite=True)
+        
+        # add comms data schema to compiled schemas
         schemas['comms_data'] = comms_meta
         schemas['comms_data']['time_specs'] = time_specs
         
@@ -883,32 +959,39 @@ class OrbitData:
     
     @staticmethod
     def __compile_agent_comms_data(agent_comms_link_data : Dict[str, pd.DataFrame]) -> pd.DataFrame:
+        """ Collects comms link data for all agents and compiles it into a single dataframe with columns for sender, receiver, start time, and end time. """
+        # define required columns for comms data
         comms_req_columns = ["start index", "end index"]
+
+        # compile comms data for all agents
         working_dfs = []
         for (u,v), comms_links in agent_comms_link_data.items():
             # take only the required cols (this avoids mutating the original DF)
             work = comms_links.loc[:, comms_req_columns].copy()
 
-            # force numeric (coerce bad values to NaN so you can detect them)
+            # force numeric (coerce bad values to NaN)
             for c in comms_req_columns:
                 work[c] = pd.to_numeric(work[c], errors="coerce")
 
-            # if these must be integers, enforce and fail fast on NaNs
+            # check for NaNs
             if work[comms_req_columns].isna().any().any():
+                # if values must be integers, enforce and fail fast on NaNs
                 bad = work[work[comms_req_columns].isna().any(axis=1)].head(5)
                 raise ValueError(
                     f"Non-numeric or missing start/end values after coercion for {u}-->{v}. "
                     f"Examples:\n{bad}"
                 )
 
-            # cast to the dtype you want (likely int32)
+            # cast start and end indices to `int`
             work["start index"] = work["start index"].astype(np.int32)
             work["end index"]   = work["end index"].astype(np.int32)
 
+            # add columns for sender and receiver
             work["u"] = u
             work["v"] = v
             working_dfs.append(work)
         
+        # concadenate comms dataframes
         if working_dfs:
             comms_links_concat = (
                 pd.concat(working_dfs, ignore_index=True, copy=False)
@@ -916,8 +999,10 @@ class OrbitData:
                 .reset_index(drop=True)
             )
         else:
+            # if no accesses were found, create empty dataframe with the correct columns
             comms_links_concat = pd.DataFrame(columns=[*comms_req_columns, "u", "v"])
 
+        # return concatenated comms dataframe
         return comms_links_concat
         
     def __load_csv_data(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Tuple:

@@ -37,7 +37,9 @@ class AgentConnectivityTester(ABC):
                         },
                         "spacecraft": [],
                         "scenario" : {
-                            "connectivity": "LOS",
+                            "connectivity": {
+                                "@type": "LOS",
+                            },
                             "events": {
                                 "@type": "PREDEF",
                                 "eventsPath": f"./tests/planners/resources/events.csv"
@@ -174,7 +176,7 @@ class AgentConnectivityTester(ABC):
         ground_operator_names = {go['name'] for go in mission_specs['groundOperator']}
 
         # load and return orbit data
-        return satellite_names, ground_operator_names, OrbitData.from_directory(orbitdata_dir, simulation_duration=self.duration)
+        return satellite_names, ground_operator_names, OrbitData.from_directory(orbitdata_dir, mission_specs, force_preprocess=overwrite)
 
     """
     ============================================

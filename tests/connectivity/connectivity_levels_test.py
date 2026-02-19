@@ -20,8 +20,10 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
         d = copy.deepcopy(self.mission_template)
 
         # set connectivity
-        d['scenario']['connectivity'] = connectivity
-        
+        d['scenario']['connectivity'] = {
+            "@type": connectivity
+        }
+
         # define sat 1
         sat1 = copy.deepcopy(self.spacecraft_template)
         sat1['name'] = 'sat_1'
