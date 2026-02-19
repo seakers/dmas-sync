@@ -88,6 +88,18 @@
             }
         },
         {
+            "name": "TEST: Agent Predef Connectivity Levels",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/tests/connectivity/predef_connectivity_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
+        {
             "name": "TEST: GEO Sat Agent Connectivity Levels",
             "type": "debugpy",
             "request": "launch",

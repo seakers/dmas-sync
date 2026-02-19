@@ -2,6 +2,7 @@ from collections import defaultdict, deque
 import copy
 from enum import Enum
 import gc
+import itertools
 import json
 import os
 import random
@@ -156,6 +157,32 @@ class OrbitData:
         return data     
     
     @staticmethod
+    def __generate_full_comms_links(agent_names : List[str], schemas : dict) -> List[Tuple]:
+        # get simulation duration from schemas
+        simulation_duration = schemas['comms_data']['time_specs']['duration']
+
+        # convert duration from days to seconds
+        simulation_duration *= 3600*24
+        
+        # create list of unique agent pairs from list of agent names
+        agent_pairs = set()
+        for u_name in agent_names:
+            for v_name in agent_names:
+                # skip self-pairs
+                if u_name == v_name: continue
+                
+                # pair key 
+                key = tuple(sorted([u_name, v_name]))
+                agent_pairs.add(key)
+
+        # create comms link data with one interval spanning the entire simulation duration for each unique agent pair
+        comms_links = [(0.0, simulation_duration, u, v)
+                       for u,v in agent_pairs]
+        
+        # return comms link data
+        return comms_links
+
+    @staticmethod
     def __load_comms_links(orbitdata_dir : str, connectivity_specs : dict, schemas : dict, printouts : bool = False) -> IntervalTable:
         # define mission specifications file path
         mission_specs_file = os.path.join(orbitdata_dir, 'MissionSpecs.json')
@@ -191,7 +218,6 @@ class OrbitData:
 
         # generate connectivity mask based on connectivity level specified in mission specifications
         connectivity_mask = OrbitData.__generate_connectivity_mask(connectivity_specs, agent_names, ground_operators)
-
 
         # convert connectivity intervals to events
         connectivity_events = []
@@ -339,38 +365,24 @@ class OrbitData:
 
         # load comms link table as IntervalTable for future querying
         return IntervalTable.from_schema(comms_links_schema, mmap_mode='r')
-    
-    @staticmethod
-    def __generate_full_comms_links(agent_names : List[str], schemas : dict) -> List[Tuple]:
-        # get simulation duration from schemas
-        simulation_duration = schemas['comms_data']['time_specs']['duration']
-
-        # convert duration from days to seconds
-        simulation_duration *= 3600*24
-        
-        # create list of unique agent pairs from list of agent names
-        agent_pairs = set()
-        for u_name in agent_names:
-            for v_name in agent_names:
-                # skip self-pairs
-                if u_name == v_name: continue
-                
-                # pair key 
-                key = tuple(sorted([u_name, v_name]))
-                agent_pairs.add(key)
-
-        # create comms link data with one interval spanning the entire simulation duration for each unique agent pair
-        comms_links = [(0.0, simulation_duration, u, v)
-                       for u,v in agent_pairs]
-        
-        # return comms link data
-        return comms_links
 
     @staticmethod
     def __generate_connectivity_mask(connectivity_dict : dict, agent_names : List[str], ground_operators : List[str]) -> Dict[Tuple[str, str], bool]:
         # get type of connectivity specified in mission specifications
         connectivity_level = connectivity_dict.get('@type', None)
+        if connectivity_level is not None: connectivity_level = connectivity_level.upper()
 
+        # construct connectivity mask based on connectivity level specified in mission specifications
+        if connectivity_level == ConnectivityLevels.PREDEF.value:
+            return OrbitData.__connectivity_mask_from_predifined_rules(connectivity_dict, agent_names)
+        else:
+            return OrbitData.__connectivity_mask_from_connectivity_level(connectivity_level, agent_names, ground_operators)
+    
+    @staticmethod
+    def __connectivity_mask_from_connectivity_level(connectivity_level : str, 
+                                                    agent_names : List[str], 
+                                                    ground_operators : List[str]
+                                                ) -> Dict[Tuple[str, str], bool]:
         # create list of unique agent pairs from list of agent names
         agent_pairs = set()
         for u_name in agent_names:
@@ -385,6 +397,7 @@ class OrbitData:
         # initialize connectivity mask as dictionary mapping agent pairs to boolean indicating whether connectivity is allowed based on specified connectivity level
         connectivity_mask : Dict[Tuple[str, str], bool] = dict()
 
+        # iterate through agent pairs and determine if connectivity is allowed based on specified connectivity level
         for u,v in agent_pairs:        
             # check if access is valid based on connectivity level
             if connectivity_level == ConnectivityLevels.NONE.value:
@@ -408,11 +421,138 @@ class OrbitData:
                 connectivity_mask[(u,v)] = True
 
             else:
+                # connectivity level not recognized or not specified; raise error
                 raise NotImplementedError("TODO: need to implement generation of connectivity mask based on connectivity level specified in mission specifications.")
             
         # return connectivity mask
         return connectivity_mask
-    
+
+    @staticmethod
+    def __connectivity_mask_from_predifined_rules(connectivity_dict : dict, 
+                                                  agent_names : List[str]
+                                                ) -> Dict[Tuple[str, str], bool]:
+        
+        # create list of unique agent pairs from list of agent names
+        agent_pairs = set()
+        for u_name in agent_names:
+            for v_name in agent_names:
+                # skip self-pairs
+                if u_name == v_name: continue
+                
+                # pair key 
+                key = tuple(sorted([u_name, v_name]))
+                agent_pairs.add(key)
+        
+        # get rules path from connectivity dict
+        predef_rules_path = connectivity_dict.get('rulesPath', None)
+
+        # ensure rules path is provided and valid
+        if predef_rules_path is None: raise ValueError('Pre-defined connectivity specifications must include a `rulesPath` field indicating the path to the JSON file containing the connectivity rules.')
+        if not os.path.isfile(predef_rules_path): raise ValueError(f'Connectivity rules file not found at specified `rulesPath`: {predef_rules_path}')
+
+        # load json connectivity rules from connectivity dict
+        with open(predef_rules_path, 'r') as rules_file:
+            predef_rules_dict : dict = json.load(rules_file)       
+
+        # unpack groups
+        groups = predef_rules_dict.get('groups', {})
+
+        # ensure all groups are lists of strings
+        assert all(isinstance(group_members, list) and all(isinstance(member, str) for member in group_members) for group_members in groups.values()), \
+            f'All groups specified in connectivity rules must be lists of strings. Invalid groups: {groups}'
+        # ensure all elements of groups are unique; no repeats within and between groups
+        all_group_members = set()
+        for group_members in groups.values():
+            for member in group_members:
+                if member in all_group_members:
+                    raise ValueError(f'All members of groups specified in connectivity rules must be unique; no repeats within or between groups. Duplicate member: {member}')
+                all_group_members.add(member)
+
+        # get default connectivity rule from rules dict
+        default_rule = predef_rules_dict.get('default', 'deny').lower() == 'allow'
+
+        # initialize connectivity mask 
+        connectivity_mask : Dict[Tuple[str, str], bool] = {
+            (u,v) : default_rule for u,v in agent_pairs
+        }
+
+        # iterate over rules in rules dict
+        for rule in predef_rules_dict.get('rules', {}):
+            # validate rule format
+            assert "action" in rule, f'Connectivity rules must specify an action in the rule name, either `allow` or `deny`. Invalid rule: {rule}'
+            assert "scope" in rule, f'Connectivity rules must specify a scope in the rule name, either `between` or `within`. Invalid rule: {rule}'
+            assert "targets" in rule, f'Connectivity rules must specify targets in a `targets` field indicating the groups the rule applies to. Invalid rule: {rule}'
+
+            # unpack rule components
+            action = rule['action'].lower()
+            scope = rule['scope'].lower()
+            targets = rule['targets']
+
+            if 'between' == scope:
+                # validate rule format
+                assert isinstance(targets, list), f'Connectivity rules with `between` must specify a list of two groups to apply the rule between. Rule: {rule}, Value: {targets}'
+                assert len(targets) >= 2, f'Connectivity rules with `between` must specify a list of at least two groups to apply the rule between. Rule: {rule}, Value: {targets}'
+              
+                # ensure all groups in vals are defined in groups dict
+                assert all(group_name in groups for group_name in targets), f'All groups specified in connectivity rules must be defined in the `groups` field of the connectivity specifications. Rule: {rule}, Value: {targets}, Defined Groups: {list(groups.keys())}'
+
+                # enlist groups and members
+                expanded = [groups[name] for name in targets]
+
+                # all unordered pairs of groups
+                for A, B in itertools.combinations(expanded, 2):
+                    for u in A:
+                        for v in B:
+                            # skip self-pairs just in case
+                            if u == v: continue
+
+                            # define key
+                            key = tuple(sorted([u,v]))                         
+
+                            # update connectivity mask based on rule type
+                            connectivity_mask[key] = (action == 'allow')
+
+            elif 'within' == scope:
+                # validate rule format
+                assert isinstance(targets, str), f'Connectivity rules with `within` must specify a single group to apply the rule within. Rule: {rule}, Value: {targets}'
+
+                # ensure group in vals is defined in groups dict
+                assert targets in groups, f'All groups specified in connectivity rules must be defined in the `groups` field of the connectivity specifications. Rule: {rule}, Value: {targets}, Defined Groups: {list(groups.keys())}'
+
+                # get group members
+                members = groups[targets]
+
+                # create all unordered pairs of members
+                for u,v in itertools.combinations(members, 2):
+                    # skip self-pairs just in case
+                    if u == v: continue
+
+                    # define key
+                    key = tuple(sorted([u,v]))
+
+                    # update connectivity mask based on rule type
+                    connectivity_mask[key] = (action == 'allow')
+           
+            else:
+                raise ValueError(f'Connectivity rule not recognized: {rule}. Supported rules are `allow_between`, `deny_between`, `allow_within`, and `deny_within`.')
+
+        # iterate through override rules and apply to connectivity mask
+        for override_rule in predef_rules_dict.get('overrides', []):
+            # validate override rule format
+            assert isinstance(override_rule, dict), f'Connectivity override rules must be specified as dictionaries with the format `{{"agents": [agent1, agent2], "action": "allow"/"deny"}}`. Invalid rule: {override_rule}'
+            assert 'pair' in override_rule, f'Connectivity override rules must specify the key `pair` indicating the pair of agents the rule applies to. Invalid rule: {override_rule}'
+            assert 'action' in override_rule, f'Connectivity override rules must specify the key `action` indicating whether the pair is allowed or denied. Invalid rule: {override_rule}'
+            
+            # unpack override rule components
+            pair = tuple(sorted(override_rule['pair']))
+            action = override_rule['action'].lower()
+            
+            # update connectivity mask based on action value
+            connectivity_mask[pair] = (action == 'allow')
+
+        # return connectivity mask
+        return connectivity_mask
+
     @staticmethod
     # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
     def __get_connected_components(adj: List[List[int]], agent_to_idx : Dict[str, int], idx_to_agent : List[str]) -> List[List[str]]:
@@ -1522,11 +1662,11 @@ class OrbitData:
                     #     modes = [0]
                     modes = [0]
 
-                    gp_acces_by_mode = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]','instrument',
+                    gp_acces_by_mode = pd.DataFrame(columns=['time index','grid index','GP index','pnt-opt index','lat [deg]','lon [deg]','instrument',
                                                                 'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
                     for mode in modes:
                         i_mode = modes.index(mode)
-                        gp_access_by_grid = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]',
+                        gp_access_by_grid = pd.DataFrame(columns=['time index','grid index','GP index','pnt-opt index','lat [deg]','lon [deg]',
                                                                 'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
 
                         for grid in mission_dict.get('grid'):
@@ -1550,11 +1690,12 @@ class OrbitData:
                         nrows, _ = gp_access_by_grid.shape
                         gp_access_by_grid['pnt-opt index'] = [mode] * nrows
 
-                        if len(gp_acces_by_mode) == 0:
-                            gp_acces_by_mode = gp_access_by_grid
-                        else:
-                            gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
+                        # if len(gp_acces_by_mode) == 0:
+                        #     gp_acces_by_mode = gp_access_by_grid
+                        # else:
+                        #     gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
                         # gp_acces_by_mode.append(gp_access_by_grid)
+                        gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
 
                     nrows, _ = gp_acces_by_mode.shape
                     gp_access_by_grid['instrument'] = [instrument['name']] * nrows

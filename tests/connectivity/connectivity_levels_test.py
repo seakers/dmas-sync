@@ -227,7 +227,7 @@ class TestAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
 
 if __name__ == '__main__':
     # print banner
-    print_scenario_banner("Connectivity Test Suite")
+    print_scenario_banner("Connectivity Levels Test Suite")
 
     # run tests
     unittest.main()
