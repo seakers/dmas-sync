@@ -105,7 +105,7 @@ def create_spacecraft_specifications(num_sats : int,
         satellite_spec = copy.deepcopy(spacecraft_specs_template)
 
         # planner settings
-        satellite_spec['planner'].pop('preplanner')
+        # satellite_spec['planner'].pop('preplanner') # remove preplanner
 
         # assign orbit state
         satellite_spec['orbitState']['state'] = orbit_state
@@ -383,7 +383,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
 
         # random wait for staggering
         if not sim_cfg.reduced:
-            t_wait = random.uniform(0, 1)
+            t_wait = random.uniform(0, 1) * int(scenario_id)
             if printouts: tqdm.write(f" - Staggering start time with random wait or {t_wait:.2f} [s]...")
             time.sleep(t_wait)
 
