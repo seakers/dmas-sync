@@ -154,7 +154,9 @@ class OrbitData:
     def __load_comms_links(orbitdata_dir : str, schemas : dict, printouts : bool = False) -> IntervalTable:
         # define mission specifications file path
         mission_specs_file = os.path.join(orbitdata_dir, 'MissionSpecs.json')
-        assert os.path.exists(mission_specs_file), f'Mission specifications file not found at: {mission_specs_file}'
+        assert os.path.exists(mission_specs_file), \
+            f'Mission specifications file not found at: {mission_specs_file}'
+        
         # load mission specifications to get mission duration and other relevant details
         with open(mission_specs_file, 'r') as mission_specs:
             mission_specs_dict : dict = json.load(mission_specs)
