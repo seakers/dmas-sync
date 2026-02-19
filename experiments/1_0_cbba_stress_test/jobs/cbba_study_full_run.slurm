@@ -34,5 +34,5 @@ end=$((2+3*i))
 python ./experiments/1_0_cbba_stress_test/study.py \
   -t full_factorial_trials \
   --trial-range "${start}:${end}" \
-  --single-thread --quiet --exceptions \
-  --profile-cpu --profile-mem # --force-simulate # --force-postprocess # --force-summarize
+  --single-thread --quiet --exceptions # \
+  # --profile-cpu --profile-mem # --force-simulate # --force-postprocess # --force-summarize

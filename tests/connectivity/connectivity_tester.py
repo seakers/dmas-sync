@@ -115,7 +115,7 @@ class AgentConnectivityTester(ABC):
                                     "ta": 0.0
                                 }
                             },
-                            "groundStationNetwork" : self.GS_NETWORK_NAME,
+                            # "groundStationNetwork" : self.GS_NETWORK_NAME,
                             "mission" : self.MISSION_NAME
                     }
         

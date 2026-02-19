@@ -954,11 +954,10 @@ class OrbitData:
         agents_loaded : List[dict] = []
         for i,spacecraft_dict in enumerate(spacecraft_list):
             spacecraft_name : str = spacecraft_dict['name']
-            gs_network_name = spacecraft_dict.get('groundStationNetwork', None)
-            agents_loaded.append(('spacecraft', i, spacecraft_name, gs_network_name))
+            agents_loaded.append(('spacecraft', i, spacecraft_name))
         for i,ground_op_dict in enumerate(ground_ops_list):
             ground_op_name : str = ground_op_dict['name']
-            agents_loaded.append(('groundOperator', i, ground_op_name, ground_op_name))
+            agents_loaded.append(('groundOperator', i, ground_op_name))
 
         # load time specifications
         position_file = os.path.join(orbitdata_dir, f"sat{agents_loaded[0][1]}", "state_cartesian.csv")
@@ -1004,7 +1003,6 @@ class OrbitData:
         # return compiled data
         return time_specs, agents_loaded, eclipse_dfs, state_dfs, gs_access_dfs, comms_link_dfs, gp_access_dfs, grid_data_dfs
 
-
     @staticmethod
     def __load_agent_eclipse_data(orbitdata_path : str, 
                                   agents_to_load : List[tuple],  
@@ -1015,7 +1013,7 @@ class OrbitData:
         data = dict()
         
         # iterate through agents to load
-        for agent_type, spacecraft_idx, agent_name, _ in agents_to_load:
+        for agent_type, spacecraft_idx, agent_name in agents_to_load:
             # load data by agent type
             if agent_type == 'spacecraft':
                 # define agent folder
@@ -1054,7 +1052,7 @@ class OrbitData:
         data = dict()
         
         # iterate through agents to load
-        for agent_type, spacecraft_idx, agent_name, _ in agents_to_load:
+        for agent_type, spacecraft_idx, agent_name in agents_to_load:
             # load data by agent type
             if agent_type == 'spacecraft':
                 # define agent folder
@@ -1093,7 +1091,7 @@ class OrbitData:
         # initialize ground station access data
         data = dict()
 
-        for agent_type, spacecraft_idx, agent_name, gs_network_name in agents_to_load:
+        for agent_type, spacecraft_idx, agent_name in agents_to_load:
             if agent_type == 'spacecraft':
                 # define agent folder
                 sat_id = "sat" + str(spacecraft_idx)
@@ -1101,10 +1099,11 @@ class OrbitData:
 
                 # compile list of ground stations that are part of the desired network                
                 gs_network_station_ids : List[str] = [ gs['@id'] for gs in ground_station_list
-                                                    if gs.get('networkName', None) == gs_network_name ]
+                                                    # if gs.get('networkName', None) == gs_network_name 
+                                                    ]
 
                 # create empty dataframe to store ground station access data for this agent
-                gs_access_data = pd.DataFrame(columns=['start index', 'end index', 'gndStn id', 'gndStn name','lat [deg]','lon [deg]'])
+                gs_access_data = pd.DataFrame(columns=['start index', 'end index', 'gndStn id', 'gndStn name', 'gndStn network', 'lat [deg]','lon [deg]'])
                 
                 # define path to agent's orbit data
                 agent_orbitdata_path = os.path.join(orbitdata_path, agent_folder)
@@ -1120,6 +1119,7 @@ class OrbitData:
                     
                     # check if ground station is part of the desired network
                     gndStn_id = ground_station_list[gndStn_index].get('@id')
+                    gs_network_name = ground_station_list[gndStn_index].get('networkName')
                     if gs_network_station_ids and gndStn_id not in gs_network_station_ids:
                         continue
 
@@ -1144,6 +1144,7 @@ class OrbitData:
 
                     gndStn_access_data['gndStn name'] = gndStn_name_column
                     gndStn_access_data['gndStn id'] = gndStn_id_column
+                    gndStn_access_data['gndStn network'] = [gs_network_name] * nrows
                     gndStn_access_data['lat [deg]'] = gndStn_lat_column
                     gndStn_access_data['lon [deg]'] = gndStn_lon_column
 
@@ -1256,8 +1257,8 @@ class OrbitData:
         comms_path = os.path.join(orbitdata_path, 'comm')
 
         # iterate through agents to load
-        for u_type,u_idx,u_name,u_gs_network in agents_to_load:
-            for v_type,v_idx,v_name,v_gs_network in agents_to_load:
+        for u_type,u_idx,u_name in agents_to_load:
+            for v_type,v_idx,v_name in agents_to_load:
                 # skip self-links
                 if u_name == v_name: continue
                 
@@ -1287,16 +1288,18 @@ class OrbitData:
                     comms_data = OrbitData.__load_isl_data(isl_file, simulation_duration, time_step)
 
                 elif u_type == 'groundOperator' and v_type == 'spacecraft':
-                    if u_gs_network == v_gs_network: 
-                        comms_data = gs_access_dfs[v_name]
-                    else:
-                        comms_data = pd.DataFrame(columns=['start index', 'end index'])
+                    # get all ground station accesses for this spacecraft
+                    comms_data = gs_access_dfs[v_name]                    
 
-                elif u_type == 'spacecraft' and v_type == 'groundOperator':                    
-                    if u_gs_network == v_gs_network: 
-                        comms_data = gs_access_dfs[u_name]
-                    else:
-                        comms_data = pd.DataFrame(columns=['start index', 'end index'])
+                    # filter ground station accesses for the ground operator's network's stations
+                    comms_data = comms_data[(comms_data['gndStn network'] == u_name)]
+
+                elif u_type == 'spacecraft' and v_type == 'groundOperator':     
+                    # get all ground station accesses for this spacecraft
+                    comms_data = gs_access_dfs[u_name]                    
+                    
+                    # filter ground station accesses for the ground operator's network's stations
+                    comms_data = comms_data[(comms_data['gndStn network'] == v_name)]
                     
                 elif u_type == 'groundOperator' and v_type == 'groundOperator':
                     # all ground operators can communicate with each other for the entire duration of the simulation
@@ -1404,7 +1407,7 @@ class OrbitData:
         data = dict()
 
         # iterate through agents to load
-        for agent_type, spacecraft_idx, agent_name,_ in agents_to_load:
+        for agent_type, spacecraft_idx, agent_name in agents_to_load:
             if agent_type == 'spacecraft':
                 # define agent folder
                 sat_id = "sat" + str(spacecraft_idx)

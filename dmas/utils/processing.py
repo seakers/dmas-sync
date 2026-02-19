@@ -1254,10 +1254,13 @@ class ResultsProcessor:
                     ['Events Observed', n_events_observed],
                     ['Events Detected', n_events_detected],
                     ['Events Requested', n_events_requested],
+
                     ['Event Observations', n_total_event_obs],
+                    
                     ['Events Re-observable', n_events_reobservable],
                     ['Events Re-observed', n_events_reobserved],
                     ['Event Re-observations', n_total_event_re_obs],
+                    
                     ['Events Co-observable', n_events_co_observable],
                     ['Events Co-observed', n_events_co_obs],
                     ['Event Co-observations', n_total_event_co_obs],
@@ -1267,13 +1270,17 @@ class ResultsProcessor:
                     ['Events Only Partially Co-observable', n_events_co_observable_partially],
                     ['Events Partially Co-observed', n_events_partially_co_obs],
                     ['Event Partial Co-observations', n_total_event_partially_co_obs],
+                    
                     ['Tasks Available', n_tasks],
                     ['Event-Driven Tasks Available', n_event_tasks],
                     ['Default Mission Tasks Available', n_default_tasks],
+                    
                     ['Tasks Observable', n_tasks_observable],
                     ['Event-Driven Tasks Observable', n_event_tasks_observable],
                     ['Default Mission Tasks Observable', n_default_tasks_observable],
+                    
                     ['Tasks Observed', n_tasks_observed],
+                    # ['Task Observations', sum([len(task_observations) for task_observations in observations_per_task.values()] )],
                     ['Event-Driven Tasks Observed', n_event_tasks_observed],
                     ['Default Mission Tasks Observed', n_default_tasks_observed],
 
