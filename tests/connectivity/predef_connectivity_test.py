@@ -140,7 +140,8 @@ class TestPredefAgentConnectivity(AgentConnectivityTester, unittest.TestCase):
         # initialize connectivity dict with type
         connectivity_dict = {
             "@type": "PREDEF",
-            "rulesPath" : f"./tests/connectivity/resources/connectivity/{connectivity}.json"
+            "rulesPath" : f"./tests/connectivity/resources/connectivity/{connectivity}.json",
+            "relaysEnabled" : False
         }
         
         return connectivity_dict 

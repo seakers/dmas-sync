@@ -203,9 +203,10 @@ class OrbitData:
         agent_names = { **satellite_names, **ground_operators }
 
         # get relay specs from mission specifications 
-        relay_toggle : bool = mission_specs_dict['scenario'].get('enabledRelays', 'True').lower() == 'true'
+        relay_toggle : bool = connectivity_specs.get('relaysEnabled', False)
 
-        if not relay_toggle: raise NotImplementedError('Currently only supports relay-enabled scenarios.')
+        if not relay_toggle: 
+            raise NotImplementedError('Currently only supports relay-enabled scenarios.')
 
         # load comms link data 
         ## check if full connectivity is specified
