@@ -47,7 +47,8 @@ class OrbitData:
                  comms_links : IntervalTable,
                  gs_access_data : IntervalTable,
                  gp_access_data : AccessTable,
-                 grid_data: TargetGridTable
+                 grid_data: TargetGridTable,
+                 comms_relays_enabled : bool = True
                 ):
         # assign attributes
         self.agent_name = agent_name
@@ -70,6 +71,8 @@ class OrbitData:
         self.comms_targets.discard(agent_name)
         self.comms_target_columns = comms_targets
         self.comms_target_indices = comms_target_indices
+
+        self.comms_relays_enabled = comms_relays_enabled
 
         # ground station access data
         self.gs_access_data = gs_access_data
@@ -203,7 +206,7 @@ class OrbitData:
         agent_names = { **satellite_names, **ground_operators }
 
         # get relay specs from mission specifications 
-        relay_toggle : bool = connectivity_specs.get('relaysEnabled', False)
+        relay_toggle : bool = connectivity_specs.get('relaysEnabled', True)
 
         if not relay_toggle: 
             raise NotImplementedError('Currently only supports relay-enabled scenarios.')
