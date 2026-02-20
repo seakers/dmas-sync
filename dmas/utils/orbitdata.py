@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from orbitpy.mission import Mission
 from execsatm.utils import Interval
-from dmas.utils.series import AccessTable, IntervalTable, StateTable, TargetGridTable
+from dmas.utils.series import AccessTable, ConnectivityTable, IntervalTable, StateTable, TargetGridTable
 
 class ConnectivityLevels(Enum):
     FULL = 'FULL'   # static fully connected network between all agents
@@ -118,7 +118,8 @@ class OrbitData:
         if connectivity_specs is None: raise ValueError('Connectivity specifications not found in mission specifications under `scenario.connectivity`. Please ensure connectivity specifications are included in the mission specifications.')
 
         # load connectivity data for each agent and store in dictionary indexed by agent name
-        agent_comms_links : IntervalTable = OrbitData.__load_comms_links(orbitdata_dir, connectivity_specs, schemas, printouts)
+        agent_comms_links, agent_comms_network \
+            = OrbitData.__load_comms_data(orbitdata_dir, connectivity_specs, schemas, printouts)
 
         data = dict()
         for agent_name, schema in schemas.items():
@@ -142,6 +143,7 @@ class OrbitData:
 
             # load comms link data from binary
             comms_links = agent_comms_links
+            comms_network = agent_comms_network
 
             # load ground point access data from binary
             gp_access_data = AccessTable.from_schema(schema['gp_access'], mmap_mode='r')
@@ -152,8 +154,8 @@ class OrbitData:
             # load state data from binary 
             state_data = StateTable.from_schema(schema['state'], mmap_mode='r')
 
-            data[agent_name] = OrbitData(agent_name, time_step, epoch_type, epoch, 
-                                            duration, eclipse_data, state_data, comms_links, gs_access_data, 
+            data[agent_name] = OrbitData(agent_name, time_step, epoch_type, epoch, duration,
+                                            eclipse_data, state_data, comms_network, gs_access_data, 
                                             gp_access_data, grid_data)
             
         # return compiled data
@@ -186,7 +188,7 @@ class OrbitData:
         return comms_links
 
     @staticmethod
-    def __load_comms_links(orbitdata_dir : str, connectivity_specs : dict, schemas : dict, printouts : bool = False) -> IntervalTable:
+    def __load_comms_data(orbitdata_dir : str, connectivity_specs : dict, schemas : dict, printouts : bool = False) -> IntervalTable:
         # define mission specifications file path
         mission_specs_file = os.path.join(orbitdata_dir, 'MissionSpecs.json')
         assert os.path.exists(mission_specs_file), \
@@ -208,8 +210,8 @@ class OrbitData:
         # get relay specs from mission specifications 
         relay_toggle : bool = connectivity_specs.get('relaysEnabled', True)
 
-        if not relay_toggle: 
-            raise NotImplementedError('Currently only supports relay-enabled scenarios.')
+        # if not relay_toggle: 
+        #     raise NotImplementedError('Currently only supports relay-enabled scenarios.')
 
         # load comms link data 
         ## check if full connectivity is specified
@@ -289,17 +291,21 @@ class OrbitData:
         interval_connectivities : List[dict] = []
         agent_to_idx = {agent: idx for idx, agent in enumerate(agent_names.keys())}
         idx_to_agent = [agent for agent in agent_to_idx.keys()]
-        prev_connectivity_matrix = np.zeros((len(agent_names), len(agent_names)), dtype=int)
+        # prev_connectivity_matrix = np.zeros((len(agent_names), len(agent_names)), dtype=int)
+        connectivity_matrices = np.zeros((len(connectivity_intervals), len(agent_names), len(agent_names)), dtype=int)
         
         # create adjacency matrix per interval
-        for interval in tqdm(connectivity_intervals, 
+        for i,interval in tqdm(enumerate(connectivity_intervals), 
                              desc='Precomputing agent connectivity intervals', 
                              unit=' intervals', 
                              leave=False,
                              disable=not printouts
                             ):
             # copy previous connectivity state              
-            interval_connectivity_matrix = prev_connectivity_matrix.copy()
+            if i > 0:
+                interval_connectivity_matrix = connectivity_matrices[i-1].copy() 
+            else:
+                interval_connectivity_matrix = np.zeros((len(agent_names), len(agent_names)), dtype=int)
             
             # get connectivity events that occur during the interval
             interval_events = events_per_interval[interval]
@@ -331,7 +337,7 @@ class OrbitData:
             })
 
             # set previous connectivity to current for next iteration
-            prev_connectivity_matrix = interval_connectivity_matrix
+            connectivity_matrices[i] = interval_connectivity_matrix
 
         # merge connectivity intervals if the connectivity maps are the same and intervals are contiguous
         merged_interval_connectivities : List[dict] = []
@@ -361,14 +367,20 @@ class OrbitData:
                 # otherwise, add new interval connectivity to list
                 merged_interval_connectivities.append(interval_connectivity)
 
-        # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
-        comms_links_df = pd.DataFrame(merged_interval_connectivities)
-        # comms_links_df = pd.DataFrame(interval_connectivities)
+        # define binary output directory for processed comms data
         bin_dir = os.path.join(orbitdata_dir, 'bin')
-        comms_links_schema = OrbitData.__write_interval_data_table(comms_links_df, bin_dir, 'comms_links', schemas['comms_data']['time_specs']['time step'], start_col='start', end_col='end', allow_overwrite=True)
+        
+        # convert adjacency matrices to ConnectivityTable for easier querying
+        comms_links_schema = None # TODO
+        raise NotImplementedError('TODO: need to implement conversion of connectivity matrices to ConnectivityTable for easier querying.')
 
-        # load comms link table as IntervalTable for future querying
-        return IntervalTable.from_schema(comms_links_schema, mmap_mode='r')
+        # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
+        comms_network_df = pd.DataFrame(merged_interval_connectivities)
+        comms_network_schema = OrbitData.__write_interval_data_table(comms_network_df, bin_dir, 'comms_links', schemas['comms_data']['time_specs']['time step'], start_col='start', end_col='end', allow_overwrite=True)
+
+        # load comms data as ConnectivityTable and IntervalTable for future querying
+        return ConnectivityTable.from_schema(comms_links_schema, mmap_mode='r'), \
+                    IntervalTable.from_schema(comms_network_schema, mmap_mode='r')
 
     @staticmethod
     def __generate_connectivity_mask(connectivity_dict : dict, agent_names : List[str], ground_operators : List[str]) -> Dict[Tuple[str, str], bool]:
