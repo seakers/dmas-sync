@@ -210,8 +210,8 @@ class OrbitData:
         # get relay specs from mission specifications 
         relay_toggle : bool = connectivity_specs.get('relaysEnabled', True)
 
-        # if not relay_toggle: 
-        #     raise NotImplementedError('Currently only supports relay-enabled scenarios.')
+        if not relay_toggle: 
+            raise NotImplementedError('Currently only supports relay-enabled scenarios.')
 
         # load comms link data 
         ## check if full connectivity is specified
@@ -370,8 +370,16 @@ class OrbitData:
         # define binary output directory for processed comms data
         bin_dir = os.path.join(orbitdata_dir, 'bin')
         
+        # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
+        comms_network_df = pd.DataFrame(merged_interval_connectivities)
+        comms_network_schema = OrbitData.__write_interval_data_table(comms_network_df, bin_dir, 'comms_links', schemas['comms_data']['time_specs']['time step'], start_col='start', end_col='end', allow_overwrite=True)
+
+        # load comms data as ConnectivityTable and IntervalTable for future querying
+        return None, IntervalTable.from_schema(comms_network_schema, mmap_mode='r')
+
+        # TODO enable support for relay-enabled scenarios by converting interval connectivity data to adjacency matrices and then to ConnectivityTable for easier querying of connectivity between agents during each interval; if relays are not enabled, can skip this step and just use the interval connectivity data as is since connectivity is static between intervals
         # convert adjacency matrices to ConnectivityTable for easier querying
-        comms_links_schema = None # TODO
+        comms_links_schema = None 
         raise NotImplementedError('TODO: need to implement conversion of connectivity matrices to ConnectivityTable for easier querying.')
 
         # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
