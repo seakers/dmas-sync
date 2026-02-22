@@ -1,0 +1,58 @@
+{
+    "@id": "thermal_sat_0_0",
+    "name": "thermal_0",
+    "spacecraftBus": {
+        "name": "BlueCanyon",
+        "mass": 20,
+        "volume": 0.5,
+        "orientation": {
+            "referenceFrame": "NADIR_POINTING",
+            "convention": "REF_FRAME_ALIGNED"
+        },
+        "components": {
+            "adcs" : {
+                "maxTorque" : 1000,
+                "maxRate" : 15
+            }
+        }
+    },
+    "instrument": {
+
+    },
+    "orbitState": {
+        "date": {
+            "@type": "GREGORIAN_UT1",
+            "year": 2020,
+            "month": 1,
+            "day": 1,
+            "hour": 0,
+            "minute": 0,
+            "second": 0
+        },
+        "state": {
+            "@type": "KEPLERIAN_EARTH_CENTERED_INERTIAL",
+            "sma": 6928.0,
+            "ecc": 0.01,
+            "inc": 98.0,
+            "raan": 0.0,
+            "aop": 0.0,
+            "ta": 0.0
+        }
+    },
+    "planner" : {
+        "preplanner": {
+            "@type": "blank",
+            "debug": "True",
+            "period" : 5000
+        },
+        "replanner": {
+            "@type": "consensus",
+            "model": "heuristicInsertion",
+            "heuristic" : "taskPriority",
+            "replanThreshold": 1,
+            "optimisticBiddingThreshold": 1,
+            "debug": "False"
+        }
+    },
+    "mission" : "generic response mission"
+}

@@ -1,0 +1,1 @@
+# TODO creates `connectivity.json` for the connectivity test scenarios
