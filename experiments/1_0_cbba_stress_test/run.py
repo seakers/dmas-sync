@@ -238,8 +238,6 @@ def create_ground_operator_specifications(base_path : str, scenario_id : int, gr
     # return ground operator specifications
     return [ground_operator_specs]
 
-
-
 def generate_scenario_mission_specs(mission_specs_template : dict, duration : float, step_size : float, 
                                     base_path : str, trial_filename : str, scenario_id : int,
                                     num_sats : int, gnd_segment : str, target_distribution : int,

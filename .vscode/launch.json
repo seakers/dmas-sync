@@ -293,7 +293,7 @@
                 // "--trial-range", "104:105",
                 // "--trial-range", "116:117",
                 // "--trial-range", "10:11",
-                // "--reduced",
+                "--reduced",
                 // "--profile-cpu",
                 // "--profile-mem",
                 // "--single-thread",
@@ -302,7 +302,7 @@
                 // "--force-simulate",
                 // "--only-postprocess",
                 "--force-summarize",
-                "--quiet",
+                // "--quiet",
                 "--exceptions",
             ]
         },
