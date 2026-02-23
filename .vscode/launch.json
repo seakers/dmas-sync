@@ -306,5 +306,17 @@
                 "--exceptions",
             ]
         },
+        {
+            "name": "EXPERIMENT 1 Prep: Connectivity Analysis",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/experiments/1_cbba_validation/connectivity.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        }
     ]
 }

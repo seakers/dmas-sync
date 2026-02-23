@@ -106,7 +106,8 @@ def main_study(sim_cfg: SimulationConfig) -> List[Dict]:
         print(" - Loaded {0} trials from `{1}`: [{2}:{3})".format(len(trials), sim_cfg.trials_file, sim_cfg.trial_start, end_disp))
 
     # load templates
-    mission_specs_template, ground_operator_specs_template, spacecraft_specs_template, instrument_specs = load_templates(base_path)
+    mission_specs_template, ground_operator_specs_template, \
+        spacecraft_specs_template, instrument_specs = load_templates(base_path)
     if not sim_cfg.quiet:
         print(" - Loaded experiment templates from `resources/templates/`")
 

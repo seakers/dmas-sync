@@ -65,7 +65,7 @@ if __name__ == "__main__":
         "Preplanner" : ["None"],
         "Replanner": ["Greedy", "CBBA", "Oracle"],
         "Num Sats": [12, 24, 48, 96, 192],
-        "Connectivity": ["High"],
+        "Latency": ["Low"],
         "Task Arrival Rate": [10, 50, 100, 500, 1000],
         "Target Distribution": [60.0],
         "Scenario" : range(n_scenarios), 
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         "Preplanner" : ["None"],
         "Replanner": ["Greedy", "CBBA", "Oracle"],
         "Num Sats": [12, 24, 48, 96, 192],
-        "Connectivity": ["High", "Medium", "Low"],
+        "Latency": ["High", "Medium", "Low"],
         "Task Arrival Rate": [10, 50, 100, 500, 1000],
         "Target Distribution": [60.0],
         "Scenario" : range(n_scenarios),
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         "Preplanner" : ["None", "DP"],
         "Replanner": ["CBBA", "Oracle"],
         "Num Sats": [12, 24, 48, 96, 192],
-        "Connectivity": ["High", "Medium", "Low"],
+        "Latency": ["High", "Medium", "Low"],
         "Task Arrival Rate": [10, 50, 100, 500, 1000],
         "Target Distribution": [60.0],
         "Scenario" : range(n_scenarios),
@@ -92,18 +92,8 @@ if __name__ == "__main__":
     # define experiment parameter rules
     rules = [
         # Oracle replanner only allowed with no preplanner
-        lambda d: (d["Replanner"] != "Oracle") | (d["Preplanner"] == "None"),
-
-        # # Oracle replanner only allowed when connectivity is High
-        # lambda d: (d["Replanner"] != "Oracle") | (d["Connectivity"] == "High"),
-
-        # # If Num Sats >= 96 then Task Arrival Rate must be >= 50 (example)
-        # lambda d: (d["Num Sats"] < 96) | (d["Task Arrival Rate"] >= 50),
-
-        # # Space Comms Segment TDRSS not allowed with Connectivity Low (example)
-        # lambda d: (d["Space Comms Segment"] != "TDRSS") | (d["Connectivity"] != "Low"),
+        lambda d: (d["Replanner"] != "Oracle") | (d["Preplanner"] == "None")
     ]
-
 
     # generate full enumeration of trials per experiment
     stress_test_trials = generate_full_tactorial_trials(stress_test_params)
