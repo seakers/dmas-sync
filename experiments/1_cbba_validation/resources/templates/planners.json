@@ -1,0 +1,19 @@
+{
+    "preplanners" : {
+        "none" : {
+            "@type": "blank",
+            "debug": "True",
+            "period" : 5000
+        }
+    },
+    "replanners" : {
+        "cbba" : {
+            "@type": "consensus",
+            "model": "heuristicInsertion",
+            "heuristic" : "taskPriority",
+            "replanThreshold": 1,
+            "optimisticBiddingThreshold": 1,
+            "debug": "False"
+        }
+    }
+}
