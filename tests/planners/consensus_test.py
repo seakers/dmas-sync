@@ -2851,11 +2851,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # print results
         results_summary : pd.DataFrame = self.simulation.summarize_results()
 
-        # TODO verify results
-        # self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observable'].values[0][1], 2)
-        # self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observed'].values[0][1], 1)
-        # self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 2)
-        # self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Re-observed'].values[0][1], 1)
+        # verify results
+        planned_reward = results_summary.loc[results_summary['Metric']=='Total Planned Reward'].values[0][1]
+        observed_reward = results_summary.loc[results_summary['Metric']=='Total Obtained Reward'].values[0][1]
+        
+        # observed reward should be less than or equal to planned reward due to lack of cooridnation opportunities
+        self.assertLessEqual(observed_reward, planned_reward) 
 
         # print done
         print(f"{scenario_name}: DONE")

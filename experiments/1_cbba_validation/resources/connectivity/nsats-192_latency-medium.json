@@ -274,8 +274,8 @@
         },
         {
             "pair": [
-                "imager_a_sat_24",
-                "imager_a_sat_52"
+                "imager_a_sat_23",
+                "imager_b_sat_45"
             ],
             "action": "allow"
         }
