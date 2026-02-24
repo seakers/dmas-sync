@@ -314,9 +314,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -409,8 +412,11 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # execute mission
         self.simulation.execute()
         
-        # summarize results
-        self.simulation.summarize_results()
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -521,9 +527,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -635,9 +644,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -748,9 +760,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -854,9 +869,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -965,9 +983,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
     
@@ -1019,9 +1040,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -1084,9 +1108,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
         
@@ -1290,9 +1317,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -1355,9 +1385,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -1418,9 +1451,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -1493,9 +1529,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -1556,9 +1595,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -1767,9 +1809,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -1863,9 +1908,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -1928,9 +1976,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -2008,9 +2059,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -2275,9 +2329,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
     
@@ -2461,9 +2518,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -2526,9 +2586,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -2604,9 +2667,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -2699,8 +2765,11 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # execute mission
         self.simulation.execute()
         
-        # summarize results
-        self.simulation.summarize_results()
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -2781,8 +2850,11 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # execute mission
         self.simulation.execute()
         
-        # summarize results
-        self.simulation.summarize_results()
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print(f"{scenario_name}: DONE")
 
@@ -2848,8 +2920,11 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # execute mission
         self.simulation.execute()
         
-        # print results
-        results_summary : pd.DataFrame = self.simulation.summarize_results(force_summarize=True)
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        results_summary = self.simulation.summarize_results(force_summarize=True)
 
         # verify results
         planned_reward = results_summary.loc[results_summary['Metric']=='Total Planned Reward'].values[0][1]
@@ -2935,9 +3010,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.summarize_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print('DONE')
 
