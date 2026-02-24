@@ -157,6 +157,13 @@
         },
         {
             "pair": [
+                "imager_b_sat_7",
+                "imager_a_sat_11"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
                 "imager_c_sat_7",
                 "imager_c_sat_24"
             ],
@@ -234,13 +241,6 @@
         },
         {
             "pair": [
-                "imager_a_sat_15",
-                "imager_b_sat_19"
-            ],
-            "action": "allow"
-        },
-        {
-            "pair": [
                 "imager_c_sat_16",
                 "imager_a_sat_17"
             ],
@@ -256,6 +256,13 @@
         {
             "pair": [
                 "imager_c_sat_20",
+                "imager_c_sat_23"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_b_sat_23",
                 "imager_c_sat_23"
             ],
             "action": "allow"

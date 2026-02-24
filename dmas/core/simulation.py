@@ -335,7 +335,8 @@ class Simulation:
             processed_results = self.__processed_results
 
             results_summary : pd.DataFrame \
-                = ResultsProcessor.summarize_results(self._orbitdata,
+                = ResultsProcessor.summarize_results(self._results_path,
+                                                     self._orbitdata,
                                                      self._events,
                                                      *processed_results, 
                                                      precision=precision, 

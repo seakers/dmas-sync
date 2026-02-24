@@ -1126,7 +1126,8 @@ class ResultsProcessor:
     RESULTS SUMMARY METHODS
     """
     @staticmethod
-    def summarize_results(compiled_orbitdata : Dict[str, OrbitData], 
+    def summarize_results(results_path : str,
+                          compiled_orbitdata : Dict[str, OrbitData], 
                           events : List[GeophysicalEvent],
                           task_reqs : List[TaskRequest],
                           known_tasks : List[GenericObservationTask],
@@ -1424,7 +1425,10 @@ class ResultsProcessor:
 
                     # Available Reward and Utility Statistics
                     ['Total Task Priority Available', total_task_priority],
-                    ['Total Available Utility', total_available_utility]
+                    ['Total Available Utility', total_available_utility],
+
+                    # Results dir
+                    ['Results Directory', results_path]
                 ]
 
         return pd.DataFrame(summary_data, columns=summary_headers)    
