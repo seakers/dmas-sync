@@ -34,7 +34,7 @@ from dmas.models.planning.decentralized.blank import BlankPlanner
 from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInsertionConsensusPlanner
 from dmas.models.planning.decentralized.dynamic import DynamicProgrammingPlanner
 from dmas.models.planning.decentralized.earliest import EarliestAccessPlanner
-from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPeriodicPlanner
+from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPeriodicPlanner, HeuristicInsertionReactivePlanner
 from dmas.models.planning.decentralized.nadir import NadirPointingPlanner
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
@@ -1022,6 +1022,9 @@ class Simulation:
                 return HeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
             else:
                 raise NotImplementedError(f'replanner model `{model}` not yet supported.')
+        elif replanner_type.lower() in ['heuristic']:
+            replan_threshold = replanner_dict.get('replanThreshold', 1)
+            return HeuristicInsertionReactivePlanner(replan_threshold, debug, logger, printouts)
         
         # fallback for unimplemented replanner types
         raise NotImplementedError(f'replanner of type `{replanner_dict}` not yet supported.')
