@@ -257,7 +257,9 @@ class PlannerTester(ABC):
             f"Mission file not found: {mission_name}.json"
 
         scenario = {
-            "connectivity": connectivity,
+            "connectivity": {
+                "@type": connectivity
+            },
             "events": {
                 "@type": "PREDEF",
                 "eventsPath": f"./tests/planners/resources/events/{event_name}.csv"

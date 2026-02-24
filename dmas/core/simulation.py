@@ -333,26 +333,18 @@ class Simulation:
             # processed results are already stored in this simulation instance;
             #   use processed results and generate summary
             processed_results = self.__processed_results
-
-            results_summary : pd.DataFrame \
-                = ResultsProcessor.summarize_results(self._results_path,
-                                                     self._orbitdata,
-                                                     self._events,
-                                                     *processed_results, 
-                                                     precision=precision, 
-                                                     printouts=printouts)
-
         else:
             # results have not already stored in this simulation instance; 
             #   process results and generate summary
             processed_results = self.process_results(printouts=printouts)
 
-            results_summary : pd.DataFrame \
-                = ResultsProcessor.summarize_results(self._orbitdata,
-                                                     self._events,
-                                                     *processed_results, 
-                                                     precision=precision, 
-                                                     printouts=printouts)
+        results_summary : pd.DataFrame \
+            = ResultsProcessor.summarize_results(self._results_path,
+                                                    self._orbitdata,
+                                                    self._events,
+                                                    *processed_results, 
+                                                    precision=precision, 
+                                                    printouts=printouts)
             
         # include runtime in results summary if simulation has been executed by this instance
         if self.__executed:

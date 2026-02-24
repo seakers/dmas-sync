@@ -544,17 +544,21 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return list of removed bids
         return expired_bids, revised_bundle, bundle_updates
     
-    def __update_performed_bundle_observations(self, state : SimulationAgentState, performed_observations : List[ObservationAction]) -> Tuple[list, List[Bid]]:
+    def __update_performed_bundle_observations(self, 
+                                               state : SimulationAgentState, 
+                                               performed_observations : List[ObservationAction]
+                                            ) -> Tuple[list, List[Bid]]:
         """ Checks if planned observations were performed by parent agent and updates results accordingly. """
         
         # initialize list of bundle updates
-        bundle_updates = []
+        bundle_updates : List[Tuple[ObservationOpportunity, List[Bid]]] = []
 
         # initialize list of performed tasks to remove from bundle
         performed_task_bids = []
 
         # collect actions in bundle past their imaging time
-        observed_opportunities : list[ObservationOpportunity] = [obs_action.obs_opp for obs_action in performed_observations]
+        observed_opportunities : list[ObservationOpportunity] = [obs_action.obs_opp 
+                                                                 for obs_action in performed_observations]
 
         performed_bundle_tasks = [ (obs_opp, obs_tasks) 
                                     for obs_opp, obs_tasks in self._bundle
@@ -599,13 +603,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
         revised_path = [obs_action for obs_action in self._path
                         if obs_action.obs_opp not in performed_bundle_obs]
         
-        # -------------------------------
-        # DEBUG
-        # -------------------------------
-
+        # collect rewards for performed bids and add to rewards sink
         for _,performed_bids in bundle_updates:
             for performed_bid in performed_bids:
                 performed_bid : Bid
+                # calculate reward for this bid
+
+                # compile reward information for this bid 
                 reward_dict = {
                     'task_id' : performed_bid.task.id,
                     'n_obs' : performed_bid.n_obs,
@@ -613,8 +617,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     't_bid' : performed_bid.t_bid,
                     'agent_name' : performed_bid.owner,
                     'planned reward' : performed_bid.owner_bid,
-                    'performed reward' : performed_bid.winning_bid
+                    # 'performed reward' : performed_bid.winning_bid
                 }
+
+                # add to rewards sink
                 self._observation_rewards.append(reward_dict)
 
         # ensure elements in path are yet to be performed
