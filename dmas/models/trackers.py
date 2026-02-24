@@ -281,3 +281,25 @@ class LatestObservationTracker:
             
             # update the tracker with this observation
             self.__update_one(obs)
+
+    def lookup(self, grid_index : int, gp_index : int) :
+        """
+        Lookup the latest observation info for a given grid point.
+
+        Returns a dict with keys:
+          - "t_last": time of the latest observation (float)
+          - "n_obs": total number of observations (int)
+          - "last_actor": name of the last observing agent (str or None)
+        """
+        k = self._k(grid_index, gp_index)
+        if k < 0:
+            return {"t_last": -np.inf, "n_obs": -1, "last_actor": None}
+        
+        actor_id = self.last_actor[k]
+        actor_name = self.id_to_actor[actor_id] if actor_id >= 0 else None
+
+        return {
+            "t_last": float(self.t_last[k]),
+            "n_obs": int(self.n_obs[k]),
+            "last_actor": actor_name
+        }

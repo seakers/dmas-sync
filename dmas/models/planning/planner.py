@@ -100,7 +100,7 @@ class AbstractPlanner(ABC):
                         mininterval=0.5, 
                         leave=False
                     ):
-            # extract relevant dataF
+            # extract relevant data
             grid_index = raw_coverage_data['grid index'][i]
             gp_index = raw_coverage_data['GP index'][i]
             instrument = raw_coverage_data['instrument'][i]
@@ -670,7 +670,8 @@ class AbstractPlanner(ABC):
 
                 # get past observations for this target before current image time
                 # target_observation : ObservationTracker = observation_history.get_observation_history(grid_index, gp_index)
-                t_prev,n_obs,_ = observation_history.lookup(grid_index, gp_index)
+                target_history = observation_history.lookup(grid_index, gp_index)
+                t_prev,n_obs,_ = list(target_history.values())
 
                 # check if there are no previous observations for this target
                 # if target_observation is None: continue  
@@ -683,7 +684,8 @@ class AbstractPlanner(ABC):
                 task_t_prev[task] = max(task_t_prev[task], t_prev) if t_prev <= t_img else task_t_prev[task]
 
                 # validate previous observation time
-                if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, "Previous observation time must be non-negative."
+                if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, \
+                    "Previous observation time must be non-negative."
                     
         # return observation counts and previous observation times
         return task_n_obs, task_t_prev
@@ -1145,9 +1147,9 @@ class AbstractPlanner(ABC):
         finally:
             # DEBUG SECTION
             pass
-            for pair_idx,(t_i,d_i,th_i,t_j,d_j,th_j,max_slew_rate) in enumerate(observation_parameters):
-                if not self.is_observation_pair_valid(t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate):
-                    x = 1
+            # for pair_idx,(t_i,d_i,th_i,t_j,d_j,th_j,max_slew_rate) in enumerate(observation_parameters):
+            #     if not self.is_observation_pair_valid(t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate):
+            #         x = 1
 
     def is_observation_pair_valid(self, 
                                   t_i, d_i, th_i, 

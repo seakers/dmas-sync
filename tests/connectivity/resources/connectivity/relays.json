@@ -1,0 +1,27 @@
+{
+  "default": "deny",
+
+  "groups": {
+    "instruments": ["sat_1", "sat_2", "sat_3"],
+    "relays": ["relay_sat_1", "relay_sat_2"],
+    "groundStations": ["gs"]
+  },
+
+  "rules": [
+    {
+      "action": "allow",
+      "scope": "between",
+      "targets": ["instruments", "relays", "groundStations"]
+    },
+    {
+      "action": "deny",
+      "scope": "within",
+      "targets": "instruments"
+    },
+    {
+      "action": "allow",
+      "scope": "within",
+      "targets": "relays"
+    }
+  ]
+}

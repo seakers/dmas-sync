@@ -71,7 +71,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
         self.client_missions : Dict[str, Mission] = {client.lower(): client_missions[client] for client in client_missions}
         self.cross_track_fovs : Dict[str, Dict[str, float]] = self._collect_client_cross_track_fovs(client_specs)
         self.client_states : Dict[str, SatelliteAgentState] = self.__initiate_client_states(client_orbitdata, client_specs)
-        self.client_plans : Dict[str, PeriodicPlan] = {client : PeriodicPlan([], t=0.0, horizon=self.horizon, t_next=np.Inf) 
+        self.client_plans : Dict[str, PeriodicPlan] = {client : PeriodicPlan([], t=0.0, horizon=self._horizon, t_next=np.Inf) 
                                            for client in self.client_orbitdata}
         self.client_tasks : Dict[Mission, List[GenericObservationTask]] = self.__generate_default_client_tasks(client_missions, client_orbitdata)
 
@@ -186,10 +186,10 @@ class DealerPlanner(AbstractPeriodicPlanner):
         plan_broadcasts : list[BroadcastMessageAction] = self._schedule_broadcasts(state, orbitdata)
         
         # generate plan from actions
-        self.plan : PeriodicPlan = PeriodicPlan(plan_broadcasts, t=state._t, horizon=self.horizon, t_next=state._t+self.period)    
+        self.plan : PeriodicPlan = PeriodicPlan(plan_broadcasts, t=state._t, horizon=self._horizon, t_next=state._t+self._period)    
         
         # schedule wait for next planning period to start
-        replan_waits : list[WaitAction] = self._schedule_periodic_replan(state, self.plan, state._t+self.period)
+        replan_waits : list[WaitAction] = self._schedule_periodic_replan(state, self.plan, state._t+self._period)
 
         # add waits to plan
         self.plan.add_all(replan_waits, t=state._t)
@@ -209,17 +209,17 @@ class DealerPlanner(AbstractPeriodicPlanner):
         """
 
         # Outline planning horizon interval
-        planning_horizons : Dict[str,Interval] = self._calculate_horizons(state, orbitdata, self.horizon)
+        planning_horizons : Dict[str,Interval] = self._calculate_horizons(state, orbitdata, self._horizon)
 
         # check if there are clients reachable in the planning horizon
         if all([orbitdata.get_next_agent_access(state._t, target=client, 
-                                                t_max=state._t+self.period, 
+                                                t_max=state._t+self._period, 
                                                 include_current=True) is None 
                 for client in self.client_orbitdata.keys()]):
             return {client: PeriodicPlan([], 
                                          t=state._t, 
                                          horizon=planning_horizons[client].right, 
-                                         t_next=state._t+self.period)
+                                         t_next=state._t+self._period)
                         for client in self.client_orbitdata
                     }
 
@@ -277,7 +277,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
         client_plans : Dict[str, PeriodicPlan] = {client: PeriodicPlan(client_observations[client], 
                                                             client_maneuvers[client], 
                                                             client_broadcasts[client], 
-                                                            t=state._t, horizon=planning_horizons[client].right, t_next=state._t+self.horizon)
+                                                            t=state._t, horizon=planning_horizons[client].right, t_next=state._t+self._horizon)
                                                 for client in self.client_orbitdata
                                             }
 
@@ -481,7 +481,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
         # create future state broadcast action for each client
         for client in self.client_orbitdata.keys():
             
-            if self.sharing == self.OPPORTUNISTIC:
+            if self._sharing == self.OPPORTUNISTIC:
                 # get access intervals with the client agent within the planning horizon
                 access_intervals : List[Tuple[Interval, str]] \
                     = orbitdata.get_next_agent_accesses(client, state._t, include_current=True)
@@ -493,10 +493,10 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     if next_access.is_empty(): continue
 
                     # if access opportunity is beyond the next planning period, skip scheduling    
-                    if next_access.right <= state._t + self.period: continue
+                    if next_access.right <= state._t + self._period: continue
 
                     # get last access interval and calculate broadcast time
-                    t_broadcast : float = max(next_access.left, state._t+self.period-5e-3) # ensure broadcast happens before the end of the planning period
+                    t_broadcast : float = max(next_access.left, state._t+self._period-5e-3) # ensure broadcast happens before the end of the planning period
 
                     # generate plan message to share state
                     state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
@@ -510,17 +510,17 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     # add to client broadcast list
                     client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
 
-            elif self.sharing == self.PERIODIC:
+            elif self._sharing == self.PERIODIC:
                 # determine current time        
                 t_curr : float  = state._t
 
                 # determine number of periods within the planning horizon
-                n_periods = int(self.horizon // self.period)
+                n_periods = int(self._horizon // self._period)
 
                 # schedule broadcasts at the end of each period
                 for i in range(n_periods):
                     # calculate broadcast time
-                    t_broadcast : float = t_curr + self.period * (i + 1) - 5e-3  # ensure broadcast happens before the end of the planning period
+                    t_broadcast : float = t_curr + self._period * (i + 1) - 5e-3  # ensure broadcast happens before the end of the planning period
                 
                     # generate plan message to share state
                     state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
@@ -535,7 +535,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
 
             else:
-                raise ValueError(f'Unknown sharing mode `{self.sharing}` specified.')
+                raise ValueError(f'Unknown sharing mode `{self._sharing}` specified.')
 
         return client_broadcasts
 
@@ -550,7 +550,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
         t_access_starts = set()    
 
         for client,client_plan in self.client_plans.items():
-            if self.sharing == self.OPPORTUNISTIC:
+            if self._sharing == self.OPPORTUNISTIC:
                 # get next access interval
                 next_access : Interval = orbitdata.get_next_agent_access(client, state._t, include_current=True)
 
@@ -569,7 +569,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
 
                 # if broadcast time is beyond the next planning period, skip scheduling
-                if t_broadcast >= state._t + self.period: continue
+                if t_broadcast >= state._t + self._period: continue
 
                 # schedule broadcasts for the client
                 plan_msg = PlanMessage(state.agent_name, client, [action.to_dict() for action in client_plan.actions], state._t)
@@ -578,17 +578,17 @@ class DealerPlanner(AbstractPeriodicPlanner):
                 plan_broadcast = BroadcastMessageAction(plan_msg.to_dict(), t_broadcast)
                 broadcasts.append(plan_broadcast)
 
-            elif self.sharing == self.PERIODIC:
+            elif self._sharing == self.PERIODIC:
                 # determine current time        
                 t_curr : float  = state._t 
 
                 # determine number of periods within the planning horizon
-                n_periods = int(self.horizon // self.period)
+                n_periods = int(self._horizon // self._period)
 
                 # schedule broadcasts at the end of each period
                 for i in range(n_periods):
                     # calculate broadcast time
-                    t_broadcast : float = t_curr + self.period * (i + 1) - 5e-3  # ensure broadcast happens before the end of the planning period
+                    t_broadcast : float = t_curr + self._period * (i + 1) - 5e-3  # ensure broadcast happens before the end of the planning period
 
                     # schedule broadcasts for the client
                     plan_msg = PlanMessage(state.agent_name, client, [action.to_dict() for action in client_plan.actions], state._t)
@@ -598,7 +598,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     broadcasts.append(plan_broadcast)
 
             else:
-                raise ValueError(f'Unknown sharing mode `{self.sharing}` specified.')          
+                raise ValueError(f'Unknown sharing mode `{self._sharing}` specified.')          
            
         # connection waits; allows for messages to be received right after access start times
         waits = [WaitAction(t_access_start, t_access_start) for t_access_start in t_access_starts]

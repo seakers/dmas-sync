@@ -84,13 +84,13 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         # currently assumes omnidirectional antennas
         
         # wait for next planning period to start
-        replan : list = self._schedule_periodic_replan(state, state._t + self.period)
+        replan_waits : list = self._schedule_periodic_replan(state, state._t + self._period)
 
         # generate plan from actions
-        self.plan : PeriodicPlan = PeriodicPlan(broadcasts, replan, t=state._t, horizon=self.horizon, t_next=state._t+self.period)    
+        self._plan : PeriodicPlan = PeriodicPlan(broadcasts, replan_waits, t=state._t, horizon=self._horizon, t_next=state._t+self._period)    
         
         # return plan and save local copy
-        return self.plan.copy()
+        return self._plan.copy()
     
     def _schedule_observations(self, *_) -> list:
         return [] # No scheduling, only announcing events

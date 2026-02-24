@@ -1,7 +1,7 @@
 {
     "missions" : [
         {
-            "name": "Algal bloom comprehensive",
+            "name": "algal bloom comprehensive",
             "objectives" : [
                 {
                     "objective_type" : "default_mission",
@@ -82,7 +82,7 @@
             ]
         },
         {
-            "name": "Algal bloom response",
+            "name": "algal bloom response",
             "objectives" : [                
                 {
                     "objective_type" : "event_driven",
@@ -125,7 +125,7 @@
             ]
         },
         {
-            "name": "Algal bloom monitoring",
+            "name": "algal bloom monitoring",
             "objectives" : [
                 {
                     "objective_type" : "default_mission",

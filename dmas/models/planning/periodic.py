@@ -13,7 +13,7 @@ from execsatm.utils import Interval
 from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.planner import AbstractPlanner
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import DataSink, LatestObservationTracker
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
@@ -58,15 +58,17 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         assert sharing in {self.NONE, self.PERIODIC, self.OPPORTUNISTIC}, f"Sharing mode `{sharing}` not recognized."
 
         # set parameters
-        self.horizon = horizon                                      # planning horizon
-        self.period = period                                        # replanning period         
-        self.sharing = sharing                                      # toggle for sharing plans
-        self.plan = PeriodicPlan(t=-1,horizon=horizon,t_next=0.0)   # initialized empty plan
+        self._horizon = horizon                                      # planning horizon
+        self._period = period                                        # replanning period         
+        self._sharing = sharing                                      # toggle for sharing plans
+        self._plan = PeriodicPlan(t=-1,horizon=horizon,t_next=0.0)   # initialized empty plan
                 
         # initialize attributes
         self.pending_reqs_to_broadcast : set[TaskRequest] = set()            # set of observation requests that have not been broadcasted
 
-    
+    def print_results(self):
+        return super().print_results()
+
     def update_percepts(self, 
                         state : SimulationAgentState,
                         current_plan : Plan,
@@ -88,11 +90,11 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                         ) -> bool:
         """ Determines whether a new plan needs to be initalized """    
 
-        if (self.plan.t < 0                  # simulation just started
-            or state.get_time() >= self.plan.t_next):    # or periodic planning period has been reached
+        if (self._plan.t < 0                  # simulation just started
+            or state.get_time() >= self._plan.t_next):    # or periodic planning period has been reached
             
             pending_actions = [action for action in current_plan
-                               if action.t_start <= self.plan.t_next]
+                               if action.t_start <= self._plan.t_next]
             
             return not bool(pending_actions)     # no actions left to do before the end of the replanning period 
         return False
@@ -114,7 +116,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         max_slew_rate, max_torque = self._collect_agility_specs(specs)
 
         # Outline planning horizon interval
-        planning_horizon = Interval(state.get_time(), state.get_time() + self.horizon)
+        planning_horizon = Interval(state.get_time(), state.get_time() + self._horizon)
 
         # get only available tasks
         available_tasks : list[GenericObservationTask] = self.get_available_tasks(tasks, planning_horizon)
@@ -140,13 +142,13 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         maneuvers : list = self._schedule_maneuvers(state, specs, observations, orbitdata)
         
         # wait for next planning period to start
-        replan : list = self._schedule_periodic_replan(state, state.get_time()+self.period)
+        replan : list = self._schedule_periodic_replan(state, state.get_time()+self._period)
         
         # generate plan from actions
-        self.plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, replan, t=state.get_time(), horizon=self.horizon, t_next=state.get_time()+self.period)    
+        self._plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, replan, t=state.get_time(), horizon=self._horizon, t_next=state.get_time()+self._period)    
 
         # return plan and save local copy
-        return self.plan.copy()
+        return self._plan.copy()
             
     
     def get_available_tasks(self, tasks : list, planning_horizon : Interval) -> list:
@@ -177,20 +179,20 @@ class AbstractPeriodicPlanner(AbstractPlanner):
             # initialize list of broadcasts to be done
             broadcasts = []       
 
-            if self.sharing == self.NONE: 
+            if self._sharing == self.NONE: 
                 pass # no broadcasts scheduled
 
-            elif self.sharing == self.PERIODIC:        
+            elif self._sharing == self.PERIODIC:        
                 # determine current time        
                 t_curr : float  = state.get_time() if t is None else t                
 
                 # determine number of periods within the planning horizon
-                n_periods = int(self.horizon // self.period)
+                n_periods = int(self._horizon // self._period)
 
                 # schedule broadcasts at the end of each period
                 for i in range(n_periods):
                     # calculate broadcast time
-                    t_broadcast : float = t_curr + self.period * (i + 1) - 5e-3  # ensure broadcast happens before the end of the planning period
+                    t_broadcast : float = t_curr + self._period * (i + 1) - 5e-3  # ensure broadcast happens before the end of the planning period
 
                     # generate plan message to share state
                     state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
@@ -204,7 +206,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                     # add to client broadcast list
                     broadcasts.extend([state_msg, observations_msg, task_requests_msg])
 
-            elif self.sharing == self.OPPORTUNISTIC:
+            elif self._sharing == self.OPPORTUNISTIC:
                 # initialize set of times when broadcasts are scheduled
                 t_access_starts = set()     
                 
@@ -222,7 +224,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                     if next_access.is_empty(): continue
 
                     # if access opportunity is beyond the next planning period, skip scheduling    
-                    if next_access.right <= state.get_time() + self.period: continue
+                    if next_access.right <= state.get_time() + self._period: continue
 
                     # get last access interval and calculate broadcast time
                     # t_broadcast : float = max(next_access.left, state.t+self.period-5e-3) # ensure broadcast happens before the end of the planning period
@@ -248,7 +250,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 broadcasts.extend(waits)
 
             else:
-                raise ValueError(f'Unknown sharing mode `{self.sharing}` specified.')
+                raise ValueError(f'Unknown sharing mode `{self._sharing}` specified.')
 
             # return scheduled broadcasts
             return broadcasts 

@@ -2,9 +2,9 @@ from typing import Any
 
 from execsatm.observations import ObservationOpportunity
 
-from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPlanner
+from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPeriodicPlanner
 
-class EarliestAccessPlanner(HeuristicInsertionPlanner):
+class EarliestAccessPlanner(HeuristicInsertionPeriodicPlanner):
     """ Schedules observations based on the earliest feasible access point """
     
     def _calc_heuristic(self,

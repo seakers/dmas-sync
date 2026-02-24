@@ -7,6 +7,7 @@ from tqdm import tqdm
 import pandas as pd
 
 from execsatm.mission import Mission
+from execsatm.attributes import SpatialCoverageRequirementAttributes, TemporalRequirementAttributes, ObservationRequirementAttributes
 from execsatm.events import GeophysicalEvent
 from execsatm.tasks import GenericObservationTask, DefaultMissionTask, EventObservationTask
 from execsatm.objectives import DefaultMissionObjective, EventDrivenObjective
@@ -60,6 +61,7 @@ class ResultsProcessor:
 
         ## tasks
         observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(compiled_orbitdata, known_tasks, observations_per_gp, agent_missions, printouts)
+        obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, printouts)
 
         # print compiled data
         processed_results_path = os.path.join(results_path)
@@ -75,6 +77,7 @@ class ResultsProcessor:
             'observations_per_event' : observations_per_event_df,            
             'observations_per_task' : observations_per_task_df,
             'planned_rewards' : planned_rewards_df,
+            'obtained_rewards' : obtained_rewards_df,
             'execution_costs' : execution_costs_df,
         }
 
@@ -83,10 +86,101 @@ class ResultsProcessor:
 
         # return compiled data for summary generation
         return task_reqs, known_tasks, events_per_gp, events_detected, events_requested, \
-            agent_broadcasts_df, planned_rewards_df, execution_costs_df, \
+            agent_broadcasts_df, planned_rewards_df, obtained_rewards_df, execution_costs_df, \
                 accesses_per_gp, accesses_per_event, accesses_per_task, \
                     observations_per_gp, observations_per_event, observations_per_task
     
+    @staticmethod
+    def __compile_obtained_rewards(observations_per_task : Dict[GenericObservationTask, List[dict]], 
+                                   agent_missions : Dict[str, Mission], 
+                                   printouts : bool
+                                ) -> pd.DataFrame:
+        # initialize list of obtained rewards
+        obtained_rewards_data = []
+
+        # iterate tasks and corresponding observations
+        for task, observations in observations_per_task.items():
+            
+            # initialize previous observation time for revisit time calculation
+            t_prev = np.NINF
+            
+            # iterate observations by start time 
+            for n_obs,obs_perf in enumerate(sorted(observations, key=lambda obs: obs['t_start'])):
+                # unpack observation information
+                observing_agent = obs_perf['agent name']
+                instrument_name : str = obs_perf['instrument']
+                loc = (obs_perf['lat [deg]'], obs_perf['lon [deg]'], obs_perf['grid index'], obs_perf['GP index'])
+                d_img = obs_perf['t_end'] - obs_perf['t_start']
+                t_img = obs_perf['time [s]']
+
+                # get matching mission for observing agent
+                mission : Mission = agent_missions[observing_agent]
+
+                # update observation performance information
+                obs_perf.update({ 
+                    SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
+                    TemporalRequirementAttributes.DURATION.value : d_img,
+                    TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
+                    #TODO Co-observation time
+                    TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
+                    TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
+                    TemporalRequirementAttributes.OBS_TIME.value : t_img,
+                    "t_end" : t_img + d_img,
+                    ObservationRequirementAttributes.OBSERVATION_NUMBER.value : n_obs + 1, # including this observation
+                })
+
+                # handle special case of first observation
+                if n_obs == 0:
+                    obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
+
+                # TODO update instrument-specific observation performance information
+                # if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower())
+                #     or ('vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower())):
+                #     if isinstance(instrument_spec.spectral_resolution, str):
+                #         obs_perf.update({
+                #             ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
+                #         })
+                #     elif isinstance(instrument_spec.spectral_resolution, (int,float)):
+                #         obs_perf.update({
+                #             ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
+                #         })
+                #     else:
+                #         raise ValueError('Unsupported type for spectral resolution in instrument specification.')
+                    
+                # elif ('altimeter' in instrument_name.lower()
+                #     or 'altimeter' in instrument_spec._type.lower()):
+                #     obs_perf.update({
+                #         ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
+                #     })
+                # else:
+                #     raise NotImplementedError(f'Calculation of task reward not yet supported for instruments of type `{instrument_name.lower()}`.')
+
+                # evaluate reward for this observation
+                reward = mission.calc_task_value(task, obs_perf)
+
+                # add reward information to observation performance information
+                reward_dict = {
+                    'task_id' : task.id,
+                    'n_obs' : n_obs,
+                    't_img' : t_img,
+                    'agent' : observing_agent,
+                    'instrument' : instrument_name,
+                    'reward' : reward,
+                }
+                obtained_rewards_data.append(reward_dict)
+                
+                # update observation performance information with reward
+                t_prev = t_img
+
+        # construct obtained rewards dataframe
+        if obtained_rewards_data:
+            obtained_rewards_df = pd.DataFrame(obtained_rewards_data)
+        else:
+            obtained_rewards_df = pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent', 'instrument', 'reward'])
+
+        # return obtained rewards dataframe
+        return obtained_rewards_df
+
     @staticmethod
     def load_processed_results(results_path : str,
                                 compiled_orbitdata : Dict[str, OrbitData], 
@@ -113,6 +207,7 @@ class ResultsProcessor:
 
         # load preprocessed dataframes if they exist, otherwise raise error     
         loadable_dfs = {
+            'obtained_rewards' : None,
             'accesses_per_event': None,
             'accesses_per_task' : None,
             'observations_per_event' : None,
@@ -125,7 +220,8 @@ class ResultsProcessor:
                 loadable_dfs[filename] = pd.read_parquet(filepath)
             else:
                 raise FileNotFoundError(f"Processed results file `{filename}.parquet` not found in path `{results_path}`. Expected file to be located at `{filepath}`.")
-
+        
+        obtained_rewards_df = loadable_dfs['obtained_rewards']
         accesses_per_event_df = loadable_dfs['accesses_per_event']
         accesses_per_task_df = loadable_dfs['accesses_per_task']
         observations_per_event_df = loadable_dfs['observations_per_event']
@@ -139,7 +235,7 @@ class ResultsProcessor:
 
         # return compiled data for summary generation
         return task_reqs, known_tasks, events_per_gp, events_detected, events_requested, \
-            agent_broadcasts_df, planned_rewards_df, execution_costs_df, \
+            agent_broadcasts_df, planned_rewards_df, obtained_rewards_df, execution_costs_df, \
                 accesses_per_gp, accesses_per_event, accesses_per_task, \
                     observations_per_gp, observations_per_event, observations_per_task
 
@@ -599,7 +695,10 @@ class ResultsProcessor:
             if access_intervals: accesses_per_event[event] = access_intervals
 
         # convert to dataframe
-        accesses_per_event_df = pd.DataFrame(accesses_per_event_data)
+        if accesses_per_event_data:
+            accesses_per_event_df = pd.DataFrame(accesses_per_event_data)
+        else:
+            accesses_per_event_df = pd.DataFrame(columns=['event id','event type','lat [deg]','lon [deg]','grid index','GP index','access start [s]','access end [s]','instrument','agent name'])
         
         # return compiled event accessibility information
         return accesses_per_event_df, accesses_per_event
@@ -758,7 +857,10 @@ class ResultsProcessor:
             if task_access_windows: accesses_per_task[task] = task_access_windows
     
         # convert to dataframe
-        accesses_per_task_df = pd.DataFrame(accesses_per_task_df_data)
+        if accesses_per_task_df_data:
+            accesses_per_task_df = pd.DataFrame(accesses_per_task_df_data)
+        else:
+            accesses_per_task_df = pd.DataFrame(columns=['task id','task type','parameter','lat [deg]','lon [deg]','grid index','GP index','t start','t end','agent name','instrument'])
 
         # remove duplicates
         accesses_per_task_df = accesses_per_task_df.drop_duplicates().reset_index(drop=True)
@@ -895,7 +997,10 @@ class ResultsProcessor:
             if matching_observations: observations_per_event[event] = matching_observations        
 
         # convert to dataframe
-        observations_per_event_df = pd.DataFrame(observations_per_event_df_data)
+        if observations_per_event_df_data:
+            observations_per_event_df = pd.DataFrame(observations_per_event_df_data)
+        else:
+            observations_per_event_df = pd.DataFrame(columns=['event id','event type','lat [deg]','lon [deg]','grid index','GP index','agent name','t_start','t_end','instrument','n_obs','t_rev'])
 
         # return observations per event
         return observations_per_event_df, observations_per_event
@@ -1120,7 +1225,8 @@ class ResultsProcessor:
     RESULTS SUMMARY METHODS
     """
     @staticmethod
-    def summarize_results(compiled_orbitdata : Dict[str, OrbitData], 
+    def summarize_results(results_path : str,
+                          compiled_orbitdata : Dict[str, OrbitData], 
                           events : List[GeophysicalEvent],
                           task_reqs : List[TaskRequest],
                           known_tasks : List[GenericObservationTask],
@@ -1129,6 +1235,7 @@ class ResultsProcessor:
                           events_requested : List[GeophysicalEvent], 
                           agent_broadcasts_df : pd.DataFrame, 
                           planned_rewards_df : pd.DataFrame, 
+                          obtained_rewards_df : pd.DataFrame,
                           execution_costs_df : pd.DataFrame,
                           accesses_per_gp : Dict[Tuple[int,int], pd.DataFrame],
                           accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
@@ -1162,7 +1269,7 @@ class ResultsProcessor:
                     n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
                         n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                             n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                n_tasks, n_event_tasks, n_default_tasks, \
+                                n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
                                     n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
                                         n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
                                             n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
@@ -1233,21 +1340,20 @@ class ResultsProcessor:
 
         # calculate utility metrics
         total_planned_reward = np.round(planned_rewards_df['planned reward'].sum(), precision) if planned_rewards_df is not None else 0.0
+        total_planned_utility = np.round(planned_rewards_df['planned reward'].sum() - execution_costs_df['cost'].sum(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0
+
         avg_planned_reward = np.round(planned_rewards_df['planned reward'].mean(), precision) if planned_rewards_df is not None else 0.0
         std_planned_reward = np.round(planned_rewards_df['planned reward'].std(), precision) if planned_rewards_df is not None else 0.0
         median_planned_reward = np.round(planned_rewards_df['planned reward'].median(), precision) if planned_rewards_df is not None else 0.0
 
-        total_planned_utility = np.round(planned_rewards_df['planned reward'].sum() - execution_costs_df['cost'].sum(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0
+        total_obtained_reward = np.round(obtained_rewards_df['reward'].sum(), precision) if obtained_rewards_df is not None else 0.0
+        total_obtained_utility = np.round(obtained_rewards_df['reward'].sum() - execution_costs_df['cost'].sum(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0
 
         total_task_priority, total_available_utility = ResultsProcessor.__calculate_total_available_utility(accesses_per_task)
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
         summary_data = [
-                    # Dates
-                    # ['Simulation Start Date', self.environment._clock_config.start_date], 
-                    # ['Simulation End Date', self.environment._clock_config.end_date], 
-
                     # Counters
                     ['Events', n_events],
                     ['Events Observable', n_events_observable],
@@ -1280,7 +1386,7 @@ class ResultsProcessor:
                     ['Default Mission Tasks Observable', n_default_tasks_observable],
                     
                     ['Tasks Observed', n_tasks_observed],
-                    # ['Task Observations', sum([len(task_observations) for task_observations in observations_per_task.values()] )],
+                    ['Task Observations', n_total_task_obs],
                     ['Event-Driven Tasks Observed', n_event_tasks_observed],
                     ['Default Mission Tasks Observed', n_default_tasks_observed],
 
@@ -1395,6 +1501,10 @@ class ResultsProcessor:
                     ['Total Planned Reward', total_planned_reward],
                     ['Normalized Total Planned Reward', total_planned_reward / total_available_utility if total_available_utility > 0 else 0.0],
                     ['Total Planned Task Observations', len(planned_rewards_df) if planned_rewards_df is not None else 0],
+
+                    ['Total Obtained Reward', total_obtained_reward],
+                    ['Normalized Total Obtained Reward', total_obtained_reward / total_available_utility if total_available_utility > 0 else 0.0],
+                    ['Total Obtained Task Observations', len(obtained_rewards_df) if obtained_rewards_df is not None else 0],
                     
                     ['Average Planned Reward per Task Observation', avg_planned_reward],
                     ['Standard Deviation of Planned Reward per Task Observation', std_planned_reward],
@@ -1412,13 +1522,23 @@ class ResultsProcessor:
 
                     # Utility Statistics
                     ['Total Planned Utility', total_planned_utility],
+                    ['Normalized Total Planned Utility', total_planned_utility / total_available_utility if total_available_utility > 0 else 0.0],
                     ['Average Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
                     ['Standard Deviation of Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
                     ['Median Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
 
+                    ['Total Obtained Utility', total_obtained_utility],
+                    ['Normalized Total Obtained Utility', total_obtained_utility / total_available_utility if total_available_utility > 0 else 0.0],
+                    ['Average Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Standard Deviation of Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Median Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
+
                     # Available Reward and Utility Statistics
                     ['Total Task Priority Available', total_task_priority],
-                    ['Total Available Utility', total_available_utility]
+                    ['Total Available Utility', total_available_utility],
+
+                    # Results dir
+                    # ['Results Directory', results_path]
                 ]
 
         return pd.DataFrame(summary_data, columns=summary_headers)    
@@ -1531,6 +1651,7 @@ class ResultsProcessor:
 
         # count observations per task
         n_tasks = len(tasks_known)
+        n_total_task_obs = sum(len(observations) for observations in tasks_observed.values())
         n_event_tasks = len([task for task in tasks_known if isinstance(task, EventObservationTask)])
         n_default_tasks = len([task for task in tasks_known if isinstance(task, DefaultMissionTask)]) 
 
@@ -1597,7 +1718,7 @@ class ResultsProcessor:
                         n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
                             n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                                 n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                    n_tasks, n_event_tasks, n_default_tasks, \
+                                    n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
                                         n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
                                             n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
                                                 n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
@@ -1635,7 +1756,7 @@ class ResultsProcessor:
                     n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
                         n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                             n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                n_tasks, n_event_tasks, n_default_tasks, \
+                                n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
                                     n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
                                         n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
                                             n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \

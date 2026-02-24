@@ -2,6 +2,7 @@ from collections import defaultdict, deque
 import copy
 from enum import Enum
 import gc
+import itertools
 import json
 import os
 import random
@@ -17,7 +18,7 @@ from tqdm import tqdm
 
 from orbitpy.mission import Mission
 from execsatm.utils import Interval
-from dmas.utils.series import AccessTable, IntervalTable, StateTable, TargetGridTable
+from dmas.utils.series import AccessTable, ConnectivityTable, IntervalTable, StateTable, TargetGridTable
 
 class ConnectivityLevels(Enum):
     FULL = 'FULL'   # static fully connected network between all agents
@@ -25,6 +26,7 @@ class ConnectivityLevels(Enum):
     ISL = 'ISL'     # inter-satellite links only
     GS = 'GS'       # satellite-to-ground station links only
     NONE = 'NONE'   # no inter-agent connectivity
+    PREDEF = 'PREDEF'   # pre-defined connectivity specified in mission specifications
         
 class OrbitData:
     """
@@ -36,7 +38,6 @@ class OrbitData:
 
     def __init__(self,
                  agent_name : str,
-                 gs_network_name : str,
                  time_step : float,
                  epoch_type : str,
                  epoch : float,
@@ -46,11 +47,11 @@ class OrbitData:
                  comms_links : IntervalTable,
                  gs_access_data : IntervalTable,
                  gp_access_data : AccessTable,
-                 grid_data: TargetGridTable
+                 grid_data: TargetGridTable,
+                 comms_relays_enabled : bool = True
                 ):
         # assign attributes
         self.agent_name = agent_name
-        self.gs_network_name = gs_network_name
         self.time_step = time_step
         self.epoch_type = epoch_type
         self.epoch = epoch
@@ -71,6 +72,8 @@ class OrbitData:
         self.comms_target_columns = comms_targets
         self.comms_target_indices = comms_target_indices
 
+        self.comms_relays_enabled = comms_relays_enabled
+
         # ground station access data
         self.gs_access_data = gs_access_data
         
@@ -84,13 +87,16 @@ class OrbitData:
     LOAD FROM PRE-COMPUTED DATA
     """
     @staticmethod
-    def from_directory(orbitdata_dir: str, simulation_duration : float, force_preprocess : bool = False, printouts : bool = True) -> Dict[str, 'OrbitData']:
+    def from_directory(orbitdata_dir: str, mission_specs : dict, force_preprocess : bool = False, printouts : bool = True) -> Dict[str, 'OrbitData']:
         # TODO check if schemas have already been generated at the provided directory and load from there if so, o
         # therwise preprocess data and generate schemas before loading
         
         # define binary output directory
         bin_dir = os.path.join(orbitdata_dir, 'bin')
         bin_meta_file = os.path.join(bin_dir, "meta.json")
+
+        # get simulation duration from mission specifications
+        simulation_duration = mission_specs['duration']
 
         # check if preprocessed data already exists
         if not os.path.exists(bin_meta_file) or force_preprocess:
@@ -107,8 +113,13 @@ class OrbitData:
                 schemas : dict[str, dict] = json.load(meta_file)
                 if printouts: tqdm.write('Existing preprocessed data found. Loading from binaries...')
 
+        # get connectivity level from mission specifications
+        connectivity_specs : dict = mission_specs.get('scenario',{}).get('connectivity', None)
+        if connectivity_specs is None: raise ValueError('Connectivity specifications not found in mission specifications under `scenario.connectivity`. Please ensure connectivity specifications are included in the mission specifications.')
+
         # load connectivity data for each agent and store in dictionary indexed by agent name
-        agent_comms_links : IntervalTable = OrbitData.__load_comms_links(orbitdata_dir, schemas, printouts)
+        agent_comms_links, agent_comms_network \
+            = OrbitData.__load_comms_data(orbitdata_dir, connectivity_specs, schemas, printouts)
 
         data = dict()
         for agent_name, schema in schemas.items():
@@ -116,7 +127,6 @@ class OrbitData:
             if 'data' in agent_name or 'comms' in agent_name: continue 
 
             # unpack agent-specific data from schema
-            gs_network_name = schema['gs_network_name']
             time_step = schema['time_specs']['time step']
             epoch_type = schema['time_specs']['epoch type']
             epoch = schema['time_specs']['epoch']
@@ -133,6 +143,7 @@ class OrbitData:
 
             # load comms link data from binary
             comms_links = agent_comms_links
+            comms_network = agent_comms_network
 
             # load ground point access data from binary
             gp_access_data = AccessTable.from_schema(schema['gp_access'], mmap_mode='r')
@@ -143,15 +154,41 @@ class OrbitData:
             # load state data from binary 
             state_data = StateTable.from_schema(schema['state'], mmap_mode='r')
 
-            data[agent_name] = OrbitData(agent_name, gs_network_name, time_step, epoch_type, epoch, 
-                                            duration, eclipse_data, state_data, comms_links, gs_access_data, 
+            data[agent_name] = OrbitData(agent_name, time_step, epoch_type, epoch, duration,
+                                            eclipse_data, state_data, comms_network, gs_access_data, 
                                             gp_access_data, grid_data)
             
         # return compiled data
         return data     
     
     @staticmethod
-    def __load_comms_links(orbitdata_dir : str, schemas : dict, printouts : bool = False) -> IntervalTable:
+    def __generate_full_comms_links(agent_names : List[str], schemas : dict) -> List[Tuple]:
+        # get simulation duration from schemas
+        simulation_duration = schemas['comms_data']['time_specs']['duration']
+
+        # convert duration from days to seconds
+        simulation_duration *= 3600*24
+        
+        # create list of unique agent pairs from list of agent names
+        agent_pairs = set()
+        for u_name in agent_names:
+            for v_name in agent_names:
+                # skip self-pairs
+                if u_name == v_name: continue
+                
+                # pair key 
+                key = tuple(sorted([u_name, v_name]))
+                agent_pairs.add(key)
+
+        # create comms link data with one interval spanning the entire simulation duration for each unique agent pair
+        comms_links = [(0.0, simulation_duration, u, v)
+                       for u,v in agent_pairs]
+        
+        # return comms link data
+        return comms_links
+
+    @staticmethod
+    def __load_comms_data(orbitdata_dir : str, connectivity_specs : dict, schemas : dict, printouts : bool = False) -> IntervalTable:
         # define mission specifications file path
         mission_specs_file = os.path.join(orbitdata_dir, 'MissionSpecs.json')
         assert os.path.exists(mission_specs_file), \
@@ -170,38 +207,33 @@ class OrbitData:
         # combine into list of agent names
         agent_names = { **satellite_names, **ground_operators }
 
-        # get connectivity level from mission specifications
-        connectivity_level : str = mission_specs_dict['scenario'].get('connectivity', 'full').upper()
-
         # get relay specs from mission specifications 
-        relay_toggle : bool = mission_specs_dict['scenario'].get('enabledRelays', 'True').lower() == 'true'
+        relay_toggle : bool = connectivity_specs.get('relaysEnabled', True)
 
-        if not relay_toggle: raise NotImplementedError('Currently only supports relay-enabled scenarios.')
+        if not relay_toggle: 
+            raise NotImplementedError('Currently only supports relay-enabled scenarios.')
 
         # load comms link data 
-        comm_data = IntervalTable.from_schema(schemas['comms_data'], mmap_mode='r')
+        ## check if full connectivity is specified
+        if connectivity_specs.get('@type', None) == ConnectivityLevels.FULL.value:
+            # generate full comms link data
+            comm_data = OrbitData.__generate_full_comms_links(agent_names, schemas)
+        else:
+            # load preprocessed comms link data from binary
+            comm_data = IntervalTable.from_schema(schemas['comms_data'], mmap_mode='r')
+
+        # generate connectivity mask based on connectivity level specified in mission specifications
+        connectivity_mask = OrbitData.__generate_connectivity_mask(connectivity_specs, agent_names, ground_operators)
 
         # convert connectivity intervals to events
         connectivity_events = []
         for t_start,t_end,u,v in comm_data:
             # check if access is valid based on connectivity level
-            if connectivity_level == ConnectivityLevels.NONE.value:
-                # no connectivity between any agents
-                break
-
-            elif connectivity_level == ConnectivityLevels.GS.value:
-                # ignore any links that do not involve a ground station
-                if not (u in ground_operators or v in ground_operators):
-                    continue
-
-            elif connectivity_level == ConnectivityLevels.ISL.value:
-                # ignore any links that involve a ground station
-                if u in ground_operators or v in ground_operators:
-                    continue
-
-            elif connectivity_level == ConnectivityLevels.LOS.value:
-                # accept all links
-                pass
+            key = tuple(sorted([u,v]))
+            if not connectivity_mask.get(key, False):
+                # access between agents `u` and `v` is not allowed;
+                #   skip this access interval
+                continue
 
             # decompose interval to event start and event end
             event_start = (t_start, u, v, 1)
@@ -259,17 +291,21 @@ class OrbitData:
         interval_connectivities : List[dict] = []
         agent_to_idx = {agent: idx for idx, agent in enumerate(agent_names.keys())}
         idx_to_agent = [agent for agent in agent_to_idx.keys()]
-        prev_connectivity_matrix = np.zeros((len(agent_names), len(agent_names)), dtype=int)
+        # prev_connectivity_matrix = np.zeros((len(agent_names), len(agent_names)), dtype=int)
+        connectivity_matrices = np.zeros((len(connectivity_intervals), len(agent_names), len(agent_names)), dtype=int)
         
         # create adjacency matrix per interval
-        for interval in tqdm(connectivity_intervals, 
+        for i,interval in tqdm(enumerate(connectivity_intervals), 
                              desc='Precomputing agent connectivity intervals', 
                              unit=' intervals', 
                              leave=False,
                              disable=not printouts
                             ):
             # copy previous connectivity state              
-            interval_connectivity_matrix = prev_connectivity_matrix.copy()
+            if i > 0:
+                interval_connectivity_matrix = connectivity_matrices[i-1].copy() 
+            else:
+                interval_connectivity_matrix = np.zeros((len(agent_names), len(agent_names)), dtype=int)
             
             # get connectivity events that occur during the interval
             interval_events = events_per_interval[interval]
@@ -301,7 +337,7 @@ class OrbitData:
             })
 
             # set previous connectivity to current for next iteration
-            prev_connectivity_matrix = interval_connectivity_matrix
+            connectivity_matrices[i] = interval_connectivity_matrix
 
         # merge connectivity intervals if the connectivity maps are the same and intervals are contiguous
         merged_interval_connectivities : List[dict] = []
@@ -331,15 +367,216 @@ class OrbitData:
                 # otherwise, add new interval connectivity to list
                 merged_interval_connectivities.append(interval_connectivity)
 
-        # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
-        comms_links_df = pd.DataFrame(merged_interval_connectivities)
-        # comms_links_df = pd.DataFrame(interval_connectivities)
+        # define binary output directory for processed comms data
         bin_dir = os.path.join(orbitdata_dir, 'bin')
-        comms_links_schema = OrbitData.__write_interval_data_table(comms_links_df, bin_dir, 'comms_links', schemas['comms_data']['time_specs']['time step'], start_col='start', end_col='end', allow_overwrite=True)
+        
+        # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
+        comms_network_df = pd.DataFrame(merged_interval_connectivities)
+        comms_network_schema = OrbitData.__write_interval_data_table(comms_network_df, bin_dir, 'comms_links', schemas['comms_data']['time_specs']['time step'], start_col='start', end_col='end', allow_overwrite=True)
 
-        # load comms link table as IntervalTable for future querying
-        return IntervalTable.from_schema(comms_links_schema, mmap_mode='r')
+        # load comms data as ConnectivityTable and IntervalTable for future querying
+        return None, IntervalTable.from_schema(comms_network_schema, mmap_mode='r')
+
+        # TODO enable support for relay-enabled scenarios by converting interval connectivity data to adjacency matrices and then to ConnectivityTable for easier querying of connectivity between agents during each interval; if relays are not enabled, can skip this step and just use the interval connectivity data as is since connectivity is static between intervals
+        # convert adjacency matrices to ConnectivityTable for easier querying
+        comms_links_schema = None 
+        raise NotImplementedError('TODO: need to implement conversion of connectivity matrices to ConnectivityTable for easier querying.')
+
+        # convert interval connectivity data to dataframe and then to IntervalTable for easier querying
+        comms_network_df = pd.DataFrame(merged_interval_connectivities)
+        comms_network_schema = OrbitData.__write_interval_data_table(comms_network_df, bin_dir, 'comms_links', schemas['comms_data']['time_specs']['time step'], start_col='start', end_col='end', allow_overwrite=True)
+
+        # load comms data as ConnectivityTable and IntervalTable for future querying
+        return ConnectivityTable.from_schema(comms_links_schema, mmap_mode='r'), \
+                    IntervalTable.from_schema(comms_network_schema, mmap_mode='r')
+
+    @staticmethod
+    def __generate_connectivity_mask(connectivity_dict : dict, agent_names : List[str], ground_operators : List[str]) -> Dict[Tuple[str, str], bool]:
+        # get type of connectivity specified in mission specifications
+        connectivity_level = connectivity_dict.get('@type', None)
+        if connectivity_level is not None: connectivity_level = connectivity_level.upper()
+
+        # construct connectivity mask based on connectivity level specified in mission specifications
+        if connectivity_level == ConnectivityLevels.PREDEF.value:
+            return OrbitData.__connectivity_mask_from_predifined_rules(connectivity_dict, agent_names)
+        else:
+            return OrbitData.__connectivity_mask_from_connectivity_level(connectivity_level, agent_names, ground_operators)
     
+    @staticmethod
+    def __connectivity_mask_from_connectivity_level(connectivity_level : str, 
+                                                    agent_names : List[str], 
+                                                    ground_operators : List[str]
+                                                ) -> Dict[Tuple[str, str], bool]:
+        # create list of unique agent pairs from list of agent names
+        agent_pairs = set()
+        for u_name in agent_names:
+            for v_name in agent_names:
+                # skip self-pairs
+                if u_name == v_name: continue
+                
+                # pair key 
+                key = tuple(sorted([u_name, v_name]))
+                agent_pairs.add(key)
+
+        # initialize connectivity mask as dictionary mapping agent pairs to boolean indicating whether connectivity is allowed based on specified connectivity level
+        connectivity_mask : Dict[Tuple[str, str], bool] = dict()
+
+        # iterate through agent pairs and determine if connectivity is allowed based on specified connectivity level
+        for u,v in agent_pairs:        
+            # check if access is valid based on connectivity level
+            if connectivity_level == ConnectivityLevels.NONE.value:
+                # no connectivity between any agents
+                connectivity_mask[(u,v)] = False
+
+            elif connectivity_level == ConnectivityLevels.GS.value:
+                # ignore any links that do not involve a ground station
+                connectivity_mask[(u,v)] = u in ground_operators or v in ground_operators
+
+            elif connectivity_level == ConnectivityLevels.ISL.value:
+                # ignore any links that involve a ground station                
+                connectivity_mask[(u,v)] = u not in ground_operators and v not in ground_operators
+
+            elif connectivity_level == ConnectivityLevels.LOS.value:
+                # accept all links
+                connectivity_mask[(u,v)] = True            
+            
+            elif connectivity_level == ConnectivityLevels.FULL.value:
+                # accept all links
+                connectivity_mask[(u,v)] = True
+
+            else:
+                # connectivity level not recognized or not specified; raise error
+                raise NotImplementedError("TODO: need to implement generation of connectivity mask based on connectivity level specified in mission specifications.")
+            
+        # return connectivity mask
+        return connectivity_mask
+
+    @staticmethod
+    def __connectivity_mask_from_predifined_rules(connectivity_dict : dict, 
+                                                  agent_names : List[str]
+                                                ) -> Dict[Tuple[str, str], bool]:
+        
+        # create list of unique agent pairs from list of agent names
+        agent_pairs = set()
+        for u_name in agent_names:
+            for v_name in agent_names:
+                # skip self-pairs
+                if u_name == v_name: continue
+                
+                # pair key 
+                key = tuple(sorted([u_name, v_name]))
+                agent_pairs.add(key)
+        
+        # get rules path from connectivity dict
+        predef_rules_path = connectivity_dict.get('rulesPath', None)
+
+        # ensure rules path is provided and valid
+        if predef_rules_path is None: raise ValueError('Pre-defined connectivity specifications must include a `rulesPath` field indicating the path to the JSON file containing the connectivity rules.')
+        if not os.path.isfile(predef_rules_path): raise ValueError(f'Connectivity rules file not found at specified `rulesPath`: {predef_rules_path}')
+
+        # load json connectivity rules from connectivity dict
+        with open(predef_rules_path, 'r') as rules_file:
+            predef_rules_dict : dict = json.load(rules_file)       
+
+        # unpack groups
+        groups = predef_rules_dict.get('groups', {})
+
+        # ensure all groups are lists of strings
+        assert all(isinstance(group_members, list) and all(isinstance(member, str) for member in group_members) for group_members in groups.values()), \
+            f'All groups specified in connectivity rules must be lists of strings. Invalid groups: {groups}'
+        # ensure all elements of groups are unique; no repeats within and between groups
+        all_group_members = set()
+        for group_members in groups.values():
+            for member in group_members:
+                if member in all_group_members:
+                    raise ValueError(f'All members of groups specified in connectivity rules must be unique; no repeats within or between groups. Duplicate member: {member}')
+                all_group_members.add(member)
+
+        # get default connectivity rule from rules dict
+        default_rule = predef_rules_dict.get('default', 'deny').lower() == 'allow'
+
+        # initialize connectivity mask 
+        connectivity_mask : Dict[Tuple[str, str], bool] = {
+            (u,v) : default_rule for u,v in agent_pairs
+        }
+
+        # iterate over rules in rules dict
+        for rule in predef_rules_dict.get('rules', {}):
+            # validate rule format
+            assert "action" in rule, f'Connectivity rules must specify an action in the rule name, either `allow` or `deny`. Invalid rule: {rule}'
+            assert "scope" in rule, f'Connectivity rules must specify a scope in the rule name, either `between` or `within`. Invalid rule: {rule}'
+            assert "targets" in rule, f'Connectivity rules must specify targets in a `targets` field indicating the groups the rule applies to. Invalid rule: {rule}'
+
+            # unpack rule components
+            action = rule['action'].lower()
+            scope = rule['scope'].lower()
+            targets = rule['targets']
+
+            if 'between' == scope:
+                # validate rule format
+                assert isinstance(targets, list), f'Connectivity rules with `between` must specify a list of two groups to apply the rule between. Rule: {rule}, Value: {targets}'
+                assert len(targets) >= 2, f'Connectivity rules with `between` must specify a list of at least two groups to apply the rule between. Rule: {rule}, Value: {targets}'
+              
+                # ensure all groups in vals are defined in groups dict
+                assert all(group_name in groups for group_name in targets), f'All groups specified in connectivity rules must be defined in the `groups` field of the connectivity specifications. Rule: {rule}, Value: {targets}, Defined Groups: {list(groups.keys())}'
+
+                # enlist groups and members
+                expanded = [groups[name] for name in targets]
+
+                # all unordered pairs of groups
+                for A, B in itertools.combinations(expanded, 2):
+                    for u in A:
+                        for v in B:
+                            # skip self-pairs just in case
+                            if u == v: continue
+
+                            # define key
+                            key = tuple(sorted([u,v]))                         
+
+                            # update connectivity mask based on rule type
+                            connectivity_mask[key] = (action == 'allow')
+
+            elif 'within' == scope:
+                # validate rule format
+                assert isinstance(targets, str), f'Connectivity rules with `within` must specify a single group to apply the rule within. Rule: {rule}, Value: {targets}'
+
+                # ensure group in vals is defined in groups dict
+                assert targets in groups, f'All groups specified in connectivity rules must be defined in the `groups` field of the connectivity specifications. Rule: {rule}, Value: {targets}, Defined Groups: {list(groups.keys())}'
+
+                # get group members
+                members = groups[targets]
+
+                # create all unordered pairs of members
+                for u,v in itertools.combinations(members, 2):
+                    # skip self-pairs just in case
+                    if u == v: continue
+
+                    # define key
+                    key = tuple(sorted([u,v]))
+
+                    # update connectivity mask based on rule type
+                    connectivity_mask[key] = (action == 'allow')
+           
+            else:
+                raise ValueError(f'Connectivity rule not recognized: {rule}. Supported rules are `allow_between`, `deny_between`, `allow_within`, and `deny_within`.')
+
+        # iterate through override rules and apply to connectivity mask
+        for override_rule in predef_rules_dict.get('overrides', []):
+            # validate override rule format
+            assert isinstance(override_rule, dict), f'Connectivity override rules must be specified as dictionaries with the format `{{"agents": [agent1, agent2], "action": "allow"/"deny"}}`. Invalid rule: {override_rule}'
+            assert 'pair' in override_rule, f'Connectivity override rules must specify the key `pair` indicating the pair of agents the rule applies to. Invalid rule: {override_rule}'
+            assert 'action' in override_rule, f'Connectivity override rules must specify the key `action` indicating whether the pair is allowed or denied. Invalid rule: {override_rule}'
+            
+            # unpack override rule components
+            pair = tuple(sorted(override_rule['pair']))
+            action = override_rule['action'].lower()
+            
+            # update connectivity mask based on action value
+            connectivity_mask[pair] = (action == 'allow')
+
+        # return connectivity mask
+        return connectivity_mask
+
     @staticmethod
     # def __get_connected_components(adj: Dict[str, Dict[str, int]]):
     def __get_connected_components(adj: List[List[int]], agent_to_idx : Dict[str, int], idx_to_agent : List[str]) -> List[List[str]]:
@@ -833,7 +1070,7 @@ class OrbitData:
             
         # create instances of OrbitData for each agent and store in dictionary indexed by agent name
         schemas = dict()
-        for *__,agent_name,gs_network_name in agents_loaded: 
+        for *__,agent_name in agents_loaded: 
             # extract relevant data for this agent
             agent_eclipse_data = eclipse_dfs[agent_name]
             agent_state_data = state_dfs[agent_name]
@@ -858,7 +1095,6 @@ class OrbitData:
 
             # compile schema for this agent and store in dictionary
             schemas[agent_name] = {
-                'gs_network_name': gs_network_name,
                 'time_specs' : time_specs,
                 'dir' : agent_bin_dir,
                 'eclipse': eclipse_meta,
@@ -868,9 +1104,13 @@ class OrbitData:
                 'grid': grid_meta
             }
 
-        # save agent comms link data into single dataframe and print to binary
+        # compile comms link data for all agents into single dataframe
         comms_data_concat :pd.DataFrame = OrbitData.__compile_agent_comms_data(comms_link_dfs)
+        
+        # save agent comms link data into single dataframe and print to binary
         comms_meta = OrbitData.__write_interval_data_table(comms_data_concat, bin_dir, 'comms_data', time_specs['time step'], allow_overwrite=True)
+        
+        # add comms data schema to compiled schemas
         schemas['comms_data'] = comms_meta
         schemas['comms_data']['time_specs'] = time_specs
         
@@ -883,32 +1123,39 @@ class OrbitData:
     
     @staticmethod
     def __compile_agent_comms_data(agent_comms_link_data : Dict[str, pd.DataFrame]) -> pd.DataFrame:
+        """ Collects comms link data for all agents and compiles it into a single dataframe with columns for sender, receiver, start time, and end time. """
+        # define required columns for comms data
         comms_req_columns = ["start index", "end index"]
+
+        # compile comms data for all agents
         working_dfs = []
         for (u,v), comms_links in agent_comms_link_data.items():
             # take only the required cols (this avoids mutating the original DF)
             work = comms_links.loc[:, comms_req_columns].copy()
 
-            # force numeric (coerce bad values to NaN so you can detect them)
+            # force numeric (coerce bad values to NaN)
             for c in comms_req_columns:
                 work[c] = pd.to_numeric(work[c], errors="coerce")
 
-            # if these must be integers, enforce and fail fast on NaNs
+            # check for NaNs
             if work[comms_req_columns].isna().any().any():
+                # if values must be integers, enforce and fail fast on NaNs
                 bad = work[work[comms_req_columns].isna().any(axis=1)].head(5)
                 raise ValueError(
                     f"Non-numeric or missing start/end values after coercion for {u}-->{v}. "
                     f"Examples:\n{bad}"
                 )
 
-            # cast to the dtype you want (likely int32)
+            # cast start and end indices to `int`
             work["start index"] = work["start index"].astype(np.int32)
             work["end index"]   = work["end index"].astype(np.int32)
 
+            # add columns for sender and receiver
             work["u"] = u
             work["v"] = v
             working_dfs.append(work)
         
+        # concadenate comms dataframes
         if working_dfs:
             comms_links_concat = (
                 pd.concat(working_dfs, ignore_index=True, copy=False)
@@ -916,8 +1163,10 @@ class OrbitData:
                 .reset_index(drop=True)
             )
         else:
+            # if no accesses were found, create empty dataframe with the correct columns
             comms_links_concat = pd.DataFrame(columns=[*comms_req_columns, "u", "v"])
 
+        # return concatenated comms dataframe
         return comms_links_concat
         
     def __load_csv_data(orbitdata_dir: str, simulation_duration : float, printouts : bool = True) -> Tuple:
@@ -1437,11 +1686,11 @@ class OrbitData:
                     #     modes = [0]
                     modes = [0]
 
-                    gp_acces_by_mode = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]','instrument',
+                    gp_acces_by_mode = pd.DataFrame(columns=['time index','grid index','GP index','pnt-opt index','lat [deg]','lon [deg]','instrument',
                                                                 'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
                     for mode in modes:
                         i_mode = modes.index(mode)
-                        gp_access_by_grid = pd.DataFrame(columns=['time index','GP index','pnt-opt index','lat [deg]','lon [deg]',
+                        gp_access_by_grid = pd.DataFrame(columns=['time index','grid index','GP index','pnt-opt index','lat [deg]','lon [deg]',
                                                                 'observation range [km]','look angle [deg]','incidence angle [deg]','solar zenith [deg]'])
 
                         for grid in mission_dict.get('grid'):
@@ -1465,20 +1714,16 @@ class OrbitData:
                         nrows, _ = gp_access_by_grid.shape
                         gp_access_by_grid['pnt-opt index'] = [mode] * nrows
 
-                        if len(gp_acces_by_mode) == 0:
-                            gp_acces_by_mode = gp_access_by_grid
-                        else:
-                            gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
+                        # if len(gp_acces_by_mode) == 0:
+                        #     gp_acces_by_mode = gp_access_by_grid
+                        # else:
+                        #     gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
                         # gp_acces_by_mode.append(gp_access_by_grid)
+                        gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
 
                     nrows, _ = gp_acces_by_mode.shape
-                    gp_access_by_grid['instrument'] = [instrument['name']] * nrows
-                    # gp_access_data[ins_name] = gp_acces_by_mode
-
-                    if len(gp_access_data) == 0:
-                        gp_access_data = gp_acces_by_mode
-                    else:
-                        gp_access_data = pd.concat([gp_access_data, gp_acces_by_mode])
+                    gp_acces_by_mode['instrument'] = [instrument['name']] * nrows
+                    gp_access_data = pd.concat([gp_access_data, gp_acces_by_mode])
                 
                 nrows, _ = gp_access_data.shape
                 gp_access_data['agent name'] = [spacecraft_list[spacecraft_idx]['name']] * nrows
@@ -1987,8 +2232,9 @@ class OrbitData:
                 or pd.api.types.is_string_dtype(s.dtype)
                 or pd.api.types.is_categorical_dtype(s.dtype)
             )
-
-            if is_stringish:
+            is_grid_or_gp = col in ['grid index', 'GP index']
+            
+            if is_stringish and not is_grid_or_gp:
                 s2 = s.astype("string")
                 uniques = s2.dropna().unique()
 

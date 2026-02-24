@@ -1,6 +1,6 @@
 from abc import ABC
 import copy
-from typing import List
+from typing import List, Tuple
 import uuid
 import numpy as np
 from tqdm import tqdm
@@ -275,27 +275,31 @@ class Plan(ABC):
                                     aborted_actions : list, 
                                     pending_actions : list,
                                     t : float
-                                ) -> None:
-        """ 
-        
+                                ) -> Tuple[list, list]:
+        """         
         Checks if any of the actions completed by the agent were in the current plan. 
-        If so, they are removed.
-        
+        If so, they are removed.        
         """
         # compile performed actions
         performed_actions : list[AgentAction] = [action for action in completed_actions]
         performed_actions.extend(aborted_actions)
 
         # remove performed actions from plan
+        performed_plan_actions = []
         for performed_action in performed_actions:
-            matching_actions = [action for action in self.actions
+            matching_performed_actions = [action for action in self.actions
                                 if performed_action.id == action.id]
-            for action in matching_actions: self.actions.remove(action)
+            for action in matching_performed_actions: 
+                self.actions.remove(action)
+            performed_plan_actions.extend(matching_performed_actions)
 
         # removed expired actions
-        expired_actions = [action for action in self.actions
+        expired_plan_actions = [action for action in self.actions
                            if 1e-9 < t - action.t_end]
-        for action in expired_actions: self.actions.remove(action)
+        for action in expired_plan_actions: self.actions.remove(action)
+
+        # return performed actions that were in the plan and expired actions that were not completed
+        return performed_plan_actions, expired_plan_actions
 
     def get_next_actions(self, t : float, earliest : bool = True, tolerance : float = 1e-6) -> list:
         """ returns a list of dicts """

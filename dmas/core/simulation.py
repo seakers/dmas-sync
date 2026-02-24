@@ -34,7 +34,7 @@ from dmas.models.planning.decentralized.blank import BlankPlanner
 from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInsertionConsensusPlanner
 from dmas.models.planning.decentralized.dynamic import DynamicProgrammingPlanner
 from dmas.models.planning.decentralized.earliest import EarliestAccessPlanner
-from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPlanner
+from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPeriodicPlanner, HeuristicInsertionReactivePlanner
 from dmas.models.planning.decentralized.nadir import NadirPointingPlanner
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
@@ -335,23 +335,24 @@ class Simulation:
             processed_results = self.__processed_results
 
             results_summary : pd.DataFrame \
-                = ResultsProcessor.summarize_results(self._orbitdata,
-                                                     self._events,
-                                                     *processed_results, 
-                                                     precision=precision, 
-                                                     printouts=printouts)
-
+                = ResultsProcessor.summarize_results(self._results_path,
+                                                        self._orbitdata,
+                                                        self._events,
+                                                        *processed_results, 
+                                                        precision=precision, 
+                                                        printouts=printouts)
         else:
             # results have not already stored in this simulation instance; 
             #   process results and generate summary
             processed_results = self.process_results(printouts=printouts)
 
             results_summary : pd.DataFrame \
-                = ResultsProcessor.summarize_results(self._orbitdata,
-                                                     self._events,
-                                                     *processed_results, 
-                                                     precision=precision, 
-                                                     printouts=printouts)
+                = ResultsProcessor.summarize_results(self._results_path,
+                                                        self._orbitdata,
+                                                        self._events,
+                                                        *processed_results, 
+                                                        precision=precision, 
+                                                        printouts=printouts)
             
         # include runtime in results summary if simulation has been executed by this instance
         if self.__executed:
@@ -445,7 +446,7 @@ class Simulation:
 
         # precompute orbit data
         orbitdata_dir = OrbitData.precompute(d, printouts=printouts) if spacecraft_dict is not None else None
-        simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, scenario_duration, printouts=printouts) if orbitdata_dir is not None else {}
+        simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, d, printouts=printouts) if orbitdata_dir is not None else {}
         
         # load missions
         simulation_missions : Dict[str, Mission] = Simulation.load_missions(scenario_dict)
@@ -507,16 +508,11 @@ class Simulation:
         
         # ------------------------------------
         # create environment
-        connectivity_level = scenario_dict.get('connectivity','LOS').upper()
-        relay_capabilities = scenario_dict.get('relayCapabilities','True').upper()
-
         environment = SimulationEnvironment(results_path, 
                                             simulation_orbitdata,
                                             spacecraft_dict,
                                             gops_dict,
                                             events,
-                                            connectivity_level,
-                                            relay_capabilities,
                                             level,
                                             logger,
                                             printouts=printouts)
@@ -858,25 +854,29 @@ class Simulation:
         # check if planner dictionary is empty
         if planner_dict is None: return None, None
 
+        # define path for agent results to be used by planners
+        agent_results_dir = os.path.join(simulation_results_path, agent_name.lower())
+
         # load preplanner
-        preplanner = Simulation.__load_preplanner(planner_dict, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
+        preplanner = Simulation.__load_preplanner(planner_dict, agent_results_dir, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
 
         # load replanner
-        replanner = Simulation.__load_replanner(planner_dict, agent_name, simulation_results_path, logger, printouts)
+        replanner = Simulation.__load_replanner(planner_dict, agent_results_dir, logger, printouts)
 
         # return loaded planners
         return preplanner, replanner
     
     @staticmethod
     def __load_preplanner(planner_dict : dict, 
-                        agent_mission : Mission, 
-                        simulation_missions : Dict[str,Mission],
-                        simulation_orbitdata : Dict[str, OrbitData],
-                        orbitdata_dir : str,
-                        agent_name : str,
-                        logger : logging.Logger,
-                        printouts : bool
-                    ) -> AbstractPeriodicPlanner:
+                          agent_results_dir : str,
+                          agent_mission : Mission, 
+                          simulation_missions : Dict[str,Mission],
+                          simulation_orbitdata : Dict[str, OrbitData],
+                          orbitdata_dir : str,
+                          agent_name : str,
+                          logger : logging.Logger,
+                          printouts : bool
+                        ) -> AbstractPeriodicPlanner:
         """ loads the preplanner for the agent """
         # get preplanner specs
         preplanner_dict : Dict = planner_dict.get('preplanner', None)
@@ -898,7 +898,7 @@ class Simulation:
 
         # initialize preplanner
         if preplanner_type.lower() in ["heuristic"]:
-            return HeuristicInsertionPlanner(horizon, period, sharing, debug, logger, printouts)
+            return HeuristicInsertionPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["naive", "fifo", "earliest"]:
             return EarliestAccessPlanner(horizon, period, sharing, debug, logger, printouts)
@@ -998,8 +998,7 @@ class Simulation:
         
     @staticmethod
     def __load_replanner(planner_dict : dict, 
-                         agent_name : str, 
-                         simulation_results_path : str, 
+                         agent_results_dir : str, 
                          logger : logging.Logger, 
                          printouts : bool) -> AbstractReactivePlanner:
         """ loads the replanner for the agent """
@@ -1020,10 +1019,12 @@ class Simulation:
 
             if 'heuristic' in model:
                 heuristic = replanner_dict.get('heuristic', 'earliestAccess')
-                agent_results_dir = os.path.join(simulation_results_path, agent_name.lower())
                 return HeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
             else:
                 raise NotImplementedError(f'replanner model `{model}` not yet supported.')
+        elif replanner_type.lower() in ['heuristic']:
+            replan_threshold = replanner_dict.get('replanThreshold', 1)
+            return HeuristicInsertionReactivePlanner(replan_threshold, debug, logger, printouts)
         
         # fallback for unimplemented replanner types
         raise NotImplementedError(f'replanner of type `{replanner_dict}` not yet supported.')

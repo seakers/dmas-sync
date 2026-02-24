@@ -3,9 +3,12 @@ from orbitpy.util import Spacecraft
 
 from tqdm import tqdm
 
-from execsatm.mission import Mission
-from execsatm.observations import ObservationOpportunity
+from execsatm.mission import DefaultMissionTask, Mission
+from execsatm.observations import Interval, ObservationOpportunity
 
+from dmas.models.planning.plan import PeriodicPlan, Plan
+from dmas.models.planning.plan import Plan
+from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.utils.orbitdata import OrbitData
 from dmas.utils.orbitdata import OrbitData
 from dmas.core.messages import *
@@ -16,10 +19,9 @@ from dmas.models.actions import *
 from dmas.models.science.requests import *
 from dmas.models.states import SimulationAgentState
 
-class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
-    """ Schedules observations iteratively based on the highest heuristic-scoring and feasible access point """
 
-    
+class HeuristicInsertionPeriodicPlanner(AbstractPeriodicPlanner):
+    """ Schedules observations iteratively (greedy) based on the highest heuristic-scoring and feasible access point """    
     def _schedule_observations(self, 
                                state : SimulationAgentState, 
                                specs : object, 
@@ -177,10 +179,10 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
         if not observation_opportunities: return observation_opportunities
 
         # check if planning horizon is set
-        if self.horizon < np.Inf:
+        if self._horizon < np.Inf:
             # estimate maximum number of observations in the planning horizon
             min_observation_duration = min([obs.accessibility.span() for obs in observation_opportunities])
-            max_number_observations = int(self.horizon / min_observation_duration) if min_observation_duration > 0 else len(observation_opportunities)
+            max_number_observations = int(self._horizon / min_observation_duration) if min_observation_duration > 0 else len(observation_opportunities)
             
             # sort observations by accessibility duration (longest first)
             observation_opportunities.sort(key=lambda x: x.accessibility.span(),reverse=True)
@@ -238,3 +240,90 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
         
         # do not schedule broadcasts
         return super()._schedule_broadcasts(state, observations, orbitdata)
+    
+class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
+    """ Repairs previously constructed plans according to external inputs and changes in state. """
+    
+    def __init__(self, replan_threshold : int, debug = False, logger = None, printouts = True):
+        super().__init__(debug, logger, printouts)
+        self._replan_threshold : int = replan_threshold
+        self._known_tasks = set() 
+        # replanning flags 
+        self._task_announcements_received = False
+
+    def update_percepts(self, 
+                        state : SimulationAgentState,
+                        current_plan : Plan,
+                        tasks : List[GenericObservationTask],
+                        incoming_reqs: List[TaskRequest], 
+                        misc_messages : List[SimulationMessage],
+                        completed_actions: List[AgentAction],
+                        aborted_actions : List[AgentAction],
+                        pending_actions : List[AgentAction]                   
+                    ) -> None:    
+        # update percepts in parent class
+        super().update_percepts(state, current_plan, tasks, incoming_reqs, misc_messages, completed_actions, aborted_actions, pending_actions)
+        
+        # get current time 
+        t_curr = state.get_time()
+
+        # identify new default tasks
+        new_default_tasks = [task for task in tasks 
+                             # filter for default mission tasks 
+                             if isinstance(task, DefaultMissionTask)
+                             # check if task is still available 
+                             and task.is_available(t_curr)
+                             # and not already known
+                             and task not in self._known_tasks]
+
+        # get new and active incoming tasks from requests
+        new_req_tasks = [req.task for req in incoming_reqs 
+                         # check if task is still available 
+                         if req.task.is_available(t_curr)
+                         # and not already known
+                         and req.task not in self._known_tasks]
+        
+        # merge new tasks
+        new_tasks = new_default_tasks + new_req_tasks
+
+        # check if new tasks exceed threshold
+        if len(new_tasks) >= self._replan_threshold: 
+
+            # update known tasks
+            self._known_tasks.update(new_tasks)
+                    
+            # set replan flags
+            self._task_announcements_received = True
+
+    def needs_planning(self, *_) -> bool:
+        # replan if replan flag was set in `update_percepts`
+        return self._task_announcements_received
+    
+
+    def generate_plan(  self, 
+                        state : SimulationAgentState,
+                        specs : object,
+                        current_plan : Plan,
+                        orbitdata : OrbitData,
+                        mission : Mission,
+                        tasks : List[GenericObservationTask],
+                        observation_history : LatestObservationTracker
+                    ) -> Plan:
+        try:
+            # TODO create new plan using heuristic insertion algorithm
+            
+            # determine planning horizon 
+            planning_horizon = Interval(state.get_time(), self._preplan.t_next)
+
+            # etc...
+
+            x = 1
+
+            return current_plan # <- placeholder 
+        finally:
+            # reset replan flag
+            self._task_announcements_received = False   
+    
+    def print_results(self):
+        # nothing to add
+        return super().print_results()
