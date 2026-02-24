@@ -13,11 +13,20 @@ class PlannerTester(ABC):
     R = 6357.0 # Radius of the Earth [km]
 
     def setUp(self) -> None:        
+        # planner output toggle
+        self.planner_debug = True
+        
         # test case toggles
         self.single_sat_toy : bool = False
         self.multiple_sat_toy : bool = False
         self.single_sat_lakes : bool = False
         self.multiple_sat_lakes : bool = False
+
+        ## toy cases
+        self.toy_1 = False  # single sat    default mission     single target, no events
+        self.toy_2 = False  # single sat    no default mission  one event
+        self.toy_3 = False  # two sats      no default mission  one event
+
 
         # load scenario json file
         self.spacecraft_template = {
@@ -333,6 +342,26 @@ class PlannerTester(ABC):
 
         # return ground station network as list of dicts
         return gs_network
+            
+    def setup_announcer_config(self, event_name : str = None) -> dict:
+        """ Setup announcer planner configuration for the scenario. """
+
+        # default to no planner
+        if event_name is None: return {}
+
+        # validate event file exists
+        assert isinstance(event_name, str), "event_name must be a string"
+        assert os.path.isfile(f"./tests/planners/resources/events/{event_name}.csv"), \
+            f"Event file not found: {event_name}.csv"
+        
+        # return event announcer planner config
+        return {
+                "preplanner": {
+                    "@type": "eventAnnouncer",
+                    "debug": str(self.planner_debug),                        
+                    "eventsPath" : f"./tests/planners/resources/events/{event_name}.csv"
+                }
+            }
     
     @abstractmethod
     def toy_planner_config(self) -> dict:
@@ -345,6 +374,304 @@ class PlannerTester(ABC):
     @abstractmethod
     def planner_name(self) -> str:
         """ Returns the planner name for the test case. """
+
+    def test_toy_case_1(self):
+        """ 
+        ## TOY CASE 1
+        Test case for single satellite performing multiple observations of a single default mission task.
+
+        ### Goals
+        - Validate basic functionality of the bundle-building phase of the consensus planner in a simple scenario. 
+        - Ensure that the satellite can plan and execute observations of a single target without any events occurring.
+        - Ensure repeated obsevations are being tracked properly by planner.
+        
+        ### Mission Details
+        - Default objectives: continuous observation of a predefined target grid.
+        - Event-driven objectives: None
+
+        ### Agents
+        - SAT1 : 
+            - reactive satellite with narrow swath instrument
+            - observation capability
+            - onboard consensus planner
+            - no onboard event-detection        
+
+        ### Scenario  Description
+        - Duration: 12 hours
+        - Grid: One target at (lat=0.0°, lon=0.0°)
+        - Events: No events
+
+        ### Expected Outcomes
+        - Satellite performs 7 observations, one per each access window.
+        - All observations are successfully scheduled and executed without conflicts.
+        - The planner effectively tracks the bidding and performance of the observations being scheduled.
+        - Final planner results should indicate 7 completed bids and an empty bundle at the end of the simulation.
+        - The environment results should reflect the successful completion of all scheduled observations.
+        """
+
+        # check for case toggle 
+        if not self.toy_1: return
+
+        # setup scenario parameters
+        duration = 12.0 / 24.0
+        grid_name = 'toy_1'
+        scenario_name = f'toy_1-{self.planner_name()}'
+        connectivity = 'LOS'
+        event_name = 'toy_1'
+        mission_database = 'toy_missions'
+
+        # SAT1 : reactive satellite with narrow swath instrument
+        ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
+        ractive_spacecraft_1['@id'] = 'sat1_vnir'
+        ractive_spacecraft_1['name'] = 'sat1'
+        ractive_spacecraft_1['planner'] = self.toy_planner_config()
+        ractive_spacecraft_1['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_1['orbitState']['state']['inc'] = 0.0
+        ractive_spacecraft_1['mission'] = "toy_mission_1"
+
+        # terminal welcome message
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
+
+        # Generate scenario
+        scenario_specs = self.setup_scenario_specs(duration,
+                                                   grid_name, 
+                                                   scenario_name, 
+                                                   connectivity,
+                                                   event_name,
+                                                   mission_database,
+                                                   spacecraft=[
+                                                       ractive_spacecraft_1
+                                                    ]
+                                                   )
+
+
+        # initialize mission
+        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+
+        # execute mission
+        self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
+
+        print(f"{scenario_name}: DONE")
+
+    def test_toy_case_2(self):
+        """
+        ## TOY CASE 2
+        Test case for single satellite performing an event-driven task from announcer.
+
+        ### Goals
+        - Validate basic functionality of the bundle-building phase of the consensus planner in a reactive scenario. 
+        - Ensure that the satellite can plan and execute observations of a single target without any default mission tasks.
+        - Ensure event announcements are being processed properly by planner.
+        - Ensure repeated obsevations are being tracked properly by planner.
+        
+        ### Mission Details
+        - Default objectives: None
+        - Event-driven objectives: respond to event announcements from an announcer satellite.
+
+        ### Agents
+        - SAT0 : 
+            - announcer satellite
+            - no observation capability
+            - onboard event-announcer planner
+            - no onboard consensus planner
+        - SAT1 : 
+            - reactive satellite with narrow swath instrument
+            - observation capability
+            - onboard consensus planner
+            - no onboard event-detection        
+
+        ### Scenario  Description
+        - Duration: 12 hours
+        - Grid: One target at (lat=0.0°, lon=0.0°)
+        - Events: One event occurring at t=1000 s, lasting for 2 hours.
+        - Only one observation opportunity should be available during the event duration.
+
+        ### Expected Outcomes
+        - Satellite performs 1 observation of the event.
+        - The observation is successfully scheduled and executed without conflicts.
+        """
+
+        # check for case toggle 
+        if not self.toy_2: return
+
+        # setup scenario parameters
+        duration = 12.0 / 24.0
+        grid_name = 'toy_2'
+        scenario_name = f'toy_2-{self.planner_name()}'
+        connectivity = 'LOS'
+        event_name = 'toy_2'
+        mission_name = 'toy_missions'
+
+        # SAT0 : announcer satellite 
+        announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
+        announcer_spacecraft['@id'] = 'sat0_announcer'
+        announcer_spacecraft['name'] = 'sat0'
+        announcer_spacecraft['planner'] = self.setup_announcer_config(event_name)
+        announcer_spacecraft['instrument'] = self.instruments['TIR'] # wide swath instrument
+        announcer_spacecraft['orbitState']['state']['inc'] = 0.0
+        announcer_spacecraft['mission'] = "toy_mission_2"
+
+        # SAT1 : reactive satellite with narrow swath instrument
+        ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
+        ractive_spacecraft_1['@id'] = 'sat1_vnir'
+        ractive_spacecraft_1['name'] = 'sat1'
+        ractive_spacecraft_1['planner'] = self.toy_planner_config()
+        ractive_spacecraft_1['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_1['orbitState']['state']['inc'] = 0.0
+        ractive_spacecraft_1['mission'] = "toy_mission_2"
+
+        # terminal welcome message
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
+
+        # Generate scenario
+        scenario_specs = self.setup_scenario_specs(duration,
+                                                   grid_name, 
+                                                   scenario_name, 
+                                                   connectivity,
+                                                   event_name,
+                                                   mission_name,
+                                                   spacecraft=[
+                                                       announcer_spacecraft,
+                                                       ractive_spacecraft_1
+                                                    ]
+                                                   )
+
+        # initialize mission
+        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+
+        # execute mission
+        self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
+
+        print(f"{scenario_name}: DONE")
+
+    def test_toy_case_3(self):
+        """
+        ## TOY CASE 3
+        Test case for two satellite performing an event-driven task from announcer.
+
+        ### Goals
+        - Validate the functionality of the consensus planner in a multi-agent reactive scenario.
+        
+        ### Mission Details
+        - Default objectives: None
+        - Event-driven objectives: respond to event announcements from an announcer satellite.
+
+        ### Agents
+        - SAT0 : 
+            - announcer satellite
+            - no observation capability
+            - onboard event-announcer planner
+            - no onboard consensus planner
+        - SAT1 : 
+            - reactive satellite with narrow swath instrument
+            - observation capability
+            - onboard consensus planner
+            - no onboard event-detection        
+        - SAT2 : 
+            - reactive satellite with narrow swath instrument
+            - observation capability
+            - onboard consensus planner
+            - no onboard event-detection        
+
+        ### Scenario  Description
+        - Duration: 2 hours
+        - Grid: One target at (lat=0.0°, lon=0.0°)
+        - Events: One event occurring at t=5 seconds, lasting for 2 hours.
+        - Same instruments for both agents
+        - Agents offset by 2 degrees in true anomaly
+        
+        ### Expected Outcomes
+        - Both satellites should perform 2 observations of the event each, one per each access window.
+        - Agent 1 performs first observation before Agent 2's first observation.
+        - Agent 1 performs second observation before Agent 2's second observation but after its first observation.
+        - All observations are successfully scheduled and executed without conflicts.
+        - The planner effectively tracks the bidding and performance of the observations being scheduled.
+        - Final planner results should indicate 2 completed bids per satellite and an empty bundle at the end of the simulation.
+        - The environment results should reflect the successful completion of all scheduled observations.
+        """
+        # check for case toggle 
+        if not self.toy_3: return
+
+        # setup scenario parameters
+        duration = 2.0 / 24.0
+        grid_name = 'toy_3'
+        scenario_name = f'toy_3-{self.planner_name()}'
+        connectivity = 'LOS'
+        event_name = 'toy_3'
+        mission_name = 'toy_missions'
+
+        # SAT0 : announcer satellite 
+        announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
+        announcer_spacecraft['@id'] = 'sat0_announcer'
+        announcer_spacecraft['name'] = 'sat0'
+        announcer_spacecraft['planner'] = self.setup_announcer_config(event_name)
+        announcer_spacecraft['instrument'] = self.instruments['TIR'] # wide swath instrument
+        announcer_spacecraft['orbitState']['state']['inc'] = 0.0
+        announcer_spacecraft['mission'] = "toy_mission_3"
+
+        # SAT1 : reactive satellite with narrow swath instrument
+        ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
+        ractive_spacecraft_1['@id'] = 'sat1_vnir'
+        ractive_spacecraft_1['name'] = 'sat1'
+        ractive_spacecraft_1['planner'] = self.toy_planner_config()
+        ractive_spacecraft_1['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_1['orbitState']['state']['inc'] = 0.0
+        ractive_spacecraft_1['mission'] = "toy_mission_3"
+
+        # SAT1 : reactive satellite with narrow swath instrument
+        ractive_spacecraft_2 : dict = copy.deepcopy(self.spacecraft_template)
+        ractive_spacecraft_2['@id'] = 'sat2_vnir'
+        ractive_spacecraft_2['name'] = 'sat2'
+        ractive_spacecraft_2['planner'] = self.toy_planner_config()
+        ractive_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_2['orbitState']['state']['inc'] = 0.0
+        ractive_spacecraft_2['orbitState']['state']['ta'] \
+            = ractive_spacecraft_1['orbitState']['state']['ta'] - 2.0 # phase offset by 2.0[deg]
+        ractive_spacecraft_2['mission'] = "toy_mission_3"
+
+        # terminal welcome message
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
+
+        # Generate scenario
+        scenario_specs = self.setup_scenario_specs(duration,
+                                                   grid_name, 
+                                                   scenario_name, 
+                                                   connectivity,
+                                                   event_name,
+                                                   mission_name,
+                                                   spacecraft=[
+                                                       announcer_spacecraft,
+                                                       ractive_spacecraft_1,
+                                                       ractive_spacecraft_2
+                                                    ]
+                                                   )
+
+        # initialize mission
+        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+
+        # execute mission
+        self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
+
+        print(f"{scenario_name}: DONE")
+        
 
     def test_single_sat_toy(self):
         """ Test case for a single satellite with toy events. """
@@ -569,5 +896,5 @@ class PlannerTester(ABC):
         # print results summary
         self.simulation.summarize_results(force_summarize=True)
 
-        print('DONE')
+        print('DONE') 
 

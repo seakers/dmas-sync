@@ -40,7 +40,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_12 = False # single sat    default mission     multiple targets    no events           preplan + replan
         self.toy_13 = False # two sats      default mission     multiple targets    no events           preplan + replan
         self.toy_14 = False # single sat    default mission     multiple targets    two events          preplan + replan
-        self.toy_15 = False # two sats      default mission     multiple targets    two events          preplan + replan
+        self.toy_15 = True # two sats      default mission     multiple targets    two events          preplan + replan
         self.toy_16 = False # single sat    no default mission  two targets         two expiring events  preplan + replan   not the correct instruments
         self.toy_17 = False # moving relay scenario
         self.toy_18 = False # static relay scenario
@@ -56,7 +56,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         self.toy_27 = False # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
-        self.toy_29 = True # 
+        self.toy_29 = False # 
 
     def toy_planner_config(self):
         return {
@@ -122,26 +122,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
                 "debug": str(self.planner_debug)
             }
         }
-        
-    def setup_announcer_config(self, event_name : str = None) -> dict:
-        """ Setup announcer planner configuration for the scenario. """
-
-        # default to no planner
-        if event_name is None: return {}
-
-        # validate event file exists
-        assert isinstance(event_name, str), "event_name must be a string"
-        assert os.path.isfile(f"./tests/planners/resources/events/{event_name}.csv"), \
-            f"Event file not found: {event_name}.csv"
-        
-        # return event announcer planner config
-        return {
-                "preplanner": {
-                    "@type": "eventAnnouncer",
-                    "debug": str(self.planner_debug),                        
-                    "eventsPath" : f"./tests/planners/resources/events/{event_name}.csv"
-                }
-            }
+    
 
     def planner_name(self):
         return "consensus"

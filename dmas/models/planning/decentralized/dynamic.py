@@ -423,9 +423,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                 t_img_j = max(t_imgs[i] + d_imgs[i] + slew_times[i][j], t_imgs[j]) 
 
                 # check if imaging time is valid
-                if not (t_img_j <= state._t + self.horizon                                   # imaging start time within planning horizon
+                if not (t_img_j <= state._t + self._horizon                                   # imaging start time within planning horizon
                     and t_img_j in observation_opportunities[j].accessibility               # imaging start time within observation availability
-                    and t_img_j + d_imgs[j] <= state._t + self.horizon                       # imaging end time within planning horizon
+                    and t_img_j + d_imgs[j] <= state._t + self._horizon                       # imaging end time within planning horizon
                     and t_img_j + d_imgs[j] in observation_opportunities[j].accessibility): # imaging end time within observation availability
                     continue
 
@@ -492,7 +492,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                 
             elif self.model == self.DISCRETE:
                 # iterate through all possible imaging times for observation i with time step of orbitdata
-                while t_img + obs_i.min_duration <= min(obs_i.accessibility.right, state._t + self.horizon):
+                while t_img + obs_i.min_duration <= min(obs_i.accessibility.right, state._t + self._horizon):
                     # add pair to list                
                     observation_pairs.append((i, t_img))
 

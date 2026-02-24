@@ -1,13 +1,11 @@
 from abc import abstractmethod
 from collections import defaultdict, deque
 from itertools import chain
-import os
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Tuple, Union
 
 import logging
 
 import numpy as np
-import pandas as pd
 
 from dmas.core.messages import SimulationMessage, SimulationMessageTypes
 from dmas.models.actions import AgentAction
@@ -15,9 +13,8 @@ from dmas.models.actions import AgentAction
 from execsatm.tasks import DefaultMissionTask, EventObservationTask, GenericObservationTask
 from execsatm.observations import ObservationOpportunity
 from execsatm.mission import Mission
-from execsatm.utils import Interval
 
-from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, IdleAction, ObservationAction, WaitAction
+from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.trackers import DataSink, LatestObservationTracker
 from dmas.models.planning.plan import Plan, PeriodicPlan, ReactivePlan
@@ -84,16 +81,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._incoming_event_tasks : list[GenericObservationTask] = list()
         self._relevant_updates : List[Bid] = list()
 
-        # initialize known preplan and current plan
-        self._preplan : PeriodicPlan = PeriodicPlan([])
-        self._plan : Plan = None
-
         # set parameters
         self._model = model
         self._replan_threshold = replan_threshold
         self._optimistic_bidding_threshold = optimistic_bidding_threshold
         self._periodic_overwrite = periodic_overwrite
-        self._t_share = -1   
 
         # replanning flags 
         self._task_announcements_received = False
@@ -121,7 +113,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     ) -> None:
         """ Updates internal knowledge based on incoming percepts """
         # update base percepts
-        super().update_percepts(completed_actions)
+        super().update_percepts(state, current_plan, tasks, incoming_reqs, misc_messages, completed_actions, aborted_actions, pending_actions)
 
         # collect bids from incoming messages to inbox
         incoming_bids : List[Union[Bid,dict]] \
@@ -299,8 +291,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # no new preplan available; return no updates
             return [], []
     
-        # save new preplan
-        self._preplan : PeriodicPlan = current_plan.copy()
+        # save new preplan 
+        #   DEPRECATED, done at the `AbstractReactivePlanner` level 
+        # self._preplan : PeriodicPlan = current_plan.copy()
 
         # extract observations path from new preplan
         preplan_path : List[ObservationAction] = \

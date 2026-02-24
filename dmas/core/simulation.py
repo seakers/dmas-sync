@@ -854,18 +854,21 @@ class Simulation:
         # check if planner dictionary is empty
         if planner_dict is None: return None, None
 
+        # define path for agent results to be used by planners
+        agent_results_dir = os.path.join(simulation_results_path, agent_name.lower())
+
         # load preplanner
-        preplanner = Simulation.__load_preplanner(planner_dict, simulation_results_path, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
+        preplanner = Simulation.__load_preplanner(planner_dict, agent_results_dir, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
 
         # load replanner
-        replanner = Simulation.__load_replanner(planner_dict, agent_name, simulation_results_path, logger, printouts)
+        replanner = Simulation.__load_replanner(planner_dict, agent_results_dir, logger, printouts)
 
         # return loaded planners
         return preplanner, replanner
     
     @staticmethod
     def __load_preplanner(planner_dict : dict, 
-                          simulation_results_path : str,
+                          agent_results_dir : str,
                           agent_mission : Mission, 
                           simulation_missions : Dict[str,Mission],
                           simulation_orbitdata : Dict[str, OrbitData],
@@ -895,17 +898,17 @@ class Simulation:
 
         # initialize preplanner
         if preplanner_type.lower() in ["heuristic"]:
-            return HeuristicInsertionPeriodicPlanner(simulation_results_path, horizon, period, sharing, debug, logger, printouts)
+            return HeuristicInsertionPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
 
-        # elif preplanner_type.lower() in ["naive", "fifo", "earliest"]:
-        #     return EarliestAccessPlanner(horizon, period, sharing, debug, logger, printouts)
+        elif preplanner_type.lower() in ["naive", "fifo", "earliest"]:
+            return EarliestAccessPlanner(horizon, period, sharing, debug, logger, printouts)
 
-        # elif preplanner_type.lower() == 'nadir':
-        #     return NadirPointingPlanner(horizon, period, sharing, debug, logger, printouts)
+        elif preplanner_type.lower() == 'nadir':
+            return NadirPointingPlanner(horizon, period, sharing, debug, logger, printouts)
 
-        # elif preplanner_type.lower() in ["dynamic", "dp"]:
-        #     model = preplanner_dict.get('model', 'earliest').lower()
-        #     return DynamicProgrammingPlanner(horizon, period, model, sharing, debug, logger, printouts)
+        elif preplanner_type.lower() in ["dynamic", "dp"]:
+            model = preplanner_dict.get('model', 'earliest').lower()
+            return DynamicProgrammingPlanner(horizon, period, model, sharing, debug, logger, printouts)
         
         elif preplanner_type.lower() in ["eventannouncer", "announcer"]:
             events_path = preplanner_dict.get('eventsPath', None)
@@ -995,8 +998,7 @@ class Simulation:
         
     @staticmethod
     def __load_replanner(planner_dict : dict, 
-                         agent_name : str, 
-                         simulation_results_path : str, 
+                         agent_results_dir : str, 
                          logger : logging.Logger, 
                          printouts : bool) -> AbstractReactivePlanner:
         """ loads the replanner for the agent """
@@ -1017,7 +1019,6 @@ class Simulation:
 
             if 'heuristic' in model:
                 heuristic = replanner_dict.get('heuristic', 'earliestAccess')
-                agent_results_dir = os.path.join(simulation_results_path, agent_name.lower())
                 return HeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
             else:
                 raise NotImplementedError(f'replanner model `{model}` not yet supported.')

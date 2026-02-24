@@ -59,14 +59,14 @@ class WorkerPlanner(AbstractPeriodicPlanner):
         #--------------------
 
         # create a plan from plan message actions
-        self.plan = PeriodicPlan(actions, t=self.plan_message.t_plan)
+        self._plan = PeriodicPlan(actions, t=self.plan_message.t_plan)
 
         # remove the plan message after processing
         del self.plan_message
         self.plan_message = None
 
         # return the generated plan
-        return self.plan.copy()
+        return self._plan.copy()
 
     def _schedule_observations(self, *_):
         """ Boilerplate method for scheduling observations."""

@@ -1147,9 +1147,9 @@ class AbstractPlanner(ABC):
         finally:
             # DEBUG SECTION
             pass
-            for pair_idx,(t_i,d_i,th_i,t_j,d_j,th_j,max_slew_rate) in enumerate(observation_parameters):
-                if not self.is_observation_pair_valid(t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate):
-                    x = 1
+            # for pair_idx,(t_i,d_i,th_i,t_j,d_j,th_j,max_slew_rate) in enumerate(observation_parameters):
+            #     if not self.is_observation_pair_valid(t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate):
+            #         x = 1
 
     def is_observation_pair_valid(self, 
                                   t_i, d_i, th_i, 
