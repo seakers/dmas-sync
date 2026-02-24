@@ -81,15 +81,15 @@
     "overrides": [
         {
             "pair": [
-                "imager_a_sat_5",
-                "imager_a_sat_12"
+                "imager_a_sat_0",
+                "imager_b_sat_4"
             ],
             "action": "allow"
         },
         {
             "pair": [
-                "imager_a_sat_11",
-                "tdrss_sat_2"
+                "imager_a_sat_0",
+                "tdrss_sat_1"
             ],
             "action": "allow"
         }

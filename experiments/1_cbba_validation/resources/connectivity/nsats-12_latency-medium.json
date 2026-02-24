@@ -45,8 +45,8 @@
     "overrides": [
         {
             "pair": [
-                "imager_b_sat_2",
-                "tdrss_sat_1"
+                "imager_b_sat_3",
+                "tdrss_sat_2"
             ],
             "action": "allow"
         }
