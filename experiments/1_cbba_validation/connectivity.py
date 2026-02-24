@@ -122,341 +122,59 @@ def generate_intermediate_latency_connectivity_spec(imaging_sats : list, relay_s
 
 EdgeIdx = Tuple[int, int]
 
-def generate_medium_latency_connectivity_spec(
-    imaging_sats: list,
-    relay_sats: list,
-    ground_stations: list,
-    high_latency_values: dict,
-    low_latency_values: dict,
-    messages: List[Tuple[str, str, float]],
-    medium_latency_filename: str,
-    *mission_specs_kwargs
-) -> dict:
+# def generate_medium_latency_connectivity_spec(
+#     imaging_sats: list,
+#     relay_sats: list,
+#     ground_stations: list,
+#     high_latency_values: dict,
+#     low_latency_values: dict,
+#     messages: List[Tuple[str, str, float]],
+#     medium_latency_filename: str,
+#     *mission_specs_kwargs
+# ) -> dict:
 
-    # ----------------------------
-    # 0) Targets derived from high/low
-    # ----------------------------
-    target_p95 = 0.5 * (low_latency_values["latency_95th"] + high_latency_values["latency_95th"])
-    target_p_on_time = 0.5 * (low_latency_values["p_on_time"] + high_latency_values["p_on_time"])
-    p_success_min = min(low_latency_values["p_success"], high_latency_values["p_success"])
-
-    # Tolerances for "medium" (tune these)
-    # e.g., within ±10% of target p95 and ±0.05 on p_on_time
-    p95_tol_frac = 0.10
-    p_on_time_tol = 0.05
-
-    # ----------------------------
-    # 1) Build agent list + candidate sat-sat edges
-    # ----------------------------
-    agents = list(imaging_sats) + list(relay_sats) + list(ground_stations)
-    n = len(agents)
-
-    imaging_set = set(imaging_sats)
-    relay_set = set(relay_sats)
-    ground_set = set(ground_stations)
-
-    def is_candidate_edge(u: str, v: str) -> bool:
-        # Only toggle sat<->sat
-        if (u in ground_set) or (v in ground_set):
-            return False
-        return True
-
-    edge_list: List[EdgeIdx] = []
-    for i in range(n):
-        for j in range(i + 1, n):
-            if is_candidate_edge(agents[i], agents[j]):
-                edge_list.append((i, j))
-
-    if not edge_list:
-        raise ValueError("No candidate sat-sat edges were generated.")
-
-    # ----------------------------
-    # 2) Helpers: edge-set -> connectivity spec
-    # ----------------------------
-    def edge_set_to_connectivity_spec(enabled_edges: Set[EdgeIdx]) -> dict:
-        overrides = [{"pair": [agents[i], agents[j]], "action": "allow"} for (i, j) in sorted(enabled_edges)]
-
-        spec = {
-            "default": "deny",
-            "groups": {
-                "imaging_sats": list(imaging_sats),
-                "relay_sats": list(relay_sats),
-                "ground_stations": list(ground_stations),
-            },
-            "rules": [
-                {"action": "allow", "scope": "between", "targets": ["imaging_sats", "ground_stations"]},
-                {"action": "allow", "scope": "between", "targets": ["relay_sats", "ground_stations"]},
-            ],
-            "overrides": overrides,
-        }
-        return spec
-
-    def evaluate_edge_set(enabled_edges: Set[EdgeIdx]) -> Dict[str, Any]:
-        conn_spec = edge_set_to_connectivity_spec(enabled_edges)
-
-        # save connectivity spec to file 
-        with open(medium_latency_filename, 'w') as f:
-            json.dump(conn_spec, f, indent=4)
-
-        mission_specs_candidate = generate_scenario_mission_specs(
-            *mission_specs_kwargs,  
-        )
-
-        metrics = evaluate_scenario_latency(
-            mission_specs_candidate,
-            messages,
-            # If you want p_on_time relative to a requirement, pass T_req here:
-            # T_req=...,
-            printouts=False,
-        )
-
-        # If evaluate_scenario_latency already returns a dict, great.
-        # If it returns tuple, wrap it here.
-        return metrics
-    
-    # ----------------------------
-    # 3) Greedy forward-add to reach "medium"
-    # ----------------------------
-    eval_cache: Dict[frozenset, Dict[str, Any]] = {}
-
-    def eval_cached(E: Set[EdgeIdx]) -> Dict[str, Any]:
-        key = frozenset(E)
-        if key not in eval_cache:
-            eval_cache[key] = evaluate_edge_set(E)
-        return eval_cache[key]
-
-    def medium_ok(m: Dict[str, Any]) -> bool:
-        if float(m["p_success"]) < p_success_min:
-            return False
-        p95 = float(m["latency_95th"])
-        p_on = float(m["p_on_time"])
-        return (abs(p95 - target_p95) <= p95_tol_frac * target_p95) and (abs(p_on - target_p_on_time) <= p_on_time_tol)
-
-    # Start from empty sat-sat ISLs (but sat-ground allowed via rules)
-    enabled: Set[EdgeIdx] = set()
-    cur = eval_cached(enabled)
-
-    remaining = [e for e in edge_list if e not in enabled]
-
-    # To avoid O(|edges|) eval per step being too expensive, screen candidates per step
-    screen_k = min(200, len(remaining))  # tune
-
-    # We’ll optimize "distance to medium" rather than pure feasibility
-    def distance_to_medium(m: Dict[str, Any]) -> float:
-        # big penalty if violates success
-        if float(m["p_success"]) < p_success_min:
-            return 1e9 + (p_success_min - float(m["p_success"])) * 1e6
-
-        p95 = float(m["latency_95th"])
-        p_on = float(m["p_on_time"])
-        # normalized squared error
-        d_p95 = ((p95 - target_p95) / max(1e-9, target_p95)) ** 2
-        d_on = (p_on - target_p_on_time) ** 2
-        # small edge penalty to discourage unnecessary links
-        d_edges = 1e-4 * len(enabled)
-        return d_p95 + d_on + d_edges
-
-    best_dist = distance_to_medium(cur)
-
-    # Forward add loop
-    max_add_steps = 500  # safety
-    for _ in tqdm(range(max_add_steps), total=max_add_steps, desc="Greedy add", unit=' steps', disable=False):
-        if medium_ok(cur):
-            break
-        if not remaining:
-            break
-
-        # Screen candidates
-        if len(remaining) > screen_k:
-            cand_subset = np.random.choice(len(remaining), size=screen_k, replace=False)
-            pool = [remaining[i] for i in cand_subset]
-        else:
-            pool = remaining
-
-        best_edge = None
-        best_edge_metrics = None
-        best_edge_dist = best_dist
-
-        for e in tqdm(pool, desc="  Evaluating candidates", unit=' edges', leave=False):
-            trial = set(enabled)
-            trial.add(e)
-            m = eval_cached(trial)
-            d = distance_to_medium(m)
-            if d < best_edge_dist:
-                best_edge_dist = d
-                best_edge = e
-                best_edge_metrics = m
-
-        # No improvement found
-        if best_edge is None:
-            break
-
-        enabled.add(best_edge)
-        remaining.remove(best_edge)
-        cur = best_edge_metrics
-        best_dist = best_edge_dist
-
-    # ----------------------------
-    # 4) Prune: remove edges while staying "medium-ish"
-    # ----------------------------
-    improved = True
-    while improved and enabled:
-        improved = False
-
-        # Evaluate removal candidates (screen if big)
-        enabled_list = list(enabled)
-        # You can sort by heuristic (e.g., remove edges involving imaging first), but simplest:
-        np.random.shuffle(enabled_list)
-
-        remove_screen_k = min(200, len(enabled_list))
-        pool = enabled_list[:remove_screen_k]
-
-        best_remove = None
-        best_remove_metrics = None
-        best_remove_dist = best_dist
-
-        for e in tqdm(pool, desc="  Evaluating removal candidates", unit=' edges', leave=False):
-            trial = set(enabled)
-            trial.remove(e)
-            m = eval_cached(trial)
-            # require still "medium" OR at least not worsen distance much
-            d = distance_to_medium(m)
-            # Prefer staying in band; if not in band, allow only if distance doesn't worsen
-            if d <= best_remove_dist and (medium_ok(m) or d <= best_dist):
-                best_remove = e
-                best_remove_metrics = m
-                best_remove_dist = d
-
-        if best_remove is not None and medium_ok(best_remove_metrics):
-            enabled.remove(best_remove)
-            cur = best_remove_metrics
-            best_dist = best_remove_dist
-            improved = True
-
-    # ----------------------------
-    # 5) Save final spec and return
-    # ----------------------------
-    final_spec = edge_set_to_connectivity_spec(enabled)
-    with open(medium_latency_filename, "w") as f:
-        json.dump(final_spec, f, indent=4)
-
-    return final_spec
-
-# def generate_medium_latency_connectivity_spec(imaging_sats : list, 
-#                                               relay_sats : list, 
-#                                               ground_stations : list, 
-#                                               high_latency_values : dict, 
-#                                               low_latency_values : dict,
-#                                               messages : List[Tuple[str, str, float]],
-#                                               medium_latency_filename : str,
-#                                               *mission_specs_kwargs
-#                                             ) -> dict:
-#     """ 
-#     Uses the evaluated latency values for the high and low latency scenarios to generate 
-#     a medium latency connectivity spec that is designed to have latency values between the two.
-
-#     Extracts latency requirement from high and low lavency values and uses Genetic Algorithm to search 
-#     for a connectivity spec that meets the medium latency requirement.
-#     """
-    
 #     # ----------------------------
 #     # 0) Targets derived from high/low
 #     # ----------------------------
-#     # Expect these keys exist in your metrics dict:
-#     #   "p_success", "p_on_time", "latency_mean", "latency_50th", "latency_95th", "latency_99th"
 #     target_p95 = 0.5 * (low_latency_values["latency_95th"] + high_latency_values["latency_95th"])
 #     target_p_on_time = 0.5 * (low_latency_values["p_on_time"] + high_latency_values["p_on_time"])
+#     p_success_min = min(low_latency_values["p_success"], high_latency_values["p_success"])
 
-#     # set successful delivery requirement 
-#     p_success_min = min(low_latency_values["p_success"], high_latency_values["p_success"]) 
-#     # p_success_min = 0.95 # Or set explicitly, e.g. 0.95
+#     # Tolerances for "medium" (tune these)
+#     # e.g., within ±10% of target p95 and ±0.05 on p_on_time
+#     p95_tol_frac = 0.10
+#     p_on_time_tol = 0.05
 
 #     # ----------------------------
-#     # 1) Build agent list + candidate edges
+#     # 1) Build agent list + candidate sat-sat edges
 #     # ----------------------------
 #     agents = list(imaging_sats) + list(relay_sats) + list(ground_stations)
 #     n = len(agents)
-#     agent_to_idx = {a: i for i, a in enumerate(agents)}
 
 #     imaging_set = set(imaging_sats)
 #     relay_set = set(relay_sats)
 #     ground_set = set(ground_stations)
 
 #     def is_candidate_edge(u: str, v: str) -> bool:
-#         """Restrict what the GA is allowed to turn on."""
-
-#         u_is_img = u in imaging_set
-#         v_is_img = v in imaging_set
-#         u_is_rel = u in relay_set
-#         v_is_rel = v in relay_set
-#         u_is_gs = u in ground_set
-#         v_is_gs = v in ground_set
-
-#         # if (u_is_gs and v_is_img) or (u_is_img and v_is_gs):
-#         if u_is_gs or v_is_gs:
-#             # Disallow direct toggling of sat<->ground links 
-#             # (already enabled in rules)
+#         # Only toggle sat<->sat
+#         if (u in ground_set) or (v in ground_set):
 #             return False
+#         return True
 
-#         return True  
-    
-
-#         # Typical "medium latency" design space:
-#         # - allow imaging<->relay
-#         # - allow relay<->relay
-#         # - allow relay<->ground
-#         # - disallow imaging<->imaging (optional)
-#         # - disallow imaging<->ground direct (optional)
-#         if (u_is_img and v_is_rel) or (u_is_rel and v_is_img):
-#             return True
-#         if u_is_rel and v_is_rel:
-#             return True
-#         if (u_is_rel and v_is_gs) or (u_is_gs and v_is_rel):
-#             return True
-
-#         # Optional: allow imaging->ground direct links
-#         # if (u_is_img and v_is_gs) or (u_is_gs and v_is_img):
-#         #     return True
-
-#         return False
-
-#     # Enumerate undirected candidate edges as (i,j) with i<j
-#     edge_list: List[Tuple[int, int]] = []
+#     edge_list: List[EdgeIdx] = []
 #     for i in range(n):
 #         for j in range(i + 1, n):
-#             u = agents[i]
-#             v = agents[j]
-#             if is_candidate_edge(u, v):
+#             if is_candidate_edge(agents[i], agents[j]):
 #                 edge_list.append((i, j))
 
-#     if len(edge_list) == 0:
-#         raise ValueError("No candidate edges were generated. Check your candidate-edge rules.")
-
-#     num_genes = len(edge_list)
+#     if not edge_list:
+#         raise ValueError("No candidate sat-sat edges were generated.")
 
 #     # ----------------------------
-#     # 2) Helpers: chromosome -> adjacency -> connectivity spec
+#     # 2) Helpers: edge-set -> connectivity spec
 #     # ----------------------------
-#     def chromosome_to_adjacency(solution: np.ndarray) -> np.ndarray:
-#         """Build an NxN symmetric adjacency matrix from a 0/1 chromosome."""
-#         adj = np.zeros((n, n), dtype=np.uint8)
-#         # Ensure ints 0/1
-#         bits = (solution > 0.5).astype(np.uint8)
-#         for gene_idx, (i, j) in enumerate(edge_list):
-#             if bits[gene_idx]:
-#                 adj[i, j] = 1
-#                 adj[j, i] = 1
-#         return adj
-
-#     def adjacency_to_connectivity_spec(adj: np.ndarray) -> dict:
-#         """
-#         Convert adjacency matrix to a connectivity spec dict.
-#         This format is intentionally simple: default deny + allowed pair overrides.
-#         """
-#         overrides = []
-#         for i, j in edge_list:
-#             if adj[i, j] == 1:
-#                 overrides.append({"pair": [agents[i], agents[j]], "action": "allow"})
+#     def edge_set_to_connectivity_spec(enabled_edges: Set[EdgeIdx]) -> dict:
+#         overrides = [{"pair": [agents[i], agents[j]], "action": "allow"} for (i, j) in sorted(enabled_edges)]
 
 #         spec = {
 #             "default": "deny",
@@ -466,35 +184,15 @@ def generate_medium_latency_connectivity_spec(
 #                 "ground_stations": list(ground_stations),
 #             },
 #             "rules": [
-#                 {
-#                     "action": "allow",
-#                     "scope": "between",
-#                     "targets": [
-#                         "imaging_sats",
-#                         "ground_stations"
-#                     ]
-#                 },
-#                 {
-#                     "action": "allow",
-#                     "scope": "between",
-#                     "targets": [
-#                         "relay_sats",
-#                         "ground_stations"
-#                     ]
-#                 },
+#                 {"action": "allow", "scope": "between", "targets": ["imaging_sats", "ground_stations"]},
+#                 {"action": "allow", "scope": "between", "targets": ["relay_sats", "ground_stations"]},
 #             ],
 #             "overrides": overrides,
 #         }
 #         return spec
 
-#     # ----------------------------
-#     # 3) Evaluation wrapper: spec -> mission_specs -> metrics dict
-#     # ----------------------------
-#     def evaluate_solution(solution: np.ndarray) -> Dict[str, Any]:
-        
-#         # Convert chromosome to connectivity spec
-#         adj = chromosome_to_adjacency(solution)
-#         conn_spec = adjacency_to_connectivity_spec(adj)
+#     def evaluate_edge_set(enabled_edges: Set[EdgeIdx]) -> Dict[str, Any]:
+#         conn_spec = edge_set_to_connectivity_spec(enabled_edges)
 
 #         # save connectivity spec to file 
 #         with open(medium_latency_filename, 'w') as f:
@@ -514,111 +212,413 @@ def generate_medium_latency_connectivity_spec(
 
 #         # If evaluate_scenario_latency already returns a dict, great.
 #         # If it returns tuple, wrap it here.
-#         return metrics, conn_spec, adj
-
+#         return metrics
+    
 #     # ----------------------------
-#     # 4) Fitness function for pygad
+#     # 3) Greedy forward-add to reach "medium"
 #     # ----------------------------
-#     # We use squared penalties for being far from targets and a mild edge penalty.
-#     # Also a big penalty if success is too low.
-#     #
-#     # Make sure these weights roughly match your units (seconds).
-#     w_p95 = 1.0
-#     w_on_time = 1.0
-#     w_edges = 0.01
-#     big_penalty = 1e6
+#     eval_cache: Dict[frozenset, Dict[str, Any]] = {}
 
-#     # Cache to avoid re-evaluating identical solutions (GA revisits often)
-#     eval_cache: Dict[bytes, float] = {}
-#     best_payload: Dict[str, Any] = {"fitness": -np.inf, "conn_spec": None, "metrics": None}
+#     def eval_cached(E: Set[EdgeIdx]) -> Dict[str, Any]:
+#         key = frozenset(E)
+#         if key not in eval_cache:
+#             eval_cache[key] = evaluate_edge_set(E)
+#         return eval_cache[key]
 
-#     def fitness_func(ga_instance, solution, solution_idx):
-#         # Cache key
-#         key = np.asarray(solution > 0.5, dtype=np.uint8).tobytes()
-#         if key in eval_cache:
-#             return eval_cache[key]
+#     def medium_ok(m: Dict[str, Any]) -> bool:
+#         if float(m["p_success"]) < p_success_min:
+#             return False
+#         p95 = float(m["latency_95th"])
+#         p_on = float(m["p_on_time"])
+#         return (abs(p95 - target_p95) <= p95_tol_frac * target_p95) and (abs(p_on - target_p_on_time) <= p_on_time_tol)
 
-#         try:
-#             metrics, conn_spec, adj = evaluate_solution(solution)
-#         except Exception:
-#             # If evaluation fails (infeasible spec, etc.), return very poor fitness
-#             fit = -big_penalty
-#             eval_cache[key] = fit
-#             return fit
+#     # Start from empty sat-sat ISLs (but sat-ground allowed via rules)
+#     enabled: Set[EdgeIdx] = set()
+#     cur = eval_cached(enabled)
 
-#         p_success = float(metrics["p_success"])
-#         p_on_time = float(metrics["p_on_time"])
-#         p95 = float(metrics["latency_95th"])
+#     remaining = [e for e in edge_list if e not in enabled]
 
-#         # Edge count penalty (encourage simpler topologies)
-#         edge_count = int(np.sum(adj) // 2)  # undirected edges counted once
-#         edge_fraction = edge_count / max(1, len(edge_list))  # normalize
+#     # To avoid O(|edges|) eval per step being too expensive, screen candidates per step
+#     screen_k = min(200, len(remaining))  # tune
 
-#         # Hard-ish constraint on success (deliverability)
-#         if p_success < p_success_min:
-#             # Penalize heavily if too many messages are undeliverable
-#             cost = big_penalty * (p_success_min - p_success) ** 2
+#     # We’ll optimize "distance to medium" rather than pure feasibility
+#     def distance_to_medium(m: Dict[str, Any]) -> float:
+#         # big penalty if violates success
+#         if float(m["p_success"]) < p_success_min:
+#             return 1e9 + (p_success_min - float(m["p_success"])) * 1e6
+
+#         p95 = float(m["latency_95th"])
+#         p_on = float(m["p_on_time"])
+#         # normalized squared error
+#         d_p95 = ((p95 - target_p95) / max(1e-9, target_p95)) ** 2
+#         d_on = (p_on - target_p_on_time) ** 2
+#         # small edge penalty to discourage unnecessary links
+#         d_edges = 1e-4 * len(enabled)
+#         return d_p95 + d_on + d_edges
+
+#     best_dist = distance_to_medium(cur)
+
+#     # Forward add loop
+#     max_add_steps = 500  # safety
+#     for _ in tqdm(range(max_add_steps), total=max_add_steps, desc="Greedy add", unit=' steps', disable=False):
+#         if medium_ok(cur):
+#             break
+#         if not remaining:
+#             break
+
+#         # Screen candidates
+#         if len(remaining) > screen_k:
+#             cand_subset = np.random.choice(len(remaining), size=screen_k, replace=False)
+#             pool = [remaining[i] for i in cand_subset]
 #         else:
-#             cost = 0.0
+#             pool = remaining
 
-#         # Drive p95 to target
-#         # Normalize by target_p95 to make it unitless and comparable across scenarios
-#         cost += w_p95 * ((p95 - target_p95) / max(1e-9, target_p95)) ** 2
+#         best_edge = None
+#         best_edge_metrics = None
+#         best_edge_dist = best_dist
 
-#         # Drive on-time probability to target
-#         cost += w_on_time * (p_on_time - target_p_on_time) ** 2
+#         for e in tqdm(pool, desc="  Evaluating candidates", unit=' edges', leave=False):
+#             trial = set(enabled)
+#             trial.add(e)
+#             m = eval_cached(trial)
+#             d = distance_to_medium(m)
+#             if d < best_edge_dist:
+#                 best_edge_dist = d
+#                 best_edge = e
+#                 best_edge_metrics = m
 
-#         # Mild preference for fewer edges
-#         cost += w_edges * edge_fraction
+#         # No improvement found
+#         if best_edge is None:
+#             break
 
-#         fit = -float(cost)
-
-#         # Track best
-#         if fit > best_payload["fitness"]:
-#             best_payload["fitness"] = fit
-#             best_payload["conn_spec"] = conn_spec
-#             best_payload["metrics"] = metrics
-
-#         eval_cache[key] = fit
-#         return fit
+#         enabled.add(best_edge)
+#         remaining.remove(best_edge)
+#         cur = best_edge_metrics
+#         best_dist = best_edge_dist
 
 #     # ----------------------------
-#     # 5) Run pygad GA
+#     # 4) Prune: remove edges while staying "medium-ish"
 #     # ----------------------------
-#     # Gene values are 0/1. pygad supports init_range_low/high, but to force 0/1:
-#     gene_space = [0, 1]
+#     improved = True
+#     while improved and enabled:
+#         improved = False
 
-#     ga = pygad.GA(
-#         num_generations=60,
-#         num_parents_mating=12,
-#         fitness_func=fitness_func,
-#         sol_per_pop=30,
-#         num_genes=num_genes,
-#         gene_space=gene_space,
-#         parent_selection_type="tournament",
-#         K_tournament=3,
-#         crossover_type="single_point",
-#         mutation_type="random",
-#         mutation_probability=0.05,
-#         keep_parents=2,
-#         stop_criteria=["saturate_10"],  # stop if no improvement for 10 gens
-#         random_seed=42,
-#         allow_duplicate_genes=True,
-#     )
+#         # Evaluate removal candidates (screen if big)
+#         enabled_list = list(enabled)
+#         # You can sort by heuristic (e.g., remove edges involving imaging first), but simplest:
+#         np.random.shuffle(enabled_list)
 
-#     ga.run()
+#         remove_screen_k = min(200, len(enabled_list))
+#         pool = enabled_list[:remove_screen_k]
 
-#     # Retrieve best
-#     if best_payload["conn_spec"] is None:
-#         # Fallback: use GA's best solution
-#         solution, solution_fitness, _ = ga.best_solution()
-#         metrics, conn_spec, _ = evaluate_solution(solution)
-#         best_payload["conn_spec"] = conn_spec
-#         best_payload["metrics"] = metrics
+#         best_remove = None
+#         best_remove_metrics = None
+#         best_remove_dist = best_dist
 
-#     # You asked for the connectivity spec dict:
-#     # (Optionally you may also want to return best_payload["metrics"] for logging.)
-#     return best_payload["conn_spec"]
+#         for e in tqdm(pool, desc="  Evaluating removal candidates", unit=' edges', leave=False):
+#             trial = set(enabled)
+#             trial.remove(e)
+#             m = eval_cached(trial)
+#             # require still "medium" OR at least not worsen distance much
+#             d = distance_to_medium(m)
+#             # Prefer staying in band; if not in band, allow only if distance doesn't worsen
+#             if d <= best_remove_dist and (medium_ok(m) or d <= best_dist):
+#                 best_remove = e
+#                 best_remove_metrics = m
+#                 best_remove_dist = d
+
+#         if best_remove is not None and medium_ok(best_remove_metrics):
+#             enabled.remove(best_remove)
+#             cur = best_remove_metrics
+#             best_dist = best_remove_dist
+#             improved = True
+
+#     # ----------------------------
+#     # 5) Save final spec and return
+#     # ----------------------------
+#     final_spec = edge_set_to_connectivity_spec(enabled)
+#     with open(medium_latency_filename, "w") as f:
+#         json.dump(final_spec, f, indent=4)
+
+#     return final_spec
+
+def generate_medium_latency_connectivity_spec(imaging_sats : list, 
+                                              relay_sats : list, 
+                                              ground_stations : list, 
+                                              high_latency_values : dict, 
+                                              low_latency_values : dict,
+                                              messages : List[Tuple[str, str, float]],
+                                              medium_latency_filename : str,
+                                              *mission_specs_kwargs
+                                            ) -> dict:
+    """ 
+    Uses the evaluated latency values for the high and low latency scenarios to generate 
+    a medium latency connectivity spec that is designed to have latency values between the two.
+
+    Extracts latency requirement from high and low lavency values and uses Genetic Algorithm to search 
+    for a connectivity spec that meets the medium latency requirement.
+    """
+    
+    # ----------------------------
+    # 0) Targets derived from high/low
+    # ----------------------------
+    # Expect these keys exist in your metrics dict:
+    #   "p_success", "p_on_time", "latency_mean", "latency_50th", "latency_95th", "latency_99th"
+    target_p95 = 0.5 * (low_latency_values["latency_95th"] + high_latency_values["latency_95th"])
+    target_p_on_time = 0.5 * (low_latency_values["p_on_time"] + high_latency_values["p_on_time"])
+
+    # set successful delivery requirement 
+    p_success_min = min(low_latency_values["p_success"], high_latency_values["p_success"]) 
+    # p_success_min = 0.95 # Or set explicitly, e.g. 0.95
+
+    # ----------------------------
+    # 1) Build agent list + candidate edges
+    # ----------------------------
+    agents = list(imaging_sats) + list(relay_sats) + list(ground_stations)
+    n = len(agents)
+    agent_to_idx = {a: i for i, a in enumerate(agents)}
+
+    imaging_set = set(imaging_sats)
+    relay_set = set(relay_sats)
+    ground_set = set(ground_stations)
+
+    def is_candidate_edge(u: str, v: str) -> bool:
+        """Restrict what the GA is allowed to turn on."""
+
+        u_is_img = u in imaging_set
+        v_is_img = v in imaging_set
+        u_is_rel = u in relay_set
+        v_is_rel = v in relay_set
+        u_is_gs = u in ground_set
+        v_is_gs = v in ground_set
+
+        # if (u_is_gs and v_is_img) or (u_is_img and v_is_gs):
+        if u_is_gs or v_is_gs:
+            # Disallow direct toggling of sat<->ground links 
+            # (already enabled in rules)
+            return False
+
+        return True  
+    
+
+        # Typical "medium latency" design space:
+        # - allow imaging<->relay
+        # - allow relay<->relay
+        # - allow relay<->ground
+        # - disallow imaging<->imaging (optional)
+        # - disallow imaging<->ground direct (optional)
+        if (u_is_img and v_is_rel) or (u_is_rel and v_is_img):
+            return True
+        if u_is_rel and v_is_rel:
+            return True
+        if (u_is_rel and v_is_gs) or (u_is_gs and v_is_rel):
+            return True
+
+        # Optional: allow imaging->ground direct links
+        # if (u_is_img and v_is_gs) or (u_is_gs and v_is_img):
+        #     return True
+
+        return False
+
+    # Enumerate undirected candidate edges as (i,j) with i<j
+    edge_list: List[Tuple[int, int]] = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            u = agents[i]
+            v = agents[j]
+            if is_candidate_edge(u, v):
+                edge_list.append((i, j))
+
+    if len(edge_list) == 0:
+        raise ValueError("No candidate edges were generated. Check your candidate-edge rules.")
+
+    num_genes = len(edge_list)
+
+    # ----------------------------
+    # 2) Helpers: chromosome -> adjacency -> connectivity spec
+    # ----------------------------
+    def chromosome_to_adjacency(solution: np.ndarray) -> np.ndarray:
+        """Build an NxN symmetric adjacency matrix from a 0/1 chromosome."""
+        adj = np.zeros((n, n), dtype=np.uint8)
+        # Ensure ints 0/1
+        bits = (solution > 0.5).astype(np.uint8)
+        for gene_idx, (i, j) in enumerate(edge_list):
+            if bits[gene_idx]:
+                adj[i, j] = 1
+                adj[j, i] = 1
+        return adj
+
+    def adjacency_to_connectivity_spec(adj: np.ndarray) -> dict:
+        """
+        Convert adjacency matrix to a connectivity spec dict.
+        This format is intentionally simple: default deny + allowed pair overrides.
+        """
+        overrides = []
+        for i, j in edge_list:
+            if adj[i, j] == 1:
+                overrides.append({"pair": [agents[i], agents[j]], "action": "allow"})
+
+        spec = {
+            "default": "deny",
+            "groups": {
+                "imaging_sats": list(imaging_sats),
+                "relay_sats": list(relay_sats),
+                "ground_stations": list(ground_stations),
+            },
+            "rules": [
+                {
+                    "action": "allow",
+                    "scope": "between",
+                    "targets": [
+                        "imaging_sats",
+                        "ground_stations"
+                    ]
+                },
+                {
+                    "action": "allow",
+                    "scope": "between",
+                    "targets": [
+                        "relay_sats",
+                        "ground_stations"
+                    ]
+                },
+            ],
+            "overrides": overrides,
+        }
+        return spec
+
+    # ----------------------------
+    # 3) Evaluation wrapper: spec -> mission_specs -> metrics dict
+    # ----------------------------
+    def evaluate_solution(solution: np.ndarray) -> Dict[str, Any]:
+        
+        # Convert chromosome to connectivity spec
+        adj = chromosome_to_adjacency(solution)
+        conn_spec = adjacency_to_connectivity_spec(adj)
+
+        # save connectivity spec to file 
+        with open(medium_latency_filename, 'w') as f:
+            json.dump(conn_spec, f, indent=4)
+
+        mission_specs_candidate = generate_scenario_mission_specs(
+            *mission_specs_kwargs,  
+        )
+
+        metrics = evaluate_scenario_latency(
+            mission_specs_candidate,
+            messages,
+            # If you want p_on_time relative to a requirement, pass T_req here:
+            # T_req=...,
+            printouts=False,
+        )
+
+        # If evaluate_scenario_latency already returns a dict, great.
+        # If it returns tuple, wrap it here.
+        return metrics, conn_spec, adj
+
+    # ----------------------------
+    # 4) Fitness function for pygad
+    # ----------------------------
+    # We use squared penalties for being far from targets and a mild edge penalty.
+    # Also a big penalty if success is too low.
+    #
+    # Make sure these weights roughly match your units (seconds).
+    w_p95 = 1.0
+    w_on_time = 1.0
+    w_edges = 0.01
+    big_penalty = 1e6
+
+    # Cache to avoid re-evaluating identical solutions (GA revisits often)
+    eval_cache: Dict[bytes, float] = {}
+    best_payload: Dict[str, Any] = {"fitness": -np.inf, "conn_spec": None, "metrics": None}
+
+    def fitness_func(ga_instance, solution, solution_idx):
+        # Cache key
+        key = np.asarray(solution > 0.5, dtype=np.uint8).tobytes()
+        if key in eval_cache:
+            return eval_cache[key]
+
+        try:
+            metrics, conn_spec, adj = evaluate_solution(solution)
+        except Exception:
+            # If evaluation fails (infeasible spec, etc.), return very poor fitness
+            fit = -big_penalty
+            eval_cache[key] = fit
+            return fit
+
+        p_success = float(metrics["p_success"])
+        p_on_time = float(metrics["p_on_time"])
+        p95 = float(metrics["latency_95th"])
+
+        # Edge count penalty (encourage simpler topologies)
+        edge_count = int(np.sum(adj) // 2)  # undirected edges counted once
+        edge_fraction = edge_count / max(1, len(edge_list))  # normalize
+
+        # Hard-ish constraint on success (deliverability)
+        if p_success < p_success_min:
+            # Penalize heavily if too many messages are undeliverable
+            cost = big_penalty * (p_success_min - p_success) ** 2
+        else:
+            cost = 0.0
+
+        # Drive p95 to target
+        # Normalize by target_p95 to make it unitless and comparable across scenarios
+        cost += w_p95 * ((p95 - target_p95) / max(1e-9, target_p95)) ** 2
+
+        # Drive on-time probability to target
+        cost += w_on_time * (p_on_time - target_p_on_time) ** 2
+
+        # Mild preference for fewer edges
+        cost += w_edges * edge_fraction
+
+        fit = -float(cost)
+
+        # Track best
+        if fit > best_payload["fitness"]:
+            best_payload["fitness"] = fit
+            best_payload["conn_spec"] = conn_spec
+            best_payload["metrics"] = metrics
+
+        eval_cache[key] = fit
+        return fit
+
+    # ----------------------------
+    # 5) Run pygad GA
+    # ----------------------------
+    # Gene values are 0/1. pygad supports init_range_low/high, but to force 0/1:
+    gene_space = [0, 1]
+
+    ga = pygad.GA(
+        num_generations=60,
+        num_parents_mating=12,
+        fitness_func=fitness_func,
+        sol_per_pop=30,
+        num_genes=num_genes,
+        gene_space=gene_space,
+        parent_selection_type="tournament",
+        K_tournament=3,
+        crossover_type="single_point",
+        mutation_type="random",
+        mutation_probability=0.05,
+        keep_parents=2,
+        stop_criteria=["saturate_10"],  # stop if no improvement for 10 gens
+        random_seed=42,
+        allow_duplicate_genes=True,
+    )
+
+    ga.run()
+
+    # Retrieve best
+    if best_payload["conn_spec"] is None:
+        # Fallback: use GA's best solution
+        solution, solution_fitness, _ = ga.best_solution()
+        metrics, conn_spec, _ = evaluate_solution(solution)
+        best_payload["conn_spec"] = conn_spec
+        best_payload["metrics"] = metrics
+
+    # You asked for the connectivity spec dict:
+    # (Optionally you may also want to return best_payload["metrics"] for logging.)
+    return best_payload["conn_spec"]
 
 def generate_message_samples(mission_specs : dict, 
                              num_samples : int = 20_000,
