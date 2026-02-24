@@ -1,7 +1,7 @@
 import json
 import os
 import random
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 import numpy as np
 import pandas as pd
 import pygad
@@ -620,7 +620,6 @@ def generate_medium_latency_connectivity_spec(
 #     # (Optionally you may also want to return best_payload["metrics"] for logging.)
 #     return best_payload["conn_spec"]
 
-
 def generate_message_samples(mission_specs : dict, 
                              num_samples : int = 20_000,
                              reduced : bool = False
@@ -658,63 +657,78 @@ class ConnectivityIndex:
     t_end: np.ndarray              # (K,)
     comp_idx: np.ndarray           # (K, N) uint16/uint32: compact component index per agent
     n_comps: np.ndarray            # (K,) number of components in each interval
-    trans: List[List[int]]         # len K-1; trans[k][c] is bitmask of next comps in k+1 overlapping comp c in k
-
+    trans: List[List[int]]         # (K-1) lists; trans[k][c] is Python-int bitmask of comps in k+1
 
 def build_connectivity_index(scenario_orbitdata: Dict[str, "OrbitData"]) -> ConnectivityIndex:
     """
-    Build compact per-interval component indices + component-overlap transitions.
-    Assumes all OrbitData share the same comms_links schema (same columns/agents).
-    Uses scenario_orbitdata for any agent to access comms_links table.
+    Build a compact connectivity index from comms_links that is safe for >64 components:
+      - comp_idx[k, a] is the compact component id (0..Ck-1) of agent a in interval k
+      - trans[k][c] is a Python-int bitmask over components in interval k+1 that overlap comp c in k
     """
-    # pick any orbitdata object (they should reference same comms_links table layout)
     any_agent = next(iter(scenario_orbitdata))
     orbitdata = scenario_orbitdata[any_agent]
 
     agent_to_col = orbitdata.comms_target_indices
-    col_to_agent = orbitdata.comms_target_columns
-    agents = list(col_to_agent)
+    col_to_agent = list(orbitdata.comms_target_columns)
+    agents = col_to_agent
     N = len(agents)
 
-    # Pull all intervals & raw component ids into arrays once
+    # Pull all rows once
     rows = list(orbitdata.comms_links.iter_rows_raw(t=0.0, include_current=True))
     K = len(rows)
+    if K == 0:
+        return ConnectivityIndex(
+            agents=agents,
+            agent_to_col=agent_to_col,
+            t_start=np.array([], dtype=float),
+            t_end=np.array([], dtype=float),
+            comp_idx=np.zeros((0, N), dtype=np.uint16),
+            n_comps=np.array([], dtype=np.uint16),
+            trans=[],
+        )
 
     t_start = np.empty(K, dtype=float)
     t_end = np.empty(K, dtype=float)
 
-    # raw comp ids per (k, agent_col) as Python objects / ints
+    # raw component labels (could be any ints) per interval per agent-col
     raw = np.empty((K, N), dtype=np.int64)
-
     for k, row in enumerate(rows):
         ts, te, *comp_ids = row
         t_start[k] = ts
         t_end[k] = te
+        # make sure this becomes a numeric array, not object
         raw[k, :] = np.asarray(comp_ids, dtype=np.int64)
 
-    # Remap raw component labels to compact 0..Ck-1 per interval
-    comp_idx = np.empty_like(raw, dtype=np.uint16)  # N<=196 => uint16 fine
+    # Remap raw labels to compact 0..Ck-1 per interval
+    comp_idx = np.empty((K, N), dtype=np.uint16)
     n_comps = np.empty(K, dtype=np.uint16)
-
     for k in range(K):
-        # unique mapping for this interval
-        uniq, inv = np.unique(raw[k, :], return_inverse=True)
+        _, inv = np.unique(raw[k, :], return_inverse=True)
         comp_idx[k, :] = inv.astype(np.uint16)
-        n_comps[k] = np.uint16(len(uniq))
+        n_comps[k] = np.uint16(inv.max() + 1)
 
-    # Build transitions between consecutive intervals:
-    # trans[k][c] = bitmask over comps in k+1 that share any agent with comp c in k.
+    # Build transitions as Python ints (NO numpy arrays here)
     trans: List[List[int]] = []
     for k in range(K - 1):
         Ck = int(n_comps[k])
-        Cn = int(n_comps[k + 1])
-        trans_k = [0] * Ck
+        trans_k: List[int] = [0] * Ck  # Python ints only
 
-        # For each agent, connect its comp in k to its comp in k+1
-        ck = comp_idx[k, :].astype(np.int32)
-        cn = comp_idx[k + 1, :].astype(np.int32)
+        ck = comp_idx[k, :]
+        cn = comp_idx[k + 1, :]
+
+        # Each agent maps (comp in k) -> (comp in k+1)
         for a in range(N):
-            trans_k[ck[a]] |= (1 << cn[a])
+            u = int(ck[a])   # Python int
+            v = int(cn[a])   # Python int
+            trans_k[u] |= (1 << v)  # Python int bitmask (arbitrary precision)
+
+        # Hard guarantee: Python int and non-negative
+        # (If this ever fails, something *else* corrupted it.)
+        for c, m in enumerate(trans_k):
+            if not isinstance(m, int):
+                trans_k[c] = int(m)
+            if trans_k[c] < 0:
+                raise ValueError(f"Overflow: trans[{k}][{c}] is negative ({trans_k[c]}).")
 
         trans.append(trans_k)
 
@@ -729,108 +743,91 @@ def build_connectivity_index(scenario_orbitdata: Dict[str, "OrbitData"]) -> Conn
     )
 
 
-def _iter_set_bits(x : int):
-    # convert numpy scalar to python int
-    x = int(x)
-    while x:
-        lsb = x & -x
-        i = int(lsb).bit_length() - 1
-        yield i
-        x ^= lsb
-
-
 def calculate_message_latency_fast(
     sender: str,
     receiver: str,
     start_time: float,
-    idx: ConnectivityIndex,
+    idx: "ConnectivityIndex",
 ) -> float:
+    """
+    Fast earliest-arrival latency for dynamic undirected connectivity with:
+      - zero per-hop latency (instant inside component)
+      - store-and-forward across time (agents carry the message across interval boundaries)
+      - topology changes only at interval boundaries (idx.t_start / idx.comp_idx / idx.trans)
+
+    Returns:
+      float: (earliest arrival time - start_time), or np.inf if unreachable.
+
+    IMPORTANT invariants for correctness/performance:
+      - idx.trans[k][c] MUST be Python ints (arbitrary-precision), never np.int64.
+      - idx.comp_idx is a (K, N) array of compact component indices per interval per agent-col.
+    """
+
     if sender == receiver:
         return 0.0
 
-    # interval index k0 such that t_start[k0] <= start_time < t_end[k0]
-    # using t_start search is usually sufficient if intervals are contiguous and ordered.
-    k0 = int(np.searchsorted(idx.t_start, start_time, side="right") - 1)
-    if k0 < 0:
-        k0 = 0
-    if k0 >= len(idx.t_start):
-        return np.inf
-
-    s_col = idx.agent_to_col.get(sender, None)
-    r_col = idx.agent_to_col.get(receiver, None)
+    # Resolve sender/receiver columns
+    s_col: Optional[int] = idx.agent_to_col.get(sender, None)
+    r_col: Optional[int] = idx.agent_to_col.get(receiver, None)
     if s_col is None or r_col is None:
         return np.inf
 
-    # Active component set as bitmask for interval k
-    s_comp = int(idx.comp_idx[k0, s_col])
-    active = 1 << s_comp
+    t_start_arr = idx.t_start
+    K = int(len(t_start_arr))
+    if K == 0:
+        return np.inf
 
-    # Check receiver in same component at k0
+    # Interval index k0 with t_start[k0] <= start_time < t_start[k0+1] (assuming ordered intervals)
+    k0 = int(np.searchsorted(t_start_arr, start_time, side="right") - 1)
+    if k0 < 0:
+        k0 = 0
+    if k0 >= K:
+        return np.inf
+
+    # Initialize active component bitmask in interval k0 (Python int, avoids overflow)
+    s_comp = int(idx.comp_idx[k0, s_col])
+    active = int(1) << s_comp
+
+    # Quick check: receiver in same component at k0 -> latency 0
     r_comp = int(idx.comp_idx[k0, r_col])
     if (active >> r_comp) & 1:
         return 0.0
 
-    # propagate forward across boundaries
-    K = len(idx.t_start)
+    # Propagate active components forward across boundaries
+    # idx.trans has length K-1; trans[k] maps comps at interval k -> bitmask of comps in interval k+1
     for k in range(k0, K - 1):
-        # compute active comps in next interval
-        next_active = 0
-        trans_k = idx.trans[k]
-        for c in _iter_set_bits(active):
-            # c is a component in interval k
+        trans_k = idx.trans[k]  # List[int] (Python ints)
+
+        # Defensive: ensure 'active' is a non-negative Python int
+        active = int(active)
+        if active < 0:
+            raise ValueError(
+                f"Negative active bitmask at interval k={k} (overflow). active={active}. "
+                f"Ensure idx.trans contains Python ints, not numpy int64."
+            )
+
+        # Compute next active set using bit iteration (no generator overhead)
+        x = active
+        next_active = 0  # Python int
+        while x:
+            lsb = x & -x              # lowest set bit
+            c = lsb.bit_length() - 1  # component index in interval k
             if c < len(trans_k):
-                next_active |= trans_k[c]
+                # Force Python int in case something slipped through
+                next_active |= int(trans_k[c])
+            x -= lsb  # clears the lowest set bit (safe for positive ints)
 
-        active = next_active
+        active = int(next_active)
         if active == 0:
-            return np.inf  # no carriers left (shouldn’t happen often, but safe)
+            return np.inf
 
-        # delivered at the start of interval k+1 if receiver comp is active
+        # Delivered at the start of interval k+1 if receiver's component in k+1 is active
         r_comp_next = int(idx.comp_idx[k + 1, r_col])
         if (active >> r_comp_next) & 1:
-            t_arrival = idx.t_start[k + 1]
-            return t_arrival - start_time
+            # earliest arrival is boundary time t_start[k+1]
+            return float(idx.t_start[k + 1] - start_time)
 
     return np.inf
-
-def evaluate_scenario_latency(mission_specs: dict,
-                              messages: List[Tuple[str, str, float]],
-                              T_req: float = np.Inf,
-                              printouts: bool = True) -> dict:
-
-    orbitdata_dir = OrbitData.precompute(mission_specs, printouts=printouts)
-    scenario_orbitdata = OrbitData.from_directory(orbitdata_dir, mission_specs, printouts=printouts)
-
-    idx = build_connectivity_index(scenario_orbitdata)  # <-- new
-
-    latencies = np.empty(len(messages), dtype=float)
-
-    for i, (sender, receiver, start_time) in tqdm(
-        enumerate(messages),
-        total=len(messages),
-        desc="Evaluating Message Latencies",
-        unit=" msgs",
-        disable=not printouts,
-        leave=False
-    ):
-        latencies[i] = calculate_message_latency_fast(sender, receiver, start_time, idx)
-
-    p_success = float(np.mean(np.isfinite(latencies)))
-    p_on_time = float(np.mean(latencies <= T_req)) if np.isfinite(T_req) else p_success
-
-    inf_mask = np.isinf(latencies)
-    t_end = mission_specs["duration"] * 24 * 3600
-    start_times = np.fromiter((t0 for _, _, t0 in messages), dtype=float, count=len(messages))
-    latencies = np.where(inf_mask, t_end - start_times, latencies)
-
-    return {
-        "p_success": p_success,
-        "p_on_time": p_on_time,
-        "latency_mean": float(np.mean(latencies)),
-        "latency_median": float(np.median(latencies)),
-        "latency_95th": float(np.percentile(latencies, 95)),
-        "latency_99th": float(np.percentile(latencies, 99)),
-    }
 
 # def calculate_message_latency(sender : str, 
 #                               receiver : str, 
@@ -896,55 +893,71 @@ def evaluate_scenario_latency(mission_specs: dict,
 
 #     return t_arrival - start_time
 
-# def evaluate_scenario_latency(mission_specs : dict,
-#                               messages : List[Tuple[str, str, float]],
-#                               T_req : float = np.Inf,
-#                               printouts : bool = True) -> float:
-#     # precompute coverage data for scenario mission specs
-#     orbitdata_dir = OrbitData.precompute(mission_specs, printouts=printouts)
+def sanity_check_trans(idx):
+    for k, trans_k in enumerate(idx.trans):
+        for c, m in enumerate(trans_k):
+            if not isinstance(m, int):
+                raise TypeError(f"idx.trans[{k}][{c}] is {type(m)}, expected Python int.")
+            if m < 0:
+                raise ValueError(f"idx.trans[{k}][{c}] is negative ({m}). Overflow occurred.")
+            
+
+def evaluate_scenario_latency(mission_specs: dict,
+                              messages: List[Tuple[str, str, float]],
+                              T_req: float = np.Inf,
+                              printouts: bool = True) -> dict:
+
+    # precompute coverage data for scenario mission specs
+    orbitdata_dir = OrbitData.precompute(mission_specs, printouts=printouts)
+
+    # load precomputed coverage data with relevant mission specs 
+    scenario_orbitdata = OrbitData.from_directory(orbitdata_dir, mission_specs, printouts=printouts)
+
+    # build connectivity index for fast latency calculations
+    idx = build_connectivity_index(scenario_orbitdata) 
+
+    sanity_check_trans(idx)  # catch any overflow issues early
+
+    # intiate list of message latencies
+    latencies = np.empty(len(messages), dtype=float)
+
+    for i, (sender, receiver, start_time) in tqdm(
+        enumerate(messages),
+        total=len(messages),
+        desc="Evaluating Message Latencies",
+        unit=" msgs",
+        disable=not printouts,
+        leave=False
+    ):
+        latencies[i] = calculate_message_latency_fast(sender, receiver, start_time, idx)
+
+    # calculate probability of successful communcations
+    p_success = float(np.mean(np.isfinite(latencies)))
     
-#     # load precomputed coverage data with relevant mission specs 
-#     scenario_orbitdata : dict = OrbitData.from_directory(orbitdata_dir, mission_specs, printouts=printouts)
+    # check latency requirement satisfaction (if given)
+    p_on_time = float(np.mean(latencies <= T_req)) if np.isfinite(T_req) else p_success
 
-#     # intiate list of message latencies
-#     latencies = np.zeros(len(messages))
+    # create mask for infinite latencies (undelivered messages)
+    inf_mask = np.isinf(latencies)
 
-#     # calculate latency for each message 
-#     for i, (sender, receiver, start_time) in tqdm(enumerate(messages),
-#                                                   total=len(messages),
-#                                                   desc = "Evaluating Message Latencies",
-#                                                   unit=' msgs',
-#                                                   disable=not printouts,
-#                                                   leave=False):
-#         latencies[i] = calculate_message_latency(sender, receiver, start_time, scenario_orbitdata)
-
-#     # calculate probability of successful communcations
-#     p_success = np.sum(np.isfinite(latencies)) / len(latencies)
-
-#     # check latency requirement satisfaction (if given)
-#     p_on_time = np.sum(latencies <= T_req) / len(latencies) if np.isfinite(T_req) else p_success
+    # define simulation end time as mission duration in seconds
+    t_end = mission_specs["duration"] * 24 * 3600
     
-#     # create mask for infinite latencies (undelivered messages)
-#     inf_mask = np.isinf(latencies)
+    # extract start times aligned with latencies
+    start_times = np.fromiter((t0 for _, _, t0 in messages), dtype=float, count=len(messages))
+    
+    # cap infinte latencies to simulation end time minus the message start time for statistics calculation
+    latencies = np.where(inf_mask, t_end - start_times, latencies)
 
-#     # define simulation end time as mission duration in seconds
-#     t_end = mission_specs["duration"] * 24 * 3600
-
-#     # extract start times aligned with latencies
-#     start_times = np.fromiter((t0 for _, _, t0 in messages), dtype=float, count=len(messages))
-
-#     # cap infinte latencies to simulation end time minus the message start time for statistics calculation
-#     latencies = np.where(inf_mask, t_end - start_times, latencies)
-
-#     # return latency statistics (success rate, mean, median, 95th percentile, 99th percentile)
-#     return {
-#         "p_success": p_success,
-#         "p_on_time": p_on_time,
-#         "latency_mean": np.mean(latencies),
-#         "latency_median": np.median(latencies),
-#         "latency_95th": np.percentile(latencies, 95),
-#         "latency_99th": np.percentile(latencies, 99)
-#     }
+    # return latency statistics (success rate, mean, median, 95th percentile, 99th percentile)
+    return {
+        "p_success": p_success,
+        "p_on_time": p_on_time,
+        "latency_mean": float(np.mean(latencies)),
+        "latency_median": float(np.median(latencies)),
+        "latency_95th": float(np.percentile(latencies, 95)),
+        "latency_99th": float(np.percentile(latencies, 99)),
+    }
 
 if __name__ == "__main__":
     """
