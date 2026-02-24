@@ -71,6 +71,7 @@ class RunConfig:
     spacecraft_specs_template: Dict[str, Any] = field(default_factory=dict)
     instrument_specs: Dict[str, Any] = field(default_factory=dict)
     ground_operator_specs_template: Dict[str, Any] = field(default_factory=dict)
+    planner_specs: Dict[str, Any] = field(default_factory=dict)
 
 
 # ------------------------------------------------------------------

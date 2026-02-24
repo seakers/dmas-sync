@@ -445,7 +445,7 @@ class Simulation:
 
         # precompute orbit data
         orbitdata_dir = OrbitData.precompute(d, printouts=printouts) if spacecraft_dict is not None else None
-        simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, scenario_duration, printouts=printouts) if orbitdata_dir is not None else {}
+        simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, d, printouts=printouts) if orbitdata_dir is not None else {}
         
         # load missions
         simulation_missions : Dict[str, Mission] = Simulation.load_missions(scenario_dict)
@@ -507,16 +507,11 @@ class Simulation:
         
         # ------------------------------------
         # create environment
-        connectivity_level = scenario_dict.get('connectivity','LOS').upper()
-        relay_capabilities = scenario_dict.get('relayCapabilities','True').upper()
-
         environment = SimulationEnvironment(results_path, 
                                             simulation_orbitdata,
                                             spacecraft_dict,
                                             gops_dict,
                                             events,
-                                            connectivity_level,
-                                            relay_capabilities,
                                             level,
                                             logger,
                                             printouts=printouts)

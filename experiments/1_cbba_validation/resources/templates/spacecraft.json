@@ -1,6 +1,6 @@
 {
-    "@id": "thermal_sat_0_0",
-    "name": "thermal_0",
+    "@id": "SAT_ID",
+    "name": "SAT_NAME",
     "spacecraftBus": {
         "name": "BlueCanyon",
         "mass": 20,
@@ -16,9 +16,7 @@
             }
         }
     },
-    "instrument": {
-
-    },
+    "instrument": {},
     "orbitState": {
         "date": {
             "@type": "GREGORIAN_UT1",
@@ -39,20 +37,6 @@
             "ta": 0.0
         }
     },
-    "planner" : {
-        "preplanner": {
-            "@type": "blank",
-            "debug": "True",
-            "period" : 5000
-        },
-        "replanner": {
-            "@type": "consensus",
-            "model": "heuristicInsertion",
-            "heuristic" : "taskPriority",
-            "replanThreshold": 1,
-            "optimisticBiddingThreshold": 1,
-            "debug": "False"
-        }
-    },
+    "planner" : {},
     "mission" : "generic response mission"
 }

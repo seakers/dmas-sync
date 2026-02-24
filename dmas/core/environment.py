@@ -37,8 +37,6 @@ class SimulationEnvironment(object):
                 sat_list : List[dict],
                 gs_list : List[dict],                
                 events : List[GeophysicalEvent],
-                connectivity_level : str = 'LOS',
-                connectivity_relays : bool = False,
                 level: int = logging.INFO, 
                 logger: logging.Logger = None,
                 printouts : bool = True
@@ -82,7 +80,6 @@ class SimulationEnvironment(object):
         self.agents[SimulationAgentTypes.GROUND_OPERATOR] = gs_names
 
         # initialize parameters
-        self._connectivity_relays : bool = connectivity_relays
         self._t_curr = np.NINF
         self._agent_state_update_times = {}
 
@@ -92,8 +89,6 @@ class SimulationEnvironment(object):
         self._broadcasts_history = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="broadcasts")
 
         # initialize agent connectivity
-        self._connectivity_level : str = connectivity_level.upper()
-
         self._current_connectivity_interval, \
             self._current_connectivity_components, \
                 self._current_connectivity_map \
@@ -507,9 +502,6 @@ class SimulationEnvironment(object):
         filepath = os.path.join(self._results_path, filename)
         with open(filepath, 'w') as f:
             f.write(f"# Agent Connectivity History\n")
-            f.write(f"- Connectivity Level: **{self._connectivity_level}**\n\n")
-            f.write(f"- Connectivity Relays Enabled: **{self._connectivity_relays}**\n\n")
-
             # get orbitdata for any agent 
             #   (all agents share the same comms links and connectivity interval data)
             agent_orbitdata : OrbitData = next(iter(self._orbitdata.values()))

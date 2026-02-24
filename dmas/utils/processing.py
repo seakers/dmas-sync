@@ -599,7 +599,10 @@ class ResultsProcessor:
             if access_intervals: accesses_per_event[event] = access_intervals
 
         # convert to dataframe
-        accesses_per_event_df = pd.DataFrame(accesses_per_event_data)
+        if accesses_per_event_data:
+            accesses_per_event_df = pd.DataFrame(accesses_per_event_data)
+        else:
+            accesses_per_event_df = pd.DataFrame(columns=['event id','event type','lat [deg]','lon [deg]','grid index','GP index','access start [s]','access end [s]','instrument','agent name'])
         
         # return compiled event accessibility information
         return accesses_per_event_df, accesses_per_event
@@ -758,7 +761,10 @@ class ResultsProcessor:
             if task_access_windows: accesses_per_task[task] = task_access_windows
     
         # convert to dataframe
-        accesses_per_task_df = pd.DataFrame(accesses_per_task_df_data)
+        if accesses_per_task_df_data:
+            accesses_per_task_df = pd.DataFrame(accesses_per_task_df_data)
+        else:
+            accesses_per_task_df = pd.DataFrame(columns=['task id','task type','parameter','lat [deg]','lon [deg]','grid index','GP index','t start','t end','agent name','instrument'])
 
         # remove duplicates
         accesses_per_task_df = accesses_per_task_df.drop_duplicates().reset_index(drop=True)

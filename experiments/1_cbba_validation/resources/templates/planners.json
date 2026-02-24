@@ -1,6 +1,6 @@
 {
     "preplanners" : {
-        "none" : {
+        "blank" : {
             "@type": "blank",
             "debug": "True",
             "period" : 5000

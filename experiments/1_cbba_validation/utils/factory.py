@@ -97,7 +97,7 @@ def create_scenario_specifications(base_path : str,
             },
             "connectivity" : {
                 "@type" : "PREDEF",
-                "rulesPath" : f"./experiments/1_cbba_validation/resources/connectivity/nsats-{num_sats}_latency-{latency}.json",
+                "rulesPath" : f"./experiments/1_cbba_validation/resources/connectivity/nsats-{int(num_sats)}_latency-{latency.lower()}.json",
                 "relaysEnabled" : True
             },
             "scenarioPath" : base_path,
@@ -272,12 +272,11 @@ def load_ground_stations(base_path : str, network_name : str) -> List[dict]:
     return gs_network
 
 
-def create_ground_operator_specifications(base_path : str, scenario_id : int, ground_operator_specs_template : dict) -> List[dict]:
+def create_ground_operator_specifications(ground_operator_specs_template : dict, events_path : str) -> List[dict]:
     # create ground operator specifications from template
     ground_operator_specs = copy.deepcopy(ground_operator_specs_template)
     
     # set events path
-    events_path = os.path.join(base_path, 'resources','events',f'scenario_{scenario_id}_events.csv')
     ground_operator_specs['planner']['preplanner']['eventsPath'] = events_path
 
     # return ground operator specifications
@@ -304,7 +303,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
     
     # define event file path based on scenario parameters
     events_file = f'events_arrivalrate-{task_arrival_rate}_targetdist-{target_distribution}_scenario-{scenario_idx}.csv'
-    events_path = os.path.join(base_path, events_file)
+    events_path = os.path.join(base_path, 'resources', 'events', events_file)
 
     # set simulation duration and propagator step size
     mission_specs['duration'] = duration
@@ -334,7 +333,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
 
     # assign ground operator to mission specs
     mission_specs['groundOperator'] \
-        = create_ground_operator_specifications(base_path, trial_id, ground_operator_specs_template)
+        = create_ground_operator_specifications(ground_operator_specs_template, events_path)
         
     # return mission specifications
     return mission_specs
