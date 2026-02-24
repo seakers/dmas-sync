@@ -997,7 +997,10 @@ class ResultsProcessor:
             if matching_observations: observations_per_event[event] = matching_observations        
 
         # convert to dataframe
-        observations_per_event_df = pd.DataFrame(observations_per_event_df_data)
+        if observations_per_event_df_data:
+            observations_per_event_df = pd.DataFrame(observations_per_event_df_data)
+        else:
+            observations_per_event_df = pd.DataFrame(columns=['event id','event type','lat [deg]','lon [deg]','grid index','GP index','agent name','t_start','t_end','instrument','n_obs','t_rev'])
 
         # return observations per event
         return observations_per_event_df, observations_per_event
@@ -1535,7 +1538,7 @@ class ResultsProcessor:
                     ['Total Available Utility', total_available_utility],
 
                     # Results dir
-                    ['Results Directory', results_path]
+                    # ['Results Directory', results_path]
                 ]
 
         return pd.DataFrame(summary_data, columns=summary_headers)    

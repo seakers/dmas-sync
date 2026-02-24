@@ -6,20 +6,19 @@ from tqdm import tqdm
 from execsatm.mission import Mission
 from execsatm.observations import ObservationOpportunity
 
+from dmas.models.planning.planner import AbstractPlanner
 from dmas.utils.orbitdata import OrbitData
 from dmas.utils.orbitdata import OrbitData
 from dmas.core.messages import *
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import DataSink, LatestObservationTracker
 from dmas.models.states import *
 from dmas.models.actions import *
 from dmas.models.science.requests import *
 from dmas.models.states import SimulationAgentState
 
-class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
-    """ Schedules observations iteratively based on the highest heuristic-scoring and feasible access point """
-
-    
+class HeuristicInsertionPlanner(AbstractPlanner):
+    """ Schedules observations iteratively (greedy) based on the highest heuristic-scoring and feasible access point """        
     def _schedule_observations(self, 
                                state : SimulationAgentState, 
                                specs : object, 
@@ -228,8 +227,26 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
         obs_reward = self.estimate_observation_opportunity_value(observation_opportunity, t_start, duration, specs, cross_track_fovs, orbitdata, mission, observation_history)
 
         # return to sort using: highest task reward >> highest priority >> longest duration >> earliest start time
-        return -obs_reward, -priority, -duration, t_start
+        return -obs_reward, -priority, -duration, t_start    
     
+
+class HeuristicInsertionPeriodicPlanner(AbstractPeriodicPlanner, HeuristicInsertionPlanner):    
+    def __init__(self, agent_results_dir : str, horizon = np.Inf, period = np.Inf, sharing = ..., debug = False, logger = None, printouts = True):        
+        super().__init__(horizon, period, sharing, debug, logger, printouts)
+        
+        # initialize bid results sinks
+        self._observation_rewards = DataSink(out_dir=agent_results_dir, owner_name='HeuristicPlanner', data_name='rewards')
+
+    def _schedule_observations(self, 
+                               state : SimulationAgentState, 
+                               specs : object, 
+                               orbitdata : OrbitData, 
+                               observation_opportunities : list,
+                               mission : Mission,
+                               observation_history : LatestObservationTracker
+                               ) -> list:
+        return HeuristicInsertionPlanner._schedule_observations(self, state, specs, orbitdata, observation_opportunities, mission, observation_history)
+
     
     def _schedule_broadcasts(self, 
                              state: SimulationAgentState, 
@@ -238,3 +255,9 @@ class HeuristicInsertionPlanner(AbstractPeriodicPlanner):
         
         # do not schedule broadcasts
         return super()._schedule_broadcasts(state, observations, orbitdata)
+    
+    def print_results(self):
+        super().print_results()
+
+        # print observation rewards
+        self._observation_rewards.close()

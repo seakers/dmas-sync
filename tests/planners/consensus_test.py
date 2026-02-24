@@ -2849,7 +2849,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.execute()
         
         # print results
-        results_summary : pd.DataFrame = self.simulation.summarize_results()
+        results_summary : pd.DataFrame = self.simulation.summarize_results(force_summarize=True)
 
         # verify results
         planned_reward = results_summary.loc[results_summary['Metric']=='Total Planned Reward'].values[0][1]

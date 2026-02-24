@@ -1,7 +1,7 @@
 {
     "default": "deny",
     "groups": {
-        "imaging_sats": [
+        "instruments": [
             "imager_a_sat_0",
             "imager_b_sat_0",
             "imager_c_sat_0",
@@ -51,12 +51,12 @@
             "imager_b_sat_15",
             "imager_c_sat_15"
         ],
-        "relay_sats": [
+        "relays": [
             "tdrss_sat_0",
             "tdrss_sat_1",
             "tdrss_sat_2"
         ],
-        "ground_stations": [
+        "groundStations": [
             "NEN"
         ]
     },
@@ -65,47 +65,21 @@
             "action": "allow",
             "scope": "between",
             "targets": [
-                "imaging_sats",
-                "ground_stations"
+                "instruments",
+                "relays",
+                "groundStations"
             ]
         },
         {
             "action": "allow",
-            "scope": "between",
-            "targets": [
-                "relay_sats",
-                "ground_stations"
-            ]
+            "scope": "within",
+            "targets": "instruments"
+        },
+        {
+            "action": "allow",
+            "scope": "within",
+            "targets": "relays"
         }
     ],
-    "overrides": [
-        {
-            "pair": [
-                "imager_a_sat_0",
-                "tdrss_sat_1"
-            ],
-            "action": "allow"
-        },
-        {
-            "pair": [
-                "imager_b_sat_5",
-                "imager_c_sat_12"
-            ],
-            "action": "allow"
-        },
-        {
-            "pair": [
-                "imager_c_sat_5",
-                "imager_a_sat_13"
-            ],
-            "action": "allow"
-        },
-        {
-            "pair": [
-                "imager_c_sat_9",
-                "imager_a_sat_12"
-            ],
-            "action": "allow"
-        }
-    ]
+    "overrides": []
 }

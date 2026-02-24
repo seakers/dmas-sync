@@ -34,7 +34,7 @@ from dmas.models.planning.decentralized.blank import BlankPlanner
 from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInsertionConsensusPlanner
 from dmas.models.planning.decentralized.dynamic import DynamicProgrammingPlanner
 from dmas.models.planning.decentralized.earliest import EarliestAccessPlanner
-from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPlanner
+from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPeriodicPlanner
 from dmas.models.planning.decentralized.nadir import NadirPointingPlanner
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
@@ -333,18 +333,26 @@ class Simulation:
             # processed results are already stored in this simulation instance;
             #   use processed results and generate summary
             processed_results = self.__processed_results
+
+            results_summary : pd.DataFrame \
+                = ResultsProcessor.summarize_results(self._results_path,
+                                                        self._orbitdata,
+                                                        self._events,
+                                                        *processed_results, 
+                                                        precision=precision, 
+                                                        printouts=printouts)
         else:
             # results have not already stored in this simulation instance; 
             #   process results and generate summary
             processed_results = self.process_results(printouts=printouts)
 
-        results_summary : pd.DataFrame \
-            = ResultsProcessor.summarize_results(self._results_path,
-                                                    self._orbitdata,
-                                                    self._events,
-                                                    *processed_results, 
-                                                    precision=precision, 
-                                                    printouts=printouts)
+            results_summary : pd.DataFrame \
+                = ResultsProcessor.summarize_results(self._results_path,
+                                                        self._orbitdata,
+                                                        self._events,
+                                                        *processed_results, 
+                                                        precision=precision, 
+                                                        printouts=printouts)
             
         # include runtime in results summary if simulation has been executed by this instance
         if self.__executed:
@@ -847,7 +855,7 @@ class Simulation:
         if planner_dict is None: return None, None
 
         # load preplanner
-        preplanner = Simulation.__load_preplanner(planner_dict, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
+        preplanner = Simulation.__load_preplanner(planner_dict, simulation_results_path, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
 
         # load replanner
         replanner = Simulation.__load_replanner(planner_dict, agent_name, simulation_results_path, logger, printouts)
@@ -857,14 +865,15 @@ class Simulation:
     
     @staticmethod
     def __load_preplanner(planner_dict : dict, 
-                        agent_mission : Mission, 
-                        simulation_missions : Dict[str,Mission],
-                        simulation_orbitdata : Dict[str, OrbitData],
-                        orbitdata_dir : str,
-                        agent_name : str,
-                        logger : logging.Logger,
-                        printouts : bool
-                    ) -> AbstractPeriodicPlanner:
+                          simulation_results_path : str,
+                          agent_mission : Mission, 
+                          simulation_missions : Dict[str,Mission],
+                          simulation_orbitdata : Dict[str, OrbitData],
+                          orbitdata_dir : str,
+                          agent_name : str,
+                          logger : logging.Logger,
+                          printouts : bool
+                        ) -> AbstractPeriodicPlanner:
         """ loads the preplanner for the agent """
         # get preplanner specs
         preplanner_dict : Dict = planner_dict.get('preplanner', None)
@@ -886,17 +895,17 @@ class Simulation:
 
         # initialize preplanner
         if preplanner_type.lower() in ["heuristic"]:
-            return HeuristicInsertionPlanner(horizon, period, sharing, debug, logger, printouts)
+            return HeuristicInsertionPeriodicPlanner(simulation_results_path, horizon, period, sharing, debug, logger, printouts)
 
-        elif preplanner_type.lower() in ["naive", "fifo", "earliest"]:
-            return EarliestAccessPlanner(horizon, period, sharing, debug, logger, printouts)
+        # elif preplanner_type.lower() in ["naive", "fifo", "earliest"]:
+        #     return EarliestAccessPlanner(horizon, period, sharing, debug, logger, printouts)
 
-        elif preplanner_type.lower() == 'nadir':
-            return NadirPointingPlanner(horizon, period, sharing, debug, logger, printouts)
+        # elif preplanner_type.lower() == 'nadir':
+        #     return NadirPointingPlanner(horizon, period, sharing, debug, logger, printouts)
 
-        elif preplanner_type.lower() in ["dynamic", "dp"]:
-            model = preplanner_dict.get('model', 'earliest').lower()
-            return DynamicProgrammingPlanner(horizon, period, model, sharing, debug, logger, printouts)
+        # elif preplanner_type.lower() in ["dynamic", "dp"]:
+        #     model = preplanner_dict.get('model', 'earliest').lower()
+        #     return DynamicProgrammingPlanner(horizon, period, model, sharing, debug, logger, printouts)
         
         elif preplanner_type.lower() in ["eventannouncer", "announcer"]:
             events_path = preplanner_dict.get('eventsPath', None)

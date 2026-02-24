@@ -1,6 +1,66 @@
 {
     "missions" : [
         {
+            "name": "algal bloom comprehensive",
+            "objectives" : [
+                {
+                    "objective_type" : "default_mission",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.4,
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 1],
+                            "scores": [1, 0.1]
+                        }
+                    ]
+                },
+                {
+                    "objective_type" : "event_driven",
+                    "parameter": "Chlorophyll-A",
+                    "weight": 0.6,
+                    "event_type" : "algal bloom",
+                    "requirements" : [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy" : "explicit",
+                            "valid_values": ["VNIR hyper"]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [1, 10],
+                            "scores": [0.1, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 1],
+                            "scores": [1, 0.1]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
             "name": "toy_mission_1",
             "objectives" : [
                 {

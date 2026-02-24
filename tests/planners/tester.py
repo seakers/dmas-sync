@@ -87,7 +87,7 @@ class PlannerTester(ABC):
                     #     "@type": "lookup", 
                     #     "eventsPath" : "./tests/planners/resources/events/toy_events.csv"
                     # },
-                    "mission" : "Algal bloom comprehensive"
+                    "mission" : "algal bloom comprehensive"
             }
         
         # set outdir
@@ -364,7 +364,7 @@ class PlannerTester(ABC):
         announcer_spacecraft['@id'] = 'sat0_tir'
         announcer_spacecraft['name'] = 'SAT0'
         announcer_spacecraft['planner'] = self.toy_planner_config()
-        announcer_spacecraft['instrument'] = self.instruments['TIR'] # wide swath instrument
+        announcer_spacecraft['instrument'] = self.instruments['VNIR hyp']
         announcer_spacecraft['orbitState']['state']['inc'] = 0.0
         announcer_spacecraft['science'] = self.setup_science_config(event_name)
         # if 'replanner' in announcer_spacecraft['planner']: announcer_spacecraft["planner"].pop('replanner') # make announcer purely preplanner
@@ -390,9 +390,12 @@ class PlannerTester(ABC):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.process_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print('DONE')
 
@@ -460,9 +463,12 @@ class PlannerTester(ABC):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.process_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print('DONE')
 
@@ -501,9 +507,12 @@ class PlannerTester(ABC):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.process_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print('DONE')
 
@@ -553,9 +562,12 @@ class PlannerTester(ABC):
 
         # execute mission
         self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
 
-        # print results
-        self.simulation.process_results()
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
 
         print('DONE')
 
