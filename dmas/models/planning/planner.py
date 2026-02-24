@@ -100,7 +100,7 @@ class AbstractPlanner(ABC):
                         mininterval=0.5, 
                         leave=False
                     ):
-            # extract relevant dataF
+            # extract relevant data
             grid_index = raw_coverage_data['grid index'][i]
             gp_index = raw_coverage_data['GP index'][i]
             instrument = raw_coverage_data['instrument'][i]

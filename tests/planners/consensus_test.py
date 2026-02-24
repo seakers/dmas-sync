@@ -42,7 +42,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_14 = False # single sat    default mission     multiple targets    two events          preplan + replan
         self.toy_15 = False # two sats      default mission     multiple targets    two events          preplan + replan
         self.toy_16 = False # single sat    no default mission  two targets         two expiring events  preplan + replan   not the correct instruments
-        self.toy_17 = True # moving relay scenario
+        self.toy_17 = False # moving relay scenario
         self.toy_18 = False # static relay scenario
         self.toy_19 = False # single sat    default mission     multiple targets    two events           preplan w/short horizon + replan
         self.toy_20 = False # two sats       default mission     multiple targets    two events           preplan w/short horizon + replan
@@ -56,6 +56,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         self.toy_27 = False # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
+        self.toy_29 = True # 
 
     def toy_planner_config(self):
         return {
@@ -2784,6 +2785,81 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.summarize_results()
 
         print(f"{scenario_name}: DONE")
+
+    def test_toy_case_29(self):
+        if not self.toy_29: return
+
+        # setup scenario parameters
+        duration = 2.0 / 24.0
+        grid_name = 'toy_29'
+        scenario_name = f'toy_29-{self.planner_name()}'
+        connectivity = 'LOS'
+        event_name = 'toy_29'
+        mission_filename = 'toy_missions'
+        mission_name = 'toy_mission_29'
+        gs_network = 'gs_toy_29'
+
+        # SAT1 : reactive satellite with narrow swath instrument
+        ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
+        ractive_spacecraft_1['@id'] = 'sat1_vnir'
+        ractive_spacecraft_1['name'] = 'sat1'
+        ractive_spacecraft_1['planner'] = self.toy_planner_config() # no preplan capability
+        ractive_spacecraft_1['spacecraftBus']['components']['adcs']['maxRate'] = 1.5
+        ractive_spacecraft_1['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_1['orbitState']['state']['inc'] = 0.0
+        ractive_spacecraft_1['orbitState']['state']['ta'] = 0.0
+        ractive_spacecraft_1['groundStationNetwork'] = gs_network
+        ractive_spacecraft_1['mission'] = mission_name
+
+        # SAT2 : reactive satellite with narrow swath instrument
+        ractive_spacecraft_2 : dict = copy.deepcopy(self.spacecraft_template)
+        ractive_spacecraft_2['@id'] = 'sat2_vnir'
+        ractive_spacecraft_2['name'] = 'sat2'
+        ractive_spacecraft_2['planner'] = self.toy_planner_config() # no preplan capability
+        ractive_spacecraft_2['spacecraftBus']['components']['adcs']['maxRate'] = 1.5
+        ractive_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_2['orbitState']['state']['inc'] = 0.0
+        ractive_spacecraft_2['orbitState']['state']['ta'] = -60.0 # phase offset by 40.0[deg]
+        ractive_spacecraft_2['mission'] = mission_name
+
+        # terminal welcome message
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
+
+        # Generate scenario
+        scenario_specs = self.setup_scenario_specs(duration,
+                                                   grid_name, 
+                                                   scenario_name, 
+                                                   connectivity,
+                                                   event_name,
+                                                   mission_filename,
+                                                   spacecraft=[
+                                                       ractive_spacecraft_1,
+                                                       ractive_spacecraft_2
+                                                    ]
+                                                   )
+
+        # compile ground stations and operators
+        scenario_specs['groundStation'] = self.compile_ground_stations([gs_network])
+        scenario_specs['groundOperator'] = self.setup_announcer_ground_operators(event_name, mission_name, [gs_network])
+
+        # initialize mission
+        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+
+        # execute mission
+        self.simulation.execute()
+        
+        # print results
+        results_summary : pd.DataFrame = self.simulation.summarize_results()
+
+        # TODO verify results
+        # self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observable'].values[0][1], 2)
+        # self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observed'].values[0][1], 1)
+        # self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 2)
+        # self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Re-observed'].values[0][1], 1)
+
+        # print done
+        print(f"{scenario_name}: DONE")
+
 
     # def test_toy_case_2X(self):
     #     """

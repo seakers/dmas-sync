@@ -176,7 +176,7 @@ class ResultsProcessor:
         if obtained_rewards_data:
             obtained_rewards_df = pd.DataFrame(obtained_rewards_data)
         else:
-            obtained_rewards_df = pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent_name', 'reward'])
+            obtained_rewards_df = pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent', 'instrument', 'reward'])
 
         # return obtained rewards dataframe
         return obtained_rewards_df

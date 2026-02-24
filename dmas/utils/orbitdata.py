@@ -1722,13 +1722,8 @@ class OrbitData:
                         gp_acces_by_mode = pd.concat([gp_acces_by_mode, gp_access_by_grid])
 
                     nrows, _ = gp_acces_by_mode.shape
-                    gp_access_by_grid['instrument'] = [instrument['name']] * nrows
-                    # gp_access_data[ins_name] = gp_acces_by_mode
-
-                    if len(gp_access_data) == 0:
-                        gp_access_data = gp_acces_by_mode
-                    else:
-                        gp_access_data = pd.concat([gp_access_data, gp_acces_by_mode])
+                    gp_acces_by_mode['instrument'] = [instrument['name']] * nrows
+                    gp_access_data = pd.concat([gp_access_data, gp_acces_by_mode])
                 
                 nrows, _ = gp_access_data.shape
                 gp_access_data['agent name'] = [spacecraft_list[spacecraft_idx]['name']] * nrows
@@ -2237,8 +2232,9 @@ class OrbitData:
                 or pd.api.types.is_string_dtype(s.dtype)
                 or pd.api.types.is_categorical_dtype(s.dtype)
             )
-
-            if is_stringish:
+            is_grid_or_gp = col in ['grid index', 'GP index']
+            
+            if is_stringish and not is_grid_or_gp:
                 s2 = s.astype("string")
                 uniques = s2.dropna().unique()
 
