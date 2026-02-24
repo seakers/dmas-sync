@@ -1,0 +1,229 @@
+{
+    "default": "deny",
+    "groups": {
+        "imaging_sats": [
+            "imager_a_sat_0",
+            "imager_b_sat_0",
+            "imager_c_sat_0",
+            "imager_a_sat_1",
+            "imager_b_sat_1",
+            "imager_c_sat_1",
+            "imager_a_sat_2",
+            "imager_b_sat_2",
+            "imager_c_sat_2",
+            "imager_a_sat_3",
+            "imager_b_sat_3",
+            "imager_c_sat_3"
+        ],
+        "relay_sats": [
+            "tdrss_sat_0",
+            "tdrss_sat_1",
+            "tdrss_sat_2"
+        ],
+        "ground_stations": [
+            "NEN"
+        ]
+    },
+    "rules": [
+        {
+            "action": "allow",
+            "scope": "between",
+            "targets": [
+                "imaging_sats",
+                "ground_stations"
+            ]
+        },
+        {
+            "action": "allow",
+            "scope": "between",
+            "targets": [
+                "relay_sats",
+                "ground_stations"
+            ]
+        }
+    ],
+    "overrides": [
+        {
+            "pair": [
+                "imager_a_sat_0",
+                "imager_b_sat_2"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_a_sat_0",
+                "imager_a_sat_3"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_b_sat_0",
+                "imager_c_sat_0"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_b_sat_0",
+                "imager_a_sat_1"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_b_sat_0",
+                "imager_c_sat_2"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_b_sat_0",
+                "imager_c_sat_3"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_b_sat_0",
+                "tdrss_sat_1"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_c_sat_0",
+                "imager_b_sat_1"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_c_sat_0",
+                "imager_c_sat_1"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_c_sat_0",
+                "imager_c_sat_2"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_c_sat_0",
+                "imager_a_sat_3"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_c_sat_0",
+                "imager_c_sat_3"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_c_sat_0",
+                "tdrss_sat_2"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_a_sat_1",
+                "imager_b_sat_1"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_a_sat_1",
+                "imager_c_sat_1"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_a_sat_1",
+                "imager_b_sat_2"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_a_sat_1",
+                "imager_c_sat_2"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_b_sat_1",
+                "imager_c_sat_1"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_a_sat_2",
+                "imager_b_sat_2"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_a_sat_2",
+                "imager_c_sat_3"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_a_sat_2",
+                "tdrss_sat_0"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_b_sat_2",
+                "imager_a_sat_3"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_c_sat_2",
+                "imager_b_sat_3"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "imager_c_sat_2",
+                "imager_c_sat_3"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "tdrss_sat_0",
+                "tdrss_sat_1"
+            ],
+            "action": "allow"
+        },
+        {
+            "pair": [
+                "tdrss_sat_1",
+                "tdrss_sat_2"
+            ],
+            "action": "allow"
+        }
+    ]
+}

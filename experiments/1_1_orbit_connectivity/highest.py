@@ -6,9 +6,9 @@ from tqdm import tqdm
 import numpy as np
 from matplotlib import pyplot as plt
 
-from chess3d.utils import print_banner
+from dmas.utils.tools import print_scenario_banner
 
-from chess3d.constellations import WalkerDeltaConstellation
+from dmas.utils.constellations import WalkerDeltaConstellation
 
 def pareto_front(df: pd.DataFrame, objectives: dict) -> pd.DataFrame:
     """
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     
     """
     # terminal welcome message
-    print_banner(f'Walker Delta Constellation Connectivity Experiment')
+    print_scenario_banner(f'Walker Delta Constellation Connectivity Experiment')
 
     # set inclination and altitude
     inc = 98.0  # [deg]
