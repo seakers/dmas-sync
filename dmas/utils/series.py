@@ -702,7 +702,7 @@ class AccessTable(AbstractTable):
     def __len__(self):
         return len(self._t)
 
-    def lookup_interval(self, t_start: float, t_end: float = np.Inf) -> Dict[str, np.ndarray]:
+    def lookup_interval(self, t_start: float, t_end: float = np.Inf, include_extras : bool = True) -> Dict[str, np.ndarray]:
         # validate inputs
         if not isinstance(t_start, (int, float)) or t_start < 0.0:
             raise ValueError("time t_start must be a non-negative number")
@@ -714,7 +714,7 @@ class AccessTable(AbstractTable):
         # check if there is any data
         if len(self._t) == 0:
             s_empty = slice(0, 0)
-            return self.__rows_from_slice(s_empty, include_extras=True)
+            return self.__rows_from_slice(s_empty, include_extras=include_extras)
 
         # get start and end indices for time range
         ti0 = self._time_to_index_floor(t_start)
@@ -723,13 +723,13 @@ class AccessTable(AbstractTable):
         # check if start and end time are in the same time index bucket
         if ti0 == ti1:
             # if so, return the rows for that bucket
-            return self.lookup_time(t_start, include_extras=True)
+            return self.lookup_time(t_start, include_extras=include_extras)
 
         # get slice for time index range
         s = self._slice_for_index_range(ti0, ti1)
 
         # construct output dictionary
-        out = self.__rows_from_slice(s, include_extras=True)
+        out = self.__rows_from_slice(s, include_extras=include_extras)
 
         # filter out any rows that are outside the time range 
         if s.start != s.stop:

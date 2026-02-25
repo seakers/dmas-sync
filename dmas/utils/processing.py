@@ -46,11 +46,11 @@ class ResultsProcessor:
 
         ## events
         events_per_gp = ResultsProcessor.__classify_events_per_gp(events)
-        accesses_per_event_df, accesses_per_event = ResultsProcessor.__compile_events_accessibility(events, compiled_orbitdata, agent_missions, printouts)
+        accesses_per_event_df, accesses_per_event = ResultsProcessor.__compile_events_accessibility(events, compiled_orbitdata, agent_missions, accesses_per_gp, printouts)
         events_requested_df, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
 
         ## tasks
-        accesses_per_task_df, accesses_per_task = ResultsProcessor.__compile_task_accessibility(compiled_orbitdata, known_tasks, agent_missions, printouts)
+        accesses_per_task_df, accesses_per_task = ResultsProcessor.__compile_task_accessibility(compiled_orbitdata, known_tasks, agent_missions, accesses_per_gp, printouts)
 
         # compile observations
         ## ground points
@@ -552,7 +552,7 @@ class ResultsProcessor:
         return grid_data_df
     
     @staticmethod
-    def __classify_accesses_per_gp(compiled_orbitdata : Dict[str, OrbitData]) -> Dict[Tuple[int,int], List[dict]]:
+    def __classify_accesses_per_gp(compiled_orbitdata : Dict[str, OrbitData]) -> Dict[Tuple[int,int], pd.DataFrame]:
         # compile acesses from agent orbitdata
         acesses = []
         for agent_orbit_data in compiled_orbitdata.values():
@@ -583,6 +583,7 @@ class ResultsProcessor:
     def __compile_events_accessibility(events : List[GeophysicalEvent], 
                                        compiled_orbitdata : Dict[str, OrbitData], 
                                        agent_missions : Dict[str, Mission], 
+                                       accesses_per_gp : Dict[Tuple[int,int], pd.DataFrame],
                                        printouts : bool
                                     ) -> Tuple[pd.DataFrame, Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]]]:
         
@@ -622,53 +623,50 @@ class ResultsProcessor:
                         for agent_name in instrument_capability_reqs]):
                 raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type}`. Case not yet supported.")
 
-            # get list of access intervals that occurr during the event's availability window for any agent
-            matching_event_accesses = []
-            for agent_orbit_data in compiled_orbitdata.values():                
-                # get access intervals for this agent that overlap with the event's availability window
-                event_access_intervals = agent_orbit_data.gp_access_data.lookup_interval(event.availability.left, event.availability.right)
-
-                # filter to access intervals that match the event's location and instrument capability requirements
-                for i in range(len(event_access_intervals['time [s]'])):
-                    # ignore access intervals that don't match the event's location (grid index and GP index)
-                    if (event_access_intervals['grid index'][i] != event_grid_idx 
-                        or event_access_intervals['GP index'][i] != event_gp_idx
-                        or event_access_intervals['instrument'][i].lower() not in instrument_capability_reqs[agent_name]):
-                        continue
-
-                    # add to list of access intervals to be filtered by instrument capability requirements
-                    row ={col : event_access_intervals[col][i] for col in event_access_intervals}
-                    matching_event_accesses.append(row)
+            # get matching accesses for this location
+            location_key = (event_grid_idx, event_gp_idx)
+            location_access : pd.DataFrame = accesses_per_gp.get(location_key, None)
             
-            # flatten to list of access intervals
-            matching_event_accesses_flat = [(access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
-                                            for access_interval in matching_event_accesses]
+            # check if there are any accesses for this location
+            if location_access is None: continue # no accesses found; skip
             
+            # filter data that exists within the task's availability window and matches instrument capability requirements
+            location_access_filtered : pd.DataFrame \
+                = location_access[(location_access['time [s]'] >= event.availability.left) 
+                    & (location_access['time [s]'] <= event.availability.right)]
+            location_access_filtered : pd.DataFrame \
+                = location_access_filtered[location_access_filtered.apply(lambda row: row['instrument'].lower() in instrument_capability_reqs[row['agent name']], axis=1)]
+
             # initialize map of compiled access intervals
             access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)
 
-            # compile list of access intervals
-            for t_access, agent_name, instrument in matching_event_accesses_flat:
-                # get propagation time step for this agent
-                time_step = compiled_orbitdata[agent_name].time_step 
-
-                # create unitary interval for this access time
-                access_interval = Interval(t_access, t_access + time_step)
-
-                # check if this access overlaps with any previous access
-                merged = False
-                for interval in access_interval_dict[(agent_name,instrument)]:
-                    if access_interval.overlaps(interval):
-                        # if so, join intervals
-                        interval.join(access_interval)
-                        merged = True
-                        break
+            # iterate throufh data to map accesses by agent name and instrument
+            for (agent_name, instrument), group in location_access_filtered.groupby(['agent name', 'instrument']):
+                # get sorted list of access times for this agent and instrument
+                matching_accesses = group[['time [s]', 'agent name', 'instrument']].sort_values(by='time [s]').values.tolist()
                 
-                # if merged, continue to next interval
-                if merged: continue
-                
-                # otherwise, create a new access interval
-                access_interval_dict[(agent_name,instrument)].append(access_interval)
+                # compile list of access intervals
+                for t_access, agent_name, instrument in matching_accesses:
+                    # get propagation time step for this agent
+                    time_step = compiled_orbitdata[agent_name].time_step 
+
+                    # create unitary interval for this access time
+                    access_interval = Interval(t_access, t_access + time_step)
+
+                    # check if this access overlaps with any previous access
+                    merged = False
+                    for interval in access_interval_dict[(agent_name,instrument)]:
+                        if access_interval.overlaps(interval):
+                            # if so, join intervals
+                            interval.join(access_interval)
+                            merged = True
+                            break
+                    
+                    # if merged, continue to next interval
+                    if merged: continue
+                    
+                    # otherwise, create a new access interval
+                    access_interval_dict[(agent_name,instrument)].append(access_interval)
 
             # flatten to list of access intervals
             access_intervals : List[Tuple[Interval, str, str]] \
@@ -747,6 +745,7 @@ class ResultsProcessor:
     def __compile_task_accessibility(compiled_orbitdata : Dict[str, OrbitData], 
                                      known_tasks: List[GenericObservationTask], 
                                      agent_missions: Dict[str, Mission], 
+                                     accesses_per_gp : Dict[Tuple[int,int], pd.DataFrame],
                                      printouts: bool
                                     ) -> Tuple[pd.DataFrame, List[Tuple[GenericObservationTask, List[Tuple[Interval, str, str]]]]]:
         # initialize map of tasks to access intervals
@@ -770,20 +769,6 @@ class ResultsProcessor:
 
             # find all accesses and observations that match this task
             task_access_windows = []
-
-            # get matching accesses for this task by time
-            task_accesses = []
-            for agent_name, agent_orbit_data in compiled_orbitdata.items():
-                # get access intervals for an agent observing this task's availability window
-                access_intervals = agent_orbit_data.gp_access_data.lookup_interval(task.availability.left, task.availability.right)
-                
-                # skip if no accesses found
-                if len(access_intervals['time [s]']) == 0: continue
-
-                for i in range(len(access_intervals['time [s]'])):
-                    row ={col : access_intervals[col][i] for col in access_intervals}
-                    # add to task accesses list
-                    task_accesses.append(row)
                 
             # check all task locations
             for location in task.location:
@@ -792,48 +777,58 @@ class ResultsProcessor:
                 task_lat = round(task_lat,6)
                 task_lon = round(task_lon,6)     
                 task_grid_idx = int(task_grid_idx)
-                task_gp_idx = int(task_gp_idx)     
+                task_gp_idx = int(task_gp_idx)   
+                location_key = (task_grid_idx, task_gp_idx)
                 
-                matching_accesses = [
-                                    (access_interval['time [s]'], access_interval['agent name'], access_interval['instrument'])
-                                    for access_interval in task_accesses
-                                    if task_grid_idx == access_interval['grid index']
-                                    and task_gp_idx == access_interval['GP index']
-                                    and access_interval['instrument'].lower() in instrument_capability_reqs[agent_name]
-                                ]
+                # get matching accesses for this location
+                location_access : pd.DataFrame = accesses_per_gp.get(location_key, None)
                 
+                # check if there are any accesses for this location
+                if location_access is None: continue # no accesses found; skip
+                
+                # filter data that exists within the task's availability window and matches instrument capability requirements
+                location_access_filtered : pd.DataFrame \
+                    = location_access[(location_access['time [s]'] >= task.availability.left) 
+                     & (location_access['time [s]'] <= task.availability.right)]
+                location_access_filtered : pd.DataFrame \
+                    = location_access_filtered[location_access_filtered.apply(lambda row: row['instrument'].lower() in instrument_capability_reqs[row['agent name']], axis=1)]
+
                 # initialize map of compiled access intervals
                 access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)
 
-                # compile list of access intervals
-                for t_access, agent_name, instrument in matching_accesses:
-                    # get propagation time step for this agent
-                    time_step = compiled_orbitdata[agent_name].time_step 
-
-                    # create unitary interval for this access time
-                    access_interval = Interval(t_access, t_access + time_step)
-
-                    # check if this access overlaps with any previous access
-                    merged = False
-                    for interval in access_interval_dict[(agent_name,instrument)]:
-                        if access_interval.overlaps(interval):
-                            # if so, join intervals
-                            interval.join(access_interval)
-                            merged = True
-                            break
+                # iterate throufh data to map accesses by agent name and instrument
+                for (agent_name, instrument), group in location_access_filtered.groupby(['agent name', 'instrument']):
+                    # get sorted list of access times for this agent and instrument
+                    matching_accesses = group[['time [s]', 'agent name', 'instrument']].sort_values(by='time [s]').values.tolist()
                     
-                    # if merged, continue to next interval
-                    if merged: continue
-                    
-                    # otherwise, create a new access interval
-                    access_interval_dict[(agent_name,instrument)].append(access_interval)
+                    # compile list of access intervals
+                    for t_access, agent_name, instrument in matching_accesses:
+                        # get propagation time step for this agent
+                        time_step = compiled_orbitdata[agent_name].time_step 
+
+                        # create unitary interval for this access time
+                        access_interval = Interval(t_access, t_access + time_step)
+
+                        # check if this access overlaps with any previous access
+                        merged = False
+                        for interval in access_interval_dict[(agent_name,instrument)]:
+                            if access_interval.overlaps(interval):
+                                # if so, join intervals
+                                interval.join(access_interval)
+                                merged = True
+                                break
+                        
+                        # if merged, continue to next interval
+                        if merged: continue
+                        
+                        # otherwise, create a new access interval
+                        access_interval_dict[(agent_name,instrument)].append(access_interval)
 
                 # flatten to list of access intervals
                 access_intervals : List[Tuple[Interval, str, str]] \
                     = sorted([ (interval,agent_name,instrument) 
                              for (agent_name,instrument),intervals in access_interval_dict.items()
-                             for interval in intervals ])
-                
+                             for interval in intervals ])                
                 
                 # append to task lists
                 task_access_windows.extend(access_intervals)
@@ -854,6 +849,7 @@ class ResultsProcessor:
                         'instrument' : instrument
                     })
 
+            # if access windows were found for this task, add to map of tasks to access intervals
             if task_access_windows: accesses_per_task[task] = task_access_windows
     
         # convert to dataframe

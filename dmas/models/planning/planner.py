@@ -80,6 +80,7 @@ class AbstractPlanner(ABC):
     
     def calculate_access_opportunities(self, 
                                        state : SimulationAgentState, 
+                                       tasks : List[GenericObservationTask],
                                        planning_horizon : Interval,
                                        orbitdata : OrbitData
                                     ) -> dict:
@@ -88,78 +89,150 @@ class AbstractPlanner(ABC):
         # check planning horizon span
         if planning_horizon.is_empty(): return {}
 
+        # obtain targets for available tasks
+        targets = set()
+        for task in tasks:
+            for *__,grid_index,gp_index in task.location:
+                targets.add((int(grid_index), int(gp_index)))
+
         # compile coverage data
         raw_coverage_data : dict = orbitdata.gp_access_data.lookup_interval(planning_horizon.left, planning_horizon.right)
 
-        # group by grid index and ground point index
-        coverage_idx_by_target : Dict[int, Dict[int, Dict[str, list]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
-        for i,t in tqdm(enumerate(raw_coverage_data['time [s]']), 
-                        desc=f'{state.agent_name}/PLANNER: Grouping access opportunities', 
-                        unit=' time-step', 
-                        disable=len(raw_coverage_data['time [s]'])<10 or not self._printouts,
-                        mininterval=0.5, 
-                        leave=False
-                    ):
-            # extract relevant data
+        # filter coverage data to only include targets for available tasks
+        coverage_data_indices = defaultdict(list)
+        for i,t in enumerate(raw_coverage_data['time [s]']):
+            # get grid index and ground point index for this access opportunity
             grid_index = raw_coverage_data['grid index'][i]
             gp_index = raw_coverage_data['GP index'][i]
-            instrument = raw_coverage_data['instrument'][i]
+            target = (int(grid_index), int(gp_index))
 
-            # place in appropriate dictionary entry
-            coverage_idx_by_target[grid_index][gp_index][instrument].append((i,t))
+            # check if this access opportunity corresponds to a target for an available task
+            if (target) in targets:
+                # if so, add to list of access opportunities for this target
+                coverage_data_indices[target].append((i,t))
 
-        # initiate merged access opportunities
-        access_opportunities : Dict[int, Dict[int, Dict[str, List[tuple]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        # initiate access opportunities maps 
+        #  (grid_index, gp_index) -> List[ (access_interval, instrument_name, access_times, off_nadir_angles) ]
+        access_opportunities = defaultdict(list)
 
-        # merge access interval opportunities
-        for grid_idx,gp_accesses in tqdm(coverage_idx_by_target.items(), 
-                                         desc=f'{state.agent_name}/PLANNER: Merging access opportunities', 
-                                         unit=' target',
-                                         disable=len(coverage_idx_by_target)<10 or not self._printouts,
-                                         leave=False, 
-                                         mininterval=0.5,
-                                        ):
-            for gp_idx,instrument_accesses in gp_accesses.items():
-                for instrument,access_indices in instrument_accesses.items():
-                    # initialize merged access intervals
-                    merged_access_intervals : list[tuple] = []
-                    interval_indices : list = []
+        # iterate through access data indices for each target and merge into access opportunities
+        for target, access_indices in coverage_data_indices.items():
+            # check if there are any access opportunities for this target
+            if not access_indices: continue
 
-                    # sort access indices
-                    access_indices.sort()
+            # initialize merged access intervals
+            merged_access_intervals : list[tuple] = []
 
-                    # initialize first interval
-                    t_start = access_indices[0][1]
-                    t_end = access_indices[0][1]
-                    indices = [access_indices[0][0]]
+            # sort access indices
+            access_indices.sort()
 
-                    # iterate through access indices and merge intervals
-                    for idx,t in access_indices[1:]:
-                        if t <= t_end + orbitdata.time_step + 1e-4:
-                            # extend current interval
-                            t_end = t
-                            indices.append(idx)
-                        else:
-                            # save current interval
-                            merged_access_intervals.append( Interval(t_start, t_end) )
-                            interval_indices.append(list(indices))
-                            
-                            # start new interval
-                            t_start = t
-                            t_end = t
-                            indices = [idx]
+            # initialize first interval
+            t_start = access_indices[0][1]
+            t_end = access_indices[0][1]
+            interval_indices = [access_indices[0][0]]
+
+            # iterate through access indices and merge intervals
+            for idx,t in access_indices[1:]:
+                if t <= t_end + orbitdata.time_step + self.EPS:
+                    # extend current interval
+                    t_end = t
+                    interval_indices.append(idx)
+                else:
+                    # save current interval
+                    merged_access_intervals.append( (Interval(t_start, t_end), interval_indices) )
                     
-                    # add last interval
-                    merged_access_intervals.append( Interval(t_start, t_end) )
-                    interval_indices.append(list(indices))
+                    # start new interval
+                    t_start = t
+                    t_end = t
+                    interval_indices = [idx]
+            
+            # add last interval
+            merged_access_intervals.append( (Interval(t_start, t_end), interval_indices) )
 
-                    for interval,indices in zip(merged_access_intervals, interval_indices):
-                        access_opportunities[grid_idx][gp_idx][instrument].append( (interval, 
-                                                                                    [raw_coverage_data['time [s]'][i] for i in indices],
-                                                                                    [raw_coverage_data['off-nadir axis angle [deg]'][i] for i in indices]
-                                                                                    ) )
+            # extract access data for each interval
+            for access_interval,interval_indices in merged_access_intervals:
+                # unpack interval information
+                instrument_name = raw_coverage_data['instrument'][interval_indices[0]]
+                access_times = [raw_coverage_data['time [s]'][i] for i in interval_indices]
+                off_nadir_angles = [raw_coverage_data['off-nadir axis angle [deg]'][i] for i in interval_indices]
 
+                # add access opportunity to map
+                access_opportunities[target].append( (access_interval, instrument_name, access_times, off_nadir_angles) )
+            
+        # return access opportunities
         return access_opportunities
+
+        # # group by grid index and ground point index
+        # coverage_idx_by_target : Dict[int, Dict[int, Dict[str, list]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        # for i,t in tqdm(enumerate(raw_coverage_data['time [s]']), 
+        #                 desc=f'{state.agent_name}/PLANNER: Grouping access opportunities', 
+        #                 unit=' time-step', 
+        #                 disable=len(raw_coverage_data['time [s]'])<10 or not self._printouts,
+        #                 mininterval=0.5, 
+        #                 leave=False
+        #             ):
+        #     # extract relevant data
+        #     grid_index = raw_coverage_data['grid index'][i]
+        #     gp_index = raw_coverage_data['GP index'][i]
+        #     instrument = raw_coverage_data['instrument'][i]
+
+        #     # place in appropriate dictionary entry
+        #     coverage_idx_by_target[grid_index][gp_index][instrument].append((i,t))
+
+        # # initiate merged access opportunities
+        # access_opportunities_old : Dict[int, Dict[int, Dict[str, List[tuple]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+
+        # # merge access interval opportunities
+        # for grid_idx,gp_accesses in tqdm(coverage_idx_by_target.items(), 
+        #                                  desc=f'{state.agent_name}/PLANNER: Merging access opportunities', 
+        #                                  unit=' target',
+        #                                  disable=len(coverage_idx_by_target)<10 or not self._printouts,
+        #                                  leave=False, 
+        #                                  mininterval=0.5,
+        #                                 ):
+        #     for gp_idx,instrument_accesses in gp_accesses.items():
+        #         for instrument,access_indices in instrument_accesses.items():
+                    # # initialize merged access intervals
+                    # merged_access_intervals : list[tuple] = []
+                    # interval_indices : list = []
+
+                    # # sort access indices
+                    # access_indices.sort()
+
+                    # # initialize first interval
+                    # t_start = access_indices[0][1]
+                    # t_end = access_indices[0][1]
+                    # indices = [access_indices[0][0]]
+
+                    # # iterate through access indices and merge intervals
+                    # for idx,t in access_indices[1:]:
+                    #     if t <= t_end + orbitdata.time_step + 1e-4:
+                    #         # extend current interval
+                    #         t_end = t
+                    #         indices.append(idx)
+                    #     else:
+                    #         # save current interval
+                    #         merged_access_intervals.append( Interval(t_start, t_end) )
+                    #         interval_indices.append(list(indices))
+                            
+                    #         # start new interval
+                    #         t_start = t
+                    #         t_end = t
+                    #         indices = [idx]
+                    
+                    # # add last interval
+                    # merged_access_intervals.append( Interval(t_start, t_end) )
+                    # interval_indices.append(list(indices))
+
+                    # for interval,indices in zip(merged_access_intervals, interval_indices):
+                    #     access_opportunities_old[grid_idx][gp_idx][instrument].append( (interval, 
+                    #                                                                 [raw_coverage_data['time [s]'][i] for i in indices],
+                    #                                                                 [raw_coverage_data['off-nadir axis angle [deg]'][i] for i in indices]
+                    #                                                                 ) )
+
+        # raise NotImplementedError('This method is currently not fully implemented and may contain bugs. Use with caution. Consider using `calculate_access_opportunities_from_raw_coverage_data` instead, which is more robust but also more computationally expensive.')
+
+        # return access_opportunities_old
     
     def create_observation_opportunities_from_accesses(self, 
                                     available_tasks : List[GenericObservationTask],
@@ -218,7 +291,7 @@ class AbstractPlanner(ABC):
     
     def single_task_observation_opportunity_from_accesses(self,
                                                           available_tasks : List[GenericObservationTask],
-                                                          access_times : List[tuple], 
+                                                          access_times : Dict[Tuple, List[tuple]], 
                                                           cross_track_fovs : dict,
                                                           orbitdata : OrbitData,
                                                           threshold : float = 1e-9
@@ -226,11 +299,16 @@ class AbstractPlanner(ABC):
         """ Creates one instance of a task observation opportunity per each access opportunity 
         for every available task """
 
-        # initialize list of task observation opportunities
+        # initiate task observation opportunities
         observation_opps : List[ObservationOpportunity] = []
 
         # create one instance of an observation opportunity per each access opportunity
-        for task in tqdm(available_tasks, desc="Calculating access times to known tasks", leave=False, disable=not self._printouts):
+        for task in tqdm(available_tasks, 
+                         desc="Calculating access times to known tasks", 
+                         leave=False,
+                         mininterval=0.5,
+                         disable=not self._printouts or len(available_tasks)<10
+                        ):
 
             # extract minimum duration requirement for this task
             min_duration_req : float = self.__extract_minimum_duration_req(task, orbitdata)
@@ -241,58 +319,124 @@ class AbstractPlanner(ABC):
             # collect access interval information for each target location for this task
             for *__,grid_index,gp_index in task.location:
                 # ensure grid_index and gp_index are integers
-                grid_index,gp_index = int(grid_index), int(gp_index)
+                key = int(grid_index), int(gp_index)
                 
                 # check if target is accessible  
-                if grid_index not in access_times or gp_index not in access_times[grid_index]:
-                    continue
+                if key not in access_times: continue
                 
                 # matching_access_times : List[Tuple[str, Interval, List[float]]] = []
-                for instrument_name,access_intervals in access_times[grid_index][gp_index].items():
-                    for access_interval,t,th in access_intervals:
-                        # check if instrument can perform the task
-                        if not self.can_perform_task(task, instrument_name): continue
+                for access_interval,instrument_name,t,th in access_times[key]:
+                    # check if instrument can perform the task
+                    if not self.can_perform_task(task, instrument_name): continue
 
-                        # check if access interval overlaps with task availability
-                        if not task.availability.overlaps(access_interval): continue
+                    # check if access interval overlaps with task availability
+                    if not task.availability.overlaps(access_interval): continue
 
-                        # calculate intersection of access interval and task availability
-                        overlapping_access_interval = task.availability.intersection(access_interval)
+                    # calculate intersection of access interval and task availability
+                    overlapping_access_interval = task.availability.intersection(access_interval)
 
-                        # check if overlapping access interval is long enough to perform the task
-                        if overlapping_access_interval.span() < min_duration_req - threshold: continue
+                    # check if overlapping access interval is long enough to perform the task
+                    if overlapping_access_interval.span() < min_duration_req - threshold: continue
 
-                        # reduce time and off-nadir angle lists to only include times within the overlapping access interval
-                        reduced_th = [th_i for t_i,th_i in zip(t,th)
-                                        if t_i in overlapping_access_interval]
+                    # reduce time and off-nadir angle lists to only include times within the overlapping access interval
+                    reduced_th = [th_i for t_i,th_i in zip(t,th)
+                                    if t_i in overlapping_access_interval]
 
-                        if max(reduced_th) - min(reduced_th) > cross_track_fovs[instrument_name]:
-                            # not all of the accessibility is observable with a single pass
-                            continue
-                            # TODO raise NotImplementedError('No support for tasks that require multiple passes yet.')
-                        
-                        # calculate slew angle interval 
-                        off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[instrument_name]/2,
-                                                    off_axis_angle + cross_track_fovs[instrument_name]/2)
-                                                    for off_axis_angle in reduced_th]
-                        slew_angles : Interval = reduce(lambda a, b: a.intersection(b), off_axis_angles)
+                    if max(reduced_th) - min(reduced_th) > cross_track_fovs[instrument_name]:
+                        # not all of the accessibility is observable with a single pass
+                        continue
+                        # TODO raise NotImplementedError('No support for tasks that require multiple passes yet.')
+                    
+                    # calculate slew angle interval 
+                    off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[instrument_name]/2,
+                                                off_axis_angle + cross_track_fovs[instrument_name]/2)
+                                                for off_axis_angle in reduced_th]
+                    slew_angles : Interval = reduce(lambda a, b: a.intersection(b), off_axis_angles)
 
-                        # skip if no valid slew angles
-                        if slew_angles.is_empty(): continue  
+                    # skip if no valid slew angles
+                    if slew_angles.is_empty(): continue  
 
-                        # add task observation opportunity to list of task observation opportunities
-                        observation_opps.append(ObservationOpportunity(task,
-                                                                       instrument_name,
-                                                                       # use reduced access interval
-                                                                       overlapping_access_interval,
-                                                                       # take into acount possible tolerance in duration requirement
-                                                                       min(min_duration_req, overlapping_access_interval.span()), 
-                                                                       # use reduced slew angle interval
-                                                                       slew_angles
-                                                                    ))
+                    # add task observation opportunity to list of task observation opportunities
+                    observation_opps.append(ObservationOpportunity(task,
+                                                                    instrument_name,
+                                                                    # use reduced access interval
+                                                                    overlapping_access_interval,
+                                                                    # take into acount possible tolerance in duration requirement
+                                                                    min(min_duration_req, overlapping_access_interval.span()), 
+                                                                    # use reduced slew angle interval
+                                                                    slew_angles
+                                                                ))
         
         # return list of task observation opportunities
         return sorted(observation_opps, key=lambda x: (x.accessibility, x.id))
+
+        # # initialize list of task observation opportunities
+        # observation_opps : List[ObservationOpportunity] = []
+
+        # # create one instance of an observation opportunity per each access opportunity
+        # for task in tqdm(available_tasks, desc="Calculating access times to known tasks", leave=False, disable=not self._printouts):
+
+        #     # extract minimum duration requirement for this task
+        #     min_duration_req : float = self.__extract_minimum_duration_req(task, orbitdata)
+
+        #     # ensure minimum duration requirement is a positive number
+        #     assert isinstance(min_duration_req, (int,float)) and min_duration_req >= 0.0, "minimum duration requirement must be a positive number."
+
+        #     # collect access interval information for each target location for this task
+        #     for *__,grid_index,gp_index in task.location:
+        #         # ensure grid_index and gp_index are integers
+        #         grid_index,gp_index = int(grid_index), int(gp_index)
+                
+        #         # check if target is accessible  
+        #         if grid_index not in access_times or gp_index not in access_times[grid_index]:
+        #             continue
+                
+        #         # matching_access_times : List[Tuple[str, Interval, List[float]]] = []
+        #         for instrument_name,access_intervals in access_times[grid_index][gp_index].items():
+        #             for access_interval,t,th in access_intervals:
+        #                 # check if instrument can perform the task
+        #                 if not self.can_perform_task(task, instrument_name): continue
+
+        #                 # check if access interval overlaps with task availability
+        #                 if not task.availability.overlaps(access_interval): continue
+
+        #                 # calculate intersection of access interval and task availability
+        #                 overlapping_access_interval = task.availability.intersection(access_interval)
+
+        #                 # check if overlapping access interval is long enough to perform the task
+        #                 if overlapping_access_interval.span() < min_duration_req - threshold: continue
+
+        #                 # reduce time and off-nadir angle lists to only include times within the overlapping access interval
+        #                 reduced_th = [th_i for t_i,th_i in zip(t,th)
+        #                                 if t_i in overlapping_access_interval]
+
+        #                 if max(reduced_th) - min(reduced_th) > cross_track_fovs[instrument_name]:
+        #                     # not all of the accessibility is observable with a single pass
+        #                     continue
+        #                     # TODO raise NotImplementedError('No support for tasks that require multiple passes yet.')
+                        
+        #                 # calculate slew angle interval 
+        #                 off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[instrument_name]/2,
+        #                                             off_axis_angle + cross_track_fovs[instrument_name]/2)
+        #                                             for off_axis_angle in reduced_th]
+        #                 slew_angles : Interval = reduce(lambda a, b: a.intersection(b), off_axis_angles)
+
+        #                 # skip if no valid slew angles
+        #                 if slew_angles.is_empty(): continue  
+
+        #                 # add task observation opportunity to list of task observation opportunities
+        #                 observation_opps.append(ObservationOpportunity(task,
+        #                                                                instrument_name,
+        #                                                                # use reduced access interval
+        #                                                                overlapping_access_interval,
+        #                                                                # take into acount possible tolerance in duration requirement
+        #                                                                min(min_duration_req, overlapping_access_interval.span()), 
+        #                                                                # use reduced slew angle interval
+        #                                                                slew_angles
+        #                                                             ))
+        
+        # # return list of task observation opportunities
+        # return sorted(observation_opps, key=lambda x: (x.accessibility, x.id))
     
     def __extract_minimum_duration_req(self, task : GenericObservationTask, orbitdata : OrbitData) -> float:
         """ Extracts the minimum duration requirement for a given task. """

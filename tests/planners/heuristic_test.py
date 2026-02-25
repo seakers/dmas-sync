@@ -8,12 +8,12 @@ class TestHeuristic(PlannerTester, unittest.TestCase):
 
         self.single_sat_toy : bool = False
         self.multiple_sat_toy : bool = False
-        self.single_sat_lakes : bool = False
+        self.single_sat_lakes : bool = True
         self.multiple_sat_lakes : bool = False
 
         ## toy cases
         self.toy_1 = False  # single sat    default mission     single target, no events
-        self.toy_2 = True  # single sat    no default mission  one event
+        self.toy_2 = False  # single sat    no default mission  one event
         self.toy_3 = False  # two sats      no default mission  one event
     
     def planner_name(self) -> str:
@@ -22,17 +22,17 @@ class TestHeuristic(PlannerTester, unittest.TestCase):
     def toy_planner_config(self) -> dict:
         # Toggle between preplanner and replanner for toy cases
         return {
-            # "preplanner": {
-            #     "@type": "heuristic",
-            #     "debug": "False",
-            #     # "horizon": 1000,
-            #     "period" : 200,
-            # },
-            "replanner": {
+            "preplanner": {
                 "@type": "heuristic",
                 "debug": "False",
-                # "replanThreshold": 2,
-            }
+                # "horizon": 1000,
+                "period" : 200,
+            },
+            # "replanner": {
+            #     "@type": "heuristic",
+            #     "debug": "False",
+            #     # "replanThreshold": 2,
+            # }
         }
     
     def lakes_planner_config(self) -> dict:
