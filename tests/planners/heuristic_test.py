@@ -8,11 +8,11 @@ class TestHeuristic(PlannerTester, unittest.TestCase):
 
         self.single_sat_toy : bool = False
         self.multiple_sat_toy : bool = False
-        self.single_sat_lakes : bool = True
+        self.single_sat_lakes : bool = False
         self.multiple_sat_lakes : bool = False
 
         ## toy cases
-        self.toy_1 = False  # single sat    default mission     single target, no events
+        self.toy_1 = True  # single sat    default mission     single target, no events
         self.toy_2 = False  # single sat    no default mission  one event
         self.toy_3 = False  # two sats      no default mission  one event
     

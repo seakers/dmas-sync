@@ -60,7 +60,7 @@ class ResultsProcessor:
         observations_per_event_df, observations_per_event = ResultsProcessor.__compile_events_observed(events, observations_per_gp, agent_missions, printouts)
 
         ## tasks
-        observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(compiled_orbitdata, known_tasks, observations_per_gp, agent_missions, printouts)
+        observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(known_tasks, observations_per_gp, agent_missions, printouts)
         obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, printouts)
 
         # print compiled data
@@ -1002,8 +1002,7 @@ class ResultsProcessor:
         return observations_per_event_df, observations_per_event
 
     @staticmethod
-    def __compile_tasks_observed(compiled_orbitdata : Dict[str, OrbitData],
-                                 known_tasks: List[GenericObservationTask], 
+    def __compile_tasks_observed(known_tasks: List[GenericObservationTask], 
                                  observations_per_gp: Dict, 
                                  agent_missions: Dict[str, Mission], 
                                  printouts: bool
@@ -1030,20 +1029,6 @@ class ResultsProcessor:
 
             # find all accesses and observations that match this task
             task_observations = []
-
-            # get matching accesses for this task by time
-            task_accesses = []
-            for agent_name, agent_orbit_data in compiled_orbitdata.items():
-                # get access intervals for an agent observing this task's availability window
-                access_intervals = agent_orbit_data.gp_access_data.lookup_interval(task.availability.left, task.availability.right)
-                
-                # skip if no accesses found
-                if len(access_intervals['time [s]']) == 0: continue
-
-                for i in range(len(access_intervals['time [s]'])):
-                    row ={col : access_intervals[col][i] for col in access_intervals}
-                    # add to task accesses list
-                    task_accesses.append(row)
                 
             # check all task locations
             for location in task.location:
