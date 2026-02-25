@@ -194,11 +194,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         return proposed_bundle, proposed_path, proposed_bids
     
     def __update_observation_opportunities(self, 
-                                         state : SimulationAgentState, 
-                                         tasks : List[GenericObservationTask], 
-                                         planning_horizon : Interval, 
-                                         cross_track_fovs : dict, 
-                                         orbitdata : OrbitData
+                                           state : SimulationAgentState, 
+                                           tasks : List[GenericObservationTask], 
+                                           planning_horizon : Interval, 
+                                           cross_track_fovs : dict, 
+                                           orbitdata : OrbitData
                                         ) -> List[ObservationOpportunity]:
         """ Get currently stored observation opportunities. """
         # get only available tasks from existing plan and urgent tasks
@@ -208,7 +208,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         if not available_tasks: return []
 
         # calculate coverage opportunities for available tasks
-        access_opportunities : dict[tuple] = self.calculate_access_opportunities(state, planning_horizon, orbitdata)
+        access_opportunities : dict[tuple] = self.calculate_access_opportunities(state, available_tasks, planning_horizon, orbitdata)
 
         # create and merge task observation opportunities from scheduled tasks and urgent tasks
         observation_opportunities : List[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
@@ -231,14 +231,14 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # return observation opportunities
         return observation_opportunities
     
-    def calculate_access_opportunities(self, state, planning_horizon, orbitdata) -> dict:
+    def calculate_access_opportunities(self, state, available_tasks, planning_horizon, orbitdata) -> dict:
         """ Calculate access opportunities for targets visible in the planning horizon """
 
         # check if access opportunities need to be created/recreated
         if self.__need_to_update_access_opportunities(state, planning_horizon):
             # calculate access opportunities for this planning horizon
             access_opportunities : dict[tuple] \
-                = super().calculate_access_opportunities(state, planning_horizon, orbitdata)
+                = super().calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
             
             # update access opportunity horizon
             self.access_opportunity_horizon : Interval = copy.copy(planning_horizon)
@@ -265,6 +265,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         
         # planning horizon has extended beyond existing access opportunity horizon
         if planning_horizon.right > self.access_opportunity_horizon.right + self.EPS:
+            return True
+        
+        # new tasks were added 
+        if self._task_announcements_received:
             return True
 
         # else; there is no need to recreate access opportunities

@@ -328,7 +328,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             available_tasks : list[GenericObservationTask] = self.__get_available_tasks(tasks, planning_horizon)
             
             # calculate coverage opportunities for tasks
-            access_opportunities : dict[tuple] = self.calculate_access_opportunities(state, planning_horizon, orbitdata)
+            access_opportunities : dict[tuple] = self.calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
 
             # create task observation opportunities from known tasks and future access opportunities
             observation_opportunities : list[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)

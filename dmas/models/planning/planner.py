@@ -79,7 +79,6 @@ class AbstractPlanner(ABC):
         """ Creates a plan for the agent to perform """
     
     def calculate_access_opportunities(self, 
-                                       state : SimulationAgentState, 
                                        tasks : List[GenericObservationTask],
                                        planning_horizon : Interval,
                                        orbitdata : OrbitData
