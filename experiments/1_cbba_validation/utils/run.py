@@ -89,6 +89,12 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     preplanner = "none" if not isinstance(preplanner, str) and pd.isna(preplanner) else preplanner.lower()
     replanner = "none" if not isinstance(replanner, str) and pd.isna(replanner) else replanner.lower()
 
+    # TODO temporary exception; remove when oracles planner evaluation is implemented
+    if 'oracle' in preplanner:
+        raise NotImplementedError(f"Preplanner type `{preplanner}` not yet implemented in this study.")
+    if 'oracle' in replanner:
+        raise NotImplementedError(f"Replanner type `{replanner}` not yet implemented in this study.")
+
     # A stable name for this CSV, used in folder naming
     trial_stem = os.path.splitext(os.path.basename(sim_cfg.trials_file))[0]
 
