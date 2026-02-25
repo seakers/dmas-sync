@@ -246,9 +246,14 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
     
     def __init__(self, replan_threshold : int, debug = False, logger = None, printouts = True):
         super().__init__(debug, logger, printouts)
+        
+        # set attributes
         self._replan_threshold : int = replan_threshold
+        
+        # initialize set of known tasks 
         self._known_tasks = set() 
-        # replanning flags 
+
+        # initialize replanning flags 
         self._task_announcements_received = False
 
     def update_percepts(self, 
@@ -303,7 +308,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
     def generate_plan(  self, 
                         state : SimulationAgentState,
                         specs : object,
-                        current_plan : Plan,
+                        _ : Plan,
                         orbitdata : OrbitData,
                         mission : Mission,
                         tasks : List[GenericObservationTask],

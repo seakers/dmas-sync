@@ -8,12 +8,12 @@ from execsatm.observations import ObservationOpportunity
 from execsatm.mission import Mission
 
 from dmas.models.states import SimulationAgentState, SatelliteAgentState
-from dmas.models.planning.decentralized.earliest import EarliestAccessPlanner
+from dmas.models.planning.decentralized.earliest import EarliestAccessPeriodicPlanner
 from dmas.models.trackers import LatestObservationTracker
 from dmas.models.actions import ObservationAction
 from dmas.utils.orbitdata import OrbitData
 
-class NadirPointingPlanner(EarliestAccessPlanner):
+class NadirPointingPlanner(EarliestAccessPeriodicPlanner):
     """ Only points agents in the downward direction """
     
     
