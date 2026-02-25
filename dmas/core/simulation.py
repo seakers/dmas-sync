@@ -35,7 +35,7 @@ from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInse
 from dmas.models.planning.decentralized.dynamic import DynamicProgrammingPlanner
 from dmas.models.planning.decentralized.earliest import EarliestAccessPeriodicPlanner, EarliestAccessReactivePlanner
 from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPeriodicPlanner, HeuristicInsertionReactivePlanner
-from dmas.models.planning.decentralized.nadir import NadirPointingPlanner
+from dmas.models.planning.decentralized.nadir import NadirPointingPeriodicPlanner, NadirPointingReactivePlanner
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
@@ -904,7 +904,7 @@ class Simulation:
             return EarliestAccessPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'nadir':
-            return NadirPointingPlanner(horizon, period, sharing, debug, logger, printouts)
+            return NadirPointingPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["dynamic", "dp"]:
             model = preplanner_dict.get('model', 'earliest').lower()
@@ -1029,6 +1029,9 @@ class Simulation:
         elif replanner_type.lower() in ['earliest']:
             return EarliestAccessReactivePlanner(replan_threshold, debug, logger, printouts)
         
+        elif replanner_type.lower() in ['nadir']:
+            return NadirPointingReactivePlanner(replan_threshold, debug, logger, printouts)
+
         # fallback for unimplemented replanner types
         raise NotImplementedError(f'replanner of type `{replanner_dict}` not yet supported.')
     
