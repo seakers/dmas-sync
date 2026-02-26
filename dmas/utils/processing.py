@@ -1552,15 +1552,34 @@ class ResultsProcessor:
         # count number of groundpoints and their accessibility
         n_gps = None
         gps_accessible_compiled = set()
-        for _,agent_orbitdata_temp in tqdm(orbitdata.items(), desc='Counting total and accessible ground points', leave=False, disable=not printouts):
-            # count number of ground points
-            n_gps = len([gps for gps in agent_orbitdata_temp.grid_data]) if n_gps is None else n_gps
+        # for _,agent_orbitdata_temp in tqdm(orbitdata.items(), desc='Counting total and accessible ground points', leave=False, disable=not printouts):
+        #     # count number of ground points
+        #     if n_gps is None:
+        #         n_gps = len([gps for gps in agent_orbitdata_temp.grid_data])
 
-            # get set of accessible ground points
-            gps_accessible : set = {(row['grid index'], row['GP index']) for _,row in agent_orbitdata_temp.gp_access_data}
+        #     # get set of accessible ground points
+        #     gps_accessible : set = {(row['grid index'], row['GP index']) for _,row in agent_orbitdata_temp.gp_access_data}
 
-            # update set of accessible ground points
-            gps_accessible_compiled.update(gps_accessible)
+        #     # update set of accessible ground points
+        #     gps_accessible_compiled.update(gps_accessible)
+        for _, agent in tqdm(orbitdata.items(), 
+                             desc='Counting total and accessible ground points',
+                             leave=False, 
+                             disable=not printouts
+                            ):
+
+            if n_gps is None: n_gps = len(agent.grid_data)
+
+            tab = agent.gp_access_data
+            grid = tab._grid_idx.astype(np.int64, copy=False)
+            gp   = tab._gp_idx.astype(np.int64, copy=False)
+
+            pairs = np.empty(grid.shape[0], dtype=[('g', np.int64), ('p', np.int64)])
+            pairs['g'] = grid
+            pairs['p'] = gp
+
+            upairs = np.unique(pairs)
+            gps_accessible_compiled.update(zip(upairs['g'].tolist(), upairs['p'].tolist()))
 
         n_gps_accessible = len(gps_accessible_compiled)
         n_gps_observed = len(observations_per_gp)
