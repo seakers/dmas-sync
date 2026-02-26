@@ -857,8 +857,17 @@ class AbstractPlanner(ABC):
                         for *_,grid_index,gp_index in task.location}
         
         # get ground points accessesible during the availability of the task
-        raw_access_data : Dict[str,list] \
-            = orbitdata.gp_access_data.lookup_interval(t_img, t_img + d_img)
+        raw_access_data : Dict[str,list] = None
+        for grid_index,gp_index in task_targets:
+            access_data = orbitdata.gp_access_data.lookup_interval(t_img, 
+                                                                   t_img + d_img,
+                                                                   filters={'grid_index': grid_index, 
+                                                                            'GP index': gp_index})
+            if raw_access_data is None:
+                raw_access_data = access_data
+            else:
+                for col in raw_access_data:
+                    raw_access_data[col].extend(access_data[col])
 
         # extract ground point accesses that are within the agent's field of view
         accessible_gps_data_indeces = [i for i in range(len(raw_access_data['time [s]']))
