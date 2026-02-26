@@ -471,7 +471,7 @@ class Simulation:
         # create agents 
         agents : list[SimulationAgent] = []
         if isinstance(spacecraft_dict, list):
-            for spacecraft in spacecraft_dict:
+            for spacecraft in tqdm(spacecraft_dict, leave=False, desc='Initializing Satellite Agents', unit=' agents', disable=not printouts):
 
                 # create satellite agent
                 agent = Simulation.__spacecraft_agent_factory(spacecraft,
@@ -487,7 +487,7 @@ class Simulation:
                 agents.append(agent)
 
         if isinstance(gops_dict, list):
-            for ground_operator in gops_dict:
+            for ground_operator in tqdm(gops_dict, leave=False, desc='Initializing Ground Operator Agents', unit=' agents', disable=not printouts):
                 
                 # create ground operator agent
                 agent = Simulation.__ground_operator_agent_factory(ground_operator,

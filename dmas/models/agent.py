@@ -99,7 +99,7 @@ class SimulationAgent(object):
         self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
         # initialize trackers and data sinks
-        self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name, quiet=not printouts)
+        self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
         self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history")
         self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history")
 

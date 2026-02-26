@@ -94,41 +94,37 @@ class AbstractPlanner(ABC):
             for *__,grid_index,gp_index in task.location:
                 targets.add((int(grid_index), int(gp_index)))
 
-        # compile coverage data
-        raw_coverage_data : dict = orbitdata.gp_access_data.lookup_interval(planning_horizon.left, planning_horizon.right)
-
-        # filter coverage data to only include targets for available tasks
-        coverage_data_indices = defaultdict(list)
-        for i,t in enumerate(raw_coverage_data['time [s]']):
-            # get grid index and ground point index for this access opportunity
-            grid_index = raw_coverage_data['grid index'][i]
-            gp_index = raw_coverage_data['GP index'][i]
-            target = (int(grid_index), int(gp_index))
-
-            # check if this access opportunity corresponds to a target for an available task
-            if (target) in targets:
-                # if so, add to list of access opportunities for this target
-                coverage_data_indices[target].append((i,t))
-
         # initiate access opportunities maps 
         #  (grid_index, gp_index) -> List[ (access_interval, instrument_name, access_times, off_nadir_angles) ]
-        access_opportunities = defaultdict(list)
+        access_opportunities = {target : [] for target in targets}
 
         # iterate through access data indices for each target and merge into access opportunities
-        for target, access_indices in coverage_data_indices.items():
+        # for target, access_indices in coverage_data_indices.items():
+        for target in targets:
+            # get target coverage data from orbitdata
+            target_coverage_data : dict \
+                = orbitdata.gp_access_data.lookup_interval(planning_horizon.left, 
+                                                           planning_horizon.right,
+                                                           filters={
+                                                                'grid index': target[0],
+                                                                'GP index': target[1]
+                                                           })
+
             # check if there are any access opportunities for this target
-            if not access_indices: continue
+            # if not access_indices: continue
+            if len(target_coverage_data['time [s]']) == 0: continue
 
             # initialize merged access intervals
             merged_access_intervals : list[tuple] = []
 
             # sort access indices
-            access_indices.sort()
+            access_indices = sorted([(i,t) for i,t in enumerate(target_coverage_data['time [s]'])])
+            # access_indices.sort()
 
             # initialize first interval
             t_start = access_indices[0][1]
             t_end = access_indices[0][1]
-            interval_indices = [access_indices[0][0]]
+            interval_indices = [access_indices[0][0]]            
 
             # iterate through access indices and merge intervals
             for idx,t in access_indices[1:]:
@@ -151,9 +147,9 @@ class AbstractPlanner(ABC):
             # extract access data for each interval
             for access_interval,interval_indices in merged_access_intervals:
                 # unpack interval information
-                instrument_name = raw_coverage_data['instrument'][interval_indices[0]]
-                access_times = [raw_coverage_data['time [s]'][i] for i in interval_indices]
-                off_nadir_angles = [raw_coverage_data['off-nadir axis angle [deg]'][i] for i in interval_indices]
+                instrument_name = target_coverage_data['instrument'][interval_indices[0]]
+                access_times = [target_coverage_data['time [s]'][i] for i in interval_indices]
+                off_nadir_angles = [target_coverage_data['off-nadir axis angle [deg]'][i] for i in interval_indices]
 
                 # add access opportunity to map
                 access_opportunities[target].append( (access_interval, instrument_name, access_times, off_nadir_angles) )
