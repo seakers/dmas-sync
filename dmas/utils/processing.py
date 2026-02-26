@@ -1552,16 +1552,6 @@ class ResultsProcessor:
         # count number of groundpoints and their accessibility
         n_gps = None
         gps_accessible_compiled = set()
-        # for _,agent_orbitdata_temp in tqdm(orbitdata.items(), desc='Counting total and accessible ground points', leave=False, disable=not printouts):
-        #     # count number of ground points
-        #     if n_gps is None:
-        #         n_gps = len([gps for gps in agent_orbitdata_temp.grid_data])
-
-        #     # get set of accessible ground points
-        #     gps_accessible : set = {(row['grid index'], row['GP index']) for _,row in agent_orbitdata_temp.gp_access_data}
-
-        #     # update set of accessible ground points
-        #     gps_accessible_compiled.update(gps_accessible)
         for _, agent in tqdm(orbitdata.items(), 
                              desc='Counting total and accessible ground points',
                              leave=False, 
