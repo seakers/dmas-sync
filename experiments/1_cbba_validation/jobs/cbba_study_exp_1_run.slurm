@@ -1,12 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=cbba_stress_full_propagate_relays_single
+#SBATCH --job-name=cbba_study_exp_1_run
 #SBATCH --output=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.out
 #SBATCH --error=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.err
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --array=0-0
+#SBATCH --array=0-74
+
+# --array=0-35
 
 set -euo pipefail
 
@@ -25,16 +27,12 @@ conda activate ./.venv
 
 # --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
 i=$SLURM_ARRAY_TASK_ID
-
-GROUP=$(( i / 4 ))
-POS=$(( i % 4 ))
-
-start=$(( 25 + 36*GROUP + 3*POS ))
-end=$(( 26 + 36*GROUP + 3*POS ))
+start=$((i))
+end=$((1+i))
 
 # --- Run ---
 python ./experiments/1_0_cbba_stress_test/study.py \
-  -t full_factorial_trials \
+  -t full_factorial_trials_2026-02-22 \
   --trial-range "${start}:${end}" \
-  --single-thread --quiet --exceptions \
-  --force-precompute --only-precompute
+  --single-thread --quiet --exceptions # \
+  # --profile-cpu --profile-mem # --force-simulate # --force-postprocess # --force-summarize

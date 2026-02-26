@@ -88,7 +88,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     # normalize `nan` values to None
     preplanner = "none" if not isinstance(preplanner, str) and pd.isna(preplanner) else preplanner.lower()
     replanner = "none" if not isinstance(replanner, str) and pd.isna(replanner) else replanner.lower()
-
+    
     # A stable name for this CSV, used in folder naming
     trial_stem = os.path.splitext(os.path.basename(sim_cfg.trials_file))[0]
 
@@ -108,6 +108,12 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # ------------------------------------------------------------
         # Stage 0: Build mission specs (always needed)
         # ------------------------------------------------------------
+        # TODO temporary exception; remove when oracles planner evaluation is implemented
+        if 'oracle' in preplanner:
+            raise NotImplementedError(f"Preplanner type `{preplanner}` not yet implemented in this study.")
+        if 'oracle' in replanner:
+            raise NotImplementedError(f"Replanner type `{replanner}` not yet implemented in this study.")
+
         # generate scenario specifications from templates and trial parameters
         if printouts: tqdm.write(f" - Generated mission specifications for scenario {trial_id}")
         mission_specs : dict = generate_scenario_mission_specs(
@@ -121,10 +127,10 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         )
 
         # random wait for staggering
-        if not sim_cfg.reduced:
-            t_wait = random.uniform(0, 1) * int(trial_id)
-            if printouts: tqdm.write(f" - Staggering start time with random wait or {t_wait:.2f} [s]...")
-            time.sleep(t_wait)
+        # if not sim_cfg.reduced:
+        #     t_wait = random.uniform(0, 1) * int(trial_id)
+        #     if printouts: tqdm.write(f" - Staggering start time with random wait or {t_wait:.2f} [s]...")
+        #     time.sleep(t_wait)
 
         # ------------------------------------------------------------
         # Stage 1: Precompute (controlled by force/only)
@@ -360,7 +366,7 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
         # iterate over trial rows
         for i, row in enumerate(trial_rows):
             if not sim_cfg.quiet:
-                print(f"\n=== Running trial {i+1}/{len(trial_rows)}: scenario_id={row[0]}, num_sats={row[1]}, gnd_segment={row[2]}, task_arrival_rate={row[3]}, target_distribution={row[4]} ===")
+                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n - scenario_id={row[0]}\n - preplanner={row[1]}\n - replanner={row[2]}\n - n_sats={row[3]}\n - latency={row[4]}\n - task_arrival_rate={row[5]}\n - scenario_idx={row[7]}\n")
 
             # run one trial
             res = run_one_trial(row, run_cfg, sim_cfg, pbar_pos=1)

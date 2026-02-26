@@ -122,7 +122,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         available_tasks : list[GenericObservationTask] = self.get_available_tasks(tasks, planning_horizon)
         
         # calculate coverage opportunities for tasks
-        access_opportunities : dict[tuple] = self.calculate_access_opportunities(state, planning_horizon, orbitdata)
+        access_opportunities : dict[tuple] = self.calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
 
         # create task observation opportunities from known tasks and future access opportunities
         observation_opportunities : list[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
@@ -267,26 +267,6 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         assert state.get_time() <= t_next, "Next planning time must be in the future."
         # schedule wait action for next planning time
         return [WaitAction(t_next,t_next)] if not np.isinf(t_next) else []
-    # def _schedule_periodic_replan(self, state : SimulationAgentState, prelim_plan : Plan, t_next : float) -> list:
-    #     """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
-        # # find wait start time
-        # if prelim_plan.is_empty():
-        #     t_wait_start = state.get_time() 
-        
-        # else:
-        #     actions_within_period = [action for action in prelim_plan 
-        #                          if  isinstance(action, AgentAction)
-        #                          and action.t_start < t_next]
-
-        #     if actions_within_period:
-        #         # last_action : AgentAction = actions_within_period.pop()
-        #         t_wait_start = min(max([action.t_end for action in actions_within_period]), t_next)
-                                
-        #     else:
-        #         t_wait_start = state.get_time()
-
-        # # create wait action
-        # return [WaitAction(t_wait_start, t_next)] if t_wait_start < t_next else []
     
     
     def get_ground_points(self,

@@ -297,6 +297,7 @@ class OrbitData:
         # create adjacency matrix per interval
         for i,interval in tqdm(enumerate(connectivity_intervals), 
                              desc='Precomputing agent connectivity intervals', 
+                             total=len(connectivity_intervals),
                              unit=' intervals', 
                              leave=False,
                              disable=not printouts

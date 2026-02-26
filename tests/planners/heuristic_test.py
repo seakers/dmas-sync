@@ -20,17 +20,19 @@ class TestHeuristic(PlannerTester, unittest.TestCase):
         return "heuristic"
 
     def toy_planner_config(self) -> dict:
+        # Toggle between preplanner and replanner for toy cases
         return {
-            # "preplanner": {
+            "preplanner": {
+                "@type": "heuristic",
+                "debug": "False",
+                # "horizon": 1000,
+                "period" : 200,
+            },
+            # "replanner": {
             #     "@type": "heuristic",
             #     "debug": "False",
-            #     # "horizon": 1000,
-            #     "period" : 200,
-            # },
-            "replanner": {
-                "@type": "heuristic",
-                "debug": "False"
-            }
+            #     # "replanThreshold": 2,
+            # }
         }
     
     def lakes_planner_config(self) -> dict:

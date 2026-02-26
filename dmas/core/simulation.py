@@ -33,9 +33,9 @@ from dmas.models.planning.decentralized.announcer import EventAnnouncerPlanner
 from dmas.models.planning.decentralized.blank import BlankPlanner
 from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInsertionConsensusPlanner
 from dmas.models.planning.decentralized.dynamic import DynamicProgrammingPlanner
-from dmas.models.planning.decentralized.earliest import EarliestAccessPlanner
+from dmas.models.planning.decentralized.earliest import EarliestAccessPeriodicPlanner, EarliestAccessReactivePlanner
 from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPeriodicPlanner, HeuristicInsertionReactivePlanner
-from dmas.models.planning.decentralized.nadir import NadirPointingPlanner
+from dmas.models.planning.decentralized.nadir import NadirPointingPeriodicPlanner, NadirPointingReactivePlanner
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
@@ -471,7 +471,7 @@ class Simulation:
         # create agents 
         agents : list[SimulationAgent] = []
         if isinstance(spacecraft_dict, list):
-            for spacecraft in spacecraft_dict:
+            for spacecraft in tqdm(spacecraft_dict, leave=False, desc='Initializing Satellite Agents', unit=' agents', disable=not printouts):
 
                 # create satellite agent
                 agent = Simulation.__spacecraft_agent_factory(spacecraft,
@@ -487,7 +487,7 @@ class Simulation:
                 agents.append(agent)
 
         if isinstance(gops_dict, list):
-            for ground_operator in gops_dict:
+            for ground_operator in tqdm(gops_dict, leave=False, desc='Initializing Ground Operator Agents', unit=' agents', disable=not printouts):
                 
                 # create ground operator agent
                 agent = Simulation.__ground_operator_agent_factory(ground_operator,
@@ -901,10 +901,10 @@ class Simulation:
             return HeuristicInsertionPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["naive", "fifo", "earliest"]:
-            return EarliestAccessPlanner(horizon, period, sharing, debug, logger, printouts)
+            return EarliestAccessPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'nadir':
-            return NadirPointingPlanner(horizon, period, sharing, debug, logger, printouts)
+            return NadirPointingPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["dynamic", "dp"]:
             model = preplanner_dict.get('model', 'earliest').lower()
@@ -1010,10 +1010,10 @@ class Simulation:
         replanner_type : str = replanner_dict.get('@type', None)
         if replanner_type is None: raise ValueError(f'replanner type within planner module not specified in input file.')
         debug = bool(replanner_dict.get('debug', 'false').lower() in ['true', 't'])
+        replan_threshold = replanner_dict.get('replanThreshold', 1)
         
         if replanner_type.lower() in ['consensus', 'cbba']:
             model = replanner_dict.get('model', 'heuristicInsertion')
-            replan_threshold = replanner_dict.get('replanThreshold', 1)
             optimistic_bidding_threshold = replanner_dict.get('optimisticBiddingThreshold', 1)
             periodic_overwrite = bool(replanner_dict.get('periodicOverwrite', 'false').lower() in ['true', 't'])
 
@@ -1022,10 +1022,16 @@ class Simulation:
                 return HeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
             else:
                 raise NotImplementedError(f'replanner model `{model}` not yet supported.')
+        
         elif replanner_type.lower() in ['heuristic']:
-            replan_threshold = replanner_dict.get('replanThreshold', 1)
             return HeuristicInsertionReactivePlanner(replan_threshold, debug, logger, printouts)
         
+        elif replanner_type.lower() in ['earliest']:
+            return EarliestAccessReactivePlanner(replan_threshold, debug, logger, printouts)
+        
+        elif replanner_type.lower() in ['nadir']:
+            return NadirPointingReactivePlanner(replan_threshold, debug, logger, printouts)
+
         # fallback for unimplemented replanner types
         raise NotImplementedError(f'replanner of type `{replanner_dict}` not yet supported.')
     
