@@ -366,7 +366,7 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
         # iterate over trial rows
         for i, row in enumerate(trial_rows):
             if not sim_cfg.quiet:
-                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n \tscenario_id={row[0]}, preplanner={row[1]}, replanner={row[2]}, n_sats={row[3]}, latency={row[4]}, task_arrival_rate={row[5]}, scenario_idx={row[7]}\n")
+                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n - scenario_id={row[0]}\n - preplanner={row[1]}\n - replanner={row[2]}\n - n_sats={row[3]}\n - latency={row[4]}\n - task_arrival_rate={row[5]}\n - scenario_idx={row[7]}\n")
 
             # run one trial
             res = run_one_trial(row, run_cfg, sim_cfg, pbar_pos=1)

@@ -288,9 +288,9 @@
             "args": [
                 "-t", "full_factorial_trials_2026-02-22",
                 // "-t", "full_factorial_trials_2026-02-23",
-                "--trial-range", "111:113",
-                // "--profile-cpu",
-                // "--profile-mem",
+                "--trial-range", "69:70",
+                "--profile-cpu",
+                "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
                 // "--only-simulate",
@@ -298,7 +298,7 @@
                 "--force-simulate",
                 // "--force-postprocess",
                 // "--force-summarize",
-                // "--reduced",
+                "--reduced",
                 // "--quiet",
                 // "--exceptions",
             ]
