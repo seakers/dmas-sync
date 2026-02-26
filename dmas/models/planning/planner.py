@@ -841,6 +841,64 @@ class AbstractPlanner(ABC):
         return observation_performance_metrics
     
     
+    # def get_available_accesses(self, 
+    #                            task : GenericObservationTask, 
+    #                            instrument_name : str,
+    #                            th_img : float,
+    #                            t_img : float,
+    #                            d_img : float,
+    #                            orbitdata : OrbitData, 
+    #                            cross_track_fovs : dict
+    #                         ) -> dict:
+    #     """ Uses pre-computed orbitdata to estimate observation metrics for a given task. """
+        
+    #     # get task targets
+    #     task_targets = {(int(grid_index), int(gp_index))
+    #                     for *_,grid_index,gp_index in task.location}
+        
+    #     # get ground points accessesible during the availability of the task
+    #     raw_access_data : Dict[str,list] = None
+    #     for grid_index,gp_index in task_targets:
+    #         access_data = orbitdata.gp_access_data.lookup_interval(t_img, 
+    #                                                                t_img + d_img,
+    #                                                                filters={'grid_index': grid_index, 
+    #                                                                         'GP index': gp_index})
+    #         if raw_access_data is None:
+    #             raw_access_data = access_data
+    #         else:
+    #             for col in raw_access_data:
+    #                 raw_access_data[col].extend(access_data[col])
+
+    #     # extract ground point accesses that are within the agent's field of view
+    #     accessible_gps_data_indeces = [i for i in range(len(raw_access_data['time [s]']))
+    #                                     if abs(raw_access_data['off-nadir axis angle [deg]'][i] - th_img) \
+    #                                         <= cross_track_fovs[instrument_name] / 2
+    #                                     and raw_access_data['instrument'][i] == instrument_name]
+    #     accessible_gps_performances = {col : [raw_access_data[col][i] 
+    #                                           for i in accessible_gps_data_indeces]
+    #                                 for col in raw_access_data}
+        
+    #     # extract gp accesses of the desired targets within the task's accessibility and agent's field of view
+    #     valid_access_data_indeces = [i for i in range(len(accessible_gps_performances['time [s]']))
+    #                                 if (int(accessible_gps_performances['grid index'][i]), \
+    #                                     int(accessible_gps_performances['GP index'][i])) in task_targets]
+    #     observation_performances = {col : [accessible_gps_performances[col][i] 
+    #                                        for i in valid_access_data_indeces]
+    #                                 for col in accessible_gps_performances}
+
+    #     # get agent eclipse data
+    #     agent_eclipse_intervals : List[Tuple[Interval, ...]] \
+    #         = orbitdata.eclipse_data.lookup_intervals(t_img, t_img + d_img)
+
+    #     # include eclipse data for each observation in the performance metrics
+    #     observation_performances[ObservationRequirementAttributes.ECLIPSE.value] = [
+    #         int(any([t in interval for interval,*_ in agent_eclipse_intervals]))
+    #         for t in observation_performances['time [s]']
+    #     ]
+
+    #     # return estimated observation performances
+    #     return observation_performances
+
     def get_available_accesses(self, 
                                task : GenericObservationTask, 
                                instrument_name : str,
@@ -850,54 +908,105 @@ class AbstractPlanner(ABC):
                                orbitdata : OrbitData, 
                                cross_track_fovs : dict
                             ) -> dict:
-        """ Uses pre-computed orbitdata to estimate observation metrics for a given task. """
-        
-        # get task targets
-        task_targets = {(int(grid_index), int(gp_index))
-                        for *_,grid_index,gp_index in task.location}
-        
-        # get ground points accessesible during the availability of the task
-        raw_access_data : Dict[str,list] = None
-        for grid_index,gp_index in task_targets:
-            access_data = orbitdata.gp_access_data.lookup_interval(t_img, 
-                                                                   t_img + d_img,
-                                                                   filters={'grid_index': grid_index, 
-                                                                            'GP index': gp_index})
-            if raw_access_data is None:
-                raw_access_data = access_data
-            else:
-                for col in raw_access_data:
-                    raw_access_data[col].extend(access_data[col])
+        # --- 1) Build targets once (prefer vector-friendly form) ---
+        # task.location rows look like: (*_, grid_index, gp_index)
+        task_targets = {(int(grid_index), int(gp_index)) for *_, grid_index, gp_index in task.location}
+        if not task_targets:
+            return {}
 
-        # extract ground point accesses that are within the agent's field of view
-        accessible_gps_data_indeces = [i for i in range(len(raw_access_data['time [s]']))
-                                        if abs(raw_access_data['off-nadir axis angle [deg]'][i] - th_img) \
-                                            <= cross_track_fovs[instrument_name] / 2
-                                        and raw_access_data['instrument'][i] == instrument_name]
-        accessible_gps_performances = {col : [raw_access_data[col][i] 
-                                              for i in accessible_gps_data_indeces]
-                                    for col in raw_access_data}
-        
-        # extract gp accesses of the desired targets within the task's accessibility and agent's field of view
-        valid_access_data_indeces = [i for i in range(len(accessible_gps_performances['time [s]']))
-                                    if (int(accessible_gps_performances['grid index'][i]), \
-                                        int(accessible_gps_performances['GP index'][i])) in task_targets]
-        observation_performances = {col : [accessible_gps_performances[col][i] 
-                                           for i in valid_access_data_indeces]
-                                    for col in accessible_gps_performances}
+        # Pack targets into uint64 keys for fast membership
+        tgt_keys = np.fromiter(
+            ((g << 32) | (p & 0xFFFFFFFF) for (g, p) in task_targets),
+            dtype=np.uint64,
+            count=len(task_targets),
+        )
 
-        # get agent eclipse data
-        agent_eclipse_intervals : List[Tuple[Interval, ...]] \
-            = orbitdata.eclipse_data.lookup_intervals(t_img, t_img + d_img)
+        # --- 2) One lookup for the whole time window ---
+        access = orbitdata.gp_access_data.lookup_interval(
+            t_img,
+            t_img + d_img,
+            include_extras=True,
+            filters=None,
+            columns=None,
+            decode=True,
+            exact_time_filter=True,
+        )
 
-        # include eclipse data for each observation in the performance metrics
-        observation_performances[ObservationRequirementAttributes.ECLIPSE.value] = [
-            int(any([t in interval for interval,*_ in agent_eclipse_intervals]))
-            for t in observation_performances['time [s]']
-        ]
+        # Quick empty guard
+        t = np.asarray(access.get("time [s]", []))
+        if t.size == 0: return access  # or {}
 
-        # return estimated observation performances
-        return observation_performances
+        # --- 3) Vector masks for FOV + instrument + target membership ---
+        # Convert needed columns to arrays once
+        grid = np.asarray(access["grid index"], dtype=np.int64)
+        gp = np.asarray(access["GP index"], dtype=np.int64)
+        offn = np.asarray(access["off-nadir axis angle [deg]"], dtype=np.float64)
+
+        # Instrument column handling:
+        # - If you kept decode=False and instrument is a vocab column -> it's codes (int array)
+        # - If you kept decode=True or instrument isn't vocab -> could be strings
+        instr_col = access["instrument"]
+
+        # FOV check
+        half_fov = float(cross_track_fovs[instrument_name]) * 0.5
+        m_fov = np.abs(offn - float(th_img)) <= half_fov
+
+        # Instrument match
+        instr = np.asarray(instr_col)
+        m_instr = (instr == instrument_name)
+
+        # Target membership via packed keys
+        keys = (grid.astype(np.uint64) << np.uint64(32)) | (gp.astype(np.uint64) & np.uint64(0xFFFFFFFF))
+        # np.isin on uint64 is vectorized
+        m_target = np.isin(keys, tgt_keys, assume_unique=False)
+
+        mask = m_fov & m_instr & m_target
+        if not mask.any():
+            # Return same structure but empty lists (or arrays)
+            out = {k: [] for k in access.keys()}
+            out["eclipse"] = []
+            return out
+
+        # --- 4) Slice all columns once ---
+        # Keep as arrays for now; convert to lists at the end if your callers need lists.
+        obs = {}
+        for col, arr in access.items():
+            a = np.asarray(arr)
+            obs[col] = a[mask]
+
+        # --- 5) Eclipse flags fast (no per-time "t in interval" loops) ---
+        eclipse_intervals = orbitdata.eclipse_data.lookup_intervals(t_img, t_img + d_img)
+
+        times = np.asarray(obs["time [s]"], dtype=np.float64)
+        eclipse_flags = np.zeros(times.shape[0], dtype=np.int8)
+
+        if eclipse_intervals:
+            # Build sorted start/end arrays
+            # Assumes interval has .start and .end or something equivalent.
+            # Adjust these two lines to your Interval type.
+            starts = np.array([float(interval.left) for interval, *_ in eclipse_intervals], dtype=np.float64)
+            ends   = np.array([float(interval.right)   for interval, *_ in eclipse_intervals], dtype=np.float64)
+
+            # Sort by start (and reorder ends accordingly)
+            order = np.argsort(starts)
+            starts = starts[order]
+            ends = ends[order]
+
+            # For each time t: find rightmost start <= t, then check t <= corresponding end
+            idx = np.searchsorted(starts, times, side="right") - 1
+            valid = idx >= 0
+            eclipse_flags[valid] = (times[valid] <= ends[idx[valid]]).astype(np.int8)
+
+        # Use your enum key if you need it
+        obs["eclipse"] = eclipse_flags
+
+        # --- 6) Convert to python lists if your downstream expects lists ---
+        # (If downstream can accept numpy arrays, don't convert; that’s faster.)
+        out = {}
+        for k, v in obs.items():
+            out[k] = v.tolist() if isinstance(v, np.ndarray) else list(v)
+
+        return out
     
     def _schedule_maneuvers(    self, 
                                 state : SimulationAgentState, 
