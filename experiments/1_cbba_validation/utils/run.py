@@ -127,10 +127,10 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         )
 
         # random wait for staggering
-        if not sim_cfg.reduced:
-            t_wait = random.uniform(0, 1) * int(trial_id)
-            if printouts: tqdm.write(f" - Staggering start time with random wait or {t_wait:.2f} [s]...")
-            time.sleep(t_wait)
+        # if not sim_cfg.reduced:
+        #     t_wait = random.uniform(0, 1) * int(trial_id)
+        #     if printouts: tqdm.write(f" - Staggering start time with random wait or {t_wait:.2f} [s]...")
+        #     time.sleep(t_wait)
 
         # ------------------------------------------------------------
         # Stage 1: Precompute (controlled by force/only)
@@ -366,7 +366,7 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
         # iterate over trial rows
         for i, row in enumerate(trial_rows):
             if not sim_cfg.quiet:
-                print(f"\n=== Running trial {i+1}/{len(trial_rows)}: scenario_id={row[0]}, num_sats={row[1]}, gnd_segment={row[2]}, task_arrival_rate={row[3]}, target_distribution={row[4]} ===")
+                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n \tscenario_id={row[0]}, preplanner={row[1]}, replanner={row[2]}, n_sats={row[3]}, latency={row[4]}, task_arrival_rate={row[5]}, scenario_idx={row[7]}\n")
 
             # run one trial
             res = run_one_trial(row, run_cfg, sim_cfg, pbar_pos=1)

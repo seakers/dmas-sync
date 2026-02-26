@@ -265,10 +265,14 @@ class AbstractPlanner(ABC):
                     reduced_th = [th_i for t_i,th_i in zip(t,th)
                                     if t_i in overlapping_access_interval]
 
-                    if max(reduced_th) - min(reduced_th) > cross_track_fovs[instrument_name]:
-                        # not all of the accessibility is observable with a single pass
-                        continue
-                        # TODO raise NotImplementedError('No support for tasks that require multiple passes yet.')
+                    try:
+                        if max(reduced_th) - min(reduced_th) > cross_track_fovs[instrument_name]:
+                            # not all of the accessibility is observable with a single pass
+                            continue
+                            # TODO raise NotImplementedError('No support for tasks that require multiple passes yet.')
+                    except KeyError as e:
+                        x = 1
+                        raise e
                     
                     # calculate slew angle interval 
                     off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[instrument_name]/2,
@@ -942,9 +946,7 @@ class AbstractPlanner(ABC):
         gp = np.asarray(access["GP index"], dtype=np.int64)
         offn = np.asarray(access["off-nadir axis angle [deg]"], dtype=np.float64)
 
-        # Instrument column handling:
-        # - If you kept decode=False and instrument is a vocab column -> it's codes (int array)
-        # - If you kept decode=True or instrument isn't vocab -> could be strings
+        # Instrument column handling
         instr_col = access["instrument"]
 
         # FOV check
