@@ -510,7 +510,8 @@ class SimulationEnvironment(object):
             connectivity_data : List[Tuple[Interval, Set[frozenset], Dict[str, Set[str]]]] = []
 
             # iterate through list of intervals within the simulation data
-            for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=0, t_max=self._t_curr, include_current=True):
+            # for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=0, t_max=self._t_curr, include_current=True):
+            for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw_fast(t=0, t_max=self._t_curr, include_current=True):                
                 interval, components, component_map \
                     = self.__interpret_agent_connectivity_data(agent_orbitdata, t_start, t_end, *component_indices)
                 
@@ -599,7 +600,7 @@ class SimulationEnvironment(object):
         agent_orbitdata : OrbitData = next(iter(self._orbitdata.values()))
 
         # iterate through list of intervals in this time period 
-        for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=t, include_current=True):
+        for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw_fast(t=t, include_current=True):
             # skip if time `t` is not in this interval
             if not (t_start <= t < t_end):
                 continue

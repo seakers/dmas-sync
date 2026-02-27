@@ -22,7 +22,7 @@ from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
 from dmas.utils.orbitdata import OrbitData
-from dmas.models.actions import AgentAction
+from dmas.models.actions import AgentAction, BroadcastMessageAction
 from dmas.models.agent import SimulationAgent
 from dmas.core.environment import SimulationEnvironment
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
@@ -143,6 +143,10 @@ class Simulation:
                 for agent in self._agents
             }
 
+            # ----- memory usage checkpoint -----
+            # self.__profile_current_memory(t)
+            # -----------------------------------
+
             # execute simulation loop
             with tqdm(total=tf, 
                       desc=f'{self._name}: Simulating', 
@@ -169,6 +173,13 @@ class Simulation:
                     state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]] \
                         = {agent.name : agent.decide_action(*agent_observations[agent.name])
                             for agent in self._agents}
+                    
+                    # ----- memory usage checkpoint -----
+                    # if any(isinstance(action, BroadcastMessageAction) 
+                    #        for _,action in state_action_pairs.values()) and self._printouts:
+                    #     # if any agent is broadcasting a message, check memory usage
+                    #     self.__profile_current_memory(t)
+                    # -----------------------------------
 
                     # validate that all agents generated actions
                     assert all(agent.name in state_action_pairs for agent in self._agents), \
@@ -217,6 +228,10 @@ class Simulation:
             # start simulation start time tracker
             self._t_f = time.perf_counter()
 
+            # ----- memory usage checkpoint -----
+            # self.__profile_current_memory(t)
+            # -----------------------------------
+
             # simulation completed; print results for every agent
             for agent in self._agents: agent.print_results()
             
@@ -239,6 +254,32 @@ class Simulation:
     def __print_results(self) -> None:
         """ prints simulation results after execution """
         # TODO add any results printing here
+
+    def __profile_current_memory(self, t : float, n_lines : float = 8) -> None:
+        # profile memory usage at current time step
+        current, peak = tracemalloc.get_traced_memory()
+
+        # breakpoint if memory usage is too high
+        if current > 500 * 10**6:  # if current memory usage exceeds 500MB, print a warning
+            tqdm.write(f"WARNING: High memory usage detected at t={t:.2f}s: Current = {current / 10**6:.2f} MB; Peak = {peak / 10**6:.2f} MB")
+
+        # get performance snaptshot
+        snapshot = tracemalloc.take_snapshot()      
+        
+        # print to console
+        tqdm.write(f"========== MEMORY ALLOCATION at T{t:.2f}[s] ============")
+        tqdm.write(f"- Current memory usage is {current / 10**6:.2f}MB; Peak was {peak / 10**6:.2f}MB")
+        tqdm.write(" - Traceback Limit : " + str(tracemalloc.get_traceback_limit()) + " Frames")
+        # tqdm.write(" - Traced Memory (Current, Peak): " + str(tracemalloc.get_traced_memory()))
+        tqdm.write(" - Memory Usage by tracemalloc Module : " + str(tracemalloc.get_tracemalloc_memory() / 10**6) + " MB")
+        tqdm.write(" - Tracing Status : " + str(tracemalloc.is_tracing()))
+                        
+        tqdm.write("\n================= MEMORY SNAPSHOT ====================\n")
+        for stat in snapshot.statistics("lineno")[:n_lines]: # top 5 lines responsible for memory allocation
+            tqdm.write(f"{stat}")
+            tqdm.write(f" - {stat.traceback.format()}\n")
+        # tqdm.write("\n=====================================================\n")
+
 
     """
     DATA PROCESSING METHODS

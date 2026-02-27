@@ -33,7 +33,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_5 = False  # two sats      no default mission  one event           comm delays
         self.toy_6 = False  # two sats      no default mission  two targets         two events
         self.toy_7 = False  # two sats      no default mission  two targets         two events at different times
-        self.toy_8 = True  # single sat    default mission     multiple targets    no events
+        self.toy_8 = False  # single sat    default mission     multiple targets    no events
         self.toy_9 = False  # two sats      default mission     multiple targets    no events
         self.toy_10 = False # single sat    no default mission  two targets         two expiring events 
         self.toy_11 = False # two sat       no default mission  two targets         two expiring events 
@@ -42,7 +42,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_14 = False # single sat    default mission     multiple targets    two events          preplan + replan
         self.toy_15 = False # two sats      default mission     multiple targets    two events          preplan + replan
         self.toy_16 = False # single sat    no default mission  two targets         two expiring events  preplan + replan   not the correct instruments
-        self.toy_17 = False # moving relay scenario
+        self.toy_17 = True # moving relay scenario
         self.toy_18 = False # static relay scenario
         self.toy_19 = False # single sat    default mission     multiple targets    two events           preplan w/short horizon + replan
         self.toy_20 = False # two sats       default mission     multiple targets    two events           preplan w/short horizon + replan

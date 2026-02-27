@@ -1703,26 +1703,40 @@ class ConsensusPlanner(AbstractReactivePlanner):
         t_broadcasts = set()
         agents_considered = set()
 
-        # get column index of this agent in the comms links table
-        u_column_idx = orbitdata.comms_target_indices[state.agent_name]
+        u_idx = orbitdata.comms_target_indices[state.agent_name]
+        cols = orbitdata.comms_target_columns
 
-        # iterate through list of intervals in this time period 
-        for t_start,t_end, *component_indices in orbitdata.comms_links.iter_rows_raw(t=t_curr, 
-                                                                                     t_max=t_next, 
-                                                                                     include_current=include_current):
-            
-            # get component index of this agent during this interval
-            u_component_idx = int(component_indices[u_column_idx])
-            
-            # find all matching agents with the same component index and add to output list
-            targets = set()
-            for v_column_idx,v_component_idx in enumerate(component_indices):
-                if v_column_idx != u_column_idx and v_component_idx == u_component_idx: 
-                    # get target agent name from column index
-                    target_agent = orbitdata.comms_target_columns[v_column_idx]
+        for _, row in orbitdata.comms_links.iter_rows_packed(t_curr, t_next, include_current):
+            t_start = float(row[orbitdata.comms_links._col["start"]])
+            t_end   = float(row[orbitdata.comms_links._col["end"]])
+            comps   = row[3:]  # if extras begin at index 3
 
-                    # add to set of targets for this interval
-                    targets.add(target_agent)
+            u_comp = comps[u_idx]
+            m = (comps == u_comp)
+            m[u_idx] = False
+            v_idxs = np.nonzero(m)[0]
+            targets = {cols[int(j)] for j in v_idxs}
+
+        # # get column index of this agent in the comms links table
+        # u_column_idx = orbitdata.comms_target_indices[state.agent_name]
+
+        # # iterate through list of intervals in this time period 
+        # for t_start,t_end, *component_indices in orbitdata.comms_links.iter_rows_raw_fast(t=t_curr, 
+        #                                                                              t_max=t_next, 
+        #                                                                              include_current=include_current):
+            
+        #     # get component index of this agent during this interval
+        #     u_component_idx = int(component_indices[u_column_idx])
+            
+        #     # find all matching agents with the same component index and add to output list
+        #     targets = set()
+        #     for v_column_idx,v_component_idx in enumerate(component_indices):
+        #         if v_column_idx != u_column_idx and v_component_idx == u_component_idx: 
+        #             # get target agent name from column index
+        #             target_agent = orbitdata.comms_target_columns[v_column_idx]
+
+        #             # add to set of targets for this interval
+        #             targets.add(target_agent)
 
             # skip if target agents have already been considered
             if targets <= agents_considered:

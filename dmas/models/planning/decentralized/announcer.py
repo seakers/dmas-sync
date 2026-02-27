@@ -148,9 +148,9 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                                                 ):
             
             # iterate through list of intervals in this time period 
-            for t_start,*_ in orbitdata.comms_links.iter_rows_raw(t=event.availability.left, 
-                                                                  t_max=event.availability.right, 
-                                                                  include_current=True):
+            for t_start,*_ in orbitdata.comms_links.iter_rows_raw_fast(t=event.availability.left, 
+                                                                        t_max=event.availability.right, 
+                                                                        include_current=True):
                 # calculate broadcast time to earliest in this access interval
                 t_broadcast : float = max(t_start, task_req.t_req)
                 

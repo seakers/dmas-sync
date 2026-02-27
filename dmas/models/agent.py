@@ -1,5 +1,6 @@
 from collections import defaultdict
 import copy
+from datetime import datetime
 import logging
 import os
 from typing import Any, Dict, List, Tuple
@@ -101,10 +102,10 @@ class SimulationAgent(object):
         # initialize trackers and data sinks
         self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
         self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history")
-        self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history")
+        self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history",flush_rows=1000) 
 
         # save initial state to history
-        self._state_history.append(initial_state.to_dict())
+        self.__update_state_history(initial_state)     
 
     @staticmethod
     def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> Dict[Tuple, GenericObservationTask]:
@@ -218,7 +219,7 @@ class SimulationAgent(object):
         # append state to history if time has advanced
         if (abs(curr_state.get_time() - self._state.get_time()) > 1e-6
             or curr_state.status != self._state.status):
-            self._state_history.append(curr_state.to_dict())
+            self.__update_state_history(curr_state)
 
         # update state
         self._state = curr_state
@@ -915,6 +916,25 @@ class SimulationAgent(object):
     UTILITY METHODS
     ----------------------
     """    
+    def __update_state_history(self, state : SimulationAgentState) -> None:
+        """ Adds a state to the state history. """
+        state_dict : dict = state.to_dict()
+
+        # flatten state depending on state type for easier analysis 
+        if isinstance(state, SatelliteAgentState):
+            # remove orbitstate             
+            orbit_state_dict = state_dict.pop('orbit_state')
+
+            # extract date from orbit state and convert to ISO format
+            date_dict = orbit_state_dict['date']
+            date = datetime(date_dict['year'], date_dict['month'], date_dict['day'], date_dict['hour'], date_dict['minute'], date_dict['second']).isoformat()
+            
+            # add date back to state dict and flatten orbit state dict
+            state_dict['epoch_date'] = date
+
+            # NOTE `orbit_state` also includes keplerian state, but this is already found in `state_dict`
+
+        self._state_history.append(state_dict)
 
     def get_state(self) -> SimulationAgentState:
         return self._state

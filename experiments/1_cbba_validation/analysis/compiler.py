@@ -38,7 +38,7 @@ def compile_results_summaries(trial_name : str, base_dir : str = None) -> None:
             for _,row in summary_temp_df.iterrows():
                 summary_as_dict[row['Metric']] = row['Value']
 
-            summary_as_dict['Scenario ID'] = int(dir_name.split('scenario_')[-1])
+            summary_as_dict['Trial ID'] = int(dir_name.split('_trial-')[-1])
             
             # add to data list
             data.append(summary_as_dict)
@@ -56,13 +56,13 @@ def compile_results_summaries(trial_name : str, base_dir : str = None) -> None:
     # merge summary data with trial definitions
     results_df : pd.DataFrame = summary_df.merge(
         trials_df,
-        on="Scenario ID",
+        on="Trial ID",
         how="left",          # keep all results; attach params if found
         validate="many_to_one"  # each Scenario ID should map to one row in trials_df
     )
     
-    # fill in missing values for Ground Segment with "None (In-Orbit Requester)" to indicate no ground segment 
-    results_df["Ground Segment"] = results_df["Ground Segment"].fillna("None (In-Orbit Requester)")
+    # # fill in missing values for Ground Segment with "None (In-Orbit Requester)" to indicate no ground segment 
+    # results_df["Ground Segment"] = results_df["Ground Segment"].fillna("None (In-Orbit Requester)")
     
     # fill missing probabilities with -1 to indicate not applicable / no data
     for col in results_df.columns:
@@ -70,7 +70,7 @@ def compile_results_summaries(trial_name : str, base_dir : str = None) -> None:
             results_df[col] = results_df[col].fillna(-1)  
 
     # reorder columns for clarity
-    id_col = "Scenario ID"
+    id_col = "Trial ID"
     param_cols = [c for c in trials_df.columns if c != id_col]
     result_cols = [c for c in summary_df.columns if c != id_col]
 
@@ -103,10 +103,9 @@ def compile_results_summaries(trial_name : str, base_dir : str = None) -> None:
 
 if __name__ == "__main__":
     # define trial parameters
-    base_dir = "/media/aslan15/easystore/Data/1_0_cbba_stress_test/results/2026_02_18_tdist60_merged"
+    base_dir = "/media/aslan15/easystore/Data/1_cbba_validation/2026_02_26_local"
 
-    # trial_name = "lhs_trials-2_samples-1000_seed"
-    trial_name = "full_factorial_trials"
+    trial_name = "full_factorial_trials_2026-02-22"
     
     # compile and save compiled results summaries for this trial
     compile_results_summaries(trial_name, base_dir=base_dir)
