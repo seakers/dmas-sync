@@ -25,6 +25,9 @@ module load Anaconda3
 eval "$(conda shell.bash hook)"
 conda activate ./.venv
 
+# --- Set ulimit for maximum number of open files ---
+ulimit -n 65535
+
 # --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
 i=$SLURM_ARRAY_TASK_ID
 start=$((i))
