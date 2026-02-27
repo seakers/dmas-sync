@@ -957,6 +957,32 @@ class Bid:
         # return updated bid
         return new_bid
     
+    def update_in_place(self, other : Union['Bid', dict], t_comp : float) -> int:
+        """ 
+        Compares this bid with another and updates this bid's information in place according to the appropriate update rules.
+
+        ### Arguments:
+            - other (`Bid`): bid being compared to
+            - t_comp (`float`): time in which the comparison is being made
+
+        ### Returns:
+            - `int`: 0 if no update was made, 1 if an update was made, 2 if a reset was made
+        """
+        # validate inputs
+        assert t_comp >= 0, f'`t_comp` must be non-negative, got `{t_comp}`'
+        
+        # check comparison rules
+        comp_result : BidComparisonResults = self._rule_comparison(other)
+
+        # update copy according to comparison result
+        if comp_result is BidComparisonResults.UPDATE:      
+            self.__update_info(other, t_comp); return 1
+        elif comp_result is BidComparisonResults.RESET:     
+            self.reset(t_comp, other=other); return 2
+        elif comp_result is BidComparisonResults.LEAVE:     
+            self.__leave(other, t_comp); return 0
+        else: raise ValueError(f'cannot perform update of type `{comp_result}`')
+    
     def __clone_shallow(self) -> "Bid":
         cls = self.__class__
         new = cls.__new__(cls)
@@ -1166,7 +1192,7 @@ class Bid:
     """
     @staticmethod
     def make_empty_bid(task : GenericObservationTask, owner : str, n_obs : int, t_bid : float = np.NINF) -> 'Bid':
-        return Bid(task, owner, n_obs, t_bid)
+        return Bid(task, owner, n_obs, t_bid=t_bid)
 
     @staticmethod
     def make_empty_bid_dict(task_dict : dict, owner : str, n_obs : int, t_bid : float = np.NINF) -> dict:
