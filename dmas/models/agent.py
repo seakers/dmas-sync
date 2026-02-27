@@ -353,7 +353,7 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 if True:
                 # if "imager_c_sat_0" in curr_state.agent_name and curr_state._t >= 5_575.0:
-                #     self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 

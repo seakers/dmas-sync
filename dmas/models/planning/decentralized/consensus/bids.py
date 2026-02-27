@@ -957,7 +957,7 @@ class Bid:
         # return updated bid
         return new_bid
     
-    def update_in_place(self, other : Union['Bid', dict], t_comp : float) -> int:
+    def update_from_dict_inplace(self, other : dict, t_comp : float) -> int:
         """ 
         Compares this bid with another and updates this bid's information in place according to the appropriate update rules.
 
@@ -966,22 +966,25 @@ class Bid:
             - t_comp (`float`): time in which the comparison is being made
 
         ### Returns:
-            - `int`: 0 if no update was made, 1 if an update was made, 2 if a reset was made
+            - `int`: 0 if no update was made, 
+                     1 if an update was made, 
+                     2 if a reset was made
         """
         # validate inputs
         assert t_comp >= 0, f'`t_comp` must be non-negative, got `{t_comp}`'
         
         # check comparison rules
-        comp_result : BidComparisonResults = self._rule_comparison(other)
+        comp_result : BidComparisonResults = self.__compare_to_dict(other)
 
         # update copy according to comparison result
-        if comp_result is BidComparisonResults.UPDATE:      
+        if comp_result is BidComparisonResults.LEAVE:     
+            self.__leave(other, t_comp); return 0
+        elif comp_result is BidComparisonResults.UPDATE:      
             self.__update_info(other, t_comp); return 1
         elif comp_result is BidComparisonResults.RESET:     
             self.reset(t_comp, other=other); return 2
-        elif comp_result is BidComparisonResults.LEAVE:     
-            self.__leave(other, t_comp); return 0
-        else: raise ValueError(f'cannot perform update of type `{comp_result}`')
+        else: 
+            raise ValueError(f'cannot perform update of type `{comp_result}`')
     
     def __clone_shallow(self) -> "Bid":
         cls = self.__class__

@@ -39,7 +39,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_11 = False # two sat       no default mission  two targets         two expiring events 
         self.toy_12 = False # single sat    default mission     multiple targets    no events           preplan + replan
         self.toy_13 = False # two sats      default mission     multiple targets    no events           preplan + replan
-        self.toy_14 = True # single sat    default mission     multiple targets    two events          preplan + replan
+        self.toy_14 = False # single sat    default mission     multiple targets    two events          preplan + replan
         self.toy_15 = False # two sats      default mission     multiple targets    two events          preplan + replan
         self.toy_16 = False # single sat    no default mission  two targets         two expiring events  preplan + replan   not the correct instruments
         self.toy_17 = False # moving relay scenario
@@ -56,7 +56,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         self.toy_27 = False # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
-        self.toy_29 = False # 
+        self.toy_29 = True # real vs planned reward comparison
 
     def toy_planner_config(self):
         return {
