@@ -395,48 +395,7 @@ class Bid:
         
         # 0. Sending agent claims the bid has been performed.
         if other['performed']:
-            # return self.__case_other_dict_thinks_bid_was_performed(other)  
-            # 0. Receiving agent does not believe the bid was performed.
-            if not self.performed:
-                # receiving agent has not marked bid as performed → update info
-                return BidComparisonResults.UPDATE
-            
-            # 1. Receiving agent also believes the bid was performed.
-            # preload other winner and t_img for efficiency
-            my_winner = self.winner
-            my_t_img = self.t_img
-            other_winner = other['winner']
-            other_t_img = other['t_img']
-
-            # compare winners
-            if my_winner == other_winner:
-                # both agents agree bid was performed and winner → leave info as is
-                return BidComparisonResults.LEAVE
-            
-            # compare imaging times if winners differ
-            dt = abs(my_t_img - other_t_img)
-            if dt <= 1e-6:
-                # both agents agree bid was performed and at what time but disagree on the winner;
-                if self.__wins_tie_breaker(other):
-                    #  receiver wins the tie-breaker → leave info as is
-                    return BidComparisonResults.LEAVE
-                else:
-                    #  sender wins the tie-breaker → update
-                    return BidComparisonResults.UPDATE
-                
-            elif my_t_img > other_t_img:
-                # both agents agree bid was performed but disagree on the winner and imaging time;
-                #  sender has an earlier imaging time → update
-                return BidComparisonResults.UPDATE
-            elif my_t_img < other_t_img:
-                # both agents agree bid was performed but disagree on the winner and imaging time;
-                #  receiver has an earlier imaging time → leave info as is
-                return BidComparisonResults.LEAVE
-            else:
-                # both agents agree bid was performed but disagree on the winner and imaging time;
-                #  receiver has an earlier imaging time → leave info as is
-                return BidComparisonResults.LEAVE
-
+            return self.__case_other_dict_thinks_bid_was_performed(other)        
         # 0.5. Receiving agent has marked bid as performed.
         elif self.performed:
             # receiving agent has marked bid as performed → leave info as is
@@ -444,204 +403,18 @@ class Bid:
 
         # 1. Sending agent claims itself as winner of this bid.
         elif other_winner == other['owner']:
-            # return self.__case_other_dict_thinks_is_winner(other)
-            # preload bid info for efficiency
-            my_winner = self.winner
-            my_t_img = self.t_img
-            other_t_img = other['t_img']
-            
-            # 1. Receiving agent believes it is the winner too.
-            # if self.believes_i_am_winning():
-            if my_winner == self.owner:
-                if other > self:  
-                    # Sending agent's bid is higher → update info
-                    return BidComparisonResults.UPDATE
-                elif other_t_img < my_t_img:
-                    # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
-                    return BidComparisonResults.UPDATE
-                elif other == self and abs(other_t_img - my_t_img) < self.EPS and not self.__wins_tie_breaker(other):
-                    # Both bids are tied and sending agent wins tie-breaker → update info
-                    return BidComparisonResults.UPDATE
-            
-            # 2. Receiving agent believes other is the winner already.
-            # if self.believes_other_is_winning(other):
-            if my_winner == other['owner']:
-                # Both agents agree the sending agent is the winner → update info
-                return BidComparisonResults.UPDATE
-            
-            # 3. Receiving agent believes some 3rd party is winner.
-            # if self.believes_third_party_is_winning(other):
-            if my_winner != self.NONE:
-                if other['t_stamps'].get(my_winner, np.NINF) > self.t_stamps[my_winner]:
-                # if other['t_bid'] > self.t_bid:
-                    # Sending agent has more recent info on 3rd party winner → update info
-                    return BidComparisonResults.UPDATE
-                elif other > self:
-                    # Sending agent's bid is higher → update info
-                    return BidComparisonResults.UPDATE
-                elif other_t_img < my_t_img:
-                    # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
-                    return BidComparisonResults.UPDATE
-                elif other == self and abs(other_t_img - my_t_img) < self.EPS and not self.__wins_tie_breaker(other):
-                    # Both bids are tied and sending agent wins tie-breaker → update info
-                    return BidComparisonResults.UPDATE
-                
-            # 4. Receiving agent bid has no winner.
-            # if self.believes_no_winner():
-            if my_winner == self.NONE:
-                # no known winner → update info
-                return BidComparisonResults.UPDATE
-            
-            # 5. Fallback → leave info as is
-            return BidComparisonResults.LEAVE
+            return self.__case_other_dict_thinks_is_winner(other)
         
         # 2. Sending agent claims I am the winner of this bid.
         elif other_winner == self.owner:
-            # return self.__case_other_dict_thinks_im_winner(other)
-            # preload bid info for efficiency
-            my_winner = self.winner
-            
-            # 1. Receiving agent believes it is the winner too.
-            # if self.believes_i_am_winning():
-            if my_winner == self.owner:
-                # Receiving agent has more updated information about itself → leave info as is
-                return BidComparisonResults.LEAVE
-            
-            # 2. Receiving agent believes other is the winner already.
-            # if self.believes_other_is_winning(other):
-            if my_winner == other['owner']:
-                # Both agents think the other is winning and are in conflict → reset info
-                return BidComparisonResults.RESET
-
-            # 3. Receiving agent believes some 3rd party is winner.
-            # if self.believes_third_party_is_winning(other):
-            if my_winner != self.NONE:
-                if other['t_stamps'].get(my_winner, np.NINF) > self.t_stamps[my_winner]:
-                # if other.t_bid > self.t_bid:
-                    # Sending agent has more recent info on 3rd party winner → reset info
-                    return BidComparisonResults.RESET
-
-            # 4. Receiving agent bid has no winner.
-            # if self.believes_no_winner():
-            if my_winner == self.NONE:
-                # Receiving agent would know if it was winning a bid → leave info as is
-                return BidComparisonResults.LEAVE
-
-            # 5. Fallback → leave info as is
-            return BidComparisonResults.LEAVE
+            return self.__case_other_dict_thinks_im_winner(other)
         
         # 3. Sending agent claims some 3rd party as the winner of this bid.
         elif other_winner != self.NONE:
-            # return self.__case_other_dict_thinks_third_party_winner(other)
-            # preload relevant information from self
-            my_winner = self.winner
-            me = self.owner
-            my_t_stamps = self.t_stamps
-            my_t_img = self.t_img        
-            
-            # unpack other's t_stamps
-            other_winner : str = other['winner']
-            other_owner : str = other['owner']
-            other_t_stamps : dict = other['t_stamps']
-            other_t_img : float = other['t_img']
-            
-            # 1. Receiving agent believes it is the winner too.
-            # if self.believes_i_am_winning():
-            if my_winner == me:
-                if other_t_stamps[other_winner] > my_t_stamps.get(other_winner, np.NINF):
-                # if other.t_bid > self.t_bid:
-                    # Sending agent has more recent info on 3rd party winner 
-                    if other > self:  
-                        # Sending agent's bid is higher and more updated → update info
-                        return BidComparisonResults.UPDATE
-                    elif other_t_img < my_t_img:
-                        # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
-                        return BidComparisonResults.UPDATE
-                    elif other == self and abs(other_t_img - my_t_img) < self.EPS and not self.__wins_tie_breaker(other):
-                        # Both bids are tied and sending agent wins tie-breaker → update info
-                        return BidComparisonResults.UPDATE
-            
-            # 2. Receiving agent believes other is the winner already.
-            # if self.believes_other_is_winning(other):
-            if my_winner == other_owner:
-                if other_t_stamps[other_winner] > my_t_stamps.get(other_winner, np.NINF):
-                # if other.t_bid > self.t_bid:
-                    # Sending agent has more recent info on 3rd party winner → update info
-                    return BidComparisonResults.UPDATE
-                else:
-                    # Receiving agent has more recent info on 3rd party winner → reset info and wait for sender to update
-                    return BidComparisonResults.RESET
-            
-            # preload NONE value for efficiency
-            NONE = self.NONE
-
-            # 3. Receiving agent also believes some 3rd party is the winner.
-            # if self.has_same_winner(other):
-            if my_winner == other_winner and my_winner != NONE and other_winner != NONE:
-                if other_t_stamps.get(my_winner, np.NINF) > my_t_stamps[my_winner]:
-                # if other.t_bid > self.t_bid:
-                    # Sending agent has more recent info on 3rd party winner → update info
-                    return BidComparisonResults.UPDATE
-            
-            # 4. Receiving agent believes some 4th party is the winner.
-            # if self.believes_third_party_is_winning(other):
-            if my_winner != NONE:
-                if other_t_stamps[other_winner] > my_t_stamps.get(other_winner, np.NINF):
-                    if other_t_stamps.get(my_winner, np.NINF) > my_t_stamps[my_winner]:
-                        # Sending agent's bids from all parties are more updated → update info
-                        return BidComparisonResults.UPDATE                
-                    elif other > self:  
-                        # Sending agent's bid is higher and more updated → update info
-                        return BidComparisonResults.UPDATE                
-                    elif other_t_img < my_t_img:
-                        # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
-                        return BidComparisonResults.UPDATE                
-                    elif other == self and abs(other_t_img - my_t_img) < self.EPS and not self.__wins_tie_breaker(other):
-                        # Both bids are tied and sending agent wins tie-breaker → update info
-                        return BidComparisonResults.UPDATE
-
-                elif other_t_stamps.get(my_winner, np.NINF) > my_t_stamps[my_winner]:
-                    # Sending agent has older info on 3rd party winner but newer info on receiving agent's winner → reset info
-                    return BidComparisonResults.RESET
-            
-            # 5. Receiving agent bid has no winner.
-            # if self.believes_no_winner():
-            if my_winner == NONE:
-                if other_t_stamps[other_winner] > my_t_stamps.get(other_winner, np.NINF):
-                    # Sending agent has more recent info on 3rd party winner → update info
-                    return BidComparisonResults.UPDATE
-
-            # 6. Fallback → leave info as is
-            return BidComparisonResults.LEAVE
+            return self.__case_other_dict_thinks_third_party_winner(other)
         
         # 4. Sending agent has no winner for this bid.
-        # return self.__case_other_dict_has_no_winner(other)        
-        # preload bid info for efficiency
-        my_winner = self.winner
-
-        # 1. Receiving agent believes it is the winner too.
-        # if self.believes_i_am_winning():
-        if my_winner == self.owner:
-            # Receiving agent would know if it was winning a bid → leave info as is
-            return BidComparisonResults.LEAVE
-        
-        # 2. Receiving agent believes other is the winner already.
-        # if self.believes_other_is_winning(other):
-        if my_winner == other['owner']:
-            # Sending agent would know if it was winning a bid → update info
-            return BidComparisonResults.UPDATE
-        
-        # 3. Receiving agent believes some 3rd party is winner.
-        # if self.believes_third_party_is_winning(other):
-        if my_winner != self.NONE:
-            # if other['t_stamps'].get(self.winner, np.NINF) > self.t_stamps[self.winner]:
-            if other['t_bid'] > self.t_bid:
-                # Sending agent has more recent info on 3rd party winner → update info
-                return BidComparisonResults.UPDATE
-        
-        # 4. Receiving agent bid has no winner.
-        # Neither bid has a winner → leave info as is
-        return BidComparisonResults.LEAVE
+        return self.__case_other_dict_has_no_winner(other)        
         
     # def __compare_to_dict(self, other : dict) -> BidComparisonResults:
     #     """ Compares this bid with another bid in dictionary form and indicates whether the bid should be updated, left, or reset. """
