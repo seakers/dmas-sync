@@ -298,7 +298,7 @@ class SimulationAgent(object):
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
                 if True:
-                    # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -386,7 +386,6 @@ class SimulationAgent(object):
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         if True:
-        # if "imager_c_sat_0" in curr_state.agent_name and curr_state._t >= 5_575.0:
             # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
             # self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
             x = 1 # breakpoint

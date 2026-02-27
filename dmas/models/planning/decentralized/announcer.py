@@ -151,6 +151,8 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
             for t_start,*_ in orbitdata.comms_links.iter_rows_raw_fast(t=event.availability.left, 
                                                                         t_max=event.availability.right, 
                                                                         include_current=True):
+                # TODO consider only scheduling one broadcast per agent. No need to reannounce to the same agents
+
                 # calculate broadcast time to earliest in this access interval
                 t_broadcast : float = max(t_start, task_req.t_req)
                 

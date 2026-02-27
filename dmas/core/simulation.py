@@ -170,9 +170,17 @@ class Simulation:
                         "Not all agents received senses from the environment."
                     
                     # agent think
-                    state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]] \
-                        = {agent.name : agent.decide_action(*agent_observations[agent.name])
-                            for agent in self._agents}
+                    # state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]] \
+                    #     = {agent.name : agent.decide_action(*agent_observations[agent.name])
+                    #         for agent in self._agents}
+
+                    # initialize agent state-action
+                    state_action_pairs = dict()
+                    
+                    # agent think
+                    for agent in self._agents:
+                        name = agent.name
+                        state_action_pairs[name] = agent.decide_action(*agent_observations[name])
                     
                     # ----- memory usage checkpoint -----
                     # if any(isinstance(action, BroadcastMessageAction) 

@@ -36,6 +36,9 @@ class AbstractReactivePlanner(AbstractPlanner):
                         pending_actions : List[AgentAction]
                     ) -> None:
     
+        if "sat0" in state.agent_name:
+            x = 1
+
         # check if new periodic plan is available
         if isinstance(current_plan, PeriodicPlan) and abs(state.get_time() - current_plan.t) <= self.EPS:
             # new preplan available; save new preplan

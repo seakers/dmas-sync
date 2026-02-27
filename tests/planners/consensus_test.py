@@ -50,13 +50,13 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_22 = False # two sats      no default mission     multiple targets    two events announced by GS   replan
 
         self.toy_23 = False 
-        self.toy_24 = False
+        self.toy_24 = True
         self.toy_25 = False
         self.toy_26 = False
 
         self.toy_27 = False # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
-        self.toy_29 = True # real vs planned reward comparison
+        self.toy_29 = False # real vs planned reward comparison
 
     def toy_planner_config(self):
         return {

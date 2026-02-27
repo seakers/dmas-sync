@@ -638,6 +638,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         """
         # get current time
         t_curr = state.get_time()
+        my_name = state.agent_name
 
         # group bids by bidding agent 
         grouped_bids : Dict[str, List[dict]] = self.__group_incoming_bids(incoming_bids)
@@ -665,20 +666,21 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 if task is None:
                     # task is not known in results; reconstruct task from bids
                     task = GenericObservationTask.from_dict(task_dict)
-                    task_is_known = self._results.get(task) is not None
-                else:
-                    # task is known in results; use existing task object
-                    task_is_known = True
 
                 # assign task to task key for future reference in this round
                 tasks_from_incoming_bids[task_key] = task
-            else:
-                # task was found for this task key; use existing task object
-                task_is_known = True
             
             # get current results
-            current_task_bids : List[Bid] = self._results[task] if task_is_known else []
-            current_bidding_counters : List[int] = self._optimistic_bidding_counters[task] if task_is_known else []
+            try:
+                current_task_bids : List[Bid] = self._results[task]
+                current_bidding_counters : List[int] = self._optimistic_bidding_counters[task]
+            except KeyError:
+                # task is not known in results; initialize empty results for this task
+                current_task_bids = []
+                current_bidding_counters = []
+                
+                self._results[task] = current_task_bids
+                self._optimistic_bidding_counters[task] = current_bidding_counters
             
             # initialize queue of incoming bids for processing
             q = deque(incoming_task_bids)
@@ -695,7 +697,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 while n_obs >= len(current_task_bids):
                     # incoming bid observation number exceeds existing bids; 
                     #  initialize missing elements in results with empty bids
-                    current_task_bids.append(Bid.make_empty_bid(task, incoming_bid['owner'], len(current_task_bids)))
+                    current_task_bids.append(Bid.make_empty_bid(task, my_name, len(current_task_bids)))
                     # initialize optimistic bidding counter for new bids
                     current_bidding_counters.append(self._optimistic_bidding_threshold)
 
@@ -706,7 +708,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # check if there could be a possible conflict between incoming bid and existing bid
                 old_cur_dict = None
                 if current_bid.performed and incoming_bid['performed']:
-                    old_cur_dict = current_bid.to_dict()
+                    old_cur_dict = current_bid.to_dict_for_requeue(incoming_bid['task'])
                 
                 # compare incoming bid with existing bids for the same task
                 update_flag : int = current_bid.update_from_dict_inplace(incoming_bid, t_curr)
@@ -714,13 +716,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # check if current bid was modified
                 if update_flag == 1: # `1` indicates current bid was modified
                     # add updated bid to results updates
-                    results_updates.append(current_bid.to_dict())
+                    results_updates.append(current_bid)
                 
                 # check if previously unperformed bid was performed 
                 elif not cur_performed_before and current_bid.performed:
                     # bid values remained the same but bid was performed; 
                     #  add updated bid to results updates
-                    results_updates.append(current_bid.to_dict())              
+                    results_updates.append(current_bid)              
                 
                 # check if both bids corresponded to a performed observation
                 if old_cur_dict is not None:
@@ -745,7 +747,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     if loser_bid['n_obs'] >= len(current_task_bids):
                         # add empty bid to results for new observation number
                         current_task_bids.append(
-                            Bid(task, state.agent_name, loser_bid['n_obs'])
+                            Bid(task, my_name, loser_bid['n_obs'])
                         )
 
                         # initialize optimistic bidding counter for new bid
@@ -1820,7 +1822,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # include scheduled broadcasts from preplan
         t_curr = state.get_time()
-        preplan_broadcasts = [action for action in self._preplan.actions
+        preplan_broadcasts = [action for action in self._preplan
                                 # extract only broadcast actions
                                 if isinstance(action, BroadcastMessageAction)
                                 # exclude broadcasts of future information; 
@@ -1865,6 +1867,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         u_idx = orbitdata.comms_target_indices[state.agent_name]
         cols = orbitdata.comms_target_columns
 
+        if "gs" in state.agent_name:
+            x = 1 # breakpoint
+
         # iterate through list of intervals in this time period 
         for _, row in orbitdata.comms_links.iter_rows_packed(t_curr, t_next, include_current):
             # unpack row data
@@ -1884,7 +1889,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 continue
 
             # get last access interval and calculate broadcast time
-            t_broadcast = t_curr if t_curr > t_start else t_end
+            t_broadcast = t_curr if t_curr > t_start else t_start
             
             # add to list of broadcast times if not already present
             t_broadcasts.add(t_broadcast)

@@ -110,6 +110,9 @@ class SimulationEnvironment(object):
 
         # check if connectivity needs to be update
         if t not in self._current_connectivity_interval:
+            if t >= 1000.0:
+                x = 1 # breakpoint
+
             # update current connectivity matrix and components
             self._current_connectivity_interval, \
                 self._current_connectivity_components, \

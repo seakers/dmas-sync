@@ -1190,7 +1190,7 @@ class Bid:
 
     """
     ---------------------------
-    EMPTY BID FACTORY METHODS
+    EMPTY BID & FACTORY METHODS
     ---------------------------
     """
     @staticmethod
@@ -1213,3 +1213,18 @@ class Bid:
             "performed": False,
         }
     
+    def to_dict_for_requeue(self, task_dict: dict) -> dict:
+        # task_dict is the one from incoming bids; avoids task.to_dict() cost
+        return {
+            "task": task_dict,
+            "n_obs": self.n_obs,
+            "owner": self.owner,
+            "owner_bid": self.owner_bid,
+            "winner": self.winner,
+            "winning_bid": self.winning_bid,
+            "t_img": self.t_img,
+            "t_bid": self.t_bid,
+            "t_stamps": dict(self.t_stamps),   # copy ONLY when needed
+            "main_measurement": self.main_measurement,
+            "performed": self.performed,
+        }
