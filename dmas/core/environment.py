@@ -518,10 +518,10 @@ class SimulationEnvironment(object):
                 f.write('---\n')
                 f.write(f"**Interval:** {interval} [s]\n\n")
 
+                # TODO print connectivity matrix
                 # conn_matrix = conn_matrix_sparse.toarray()
                 # agent_names = list(component_map.keys())
 
-                # TODO print connectivity matrix
                 # f.write("**Connectivity Matrix:**\n\n")
                 # ## print table header 
                 # header = "||" + "  |".join([f"`{name:>5}`" for name in agent_names]) + "|\n"
