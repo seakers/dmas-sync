@@ -552,24 +552,95 @@ class ResultsProcessor:
         return grid_data_df
     
     @staticmethod
-    def __classify_accesses_per_gp(compiled_orbitdata : Dict[str, OrbitData]) -> Dict[Tuple[int,int], pd.DataFrame]:
-        # compile acesses from agent orbitdata
-        acesses = []
+    def __classify_accesses_per_gp(
+            compiled_orbitdata : Dict[str, OrbitData]
+        ) -> Dict[Tuple[int,int], np.ndarray]:
+
+        # initialize list of columns and dictionary of column chunks
+        cols = None
+        chunks = None  # maps: col -> list of arrays
+
+        # 1) Collect per-sat arrays (no per-row dicts)
         for agent_orbit_data in compiled_orbitdata.values():
-            access_intervals = agent_orbit_data.gp_access_data.lookup_interval(0.0)
-            for i in range(len(access_intervals['time [s]'])):
-                row ={col : access_intervals[col][i] for col in access_intervals}
-                acesses.append(row)
-        accesses_df_temp = pd.DataFrame(acesses)
-        
-        # group accesses by ground point
-        accesses_per_gp : Dict[Tuple[int,int], pd.DataFrame] \
-                                = {(int(group[0]), int(group[1])) : data
-                                for group,data in accesses_df_temp.groupby(['grid index', 'GP index'])} \
-                                if not accesses_df_temp.empty else dict() # handle empty accesses case       
-       
-        # return set of accessible ground points
-        return accesses_per_gp
+            # get access data for this agent 
+            access = agent_orbit_data.gp_access_data.lookup_interval(
+                0.0,
+                include_extras=True,
+                # decode=False,          # keep vocab cols as codes if available
+                decode=True,
+            )
+
+            # check if access data is empty
+            t = access.get("time [s]", None)
+            if t is None or len(t) == 0:
+                # if so, skip this agent
+                continue
+
+            # check if columns have been initialized
+            if cols is None:
+                # if not, initialize columns and chunks dictionary
+                cols = list(access.keys())
+                chunks = {c: [] for c in cols}
+
+            # append arrays for each column
+            for c in cols:
+                chunks[c].append(np.asarray(access[c]))
+
+        # check if any access data was found
+        if cols is None: 
+            # no data found; return empty results
+            return {}, {} 
+
+        # 2) Concatenate once per column
+        big = {}
+        for c in cols:
+            big[c] = np.concatenate(chunks[c], axis=0) if chunks[c] else np.array([])
+
+        # check if time column is empty after concatenation
+        if big["time [s]"].size == 0:
+            # no data found; return empty results
+            return {}, {}
+
+        # 3) Group by (grid index, GP index) using packed keys
+        grid = np.asarray(big["grid index"], dtype=np.int64)
+        gp = np.asarray(big["GP index"], dtype=np.int64)
+
+        # fast packed key (assumes both fit in uint32; common for indices)
+        keys = (grid.astype(np.uint64) << np.uint64(32)) | (gp.astype(np.uint64) & np.uint64(0xFFFFFFFF))
+
+        order = np.argsort(keys)
+        keys_sorted = keys[order]
+
+        # reorder all columns once
+        for c in cols:
+            big[c] = np.asarray(big[c])[order]
+
+        # group boundaries
+        uniq_keys, starts, counts = np.unique(keys_sorted, return_index=True, return_counts=True)
+
+        # 4) Build slice map: (grid,gp) -> slice(start, stop)
+        gp_slices = {}  # type: Dict[Tuple[int, int], slice]
+        for k, start, cnt in zip(uniq_keys, starts, counts):
+            g = int(k >> np.uint64(32))
+            p = int(k & np.uint64(0xFFFFFFFF))
+            a = int(start)
+            b = int(start + cnt)
+            gp_slices[(g, p)] = slice(a, b)
+
+        # 5) Build final output: (grid,gp) -> {col: big[col][slice]}
+        out = {(g,p): {c: big[c][sl] for c in big} for (g,p), sl in gp_slices.items()}
+
+        # sort by time within each group
+        for data in out.values():
+            # get sorting permutation based on time
+            order = np.argsort(data["time [s]"], kind="mergesort") 
+
+            # apply permutation to every column
+            for col in data:
+                data[col] = data[col][order]
+
+        # return final output
+        return out
 
     @staticmethod
     def __classify_events_per_gp(events : List[GeophysicalEvent]) -> Dict[Tuple[int,int], List[GeophysicalEvent]]:
@@ -579,11 +650,12 @@ class ResultsProcessor:
             events_per_gp[(int(grid_index), int(gp_index))].append(event)
         return events_per_gp
 
+
     @staticmethod
     def __compile_events_accessibility(events : List[GeophysicalEvent], 
                                        compiled_orbitdata : Dict[str, OrbitData], 
                                        agent_missions : Dict[str, Mission], 
-                                       accesses_per_gp : Dict[Tuple[int,int], pd.DataFrame],
+                                       accesses_per_gp : Dict[Tuple[int,int], Dict[str, np.ndarray]],
                                        printouts : bool
                                     ) -> Tuple[pd.DataFrame, Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]]]:
         
@@ -625,54 +697,87 @@ class ResultsProcessor:
 
             # get matching accesses for this location
             location_key = (event_grid_idx, event_gp_idx)
-            location_access : pd.DataFrame = accesses_per_gp.get(location_key, None)
+            location_access : Dict[str, np.ndarray] = accesses_per_gp.get(location_key, None)
+            t = location_access["time [s]"]
+            agent = location_access["agent name"]
+            instr = location_access["instrument"]
             
             # check if there are any accesses for this location
             if location_access is None: continue # no accesses found; skip
             
-            # filter data that exists within the task's availability window and matches instrument capability requirements
-            location_access_filtered : pd.DataFrame \
-                = location_access[(location_access['time [s]'] >= event.availability.left) 
-                    & (location_access['time [s]'] <= event.availability.right)]
-            location_access_filtered : pd.DataFrame \
-                = location_access_filtered[location_access_filtered.apply(lambda row: row['instrument'].lower() in instrument_capability_reqs[row['agent name']], axis=1)]
+            # filter data that exists within the task's availability window and matches instrument capability requirements            
+            availability_mask = (
+                (t >= event.availability.left) &
+                (t <= event.availability.right)
+            )
 
-            # initialize map of compiled access intervals
-            access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)
+            idx = np.nonzero(availability_mask)[0]
 
+            # Build compatibility mask only over the narrowed slice
+            compat = np.zeros(idx.shape[0], dtype=bool)
+            for j, i in enumerate(idx):
+                a = str(agent[i])
+                allowed = instrument_capability_reqs.get(a, set())
+                compat[j] = str(instr[i]).lower() in allowed
+
+            combined_mask = availability_mask.copy()
+            combined_mask[idx] = compat
+            location_access_filtered = {col: arr[combined_mask] for col, arr in location_access.items()}
+            
             # iterate throufh data to map accesses by agent name and instrument
-            for (agent_name, instrument), group in location_access_filtered.groupby(['agent name', 'instrument']):
-                # get sorted list of access times for this agent and instrument
-                matching_accesses = group[['time [s]', 'agent name', 'instrument']].sort_values(by='time [s]').values.tolist()
-                
-                # compile list of access intervals
-                for t_access, agent_name, instrument in matching_accesses:
-                    # get propagation time step for this agent
-                    time_step = compiled_orbitdata[agent_name].time_step 
+            t = np.asarray(location_access_filtered["time [s]"], dtype=np.float64)
+            agent = np.asarray(location_access_filtered["agent name"])      # str or int
+            instr = np.asarray(location_access_filtered["instrument"])      # str or int
 
-                    # create unitary interval for this access time
-                    access_interval = Interval(t_access, t_access + time_step)
+            n = t.size
+            if n == 0:
+                access_intervals : List[Tuple[Interval, str, str]] = []
+            else:
+                # --- Sort by (agent, instrument, time) ---
+                # np.lexsort sorts by last key first => (time) within (instr) within (agent)
+                order = np.lexsort((t, instr, agent))
+                t_s = t[order]
+                a_s = agent[order]
+                i_s = instr[order]
 
-                    # check if this access overlaps with any previous access
-                    merged = False
-                    for interval in access_interval_dict[(agent_name,instrument)]:
-                        if access_interval.overlaps(interval):
-                            # if so, join intervals
-                            interval.join(access_interval)
-                            merged = True
-                            break
-                    
-                    # if merged, continue to next interval
-                    if merged: continue
-                    
-                    # otherwise, create a new access interval
-                    access_interval_dict[(agent_name,instrument)].append(access_interval)
+                access_intervals : List[Tuple[Interval, str, str]] = []
 
-            # flatten to list of access intervals
-            access_intervals : List[Tuple[Interval, str, str]] \
-                    = sorted([ (interval,agent_name,instrument) 
-                                for (agent_name,instrument),intervals in access_interval_dict.items()
-                                for interval in intervals ])
+                # --- Linear scan, merging unit intervals ---
+                # We create [t, t+dt(agent)] and merge overlaps/adjacent.
+                idx = 0
+                while idx < n:
+                    a0 = a_s[idx]
+                    i0 = i_s[idx]
+
+                    # handle agent_name for dt lookup
+                    agent_name = str(a0) if not isinstance(a0, (str, np.str_)) else a0
+                    dt = float(compiled_orbitdata[agent_name].time_step)
+
+                    # start a new merged interval at this group's first time
+                    left = float(t_s[idx])
+                    right = left + dt
+                    idx += 1
+
+                    # consume all entries for this (agent, instrument) group
+                    while idx < n and a_s[idx] == a0 and i_s[idx] == i0:
+                        tt = float(t_s[idx])
+                        # if this unit interval overlaps/abuts, extend
+                        if tt <= right + 1e-9:
+                            nr = tt + dt
+                            if nr > right:
+                                right = nr
+                        else:
+                            # close current interval and start a new one
+                            access_intervals.append((Interval(left, right), agent_name, i0))
+                            left = tt
+                            right = tt + dt
+                        idx += 1
+
+                    # close last interval for this group
+                    access_intervals.append((Interval(left, right), agent_name, i0))
+
+                # sort final intervals by start time
+                access_intervals.sort(key=lambda x: x[0].left)                
             
             # add to compiled event access data 
             for interval, agent_name, instrument in access_intervals:
@@ -745,7 +850,7 @@ class ResultsProcessor:
     def __compile_task_accessibility(compiled_orbitdata : Dict[str, OrbitData], 
                                      known_tasks: List[GenericObservationTask], 
                                      agent_missions: Dict[str, Mission], 
-                                     accesses_per_gp : Dict[Tuple[int,int], pd.DataFrame],
+                                     accesses_per_gp : Dict[Tuple[int,int], Dict[str, np.ndarray]],
                                      printouts: bool
                                     ) -> Tuple[pd.DataFrame, List[Tuple[GenericObservationTask, List[Tuple[Interval, str, str]]]]]:
         # initialize map of tasks to access intervals
@@ -786,49 +891,88 @@ class ResultsProcessor:
                 # check if there are any accesses for this location
                 if location_access is None: continue # no accesses found; skip
                 
-                # filter data that exists within the task's availability window and matches instrument capability requirements
-                location_access_filtered : pd.DataFrame \
-                    = location_access[(location_access['time [s]'] >= task.availability.left) 
-                     & (location_access['time [s]'] <= task.availability.right)]
-                location_access_filtered : pd.DataFrame \
-                    = location_access_filtered[location_access_filtered.apply(lambda row: row['instrument'].lower() in instrument_capability_reqs[row['agent name']], axis=1)]
+                # get matching accesses for this location
+                location_access : Dict[str, np.ndarray] = accesses_per_gp.get(location_key, None)
+                t = location_access["time [s]"]
+                agent = location_access["agent name"]
+                instr = location_access["instrument"]
+                
+                # check if there are any accesses for this location
+                if location_access is None: continue # no accesses found; skip
+                
+                # filter data that exists within the task's availability window and matches instrument capability requirements            
+                availability_mask = (
+                    (t >= task.availability.left) &
+                    (t <= task.availability.right)
+                )
 
-                # initialize map of compiled access intervals
-                access_interval_dict : Dict[tuple,List[Interval]] = defaultdict(list)
+                idx = np.nonzero(availability_mask)[0]
 
+                # Build compatibility mask only over the narrowed slice
+                compat = np.zeros(idx.shape[0], dtype=bool)
+                for j, i in enumerate(idx):
+                    a = str(agent[i])
+                    allowed = instrument_capability_reqs.get(a, set())
+                    compat[j] = str(instr[i]).lower() in allowed
+
+                combined_mask = availability_mask.copy()
+                combined_mask[idx] = compat
+                location_access_filtered = {col: arr[combined_mask] for col, arr in location_access.items()}
+                
                 # iterate throufh data to map accesses by agent name and instrument
-                for (agent_name, instrument), group in location_access_filtered.groupby(['agent name', 'instrument']):
-                    # get sorted list of access times for this agent and instrument
-                    matching_accesses = group[['time [s]', 'agent name', 'instrument']].sort_values(by='time [s]').values.tolist()
-                    
-                    # compile list of access intervals
-                    for t_access, agent_name, instrument in matching_accesses:
-                        # get propagation time step for this agent
-                        time_step = compiled_orbitdata[agent_name].time_step 
+                t = np.asarray(location_access_filtered["time [s]"], dtype=np.float64)
+                agent = np.asarray(location_access_filtered["agent name"])      # str or int
+                instr = np.asarray(location_access_filtered["instrument"])      # str or int
 
-                        # create unitary interval for this access time
-                        access_interval = Interval(t_access, t_access + time_step)
+                n = t.size
+                if n == 0:
+                    access_intervals : List[Tuple[Interval, str, str]] = []
+                else:
+                    # --- Sort by (agent, instrument, time) ---
+                    # np.lexsort sorts by last key first => (time) within (instr) within (agent)
+                    order = np.lexsort((t, instr, agent))
+                    t_s = t[order]
+                    a_s = agent[order]
+                    i_s = instr[order]
 
-                        # check if this access overlaps with any previous access
-                        merged = False
-                        for interval in access_interval_dict[(agent_name,instrument)]:
-                            if access_interval.overlaps(interval):
-                                # if so, join intervals
-                                interval.join(access_interval)
-                                merged = True
-                                break
-                        
-                        # if merged, continue to next interval
-                        if merged: continue
-                        
-                        # otherwise, create a new access interval
-                        access_interval_dict[(agent_name,instrument)].append(access_interval)
+                    access_intervals : List[Tuple[Interval, str, str]] = []
 
-                # flatten to list of access intervals
-                access_intervals : List[Tuple[Interval, str, str]] \
-                    = sorted([ (interval,agent_name,instrument) 
-                             for (agent_name,instrument),intervals in access_interval_dict.items()
-                             for interval in intervals ])                
+                    # --- Linear scan, merging unit intervals ---
+                    # We create [t, t+dt(agent)] and merge overlaps/adjacent.
+                    idx = 0
+                    while idx < n:
+                        a0 = a_s[idx]
+                        i0 = i_s[idx]
+
+                        # handle agent_name for dt lookup
+                        agent_name = str(a0) if not isinstance(a0, (str, np.str_)) else a0
+                        dt = float(compiled_orbitdata[agent_name].time_step)
+
+                        # start a new merged interval at this group's first time
+                        left = float(t_s[idx])
+                        right = left + dt
+                        idx += 1
+
+                        # consume all entries for this (agent, instrument) group
+                        while idx < n and a_s[idx] == a0 and i_s[idx] == i0:
+                            tt = float(t_s[idx])
+                            # if this unit interval overlaps/abuts, extend
+                            if tt <= right + 1e-9:
+                                nr = tt + dt
+                                if nr > right:
+                                    right = nr
+                            else:
+                                # close current interval and start a new one
+                                access_intervals.append((Interval(left, right), agent_name, i0))
+                                left = tt
+                                right = tt + dt
+                            idx += 1
+
+                        # close last interval for this group
+                        access_intervals.append((Interval(left, right), agent_name, i0))
+
+                    # sort final intervals by start time
+                    access_intervals.sort(key=lambda x: x[0].left)           
                 
                 # append to task lists
                 task_access_windows.extend(access_intervals)
