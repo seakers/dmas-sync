@@ -653,7 +653,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         for task_key,incoming_task_bids in grouped_bids.items():
             
             # get task object for this task key from incoming bids
-            task = tasks_from_incoming_bids.get(task_key)
+            task : GenericObservationTask = tasks_from_incoming_bids.get(task_key)
             
             # check if a matching task was found
             if task is None:
@@ -747,7 +747,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     if loser_bid['n_obs'] >= len(current_task_bids):
                         # add empty bid to results for new observation number
                         current_task_bids.append(
-                            Bid(task, my_name, loser_bid['n_obs'])
+                            Bid.make_empty_bid(task, my_name, loser_bid['n_obs'])
                         )
 
                         # initialize optimistic bidding counter for new bid
@@ -940,7 +940,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
     #     return results_updates
     
     def __group_incoming_bids(self,
-                              incoming_bids : List[Bid]
+                              incoming_bids : List[dict]
                               ) -> Dict[str,List[dict]]:
         """
         Groups incoming bids by task_key.
@@ -951,31 +951,41 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # set local bindings 
         task_key_fn = self.__task_key
 
-        # Pass 1: group bids by task key
+        # group bids by task key
         for bid in incoming_bids:
-            # get task dictionary from bid
-            try:
-                task = bid["task"]
-            except (KeyError, TypeError):
-                task = bid.task.to_dict() if isinstance(bid, Bid) else None
-            
-            if task is None: raise ValueError("Bid does not contain a valid task field.")
-            
-            # group bid by task key
-            tk = task_key_fn(task)
-            grouped_bids[tk].append(bid)
+            grouped_bids[task_key_fn(bid["task"])].append(bid)
 
-        # TODO is this needed? Constraints are checked after all updates are performed, 
-        #       so the order of processing incoming bids should not matter.
-        # # Pass 2: sort bids for each task key by observation number and owner name
-        # for tk, bids in grouped_bids.items():
-        #     # sort by bid observation number and owner name
-        #     bids.sort(key=lambda bid: 
-        #                     (bid['n_obs'], bid['owner']) if isinstance(bid, dict) 
-        #                         else (bid.n_obs, bid.owner))
-
-        # return grouped bids
         return grouped_bids
+
+    # def __group_incoming_bids(self,
+    #                           incoming_bids : List[dict]
+    #                           ) -> Dict[str,List[dict]]:
+    #     """
+    #     Groups incoming bids by task_key.
+    #     """
+    #     # initialize bid grouping: task_key -> list[bid_dict]
+    #     grouped_bids = defaultdict(list)
+
+    #     # set local bindings 
+    #     task_key_fn = self.__task_key
+
+    #     # Pass 1: group bids by task key
+    #     for bid in incoming_bids:
+    #         # get task dictionary from bid
+    #         try:
+    #             task = bid["task"]
+    #         except (KeyError, TypeError):
+    #             if isinstance(bid, Bid):
+    #                 task = bid.task.to_dict()   
+    #             else: 
+    #                 raise ValueError("Bid does not contain a valid task field.")
+            
+    #         # group bid by task key
+    #         tk = task_key_fn(task)
+    #         grouped_bids[tk].append(bid)
+
+    #     # return grouped bids
+    #     return grouped_bids
          
     def __update_bundle_from_results(self,
                                      state : SimulationAgentState
