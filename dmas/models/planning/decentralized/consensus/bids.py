@@ -1247,10 +1247,26 @@ class Bid:
         # update copy according to comparison result
         if comp_result is BidComparisonResults.LEAVE:     
             self.__leave_dict(other, t_comp); return 0
+        
         elif comp_result is BidComparisonResults.UPDATE:      
-            self.__update_info(other, t_comp); return 1
+            # check if winner values will be updated and set flag accordingly 
+            eps = self.EPS 
+            other_winning_bid = other["winning_bid"]
+            other_t_img = other["t_img"]
+            my_t_img = self.t_img
+
+            # compare winners
+            if (self.winner != other["winner"]
+                or (self.winning_bid - other_winning_bid > eps or other_winning_bid - self.winning_bid > eps)
+                or (my_t_img - other_t_img > eps or other_t_img - my_t_img > eps)):
+                flag = 1
+            else:
+                flag = 0
+            self.__update_info(other, t_comp); return flag
+            
         elif comp_result is BidComparisonResults.RESET:     
             self.reset(t_comp, other=other); return 2
+        
         else: 
             raise ValueError(f'cannot perform update of type `{comp_result}`')
     

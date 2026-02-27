@@ -714,15 +714,15 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 update_flag : int = current_bid.update_from_dict_inplace(incoming_bid, t_curr)
                 
                 # check if current bid was modified
-                if update_flag == 1: # `1` indicates current bid was modified
+                if update_flag != 0: # `0` indicates current bid was not modified
                     # add updated bid to results updates
-                    results_updates.append(current_bid)
+                    if not results_updates: results_updates.append(current_bid)
                 
                 # check if previously unperformed bid was performed 
                 elif not cur_performed_before and current_bid.performed:
                     # bid values remained the same but bid was performed; 
                     #  add updated bid to results updates
-                    results_updates.append(current_bid)              
+                    if not results_updates: results_updates.append(current_bid)              
                 
                 # check if both bids corresponded to a performed observation
                 if old_cur_dict is not None:
