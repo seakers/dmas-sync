@@ -39,9 +39,8 @@ class AbstractTable(ABC):
         if mmap_mode not in ["r", "r+", "w+", "c"]:
             raise ValueError(f"invalid mmap_mode {mmap_mode}; must be one of 'r', 'r+', 'w+', or 'c'")
         
-    # @abstractmethod
     def close(self):
-        """ Closes the memmap backing the table. """
+        """ Closes any memmaps backing the table. """
         try:
             # iterate through all attributes of the class and close any memmaps
             for var in vars(self):
@@ -63,13 +62,14 @@ class AbstractTable(ABC):
                             if mm is not None:
                                 mm.close()
 
-                elif isinstance(attr, list):
+                elif isinstance(attr, (list, tuple, set)):
                     # if attribute is a list, check if any items are memmaps
                     for item in attr:
                         if isinstance(item, np.memmap):
                             mm = getattr(item, "_mmap", None)
                             if mm is not None:
                                 mm.close()
+
         except Exception as e:
             print(f"Error closing memmaps in {self.__class__.__name__}: {e}")
             raise e
