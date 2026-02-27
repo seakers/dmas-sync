@@ -368,7 +368,7 @@ class SimulationEnvironment(object):
                 model_mask = cross_track_mask # & along_track_mask <- enable when along-track mask is implemented
                 
                 # combine with existing mask for other instrument models
-                mask = mask | model_mask
+                mask |= model_mask
                                 
             # convert columns to arrays once
             cols = {col: vals[mask] 

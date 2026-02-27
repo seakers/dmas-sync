@@ -91,6 +91,10 @@ class OrbitData:
         self.gs_access_data.close()
         self.gp_access_data.close()
         self.grid_data.close()
+
+    def __del__(self):
+        # ensure memmaps are closed when instance is deleted
+        self.close()
     
     """
     LOAD FROM PRE-COMPUTED DATA
