@@ -82,6 +82,15 @@ class OrbitData:
 
         # grid data
         self.grid_data = grid_data   
+
+    def close(self):
+        # close memmaps for all tables
+        self.eclipse_data.close()
+        self.state_data.close()
+        self.comms_links.close()
+        self.gs_access_data.close()
+        self.gp_access_data.close()
+        self.grid_data.close()
     
     """
     LOAD FROM PRE-COMPUTED DATA
@@ -118,13 +127,17 @@ class OrbitData:
         if connectivity_specs is None: raise ValueError('Connectivity specifications not found in mission specifications under `scenario.connectivity`. Please ensure connectivity specifications are included in the mission specifications.')
 
         # load connectivity data for each agent and store in dictionary indexed by agent name
-        agent_comms_links, agent_comms_network \
+        comms_links, comms_network \
             = OrbitData.__load_comms_data(orbitdata_dir, connectivity_specs, schemas, printouts)
 
         data = dict()
         for agent_name, schema in schemas.items():
             # skip comms data
             if 'data' in agent_name or 'comms' in agent_name: continue 
+
+            # ensure schema points to the correct agent
+            assert agent_name in schema['dir'], \
+                f"Schema directory {schema['dir']} does not match agent name {agent_name} for schema: {schema}"
 
             # unpack agent-specific data from schema
             time_step = schema['time_specs']['time step']
@@ -142,8 +155,8 @@ class OrbitData:
             gs_access_data = IntervalTable.from_schema(schema['gs_access'], mmap_mode='r')
 
             # load comms link data from binary
-            comms_links = agent_comms_links
-            comms_network = agent_comms_network
+            # agent_comms_links = comms_links # <- TODO enable when non-relay comms are selected for comms use-case
+            agent_comms_network = comms_network
 
             # load ground point access data from binary
             gp_access_data = AccessTable.from_schema(schema['gp_access'], mmap_mode='r')
@@ -155,7 +168,7 @@ class OrbitData:
             state_data = StateTable.from_schema(schema['state'], mmap_mode='r')
 
             data[agent_name] = OrbitData(agent_name, time_step, epoch_type, epoch, duration,
-                                            eclipse_data, state_data, comms_network, gs_access_data, 
+                                            eclipse_data, state_data, agent_comms_network, gs_access_data, 
                                             gp_access_data, grid_data)
             
         # return compiled data

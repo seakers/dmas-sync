@@ -38,7 +38,42 @@ class AbstractTable(ABC):
             raise ValueError("schema must be a dictionary")
         if mmap_mode not in ["r", "r+", "w+", "c"]:
             raise ValueError(f"invalid mmap_mode {mmap_mode}; must be one of 'r', 'r+', 'w+', or 'c'")
+        
+    # @abstractmethod
+    def close(self):
+        """ Closes the memmap backing the table. """
+        try:
+            # iterate through all attributes of the class and close any memmaps
+            for var in vars(self):
+                # get attribute
+                attr = getattr(self, var)
 
+                # check attribute type
+                if isinstance(attr, np.memmap):
+                    # if attribute is of type `memmap`, close it
+                    mm = getattr(attr, "_mmap", None)
+                    if mm is not None:
+                        mm.close()
+                
+                elif isinstance(attr, dict):
+                    # if attribute is a dict, check if any values are memmaps
+                    for val in attr.values():
+                        if isinstance(val, np.memmap):
+                            mm = getattr(val, "_mmap", None)
+                            if mm is not None:
+                                mm.close()
+
+                elif isinstance(attr, list):
+                    # if attribute is a list, check if any items are memmaps
+                    for item in attr:
+                        if isinstance(item, np.memmap):
+                            mm = getattr(item, "_mmap", None)
+                            if mm is not None:
+                                mm.close()
+        except Exception as e:
+            print(f"Error closing memmaps in {self.__class__.__name__}: {e}")
+            raise e
+            
 @dataclass
 class TargetGridTable(AbstractTable):
     """
@@ -52,6 +87,7 @@ class TargetGridTable(AbstractTable):
     _lon: np.ndarray      # view (N,)
     _grid_idx: np.ndarray # view (N,) (likely float in packed file)
     _gp_idx: np.ndarray   # view (N,) (likely float in packed file)
+    
 
     @classmethod
     def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "TargetGridTable":

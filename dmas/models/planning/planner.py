@@ -151,6 +151,15 @@ class AbstractPlanner(ABC):
                 access_times = [target_coverage_data['time [s]'][i] for i in interval_indices]
                 off_nadir_angles = [target_coverage_data['off-nadir axis angle [deg]'][i] for i in interval_indices]
 
+                # validate instruments
+                interval_instruments = {target_coverage_data['instrument'][i] 
+                                        for i in interval_indices}
+                if len(interval_instruments) != 1:
+                    raise ValueError(
+                        f"Merged interval contains multiple instruments for target={target}: "
+                        f"{sorted(map(str, interval_instruments))}"
+                    )
+
                 # add access opportunity to map
                 access_opportunities[target].append( (access_interval, instrument_name, access_times, off_nadir_angles) )
             

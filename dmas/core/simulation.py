@@ -124,6 +124,16 @@ class Simulation:
         self.__executed : bool = False
         self.__processed_results : Tuple = None
 
+    def close(self) -> None:
+        """ Closes any open resources used by the simulation. """
+        # close any open memmaps in orbitdata
+        for od in self._orbitdata.values():
+            od.close()
+
+    def __del__(self):
+        """ Ensures any open resources are closed when the simulation instance is deleted. """
+        self.close()
+
     """
     SIMULATION EXECUTION METHODS
     """

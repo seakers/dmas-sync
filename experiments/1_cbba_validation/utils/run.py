@@ -238,6 +238,13 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             }
 
         # ------------------------------------------------------------
+        # Stage 5: Cleanup resources if needed (e.g., close memmaps, etc) 
+        # ------------------------------------------------------------
+        if mission is not None:
+            # ensure any open resources are closed
+            mission.close()  
+
+        # ------------------------------------------------------------
         # Return summary
         # ------------------------------------------------------------
         return {
