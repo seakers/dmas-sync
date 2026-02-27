@@ -288,7 +288,7 @@
             "args": [
                 "-t", "full_factorial_trials_2026-02-22",
                 // "-t", "full_factorial_trials_2026-02-23",
-                "--trial-range", "69:70",
+                "--trial-range", "63:34",
                 "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
@@ -400,9 +400,9 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                // "-t", "full_factorial_trials_2026-02-22",
+                "-t", "full_factorial_trials_2026-02-22",
                 // "-t", "full_factorial_trials_2026-02-23",
-                "--trial-range", "225:300",
+                // "--trial-range", "225:300",
                 // "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
@@ -410,8 +410,8 @@
                 // "--only-simulate",
                 // "--only-postprocess",
                 // "--force-simulate",
-                "--force-postprocess",
-                "--force-summarize",
+                // "--force-postprocess",
+                // "--force-summarize",
                 "--quiet",
                 // "--exceptions",
             ]

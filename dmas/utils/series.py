@@ -253,12 +253,6 @@ class IntervalTable(AbstractTable):
 
     schema["layout"] defines column order:
       ["start", "end", "prefix_max_end", <extras...>]
-
-    Performance changes vs previous version:
-      - Precomputes extras in layout order once (_extras_in_order, _extras_cols_in_order)
-        so we never sort per row.
-      - Adds fast iterators that do not decode vocabs and avoid per-element float().
-      - Keeps the slow decoded row method for user-facing iteration / debugging.
     """
     _buf: np.ndarray                # memmap (N,K)
     _start: np.ndarray              # view (N,)
@@ -271,23 +265,6 @@ class IntervalTable(AbstractTable):
 
     _extras_in_order: List[Tuple[str, np.ndarray]]
     _extras_cols_in_order: np.ndarray  # shape (E,), dtype=int64
-
-# @dataclass
-# class IntervalTable(AbstractTable):
-#     """
-#     Memmap-backed interval table (packed).
-#     Backing storage: a single (N, K) memmap called `_buf`.
-
-#     schema["layout"] defines column order:
-#       ["start", "end", "prefix_max_end", <extras...>]
-#     """
-    # _buf: np.ndarray                # memmap (N,K)
-    # _start: np.ndarray              # view (N,)
-    # _end: np.ndarray                # view (N,)
-    # _prefix_max_end: np.ndarray     # view (N,)
-    # _extras: Dict[str, np.ndarray]  # views (N,) by safe-name key
-    # _meta: Dict[str, Any]           # metadata dictionary
-    # _col: Dict[str, int]            # name -> column index
 
     @classmethod
     def from_schema(cls, schema: Dict[str, Any], mmap_mode: str = "r") -> "IntervalTable":
@@ -473,46 +450,28 @@ class IntervalTable(AbstractTable):
         Decodes vocab columns and converts values to Python floats/strings.
         Use only when you actually need decoded rows.
         """
+        # initiate row data with start and end times
         row = [float(self._start[i]), float(self._end[i])]
 
-        # extras already in layout order; no sorting
+        # add extra columns 
         columns_meta = self._meta.get("columns", {})
         for safe, arr in self._extras_in_order:
             col_meta = columns_meta.get(safe, {})
+            
             if "vocab" in col_meta:
+                # if column has vocab, decode integer value to string
                 vocab = col_meta["vocab"]
                 row.append(vocab.get(str(int(arr[i])), None))
             else:
+                # otherwise, just append the raw value 
                 row.append(float(arr[i]))
 
+        # return row as tuple
         return tuple(row)
 
     def __iter__(self):
         for i in range(len(self)):
             yield self._row_decoded(i)
-    
-#     def __row_from_index(self, i: int) -> Tuple:
-#         # initiate row data with start and end times
-#         row = [float(self._start[i]), float(self._end[i])]
-
-#         # add extra columns in order defined by layout
-#         for safe, arr in sorted(self._extras.items(), key=lambda x: self._col[x[0]]):  
-#             col_meta = self._meta.get("columns", {}).get(safe, {})
-
-#             if "vocab" in col_meta:
-#                 # if column has vocab, decode integer value to string
-#                 vocab: dict = col_meta["vocab"]
-#                 row.append(vocab.get(str(int(arr[i])), None))
-#             else:
-#                 # otherwise, just append the raw value 
-#                 row.append(float(arr[i]))
-                
-#         # return row as tuple
-#         return tuple(row)
-    
-#     def __iter__(self):
-#         for i in range(len(self._start)):
-#             yield self.__row_from_index(i)
 
     # ---------------------------------------------------------------------
     # Iterator (no explicit decoding)
@@ -592,7 +551,7 @@ class IntervalTable(AbstractTable):
         components_view is a view into buf[i, components_slice]
         If components_slice is None, it defaults to extras columns in order.
 
-        This avoids allocating tuples for all extras when you only care about them as a vector.
+        Avoids allocating tuples for all extras when you only care about them as a vector.
         """
         idx = int(np.searchsorted(self._prefix_max_end, t, side="left"))
         start = self._start
@@ -765,6 +724,7 @@ class ConnectivityTable(AbstractTable):
     _meta: Dict[str, Any]           # metadata dictionary
     _col: Dict[str, int]            # name -> column index
 
+    # TODO develop when non-relay comms are selected for comms use-case
     # @classmethod
     # def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "IntervalTable":
     #     # validate inputs 
