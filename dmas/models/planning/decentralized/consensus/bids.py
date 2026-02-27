@@ -216,7 +216,7 @@ class Bid:
 
     """
 
-    @bid_comparison_input_checks
+    # @bid_comparison_input_checks
     def __lt__(self, other : Union['Bid', dict]) -> bool:       
         # compare bids
         if isinstance(other, dict):
@@ -224,7 +224,7 @@ class Bid:
         else:
             return other.winning_bid > self.winning_bid and self != other
 
-    @bid_comparison_input_checks
+    # @bid_comparison_input_checks
     def __gt__(self, other : Union['Bid', dict]) -> bool:
         # compare bids
         if isinstance(other, dict):
@@ -232,7 +232,7 @@ class Bid:
         else:
             return other.winning_bid < self.winning_bid and self != other
 
-    @bid_comparison_input_checks
+    # @bid_comparison_input_checks
     def __eq__(self, other : Union['Bid', dict]) -> bool:        
         # compare bids
         if isinstance(other, dict):
@@ -240,7 +240,7 @@ class Bid:
         else:
             return abs(other.winning_bid - self.winning_bid) < self.EPS    # same bid value
 
-    @bid_comparison_input_checks
+    # @bid_comparison_input_checks
     def __ne__(self, other : Union['Bid', dict]) -> bool:        
         # compare bids
         if isinstance(other, dict):
@@ -248,7 +248,7 @@ class Bid:
         else:
             return abs(other.winning_bid - self.winning_bid) > self.EPS    # different bid value
 
-    @bid_comparison_input_checks
+    # @bid_comparison_input_checks
     def __le__(self, other : Union['Bid', dict]) -> bool:
         # compare bids
         if isinstance(other, dict):
@@ -256,7 +256,7 @@ class Bid:
         else:
             return self < other or abs(other.winning_bid - self.winning_bid) < self.EPS
     
-    @bid_comparison_input_checks
+    # @bid_comparison_input_checks
     def __ge__(self, other : Union['Bid', dict]) -> bool:
         # compare bids
         if isinstance(other, dict):
@@ -286,9 +286,10 @@ class Bid:
                 return bid1
             
             ## Compare bidders alphabetically
-            name_pairs = {bid1.winner : bid1, bid2['winner'] : bid2}
-            min_name = min(name_pairs.keys())
-            return name_pairs[min_name]
+            # name_pairs = {bid1.winner : bid1, bid2['winner'] : bid2}
+            # min_name = min(name_pairs.keys())
+            # return name_pairs[min_name]
+            return bid1 if bid1.winner < bid2['winner'] else bid2
         
         else:
             # compare bids
@@ -299,7 +300,8 @@ class Bid:
                 return bid1
 
             ## Compare bidders alphabetically
-            return min(bid1, bid2, key=lambda b: b.winner)
+            # return min(bid1, bid2, key=lambda b: b.winner)
+            return bid1 if bid1.winner < bid2.winner else bid2
 
     # @bid_comparison_input_checks
     def has_different_winner_values(self, other : Union['Bid', dict]) -> bool:

@@ -388,5 +388,33 @@
                 // "--exceptions",
             ]
         },
+        {
+            "name": "EXPERIMENT 1: Full",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceRoot}/experiments/1_cbba_validation/study.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            },
+            "args": [
+                // "-t", "full_factorial_trials_2026-02-22",
+                // "-t", "full_factorial_trials_2026-02-23",
+                "--trial-range", "225:300",
+                // "--profile-cpu",
+                // "--profile-mem",
+                "--single-thread",
+                // "--only-precompute",
+                // "--only-simulate",
+                // "--only-postprocess",
+                // "--force-simulate",
+                "--force-postprocess",
+                "--force-summarize",
+                "--quiet",
+                // "--exceptions",
+            ]
+        },
     ]
 }

@@ -1251,7 +1251,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             self._plan = ReactivePlan(maneuvers, self._path, broadcasts, preplan_waits, t=state.get_time(), t_next=t_next)
 
             # return final plan
-            return self._plan.copy()
+            # return self._plan.copy()
+            return self._plan
         
         finally:
             # reset replanning flags
@@ -1866,9 +1867,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # get column index of this agent in the comms links table
         u_idx = orbitdata.comms_target_indices[state.agent_name]
         cols = orbitdata.comms_target_columns
-
-        if "gs" in state.agent_name:
-            x = 1 # breakpoint
 
         # iterate through list of intervals in this time period 
         for _, row in orbitdata.comms_links.iter_rows_packed(t_curr, t_next, include_current):
