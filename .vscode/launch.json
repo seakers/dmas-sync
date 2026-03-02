@@ -10,6 +10,7 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
+            "cwd": "${workspaceRoot}",
             "console": "integratedTerminal"
         },
         //=============================================
@@ -315,10 +316,11 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                "-t", "full_factorial_trials_2026-02-22",
-                // "-t", "full_factorial_trials_2026-02-23",
+                // "-t", "full_factorial_trials_2026-02-22",
+                "-t", "full_factorial_trials_2026-02-23",
                 // "--trial-range", "0:75",
-                "--trial-range", "0:75",
+                "--trial-range", "0:225",
+                // "--trial-range", "172:225",
                 // "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",

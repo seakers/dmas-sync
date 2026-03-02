@@ -1917,7 +1917,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
     def __is_participating_in_consensus(self, new_bids : dict) -> bool:
         """ Check if this agent is currently participating in consensus bidding. """
         # check if any shareble bids to share exist
-        return new_bids or self._performed_bundle_observations
+        return bool(new_bids) or self._performed_bundle_observations
         # return (new_bids 
         #         or self._performed_bundle_observations 
         #         or self._task_announcements_received

@@ -454,6 +454,10 @@ class Bid:
             # if self.believes_i_am_winning():
             if my_winner == self.owner:
                 if other > self:  
+                    if other_t_img > my_t_img and self.t_stamps.get(other['owner'], np.NINF) < self.t_bid:
+                        # Sender is winning but has not considered receiving agent's bid yet → leave info as is and wait for sender to update
+                        return BidComparisonResults.LEAVE
+
                     # Sending agent's bid is higher → update info
                     return BidComparisonResults.UPDATE
                 elif other_t_img < my_t_img:
