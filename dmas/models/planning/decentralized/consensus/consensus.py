@@ -955,6 +955,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
         for bid in incoming_bids:
             grouped_bids[task_key_fn(bid["task"])].append(bid)
 
+        # sort so that the winner is always first in the list for each task key
+        #   `n_obs` (descending) >> `performed` (performed bids first) >> `winner` (winning bids first) >> `owner` (ascending)
+        for bids in grouped_bids.values():
+            bids.sort(key=lambda bid: (-bid['n_obs'], bid['performed'], bid['winner'] == bid['owner'], bid['owner']), reverse=True)
+
         return grouped_bids
 
     # def __group_incoming_bids(self,
@@ -1917,11 +1922,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
     def __is_participating_in_consensus(self, new_bids : dict) -> bool:
         """ Check if this agent is currently participating in consensus bidding. """
         # check if any shareble bids to share exist
-        return bool(new_bids) or self._performed_bundle_observations
-        # return (new_bids 
-        #         or self._performed_bundle_observations 
-        #         or self._task_announcements_received
-        #         or self._bundle_changes_performed)
+        # return bool(new_bids) or self._performed_bundle_observations
+        return (bool(new_bids) 
+                or self._performed_bundle_observations 
+                # or self._task_announcements_received
+                or self._bundle_changes_performed
+            )
 
     """
     REPLAN SCHEDULING

@@ -330,7 +330,7 @@
                 // "--force-simulate",
                 // "--force-postprocess",
                 // "--force-summarize",
-                "--quiet",
+                // "--quiet",
                 // "--exceptions",
             ]
         },

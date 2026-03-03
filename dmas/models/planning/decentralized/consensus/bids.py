@@ -1274,28 +1274,28 @@ class Bid:
         else: 
             raise ValueError(f'cannot perform update of type `{comp_result}`')
     
-    def __clone_shallow(self) -> "Bid":
-        cls = self.__class__
-        new = cls.__new__(cls)
+    # def __clone_shallow(self) -> "Bid":
+    #     cls = self.__class__
+    #     new = cls.__new__(cls)
 
-        # copy slot fields
-        new.task = self.task
-        new.n_obs = self.n_obs
-        new.owner = self.owner
-        new.owner_bid = self.owner_bid
-        new.winner = self.winner
-        new.winning_bid = self.winning_bid
-        new.t_img = self.t_img
-        new.t_bid = self.t_bid
+    #     # copy slot fields
+    #     new.task = self.task
+    #     new.n_obs = self.n_obs
+    #     new.owner = self.owner
+    #     new.owner_bid = self.owner_bid
+    #     new.winner = self.winner
+    #     new.winning_bid = self.winning_bid
+    #     new.t_img = self.t_img
+    #     new.t_bid = self.t_bid
 
-        # IMPORTANT: timestamps is a dict; you usually want a shallow copy
-        # new.t_stamps = self.t_stamps.copy()
-        new.t_stamps = self.t_stamps
+    #     # IMPORTANT: timestamps is a dict; you usually want a shallow copy
+    #     # new.t_stamps = self.t_stamps.copy()
+    #     new.t_stamps = self.t_stamps
 
-        new.main_measurement = self.main_measurement
-        new.performed = self.performed
+    #     new.main_measurement = self.main_measurement
+    #     new.performed = self.performed
 
-        return new
+    #     return new
     
     def __update_info(self, other : Union['Bid', dict], t_comp : float) -> None:
         """
