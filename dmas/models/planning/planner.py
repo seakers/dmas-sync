@@ -14,7 +14,7 @@ from pyparsing import List
 from tqdm import tqdm
 
 from execsatm.tasks import GenericObservationTask
-from execsatm.observations import ObservationOpportunity
+from execsatm.observations import AtomicObservationOpportunity, ObservationOpportunity
 from execsatm.attributes import CapabilityRequirementAttributes, ObservationRequirementAttributes, SpatialCoverageRequirementAttributes, TemporalRequirementAttributes
 from execsatm.mission import Mission
 from execsatm.requirements import CapabilityRequirement, CategoricalRequirement, ConstantValueRequirement, ExpDecayRequirement, ExpSaturationRequirement, GaussianRequirement, IntervalInterpolationRequirement, LogThresholdRequirement, PerformancePreferenceStrategies, PerformanceRequirement, StepsRequirement, TriangleRequirement
@@ -293,15 +293,16 @@ class AbstractPlanner(ABC):
                     if slew_angles.is_empty(): continue  
 
                     # add task observation opportunity to list of task observation opportunities
-                    observation_opps.append(ObservationOpportunity(task,
-                                                                    instrument_name,
-                                                                    # use reduced access interval
-                                                                    overlapping_access_interval,
-                                                                    # take into acount possible tolerance in duration requirement
-                                                                    min(min_duration_req, overlapping_access_interval.span()), 
-                                                                    # use reduced slew angle interval
-                                                                    slew_angles
-                                                                ))
+                    observation_opps.append(AtomicObservationOpportunity(task,
+                                                                         instrument_name,
+                                                                         # use reduced access interval
+                                                                         overlapping_access_interval,
+                                                                         # use reduced slew angle interval
+                                                                         slew_angles,
+                                                                         # take into acount possible tolerance in duration requirement
+                                                                         min(min_duration_req, overlapping_access_interval.span()), 
+                                                                         15*60, # TODO calculate maximum duration requirement based on agent capabilities
+                                                                    ))
         
         # return list of task observation opportunities
         return sorted(observation_opps, key=lambda x: (x.accessibility, x.id))
@@ -530,7 +531,8 @@ class AbstractPlanner(ABC):
                     # TODO: look into ID being used. Ideally we would want a new ID for the combined task.
 
                     # merge all tasks in the clique into a single task p
-                    p = p.merge(q, must_overlap=must_overlap, max_duration=threshold)  # max duration of 5 minutes
+                    # p = p.merge(q, must_overlap=must_overlap, max_duration=threshold)  # max duration of 5 minutes
+                    p = p.merge(q, must_overlap=must_overlap)
 
                     # update progress bar
                     pbar.update(1)
@@ -542,7 +544,8 @@ class AbstractPlanner(ABC):
                     adj[p.id].discard(neighbor)
 
                     # reevaluate adjacency
-                    if p.can_merge(neighbor, must_overlap=must_overlap, max_duration=threshold):
+                    # if p.can_merge(neighbor, must_overlap=must_overlap, max_duration=threshold):
+                    if p.can_merge(neighbor, must_overlap=must_overlap):
                         # if p and neighbor can still be merged;
                         # add edge back to adjacency list
                         adj[neighbor.id].add(p)

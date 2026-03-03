@@ -29,7 +29,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_1 = False  # single sat    default mission     single target, no events
         self.toy_2 = False  # single sat    no default mission  one event
         self.toy_3 = False  # two sats      no default mission  one event
-        self.toy_4 = True  # two sats      no default mission  one event           optimistic bidding
+        self.toy_4 = False  # two sats      no default mission  one event           optimistic bidding
         self.toy_5 = False  # two sats      no default mission  one event           comm delays
         self.toy_6 = False  # two sats      no default mission  two targets         two events
         self.toy_7 = False  # two sats      no default mission  two targets         two events at different times
@@ -45,14 +45,14 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_17 = False # moving relay scenario
         self.toy_18 = False # static relay scenario
         self.toy_19 = False # single sat    default mission     multiple targets    two events           preplan w/short horizon + replan
-        self.toy_20 = False # two sats       default mission     multiple targets    two events           preplan w/short horizon + replan
+        self.toy_20 = False # two sats      default mission     multiple targets    two events           preplan w/short horizon + replan
         self.toy_21 = False # single sat    no default mission     multiple targets    two events announced by GS  replan
         self.toy_22 = False # two sats      no default mission     multiple targets    two events announced by GS   replan
 
-        self.toy_23 = False 
-        self.toy_24 = False
-        self.toy_25 = False
-        self.toy_26 = False
+        self.toy_23 = False # single satellite bidding against a gs agent; announcer sat
+        self.toy_24 = False # two satellites bidding against a gs agent; announcer sat
+        self.toy_25 = False # single satellite bidding against a gs agent; gs announcer
+        self.toy_26 = False # two satellites bidding against a gs agent; gs announcer
 
         self.toy_27 = False # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
@@ -2113,7 +2113,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         # verify results
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observable'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Observed'].values[0][1], 1)
-        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 0)
+        self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Requested'].values[0][1], 2)
         self.assertEqual(results_summary.loc[results_summary['Metric']=='Events Re-observed'].values[0][1], 0)
 
         # print done

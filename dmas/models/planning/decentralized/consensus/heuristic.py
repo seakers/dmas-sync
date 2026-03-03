@@ -1057,11 +1057,19 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         for task in obs_act.obs_opp.tasks
                         if task in modified_tasks}, key=lambda x: x.id)
 
+        if any(len(task.obs_opp.tasks) > 1 for task in candidate_path):
+            x = 1
+
         # find observation time for proposed task in candidate path
+        action_tasks_start_times = [
+            action.obs_opp.get_earliest_starts(action.t_start)
+            for action in candidate_path
+        ]
+        
         modified_task_obs_times : Dict[GenericObservationTask, List[Tuple[float,str,float,ObservationOpportunity]]] \
                     = {task : [
-                        (action.t_start, state.agent_name, action.look_angle, action.obs_opp) 
-                        for action in candidate_path 
+                        (start_times[task], state.agent_name, action.look_angle, action.obs_opp) 
+                        for action, start_times in zip(candidate_path, action_tasks_start_times)
                         if task in action.obs_opp.tasks
                     ] for task in modified_tasks_in_path}
         

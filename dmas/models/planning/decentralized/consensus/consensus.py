@@ -1007,7 +1007,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         t_img_bundle = [np.NAN for _ in self._bundle]
         for idx,(obs_opp, obs_tasks) in enumerate(self._bundle):
             # find matching observation action in path
-            matching_actions = [obs_action.t_start for obs_action in self._path
+            matching_actions = [obs_action.obs_opp.get_earliest_starts(obs_action.t_start) for obs_action in self._path
                                 if obs_action.obs_opp == obs_opp]
             assert len(matching_actions) == 1, \
                 "Each bundle observation opportunity must have a matching observation action in the path."
@@ -1024,7 +1024,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                         # 2) or this agent is no longer the winning bidder
                                         or not self._results[task][n_obs].is_bidder_winning() 
                                         # 3) or the imaging time does not match that in the path
-                                        or abs(self._results[task][n_obs].t_img - t_img_bundle[idx]) > self.EPS
+                                        or abs(self._results[task][n_obs].t_img - t_img_bundle[idx][task]) > self.EPS
                                         # 4) or the bid was performed
                                         or self._results[task][n_obs].was_performed()
                                     for task, n_obs in obs_tasks.items())
@@ -1036,7 +1036,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         if min_updated_idx is None:
             # no updates to bids in bundle; return original bundle
             return self._bundle, self._path, bundle_updates
-
+        
         # split bundle at first updated task
         revised_bundle = self._bundle[:min_updated_idx]
 
@@ -1725,7 +1725,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             t_prev_i : dict = t_prev[obs_idx]
 
             # iterate through parent tasks
-            for task in obs_act.obs_opp.tasks:
+            for task, task_t_earliest in obs_act.obs_opp.get_earliest_starts(obs_act.t_start).items():
                 # get current bids for this task
                 bids = self._results.get(task, None)
 
@@ -1738,7 +1738,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 prev_bid : Bid = None
                 for bid in bids:
                     # check if a matching bid was found
-                    if (abs(bid.t_img - obs_act.t_start) <= self.EPS 
+                    # if (abs(bid.t_img - obs_act.t_start) <= self.EPS 
+                    if (abs(bid.t_img - task_t_earliest) <= self.EPS
                         and bid.winner == state.agent_name):
                         # ensure only one matching bid exists
                         assert matching_bid is None, \
@@ -1846,7 +1847,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                 and not isinstance(action, FutureBroadcastMessageAction)
                                 # exclude past broadcasts; 
                                 #  these should have already been performed
-                                and action.t_start >= t_curr - self.EPS
+                                and action.t_start > t_curr - self.EPS
                                 ]
 
         broadcasts.extend(preplan_broadcasts)
@@ -2035,10 +2036,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         bid_winner = f'{bid_winner[0][0]}{bid_winner[0][-1]}'
 
                 try:
+                    instrument = bid.main_measurement
+                    if len(instrument) < 4: 
+                        instrument = instrument + '\t'  # pad short instrument names for formatting
                     if bid.winner != bid.NONE:
-                        line = f'{req_id_short} {bid.n_obs}\t{bid.main_measurement}\t{bid_winner.lower()}\t{np.round(bid.winning_bid,4)}\t{np.round(bid.t_img,1)}\t{np.round(bid.t_bid,1)}\t{self._optimistic_bidding_counters[bid.task][bid.n_obs]}\t{(bid.performed)}\n'
+                        line = f'{req_id_short} {bid.n_obs}\t{instrument}\t{bid_winner.lower()}\t{np.round(bid.winning_bid,4)}\t{np.round(bid.t_img,1)}\t{np.round(bid.t_bid,1)}\t{self._optimistic_bidding_counters[bid.task][bid.n_obs]}\t{(bid.performed)}\n'
                     else:
-                        line = f'{req_id_short} {bid.n_obs}\t{bid.main_measurement}\t\tn/a\t{np.round(bid.winning_bid,4)}\t{np.round(bid.t_img,1)}\t{np.round(bid.t_bid,1)}\t{self._optimistic_bidding_counters[bid.task][bid.n_obs]}\t{(bid.performed)}\n'
+                        line = f'{req_id_short} {bid.n_obs}\t{instrument}\t\tn/a\t{np.round(bid.winning_bid,4)}\t{np.round(bid.t_img,1)}\t{np.round(bid.t_bid,1)}\t{self._optimistic_bidding_counters[bid.task][bid.n_obs]}\t{(bid.performed)}\n'
                 except IndexError:
                     x=  1 # breakpoint
                 out += line

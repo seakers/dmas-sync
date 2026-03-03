@@ -6,10 +6,8 @@ from tqdm import tqdm
 from execsatm.mission import DefaultMissionTask, Mission
 from execsatm.observations import Interval, ObservationOpportunity
 
-from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
-from dmas.models.planning.plan import Plan
+from dmas.models.planning.plan import Plan, ReactivePlan
 from dmas.models.planning.reactive import AbstractReactivePlanner
-from dmas.utils.orbitdata import OrbitData
 from dmas.utils.orbitdata import OrbitData
 from dmas.core.messages import *
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
@@ -108,7 +106,8 @@ class HeuristicInsertionPeriodicPlanner(AbstractPeriodicPlanner):
                                                  state : SimulationAgentState, 
                                                  observation_opportunity : ObservationOpportunity, 
                                                  plan_sequence : list, 
-                                                 max_slew_rate : float) -> tuple:
+                                                 max_slew_rate : float
+                                                ) -> tuple:
         
         # get latest previously scheduled observation
         action_prev : ObservationAction = self.__get_previous_observation_action(observation_opportunity, plan_sequence)
