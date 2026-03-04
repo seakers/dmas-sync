@@ -301,7 +301,7 @@ class AbstractPlanner(ABC):
                                                                          slew_angles,
                                                                          # take into acount possible tolerance in duration requirement
                                                                          min(min_duration_req, overlapping_access_interval.span()), 
-                                                                         15*60, # TODO calculate maximum duration requirement based on agent capabilities
+                                                                         # TODO calculate maximum duration requirement based on agent capabilities
                                                                     ))
         
         # return list of task observation opportunities
@@ -649,12 +649,19 @@ class AbstractPlanner(ABC):
         # estimate measurment look angle 
         th_img = np.average([obs.slew_angles.left, obs.slew_angles.right])
 
+        # find observation time for each task in the observation opp
+        action_tasks_start_times = obs.get_earliest_starts(t_img)
+        action_task_duration = {
+            task : d_img - (t_task_img - t_img)
+            for task, t_task_img in action_tasks_start_times.items()
+        }
+
         # calculate task reward per parent task
         rewards = {parent_task : self._estimate_task_value(parent_task,
                                                             obs.instrument_name,
                                                             th_img,
-                                                            t_img,
-                                                            d_img,
+                                                            action_tasks_start_times[parent_task],
+                                                            action_task_duration[parent_task],
                                                             specs,
                                                             cross_track_fovs,
                                                             orbitdata,
@@ -740,7 +747,6 @@ class AbstractPlanner(ABC):
         return max([mission.calc_task_value(task, measurement) 
                     for measurement in measurement_performance.values()]) \
                         if len(measurement_performance.values()) > 0 else 0.0
-
         
     def __estimate_task_performance_metrics(self, 
                                             task : GenericObservationTask, 

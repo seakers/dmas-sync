@@ -1057,9 +1057,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         for task in obs_act.obs_opp.tasks
                         if task in modified_tasks}, key=lambda x: x.id)
 
-        if any(len(task.obs_opp.tasks) > 1 for task in candidate_path):
-            x = 1
-
         # find observation time for proposed task in candidate path
         action_tasks_start_times = [
             action.obs_opp.get_earliest_starts(action.t_start)
@@ -1131,7 +1128,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 is_sequence_valid = True
 
                 # evaluate sequence value for this agent
-                for seq_idx,(agent_name,t_obs,look_angle,spec_task) in enumerate(zip(obs_names,obs_times,obs_look_angles,obs_tasks)):
+                for seq_idx,(agent_name,t_obs,look_angle,obs_opp) in enumerate(zip(obs_names,obs_times,obs_look_angles,obs_tasks)):
                     
                     # get observation number for this observation
                     n_obs = seq_idx + len(performed_obs)
@@ -1158,21 +1155,21 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
                     else: # observation is to be performed by this agent
                         # assume specific task was defined
-                        assert isinstance(spec_task, ObservationOpportunity), \
+                        assert isinstance(obs_opp, ObservationOpportunity), \
                             "Task observation opportunity not defined."
                         
                         # estimate task value for this observation
                         task_value = self._estimate_task_value(task,
-                                                            spec_task.instrument_name,
-                                                            look_angle, 
-                                                            t_obs,
-                                                            spec_task.min_duration,
-                                                            specs, 
-                                                            cross_track_fovs,
-                                                            orbitdata,
-                                                            mission,
-                                                            n_obs,
-                                                            t_prev
+                                                               obs_opp.instrument_name,
+                                                               look_angle, 
+                                                               t_obs,
+                                                               obs_opp.min_duration,
+                                                               specs, 
+                                                               cross_track_fovs,
+                                                               orbitdata,
+                                                               mission,
+                                                               n_obs,
+                                                               t_prev
                                                             )
                         
                         # compare task value estimate against existing bids for this observation number

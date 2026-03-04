@@ -554,14 +554,15 @@ class ConsensusPlanner(AbstractReactivePlanner):
         observed_opportunities : list[ObservationOpportunity] = [obs_action.obs_opp 
                                                                  for obs_action in performed_observations]
 
-        performed_bundle_tasks = [ (obs_opp, obs_tasks) 
-                                    for obs_opp, obs_tasks in self._bundle
-                                    if obs_opp in observed_opportunities
-                                    # if any([obs_opp == performed_obs for performed_obs in observed_opportunities])
-                                    ]
+        potentially_performed_bundle_tasks \
+            = [ (obs_opp, obs_tasks) 
+                for obs_opp, obs_tasks in self._bundle
+                if obs_opp in observed_opportunities
+                # if any([obs_opp == performed_obs for performed_obs in observed_opportunities])
+            ]
 
         # iterate through performed bundle to mark bids as performed
-        for obs_opp, obs_tasks in performed_bundle_tasks:     
+        for obs_opp, obs_tasks in potentially_performed_bundle_tasks:     
                        
             # imaging time has passed for task bids; assume tasks were performed by parent agent
             assert any([self._results[task][n_obs].winner == state.agent_name for task,n_obs in obs_tasks.items()]), \
@@ -1631,10 +1632,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
                               n_obs : List[Dict[GenericObservationTask, int]],
                               t_prev : List[Dict[GenericObservationTask, float]]
                             ) -> List[float]:
-        """ Calculate expected value of each observation in the path. """
-        return [self.estimate_observation_opportunity_value(obs.obs_opp,
-                                                 obs.t_start,
-                                                 obs.obs_opp.min_duration,
+        """ Calculate expected value of each observation in the path. """        
+        return [self.estimate_observation_opportunity_value(obs_act.obs_opp,
+                                                 obs_act.t_start,
+                                                 obs_act.obs_opp.min_duration,
                                                  specs,
                                                  cross_track_fovs,
                                                  orbitdata,
@@ -1642,7 +1643,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                                  observation_history,
                                                  n_obs[obs_idx],
                                                  t_prev[obs_idx])
-                        for obs_idx, obs in enumerate(path)]
+                        for obs_idx, obs_act in enumerate(path)]
 
     def _count_observations_and_revisit_times_from_path(self,
                                                         path : List[ObservationAction]
