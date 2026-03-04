@@ -845,36 +845,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
             bids.sort(key=lambda bid: (-bid['n_obs'], bid['performed'], bid['winner'] == bid['owner'], bid['owner']), reverse=True)
 
         return grouped_bids
-
-    # def __group_incoming_bids(self,
-    #                           incoming_bids : List[dict]
-    #                           ) -> Dict[str,List[dict]]:
-    #     """
-    #     Groups incoming bids by task_key.
-    #     """
-    #     # initialize bid grouping: task_key -> list[bid_dict]
-    #     grouped_bids = defaultdict(list)
-
-    #     # set local bindings 
-    #     task_key_fn = self.__task_key
-
-    #     # Pass 1: group bids by task key
-    #     for bid in incoming_bids:
-    #         # get task dictionary from bid
-    #         try:
-    #             task = bid["task"]
-    #         except (KeyError, TypeError):
-    #             if isinstance(bid, Bid):
-    #                 task = bid.task.to_dict()   
-    #             else: 
-    #                 raise ValueError("Bid does not contain a valid task field.")
-            
-    #         # group bid by task key
-    #         tk = task_key_fn(task)
-    #         grouped_bids[tk].append(bid)
-
-    #     # return grouped bids
-    #     return grouped_bids
          
     def __update_bundle_from_results(self,
                                      state : SimulationAgentState
