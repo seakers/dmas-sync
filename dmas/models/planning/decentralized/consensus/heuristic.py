@@ -1280,6 +1280,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         
         # assign best observation numbers and previous observation times to observations in candidate path
         for obs_idx,obs in enumerate(candidate_path):
+            # get earliest observation time for this observation
+            obs_t_img = obs.obs_opp.get_earliest_starts(obs.t_start)
+
             # iterate through matching tasks of this observation
             for task in obs.obs_opp.tasks:
                 # check if sequence was modified for this parent task
@@ -1304,7 +1307,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     # no best sequence found for this parent task; use existing bids from results
                     # get matching bid for this observation task
                     matching_bids = [bid for bid in proposed_bids[task].values()
-                                    if abs(bid.t_img - obs.t_start) <= self.EPS
+                                    # if abs(bid.t_img - obs.t_start) <= self.EPS
+                                    if abs(bid.t_img - obs_t_img[task]) <= self.EPS
                                     and bid.owner == state.agent_name]
                     
                     assert matching_bids, \

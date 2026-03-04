@@ -147,17 +147,47 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                                                     disable=(len(task_requests) < 10) or not self._printouts
                                                 ):
             
+            # get column index of this agent in the comms links table
+            u_idx = orbitdata.comms_target_indices[state.agent_name]
+            cols = orbitdata.comms_target_columns
+
             # iterate through list of intervals in this time period 
-            for t_start,*_ in orbitdata.comms_links.iter_rows_raw_fast(t=event.availability.left, 
-                                                                        t_max=event.availability.right, 
-                                                                        include_current=True):
-                # TODO consider only scheduling one broadcast per agent. No need to reannounce to the same agents
+            for _, row in orbitdata.comms_links.iter_rows_packed(event.availability.left, 
+                                                                 event.availability.right, 
+                                                                 include_current=True):
+                # unpack row data
+                t_start = float(row[orbitdata.comms_links._col["start"]])
+                t_end   = float(row[orbitdata.comms_links._col["end"]])
+                comps   = row[3:]  
+
+                # get communication targets for this interval based on component membership
+                u_comp = comps[u_idx]
+                m = (comps == u_comp)
+                m[u_idx] = False
+                v_idxs = np.nonzero(m)[0]
+                targets = {cols[int(j)] for j in v_idxs}
+
+                # if no targets available, skip this interval
+                if len(targets) == 0:
+                    continue
 
                 # calculate broadcast time to earliest in this access interval
                 t_broadcast : float = max(t_start, task_req.t_req)
-                
+
                 # add broadcast time to set of broadcast times and assign request to be broadcast at this time
                 t_broadcasts[t_broadcast].append(task_request_msg)
+
+            # # iterate through list of intervals in this time period 
+            # for t_start,*_ in orbitdata.comms_links.iter_rows_raw_fast(t=event.availability.left, 
+            #                                                             t_max=event.availability.right, 
+            #                                                             include_current=True):
+            #     # TODO consider only scheduling one broadcast per agent. No need to reannounce to the same agents
+
+            #     # calculate broadcast time to earliest in this access interval
+            #     t_broadcast : float = max(t_start, task_req.t_req)
+                
+            #     # add broadcast time to set of broadcast times and assign request to be broadcast at this time
+            #     t_broadcasts[t_broadcast].append(task_request_msg)
                 
         # iterate through access start times to find active requests
         for t_broadcast, task_requests_msgs in tqdm(t_broadcasts.items(),

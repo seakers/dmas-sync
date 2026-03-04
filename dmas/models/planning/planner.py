@@ -1083,16 +1083,19 @@ class AbstractPlanner(ABC):
                 prev_attitude = [prev_observation.look_angle, 0.0, 0.0]
 
             # maneuver to point to target
-            if isinstance(state, SatelliteAgentState):                
+            if isinstance(state, SatelliteAgentState):       
+                # calculate required attitude change and maximum possible attitude change within the time available         
                 dth_req = abs(curr_observation.look_angle - prev_attitude[0])
                 dth_max = (curr_observation.t_start - t_prev) * max_slew_rate
 
+                # check if attitude maneuver is required
+                if abs(dth_req) <= self.EPS: 
+                    continue # already pointing in the same direction; ignore maneuver
+                
+                # check if attitude maneuver is possible within the time available
                 if dth_req > dth_max and abs(dth_req - dth_max) >= self.EPS: 
                     # maneuver impossible within timeframe
                     raise ValueError(f'Cannot schedule maneuver. Not enough time between observations')\
-                
-                # check if attitude maneuver is required
-                if abs(dth_req) <= self.EPS: continue # already pointing in the same direction; ignore maneuver
 
                 # calculate attitude duration    
                 th_0 = prev_attitude[0]
@@ -1262,7 +1265,7 @@ class AbstractPlanner(ABC):
                         t_i = state._t
                         d_i = 0.0
 
-                    observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate))
+                    observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate, j == 0))
 
                 # check if observations sequence is valid
                 if any([not self.is_observation_pair_valid(*params) 
@@ -1291,7 +1294,9 @@ class AbstractPlanner(ABC):
     def is_observation_pair_valid(self, 
                                   t_i, d_i, th_i, 
                                   t_j, d_j, th_j,
-                                  max_slew_rate) -> bool:
+                                  max_slew_rate,
+                                  start_pair = False
+                                  ) -> bool:
         # check inputs
         assert not np.isnan(th_j) and not np.isnan(th_i) # TODO: add case where the target is not visible by the agent at the desired time according to the precalculated orbitdata
 
@@ -1300,6 +1305,8 @@ class AbstractPlanner(ABC):
         
         # calculate time between measuremnets
         dt_measurements = t_j - (t_i + d_i)
+        if start_pair:
+            dt_measurements = 0.0 if t_j <= t_i <= t_j + d_j else dt_measurements
 
         return ((dt_measurements > dt_maneuver 
                 or abs(dt_measurements - dt_maneuver) < 1e-6)   # there is enough time to maneuver

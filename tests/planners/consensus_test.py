@@ -42,7 +42,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_14 = False # single sat    default mission     multiple targets    two events          preplan + replan
         self.toy_15 = False # two sats      default mission     multiple targets    two events          preplan + replan
         self.toy_16 = False # single sat    no default mission  two targets         two expiring events  preplan + replan   not the correct instruments
-        self.toy_17 = True # moving relay scenario
+        self.toy_17 = False # moving relay scenario
         self.toy_18 = False # static relay scenario
         self.toy_19 = False # single sat    default mission     multiple targets    two events           preplan w/short horizon + replan
         self.toy_20 = False # two sats      default mission     multiple targets    two events           preplan w/short horizon + replan
@@ -57,6 +57,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_27 = False # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
         self.toy_29 = False # real vs planned reward comparison
+        self.toy_30 = True # interrupted observations from external broadcast
 
     def toy_planner_config(self):
         return {
@@ -2916,6 +2917,63 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # print done
         print(f"{scenario_name}: DONE")
+
+    def test_toy_case_30(self):
+        if not self.toy_30: return
+
+        # setup scenario parameters
+        duration = 2.0 / 24.0
+        grid_name = 'toy_30'
+        scenario_name = f'toy_30-{self.planner_name()}'
+        connectivity = 'LOS'
+        event_name = 'toy_30'
+        mission_filename = 'toy_missions'
+        mission_name = 'toy_mission_30'
+        gs_network = 'gs_toy_30'
+
+        # SAT0 : announcer satellite 
+        announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
+        announcer_spacecraft['@id'] = 'sat0_announcer'
+        announcer_spacecraft['name'] = 'sat0'
+        announcer_spacecraft['planner'] = self.toy_planner_config() # no preplan capability
+        announcer_spacecraft['instrument'] = self.instruments['TIR'] # wide swath instrument
+        announcer_spacecraft['orbitState']['state']['inc'] = 0.0
+        announcer_spacecraft['orbitState']['state']['ta'] = -20.0
+        announcer_spacecraft['groundStationNetwork'] = gs_network
+        announcer_spacecraft['mission'] = mission_name
+
+        # terminal welcome message
+        print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
+
+        # Generate scenario
+        scenario_specs = self.setup_scenario_specs(duration,
+                                                   grid_name, 
+                                                   scenario_name, 
+                                                   connectivity,
+                                                   event_name,
+                                                   mission_filename,
+                                                   spacecraft=[
+                                                       announcer_spacecraft
+                                                    ]
+                                                   )
+
+        # compile ground stations and operators
+        scenario_specs['groundStation'] = self.compile_ground_stations([gs_network])
+        scenario_specs['groundOperator'] = self.setup_announcer_ground_operators(event_name, mission_name, [gs_network])
+
+        # initialize mission
+        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+
+        # execute mission
+        self.simulation.execute()
+        
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
+
+        print(f"{scenario_name}: DONE")       
 
 
     # def test_toy_case_2X(self):

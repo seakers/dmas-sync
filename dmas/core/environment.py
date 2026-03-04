@@ -296,8 +296,17 @@ class SimulationEnvironment(object):
         resp['observation_data'] = observation_data
         self._observation_history.extend(observation_data)    
 
+        # set completion status based on end time of observation action
+        if t_curr < t_end - 1e-6:
+            # observation action is still ongoing; 
+            #  mark as pending for nows
+            status = ActionStatuses.PENDING.value
+        else:
+            # observation action has completed; mark as completed
+            status = ActionStatuses.COMPLETED.value
+
         # return packaged results
-        return state, ActionStatuses.COMPLETED.value, [], [obs_data]
+        return state, status, [], [obs_data]
     
     def __perform_wait(self, 
                      state : SimulationAgentState,
