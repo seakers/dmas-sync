@@ -351,9 +351,9 @@ class SimulationAgent(object):
                 pending_actions = []
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
-                # if True:
-                if "imager_c_sat_27" in curr_state.agent_name:
-                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                if True:
+                # if "imager_c_sat_27" in curr_state.agent_name:
+                #     self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
