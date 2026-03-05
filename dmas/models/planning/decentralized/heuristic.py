@@ -1,3 +1,4 @@
+import copy
 from typing import List, Tuple
 from orbitpy.util import Spacecraft
 
@@ -299,10 +300,13 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             # set replan flags
             self._task_announcements_received = True
 
+        # initialize properties
+        self.access_opportunity_horizon : Interval = None
+        self.access_opportunities : dict[tuple] = None
+
     def needs_planning(self, *_) -> bool:
         # replan if replan flag was set in `update_percepts`
-        return self._task_announcements_received
-    
+        return self._task_announcements_received    
 
     def generate_plan(  self, 
                         state : SimulationAgentState,
@@ -327,7 +331,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             available_tasks : list[GenericObservationTask] = self.__get_available_tasks(tasks, planning_horizon)
             
             # calculate coverage opportunities for tasks
-            access_opportunities : dict[tuple] = self.calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
+            access_opportunities : dict[tuple] = self.calculate_access_opportunities(state, available_tasks, planning_horizon, orbitdata)
 
             # create task observation opportunities from known tasks and future access opportunities
             observation_opportunities : list[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
@@ -359,6 +363,85 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
         finally:
             # reset replan flag
             self._task_announcements_received = False   
+
+    def calculate_access_opportunities(self, 
+                                       state : SimulationAgentState, 
+                                       available_tasks : List[GenericObservationTask], 
+                                       planning_horizon : Interval, 
+                                       orbitdata : OrbitData
+                                    ) -> dict:
+        """ Calculate access opportunities for targets visible in the planning horizon """
+        # get current simulation time
+        t_curr = state.get_time()
+
+        # check if access opportunities need to be created/recreated
+        if self.__need_to_update_access_opportunities(t_curr, planning_horizon):
+            if self.__needs_to_reset_access_opportunities(t_curr, planning_horizon):
+                # calculate all access opportunities for this planning horizon
+                access_opportunities : dict[tuple] \
+                    = super().calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
+                
+                # set new internal access opportunities
+                self.access_opportunities = access_opportunities
+                
+            else:
+                # check which tasks' targets have not had their access opportunities calculated yet  
+                tasks_to_calculate = [task for task in available_tasks
+                                      if any( tuple(loc) not in self.access_opportunities for _,_,*loc in task.location)]
+                
+                # calculate access opportunities of missing tasks for this planning horizon
+                access_opportunities : dict[tuple] \
+                    = super().calculate_access_opportunities(tasks_to_calculate, planning_horizon, orbitdata)
+                
+                # update internal access opportunities with newly calculated ones
+                self.access_opportunities.update(access_opportunities)
+            
+            # update access opportunity horizon
+            self.access_opportunity_horizon : Interval = copy.copy(planning_horizon)
+            
+            # outline is right-open interval
+            self.access_opportunity_horizon.open_right()
+           
+        # retunrn latest known access opportunities
+        return self.access_opportunities
+
+    def __need_to_update_access_opportunities(self, t_curr : float, planning_horizon : Interval) -> bool:
+        """ Check if target access opportunities need to be created/recreated. """
+        
+        # no existing access opportunity horizon
+        if self.access_opportunity_horizon is None:
+            return True
+                
+        # simulation has advanced beyond existing access opportunity horizon
+        if t_curr not in self.access_opportunity_horizon:
+            return True
+        
+        # planning horizon has extended beyond existing access opportunity horizon
+        if planning_horizon.right > self.access_opportunity_horizon.right + self.EPS:
+            return True
+        
+        # new tasks were added 
+        if self._task_announcements_received:
+            return True
+
+        # else; there is no need to recreate access opportunities
+        return False
+
+    def __needs_to_reset_access_opportunities(self, t_curr : float, planning_horizon : Interval) -> bool:                        
+        # no existing access opportunity horizon
+        if self.access_opportunity_horizon is None:
+            return True
+        
+        # simulation has advanced beyond existing access opportunity horizon
+        if t_curr not in self.access_opportunity_horizon:
+            return True
+        
+        # planning horizon has extended beyond existing access opportunity horizon
+        if planning_horizon.right > self.access_opportunity_horizon.right + self.EPS:
+            return True        
+
+        # else; there is no need to recreate access opportunities
+        return False
 
     
     def __get_available_tasks(self, tasks : list, planning_horizon : Interval) -> list:

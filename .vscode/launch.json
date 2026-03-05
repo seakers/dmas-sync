@@ -289,7 +289,8 @@
             "args": [
                 "-t", "full_factorial_trials_2026-02-22",
                 // "-t", "full_factorial_trials_2026-02-23",
-                "--trial-range", "69:70",
+                // "--trial-range", "69:70",
+                "--trial-range", "70:71",
                 // "--trial-range", "218:219",
                 "--profile-cpu",
                 // "--profile-mem",
