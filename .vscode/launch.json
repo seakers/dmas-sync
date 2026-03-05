@@ -291,7 +291,7 @@
                 // "-t", "full_factorial_trials_2026-02-23",
                 "--trial-range", "69:70",
                 // "--trial-range", "218:219",
-                // "--profile-cpu",
+                "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
@@ -300,7 +300,7 @@
                 "--force-simulate",
                 // "--force-postprocess",
                 // "--force-summarize",
-                // "--reduced",
+                "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]

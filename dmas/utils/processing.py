@@ -1474,7 +1474,8 @@ class ResultsProcessor:
         total_obtained_reward = np.round(obtained_rewards_df['reward'].sum(), precision) if obtained_rewards_df is not None else 0.0
         total_obtained_utility = np.round(obtained_rewards_df['reward'].sum() - execution_costs_df['cost'].sum(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0
 
-        total_task_priority, total_available_utility = ResultsProcessor.__calculate_total_available_utility(accesses_per_task)
+        total_task_priority, total_observable_utility, total_available_utility \
+            = ResultsProcessor.__calculate_total_available_utility(accesses_per_task)
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -1624,11 +1625,11 @@ class ResultsProcessor:
 
                     # Reward Statistics 
                     ['Total Planned Reward', total_planned_reward],
-                    ['Normalized Total Planned Reward', total_planned_reward / total_available_utility if total_available_utility > 0 else 0.0],
+                    # ['Normalized Total Planned Reward', total_planned_reward / total_available_utility if total_available_utility > 0 else 0.0],
                     ['Total Planned Task Observations', len(planned_rewards_df) if planned_rewards_df is not None else 0],
 
                     ['Total Obtained Reward', total_obtained_reward],
-                    ['Normalized Total Obtained Reward', total_obtained_reward / total_available_utility if total_available_utility > 0 else 0.0],
+                    # ['Normalized Total Obtained Reward', total_obtained_reward / total_available_utility if total_available_utility > 0 else 0.0],
                     ['Total Obtained Task Observations', len(obtained_rewards_df) if obtained_rewards_df is not None else 0],
                     
                     ['Average Planned Reward per Task Observation', avg_planned_reward],
@@ -1647,19 +1648,20 @@ class ResultsProcessor:
 
                     # Utility Statistics
                     ['Total Planned Utility', total_planned_utility],
-                    ['Normalized Total Planned Utility', total_planned_utility / total_available_utility if total_available_utility > 0 else 0.0],
+                    # ['Normalized Total Planned Utility', total_planned_utility / total_available_utility if total_available_utility > 0 else 0.0],
                     ['Average Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
                     ['Standard Deviation of Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
                     ['Median Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
 
                     ['Total Obtained Utility', total_obtained_utility],
-                    ['Normalized Total Obtained Utility', total_obtained_utility / total_available_utility if total_available_utility > 0 else 0.0],
+                    # ['Normalized Total Obtained Utility', total_obtained_utility / total_available_utility if total_available_utility > 0 else 0.0],
                     ['Average Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
                     ['Standard Deviation of Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
                     ['Median Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
 
                     # Available Reward and Utility Statistics
                     ['Total Task Priority Available', total_task_priority],
+                    ['Total Observable Utility', total_observable_utility],
                     ['Total Available Utility', total_available_utility],
 
                     # Results dir
@@ -2203,6 +2205,7 @@ class ResultsProcessor:
         # TODO include objectives and priorities in task data structures to properly calculate this;
         #   currently assumes that each access has a maximum performance value of 1 
         total_task_priority = sum([task.priority for task in accesses_per_task.keys()])
+        total_observable_utility = sum([task.priority*int(len(accesses) > 0) for task,accesses in accesses_per_task.items()])
         total_available_utility = sum([task.priority*len(accesses) for task,accesses in accesses_per_task.items()])
         
-        return total_task_priority, total_available_utility
+        return total_task_priority, total_observable_utility, total_available_utility
