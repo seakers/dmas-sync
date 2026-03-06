@@ -382,6 +382,15 @@ class Simulation:
         # define results summary filename
         summary_path = os.path.join(f"{self._results_path}","summary.csv")
 
+        # map agent names to their respective specifications and missions
+        agent_specs : Dict[str, object] = {agent.name : agent._specs
+                                           for agent in self._agents}
+
+        agent_missions : Dict[str, Mission] = {agent.name : agent._mission
+                                    for agent in self._agents}
+        
+
+
         # check if results summary file exists 
         if os.path.isfile(summary_path) and not force_summarize:
             # file exists and reevaluate is False; skip results summary generation
@@ -398,6 +407,8 @@ class Simulation:
                 = ResultsProcessor.summarize_results(self._results_path,
                                                         self._orbitdata,
                                                         self._events,
+                                                        agent_specs,
+                                                        agent_missions,
                                                         *processed_results, 
                                                         precision=precision, 
                                                         printouts=printouts)
@@ -410,6 +421,8 @@ class Simulation:
                 = ResultsProcessor.summarize_results(self._results_path,
                                                         self._orbitdata,
                                                         self._events,
+                                                        agent_specs,
+                                                        agent_missions,
                                                         *processed_results, 
                                                         precision=precision, 
                                                         printouts=printouts)

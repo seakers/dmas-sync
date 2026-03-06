@@ -877,22 +877,22 @@ class AccessTable(AbstractTable):
     _rev_vocab: Dict[str, Dict[Any, int]]   # safe-name -> {label -> code}
 
     # Optional: share vocab arrays across instances (useful if schema objects are reused)
-    _VOCAB_CACHE = {}  # type: Dict[Tuple[str, int], np.ndarray]
+    # _VOCAB_CACHE = {}  # type: Dict[Tuple[str, int], np.ndarray]
 
     @classmethod
-    def _get_vocab_arr_cached(cls, safe: str, vocab: Dict[str, Any]) -> np.ndarray:
+    def _get_vocab_arr_cached(cls, _VOCAB_CACHE, safe: str, vocab: Dict[str, Any]) -> np.ndarray:
         """
         Build (or reuse) an object array such that arr[code] -> label.
         Cache key uses id(vocab) which works well if schema/vocab dict is reused across sats.
         """
         key = (safe, id(vocab))
-        arr = cls._VOCAB_CACHE.get(key)
+        arr = _VOCAB_CACHE.get(key)
         if arr is not None:
             return arr
 
         if not vocab:
             arr = np.empty((0,), dtype=object)
-            cls._VOCAB_CACHE[key] = arr
+            _VOCAB_CACHE[key] = arr
             return arr
 
         codes = [int(k) for k in vocab.keys()]
@@ -902,7 +902,7 @@ class AccessTable(AbstractTable):
         for k, v in vocab.items():
             arr[int(k)] = v
 
-        cls._VOCAB_CACHE[key] = arr
+        _VOCAB_CACHE[key] = arr
         return arr
 
     @classmethod
@@ -1009,14 +1009,14 @@ class AccessTable(AbstractTable):
         rev_vocab = {}
         columns_meta = schema.get("columns", {})
 
+        _VOCAB_CACHE = {}   
         for safe in extras.keys():
             col_meta = columns_meta.get(safe, {})
             vocab = col_meta.get("vocab", None)
             if not vocab:
                 continue
 
-            # Fast decoder array (possibly cached)
-            arr = cls._get_vocab_arr_cached(safe, vocab)
+            arr = cls._get_vocab_arr_cached(_VOCAB_CACHE, safe, vocab)
             vocab_arr[safe] = arr
 
             # Reverse map for filter-by-label (small dict)
@@ -1024,6 +1024,14 @@ class AccessTable(AbstractTable):
             for k_str, label in vocab.items():
                 rv[label] = int(k_str)
             rev_vocab[safe] = rv
+
+        # ensure vocab array matches reverse vocab 
+        for safe in vocab_arr.keys():
+            arr = vocab_arr[safe]
+            rv = rev_vocab[safe]
+            for label, code in rv.items():
+                if code >= len(arr) or arr[code] != label:
+                    raise AssertionError("vocab array and reverse vocab out of sync for column '%s'" % safe)
 
         return cls(
             _offsets=offsets,

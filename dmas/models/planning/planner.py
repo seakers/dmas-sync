@@ -259,7 +259,7 @@ class AbstractPlanner(ABC):
                 # matching_access_times : List[Tuple[str, Interval, List[float]]] = []
                 for access_interval,instrument_name,t,th in access_times[key]:
                     # check if instrument can perform the task
-                    if not self.can_perform_task(task, instrument_name): continue
+                    if not self.__can_perform_task(task, instrument_name): continue
 
                     # check if access interval overlaps with task availability
                     if not task.availability.overlaps(access_interval): continue
@@ -373,7 +373,7 @@ class AbstractPlanner(ABC):
         # unsupported requirement type; should not reach here
         raise ValueError('Unsupported duration requirement type.')
             
-    def can_perform_task(self, task : GenericObservationTask, instrument_name : str) -> bool:
+    def __can_perform_task(self, task : GenericObservationTask, instrument_name : str) -> bool:
         """ Checks if the agent can perform the task at hand with the given instrument """
         # TODO Replace this with KG for better reasoning capabilities; currently assumes instrument has general capability
 
@@ -861,66 +861,7 @@ class AbstractPlanner(ABC):
                 raise NotImplementedError(f'Calculation of task reward not yet supported for instruments of type `{instrument_name.lower()}`.')
 
         return observation_performance_metrics
-    
-    
-    # def get_available_accesses(self, 
-    #                            task : GenericObservationTask, 
-    #                            instrument_name : str,
-    #                            th_img : float,
-    #                            t_img : float,
-    #                            d_img : float,
-    #                            orbitdata : OrbitData, 
-    #                            cross_track_fovs : dict
-    #                         ) -> dict:
-    #     """ Uses pre-computed orbitdata to estimate observation metrics for a given task. """
         
-    #     # get task targets
-    #     task_targets = {(int(grid_index), int(gp_index))
-    #                     for *_,grid_index,gp_index in task.location}
-        
-    #     # get ground points accessesible during the availability of the task
-    #     raw_access_data : Dict[str,list] = None
-    #     for grid_index,gp_index in task_targets:
-    #         access_data = orbitdata.gp_access_data.lookup_interval(t_img, 
-    #                                                                t_img + d_img,
-    #                                                                filters={'grid_index': grid_index, 
-    #                                                                         'GP index': gp_index})
-    #         if raw_access_data is None:
-    #             raw_access_data = access_data
-    #         else:
-    #             for col in raw_access_data:
-    #                 raw_access_data[col].extend(access_data[col])
-
-    #     # extract ground point accesses that are within the agent's field of view
-    #     accessible_gps_data_indeces = [i for i in range(len(raw_access_data['time [s]']))
-    #                                     if abs(raw_access_data['off-nadir axis angle [deg]'][i] - th_img) \
-    #                                         <= cross_track_fovs[instrument_name] / 2
-    #                                     and raw_access_data['instrument'][i] == instrument_name]
-    #     accessible_gps_performances = {col : [raw_access_data[col][i] 
-    #                                           for i in accessible_gps_data_indeces]
-    #                                 for col in raw_access_data}
-        
-    #     # extract gp accesses of the desired targets within the task's accessibility and agent's field of view
-    #     valid_access_data_indeces = [i for i in range(len(accessible_gps_performances['time [s]']))
-    #                                 if (int(accessible_gps_performances['grid index'][i]), \
-    #                                     int(accessible_gps_performances['GP index'][i])) in task_targets]
-    #     observation_performances = {col : [accessible_gps_performances[col][i] 
-    #                                        for i in valid_access_data_indeces]
-    #                                 for col in accessible_gps_performances}
-
-    #     # get agent eclipse data
-    #     agent_eclipse_intervals : List[Tuple[Interval, ...]] \
-    #         = orbitdata.eclipse_data.lookup_intervals(t_img, t_img + d_img)
-
-    #     # include eclipse data for each observation in the performance metrics
-    #     observation_performances[ObservationRequirementAttributes.ECLIPSE.value] = [
-    #         int(any([t in interval for interval,*_ in agent_eclipse_intervals]))
-    #         for t in observation_performances['time [s]']
-    #     ]
-
-    #     # return estimated observation performances
-    #     return observation_performances
-
     def get_available_accesses(self, 
                                task : GenericObservationTask, 
                                instrument_name : str,

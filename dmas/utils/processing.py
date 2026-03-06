@@ -1,4 +1,5 @@
 from collections import defaultdict
+from functools import reduce
 import os
 from typing import Dict, List, Set, Tuple
 import numpy as np
@@ -6,12 +7,18 @@ import numpy as np
 from tqdm import tqdm
 import pandas as pd
 
-from execsatm.mission import Mission
-from execsatm.attributes import SpatialCoverageRequirementAttributes, TemporalRequirementAttributes, ObservationRequirementAttributes
+from instrupy.base import BasicSensorModel
+from instrupy.passive_optical_scanner_model import PassiveOpticalScannerModel
+from instrupy.util import ViewGeometry, SphericalGeometry
+from orbitpy.util import Spacecraft
+
+from execsatm.mission import Mission, ObservationOpportunity, PerformanceRequirement
+from execsatm.attributes import CapabilityRequirementAttributes, SpatialCoverageRequirementAttributes, TemporalRequirementAttributes, ObservationRequirementAttributes
 from execsatm.events import GeophysicalEvent
 from execsatm.tasks import GenericObservationTask, DefaultMissionTask, EventObservationTask
 from execsatm.objectives import DefaultMissionObjective, EventDrivenObjective
-from execsatm.requirements import ExplicitCapabilityRequirement
+from execsatm.requirements import *
+from execsatm.observations import ObservationOpportunity, AtomicObservationOpportunity
 from execsatm.utils import Interval
 
 from dmas.models.science.requests import TaskRequest
@@ -919,10 +926,13 @@ class ResultsProcessor:
                 combined_mask[idx] = compat
                 location_access_filtered = {col: arr[combined_mask] for col, arr in location_access.items()}
                 
-                # iterate throufh data to map accesses by agent name and instrument
+                # iterate through data to map accesses by agent name and instrument
                 t = np.asarray(location_access_filtered["time [s]"], dtype=np.float64)
                 agent = np.asarray(location_access_filtered["agent name"])      # str or int
                 instr = np.asarray(location_access_filtered["instrument"])      # str or int
+
+                assert all(t_i in task.availability for t_i in t), \
+                    f"Some access times {t} are outside of task availability {task.availability} for task {task.id}."
 
                 n = t.size
                 if n == 0:
@@ -963,13 +973,13 @@ class ResultsProcessor:
                                     right = nr
                             else:
                                 # close current interval and start a new one
-                                access_intervals.append((Interval(left, right), agent_name, i0))
+                                access_intervals.append((Interval(left, right - dt), agent_name, i0))
                                 left = tt
                                 right = tt + dt
                             idx += 1
 
                         # close last interval for this group
-                        access_intervals.append((Interval(left, right), agent_name, i0))
+                        access_intervals.append((Interval(left, right - dt), agent_name, i0))
 
                     # sort final intervals by start time
                     access_intervals.sort(key=lambda x: x[0].left)           
@@ -992,6 +1002,10 @@ class ResultsProcessor:
                         'agent name' : agent_name,
                         'instrument' : instrument
                     })
+
+                for interval,*_ in access_intervals:
+                    assert interval.is_subset(task.availability), \
+                        f"Access interval {interval} is not a subset of task availability {task.availability} for task {task.id}."
 
             # if access windows were found for this task, add to map of tasks to access intervals
             if task_access_windows: accesses_per_task[task] = task_access_windows
@@ -1353,6 +1367,8 @@ class ResultsProcessor:
     def summarize_results(results_path : str,
                           compiled_orbitdata : Dict[str, OrbitData], 
                           events : List[GeophysicalEvent],
+                          agent_specs : Dict[str, object],
+                          agent_missions : Dict[str, Mission],
                           task_reqs : List[TaskRequest],
                           known_tasks : List[GenericObservationTask],
                           events_per_gp : Dict[Tuple[int,int], List[GeophysicalEvent]],
@@ -1474,8 +1490,11 @@ class ResultsProcessor:
         total_obtained_reward = np.round(obtained_rewards_df['reward'].sum(), precision) if obtained_rewards_df is not None else 0.0
         total_obtained_utility = np.round(obtained_rewards_df['reward'].sum() - execution_costs_df['cost'].sum(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0
 
-        total_task_priority, total_observable_utility, total_available_utility \
-            = ResultsProcessor.__calculate_total_available_utility(accesses_per_task)
+        reward_primal_bound, reward_dual_bound \
+            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions)
+        
+        total_task_priority, total_observable_task_priority \
+            = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -1661,8 +1680,9 @@ class ResultsProcessor:
 
                     # Available Reward and Utility Statistics
                     ['Total Task Priority Available', total_task_priority],
-                    ['Total Observable Utility', total_observable_utility],
-                    ['Total Available Utility', total_available_utility],
+                    ['Total Observable Task Priority', total_observable_task_priority],
+                    ['Task Reward Primal Bound', reward_primal_bound],
+                    ['Task Reward Dual Bound', reward_dual_bound],
 
                     # Results dir
                     # ['Results Directory', results_path]
@@ -2201,11 +2221,517 @@ class ResultsProcessor:
         return t_reobservation  
     
     @staticmethod
-    def __calculate_total_available_utility(accesses_per_task: Dict[GenericObservationTask, List]) -> float:
-        # TODO include objectives and priorities in task data structures to properly calculate this;
-        #   currently assumes that each access has a maximum performance value of 1 
-        total_task_priority = sum([task.priority for task in accesses_per_task.keys()])
-        total_observable_utility = sum([task.priority*int(len(accesses) > 0) for task,accesses in accesses_per_task.items()])
-        total_available_utility = sum([task.priority*len(accesses) for task,accesses in accesses_per_task.items()])
+    def __calculate_reward_bounds(compiled_orbitdata : Dict[str, OrbitData], 
+                                  accesses_per_task: Dict[GenericObservationTask, List], 
+                                  agent_specs: Dict[str, object],
+                                  agent_missions: Dict[str, Mission],
+                                ) -> Tuple[float, float]:
+        # extract agent field of view specifications from agent specs object
+        cross_track_fovs = {agent : ResultsProcessor._collect_fov_specs(specs) 
+                            for agent,specs in agent_specs.items()}
+
+        # calculate observation opportunities from accesses
+        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] \
+             = ResultsProcessor.single_task_observation_opportunity_from_accesses(
+                    compiled_orbitdata, accesses_per_task, cross_track_fovs
+                )
         
-        return total_task_priority, total_observable_utility, total_available_utility
+        # TODO calculate primal bound using greedy oracle
+        primal_bound = 0.0
+
+        # calculate dual bound using a relaxed version of the problem         
+        dual_bound = ResultsProcessor.__calculate_dual_bound(
+                task_observation_opps, compiled_orbitdata, agent_missions, agent_specs, cross_track_fovs
+            )
+
+        # return bound values
+        return primal_bound, dual_bound
+            
+    @staticmethod
+    def __calculate_task_priorities(accesses_per_task: Dict[GenericObservationTask, List]) -> Tuple:
+        total_task_priority = sum([task.priority for task in accesses_per_task.keys()])
+        total_observable_task_priority = sum([task.priority*int(len(accesses) > 0) for task,accesses in accesses_per_task.items()])
+        # total_observable_task_priority = sum([task.priority*len(accesses) for task,accesses in accesses_per_task.items()])
+        
+        return total_task_priority, total_observable_task_priority
+
+    @staticmethod
+    def __calculate_dual_bound(
+                        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]],
+                        compiled_orbitdata : Dict[str, OrbitData],
+                        agent_missions: Dict[str, Mission],
+                        agent_specs: Dict[str, object],
+                        cross_track_fovs : Dict[str, float],
+                    ) -> float:
+        # initiate bound value to 0
+        dual_bound = 0.0
+
+        # calculate the utility for each task
+        for task, observation_opps in task_observation_opps.items():
+            
+            # initialize task utility to 0
+            task_utility = 0.0
+
+            # iterate throughout observation opportunities for this task.
+            #  assume that all observation opportunities for this task can be utilized
+            #  regardless of overlaps in access intervals or resource constraints
+            for n_obs, (obs_opp,agent_name) in enumerate(observation_opps):
+                # define observation time, observation duration, and look angle for this observation opportunity
+                t_obs = obs_opp.accessibility.left
+                d_obs = obs_opp.accessibility.span()
+                th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
+                t_prev = observation_opps[n_obs-1][0].accessibility.left if n_obs > 0 else 0.0
+
+                # get matching agent mission
+                agent_mission = agent_missions[agent_name]
+                
+                # estimate measurement performance for this observation opportunity
+                measurement_performance \
+                    = ResultsProcessor.__estimate_task_performance_metrics(task,
+                                                                           obs_opp.instrument_name,
+                                                                           th,
+                                                                           t_obs,
+                                                                           d_obs,
+                                                                           agent_specs[agent_name],
+                                                                           cross_track_fovs[agent_name],
+                                                                           compiled_orbitdata[agent_name],
+                                                                           n_obs,
+                                                                           t_prev
+                                                                        )
+
+                # calculate utility of this observation opportunity
+                obs_opp_utility = max([agent_mission.calc_task_value(task, measurement) 
+                            for measurement in measurement_performance.values()]) \
+                                if len(measurement_performance.values()) > 0 else 0.0
+
+                # add to dual bound
+                task_utility += obs_opp_utility
+
+            # add task utility to dual bound
+            dual_bound += task_utility
+            
+
+        # return value
+        return dual_bound
+    
+    @staticmethod
+    def __estimate_task_performance_metrics( 
+                                            task : GenericObservationTask, 
+                                            instrument_name : str,
+                                            th_img : float,
+                                            t_img : float,
+                                            d_img : float,
+                                            specs : Spacecraft, 
+                                            cross_track_fovs : dict,
+                                            orbitdata : OrbitData,
+                                            n_obs : int,
+                                            t_prev : float,  
+                                        ) -> dict:
+
+        # validate inputs
+        assert isinstance(task, GenericObservationTask), "Task must be of type `GenericObservationTask`."
+        assert isinstance(instrument_name, str), "Instrument name must be a string."
+        assert isinstance(th_img, (int,float)), "Image look angle must be a numeric value."
+        assert isinstance(t_img, (int,float)), "Image time must be a numeric value."
+        assert t_img >= 0, "Image time must be non-negative."
+        assert isinstance(d_img, (int,float)), "Image duration must be a numeric value."
+        assert d_img >= 0, "Image duration must be non-negative."
+        assert all(isinstance(instr, str) for instr in cross_track_fovs.keys()), "Cross-track FOV instrument names must be strings."
+        assert all(isinstance(fov, (int,float)) for fov in cross_track_fovs.values()), "Cross-track FOVs must be numeric values."
+        assert all(fov >= 0 for fov in cross_track_fovs.values()), "Cross-track FOVs must be non-negative."
+        assert isinstance(orbitdata, OrbitData), "Orbit data must be of type `OrbitData`."
+        assert n_obs >= 0, "Number of observations must be non-negative."
+        assert t_prev <= t_img, "Last observation time must be before the current image time."
+
+        # get access metrics for given observation time, instrument, and look angle
+        observation_performances = ResultsProcessor.get_available_accesses(task, instrument_name, th_img, t_img, d_img, orbitdata, cross_track_fovs)
+
+        # check if there are no valid observations for this task
+        if any([len(observation_performances[col]) == 0 for col in observation_performances]): 
+            # no valid accesses; no reward added
+            return dict()
+        
+        # group observations by location
+        observed_location_groups : dict[tuple[int,int], list[int]] = defaultdict(list)
+        for i in range(len(observation_performances['time [s]'])):
+            # unpack observed target location information
+            lat = observation_performances['lat [deg]'][i]
+            lon = observation_performances['lon [deg]'][i]
+            grid_index = int(observation_performances['grid index'][i])
+            gp_index = int(observation_performances['GP index'][i])
+
+            # define location indices
+            loc = (lat,lon,grid_index,gp_index)
+
+            # add to location group
+            observed_location_groups[loc].append({col.lower() : observation_performances[col][i] 
+                                                    for col in observation_performances})
+        
+        # sort groups by measurement time 
+        for loc in observed_location_groups: observed_location_groups[loc].sort(key=lambda a : a['time [s]'])
+        
+        # get unique task targets
+        task_targets : List[tuple] = list({(grid_idx,gp_idx) 
+                                           for *_,grid_idx,gp_idx in task.location})
+
+        # keep only one of the observations per location group that matches the task target
+        observation_performance_metrics : Dict[tuple[int,int], dict] = {loc : observed_location_groups[loc][0] # keep only first observation
+                                                 for loc in observed_location_groups
+                                                 if (loc[2],loc[3]) in task_targets
+                                                 }       
+
+        # get instrument specifications
+        instrument_spec : BasicSensorModel = next(instr 
+                                                  for instr in specs.instrument
+                                                  if instr.name.lower() == instrument_name.lower()).mode[0]
+
+        # include additional observation information 
+        for loc,obs_perf in observation_performance_metrics.items():
+            
+            # update observation performance information
+            obs_perf.update({ 
+                SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
+                TemporalRequirementAttributes.DURATION.value : d_img,
+                TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
+                #TODO Co-observation time
+                TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
+                TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
+                TemporalRequirementAttributes.OBS_TIME.value : t_img,
+                "t_end" : t_img + d_img,
+                ObservationRequirementAttributes.OBSERVATION_NUMBER.value : n_obs + 1, # including this observation
+            })
+
+            # handle special case of first observation
+            if n_obs == 0:
+                obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
+
+            # update instrument-specific observation performance information
+            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower())
+                or ('vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower())):
+                if isinstance(instrument_spec.spectral_resolution, str):
+                    obs_perf.update({
+                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
+                    })
+                elif isinstance(instrument_spec.spectral_resolution, (int,float)):
+                    obs_perf.update({
+                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
+                    })
+                else:
+                    raise ValueError('Unsupported type for spectral resolution in instrument specification.')
+                
+            elif ('altimeter' in instrument_name.lower()
+                  or 'altimeter' in instrument_spec._type.lower()):
+                obs_perf.update({
+                    ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
+                })
+            else:
+                raise NotImplementedError(f'Calculation of task reward not yet supported for instruments of type `{instrument_name.lower()}`.')
+
+        return observation_performance_metrics
+    
+    @staticmethod
+    def get_available_accesses( 
+                               task : GenericObservationTask, 
+                               instrument_name : str,
+                               th_img : float,
+                               t_img : float,
+                               d_img : float,
+                               orbitdata : OrbitData, 
+                               cross_track_fovs : dict
+                            ) -> dict:
+        # --- 1) Build targets once (prefer vector-friendly form) ---
+        # task.location rows look like: (*_, grid_index, gp_index)
+        task_targets = {(int(grid_index), int(gp_index)) for *_, grid_index, gp_index in task.location}
+        if not task_targets:
+            return {}
+
+        # Pack targets into uint64 keys for fast membership
+        tgt_keys = np.fromiter(
+            ((g << 32) | (p & 0xFFFFFFFF) for (g, p) in task_targets),
+            dtype=np.uint64,
+            count=len(task_targets),
+        )
+
+        # --- 2) One lookup for the whole time window ---
+        access = orbitdata.gp_access_data.lookup_interval(
+            t_img,
+            t_img + d_img,
+            include_extras=True,
+            filters=None,
+            columns=None,
+            decode=True,
+            exact_time_filter=True,
+        )
+
+        # Quick empty guard
+        t = np.asarray(access.get("time [s]", []))
+        if t.size == 0: return access  # or {}
+
+        # --- 3) Vector masks for FOV + instrument + target membership ---
+        # Convert needed columns to arrays once
+        grid = np.asarray(access["grid index"], dtype=np.int64)
+        gp = np.asarray(access["GP index"], dtype=np.int64)
+        offn = np.asarray(access["off-nadir axis angle [deg]"], dtype=np.float64)
+
+        # Instrument column handling
+        instr_col = access["instrument"]
+
+        # FOV check
+        half_fov = float(cross_track_fovs[instrument_name]) * 0.5
+        m_fov = np.abs(offn - float(th_img)) <= half_fov
+
+        # Instrument match
+        instr = np.asarray(instr_col)
+        m_instr = (instr == instrument_name)
+
+        # Target membership via packed keys
+        keys = (grid.astype(np.uint64) << np.uint64(32)) | (gp.astype(np.uint64) & np.uint64(0xFFFFFFFF))
+        # np.isin on uint64 is vectorized
+        m_target = np.isin(keys, tgt_keys, assume_unique=False)
+
+        mask = m_fov & m_instr & m_target
+        if not mask.any():
+            # Return same structure but empty lists (or arrays)
+            out = {k: [] for k in access.keys()}
+            out["eclipse"] = []
+            return out
+
+        # --- 4) Slice all columns once ---
+        # Keep as arrays for now; convert to lists at the end if your callers need lists.
+        obs = {}
+        for col, arr in access.items():
+            a = np.asarray(arr)
+            obs[col] = a[mask]
+
+        # --- 5) Eclipse flags fast (no per-time "t in interval" loops) ---
+        eclipse_intervals = orbitdata.eclipse_data.lookup_intervals(t_img, t_img + d_img)
+
+        times = np.asarray(obs["time [s]"], dtype=np.float64)
+        eclipse_flags = np.zeros(times.shape[0], dtype=np.int8)
+
+        if eclipse_intervals:
+            # Build sorted start/end arrays
+            # Assumes interval has .start and .end or something equivalent.
+            # Adjust these two lines to your Interval type.
+            starts = np.array([float(interval.left) for interval, *_ in eclipse_intervals], dtype=np.float64)
+            ends   = np.array([float(interval.right)   for interval, *_ in eclipse_intervals], dtype=np.float64)
+
+            # Sort by start (and reorder ends accordingly)
+            order = np.argsort(starts)
+            starts = starts[order]
+            ends = ends[order]
+
+            # For each time t: find rightmost start <= t, then check t <= corresponding end
+            idx = np.searchsorted(starts, times, side="right") - 1
+            valid = idx >= 0
+            eclipse_flags[valid] = (times[valid] <= ends[idx[valid]]).astype(np.int8)
+
+        # Use your enum key if you need it
+        obs["eclipse"] = eclipse_flags
+
+        # --- 6) Convert to python lists if your downstream expects lists ---
+        # (If downstream can accept numpy arrays, don't convert; that’s faster.)
+        out = {}
+        for k, v in obs.items():
+            out[k] = v.tolist() if isinstance(v, np.ndarray) else list(v)
+
+        return out
+
+    @staticmethod
+    def single_task_observation_opportunity_from_accesses(
+                                                          compiled_orbitdata : Dict[str, OrbitData], 
+                                                          accesses_per_task: Dict[GenericObservationTask, List[Tuple[Interval, str, str]]], 
+                                                          cross_track_fovs : dict,
+                                                          threshold : float = 1e-9
+                                                        ) -> Dict[GenericObservationTask, List[ObservationOpportunity]]:
+        """ Creates one instance of a task observation opportunity per each access opportunity 
+        for every available task """
+
+        # initiate task observation opportunities
+        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] = defaultdict(list)
+
+        # iterate throughout all accessible tasks and their corresponding access opportunities
+        for task, accesses in accesses_per_task.items():
+            for access_interval, agent_name, instrument_name in accesses:
+                # check if instrument can perform the task
+                if not ResultsProcessor.__can_perform_task(task, instrument_name): 
+                    continue # skip if instrument cannot perform task
+                
+                # get matching agent orbit data
+                agent_orbitdata = compiled_orbitdata[agent_name]
+
+                # extract minimum duration requirement for this task
+                min_duration_req : float = ResultsProcessor.__extract_minimum_duration_req(task, agent_orbitdata)
+
+                # ensure minimum duration requirement is a positive number
+                assert isinstance(min_duration_req, (int,float)) and min_duration_req >= 0.0, "minimum duration requirement must be a positive number."
+
+                # check if overlapping access interval is long enough to perform the task
+                if access_interval.span() < min_duration_req - threshold: continue
+
+                # get matching access interval in agent orbit data
+                target_coverage_data : dict \
+                    = agent_orbitdata.gp_access_data.lookup_interval(access_interval.left, 
+                                                                     access_interval.right,
+                                                                     filters={
+                                                                            'instrument': instrument_name,
+                                                                     }
+                                                                    )
+                # extract off-nadir angle data for matching access interval
+                reduced_th = target_coverage_data['off-nadir axis angle [deg]']
+                
+                # calculate slew angle interval 
+                off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[agent_name][instrument_name]/2,
+                                            off_axis_angle + cross_track_fovs[agent_name][instrument_name]/2)
+                                            for off_axis_angle in reduced_th]
+
+                # skip if no off-nadir angle data available for this access interval
+                if not off_axis_angles: continue 
+
+                # merge off-nadir angle intervals to get overall slew angle interval for this access interval
+                slew_angles : Interval = reduce(lambda a, b: a.intersection(b), off_axis_angles)
+                
+                # skip if no valid slew angles
+                if slew_angles.is_empty(): continue  
+
+                # add task observation opportunity to list of task observation opportunities
+                obs_opp = AtomicObservationOpportunity(task,
+                                                        instrument_name,
+                                                        # use reduced access interval
+                                                        access_interval,
+                                                        # use reduced slew angle interval
+                                                        slew_angles,
+                                                        # take into acount possible tolerance in duration requirement
+                                                        min(min_duration_req, access_interval.span()), 
+                                                        # TODO calculate maximum duration requirement based on agent capabilities
+                                                    )
+                task_observation_opps[task].append((obs_opp, agent_name))
+
+            # sort task observation opportunities for this task by access interval start time
+            task_observation_opps[task] = sorted(task_observation_opps[task], key=lambda x: (x[0].accessibility, x[0].id, x[1]))               
+                        
+        # return task observation opportunities
+        return task_observation_opps
+    
+    @staticmethod
+    def _collect_fov_specs(specs : Spacecraft) -> dict:
+        """ get instrument field of view specifications from agent specs object """
+        # validate inputs
+        if isinstance(specs, dict):
+            if specs.get('instrument', None) is None: return {}
+        elif isinstance(specs, Spacecraft):            
+            if specs.instrument is None: return {}
+        else:
+            raise ValueError(f'`specs` needs to be of type `dict` or `Spacecraft`. Is of type `{type(specs)}`.')
+
+        # compile instrument field of view specifications   
+        cross_track_fovs = {instrument.name: np.NAN for instrument in specs.instrument}
+        for instrument in specs.instrument:
+            cross_track_fov = []
+            for instrument_model in instrument.mode:
+                if isinstance(instrument_model, BasicSensorModel):
+                    instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
+                    instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
+                    if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    else:
+                        raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
+                elif isinstance(instrument_model, PassiveOpticalScannerModel):
+                    instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
+                    instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
+                    if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    else:
+                        raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
+                else:
+                    raise NotImplementedError(f'measurement data query not yet suported for sensor models of type {type(instrument_model)}.')
+            cross_track_fovs[instrument.name] = max(cross_track_fov)
+
+        return cross_track_fovs
+
+    @staticmethod
+    def __extract_minimum_duration_req(task : GenericObservationTask, orbitdata : OrbitData) -> float:
+        """ Extracts the minimum duration requirement for a given task. """
+        
+        # check if task has any objectives
+        if task.objective is None:
+            return orbitdata.time_step # no objectives assigned to this task; assume default minimum duration requirement
+
+        # extract any duration requirements from the task objective
+        duration_reqs = [req for req in task.objective
+                        if req.attribute == TemporalRequirementAttributes.DURATION.value]
+        
+        # check if any duration requirements were found
+        if not duration_reqs: return orbitdata.time_step # no duration requirement found; return default minimum duration requirement
+
+        # get duration requirement
+        duration_req : PerformanceRequirement = duration_reqs[0]
+
+        # extract minimum duration requirement based on requirement type
+        if isinstance(duration_req, CategoricalRequirement):
+            raise ValueError('Categorical duration requirements are not supported.')
+        
+        elif isinstance(duration_req, ConstantValueRequirement):
+            return duration_req.value # return constant duration requirement value
+        
+        elif isinstance(duration_req, ExpSaturationRequirement):
+            return - (1 / duration_req.sat_rate) * np.log(1 - 0.01) # return duration requirement at 1% saturation
+
+        elif isinstance(duration_req, LogThresholdRequirement):
+            return duration_req.threshold # return log threshold duration requirement value
+
+        elif isinstance(duration_req, ExpDecayRequirement):
+            return - (1 / duration_req.decay_rate) * np.log(0.01) # return duration requirement at 1% decay
+
+        elif isinstance(duration_req, GaussianRequirement):
+            # TODO implement gaussian requirement extraction
+            raise NotImplementedError('Gaussian duration requirements are not supported yet.')
+        
+        elif isinstance(duration_req, TriangleRequirement):
+            min_duration = duration_req.reference - (duration_req.width / 2) * (1 - 0.01) # 1% of the triangle height
+            return max(min_duration, 0.0) # ensure non-negative duration requirement
+
+        elif isinstance(duration_req, StepsRequirement):
+            # filter non-zero scores
+            positive_scores = [(idx, score) for idx,score in enumerate(duration_req.scores) if score > 0]
+
+            # check if there are any positive scores        
+            if not positive_scores:
+                raise ValueError('No positive scores found in `StepsRequirement` for duration requirement.')
+
+            # get interval with minimum positive score
+            min_idx, _ = min(positive_scores, key=lambda x: x[1])
+
+            if min_idx == 0:
+                return max(duration_req.thresholds[0], 0.0)
+            elif min_idx == len(duration_req.thresholds):
+                return max(duration_req.thresholds[-1], 0.0)
+            else:
+                return max(min(duration_req.thresholds[min_idx + 1], duration_req.thresholds[min_idx]), 0.0)
+        
+        elif isinstance(duration_req, IntervalInterpolationRequirement):
+            # TODO implement interval interpolation requirement extraction
+            raise NotImplementedError('Interval interpolation duration requirements are not supported yet.')     
+       
+        # unsupported requirement type; should not reach here
+        raise ValueError('Unsupported duration requirement type.')
+
+    @staticmethod
+    def __can_perform_task(task : GenericObservationTask, instrument_name : str) -> bool:
+        """ Checks if the agent can perform the task at hand with the given instrument """
+        # TODO Replace this with KG for better reasoning capabilities; currently assumes instrument has general capability
+
+        # Check if task has specified objectives
+        if task.objective is not None:
+            # Extract capability requirements from the objective
+            capability_reqs = [req for req in task.objective
+                               if isinstance(req, CapabilityRequirement)
+                               and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
+            capability_req: CapabilityRequirement = capability_reqs[0] if capability_reqs else None
+
+            # Evaluate capability requirement
+            if capability_req is not None:
+                return capability_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value, instrument_name.lower()) >= 0.5
+
+        # No capability objectives specified; check if instrument has general capability
+        return True

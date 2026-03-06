@@ -109,10 +109,17 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # Stage 0: Build mission specs (always needed)
         # ------------------------------------------------------------
         # TODO temporary exception; remove when oracles planner evaluation is implemented
-        if 'oracle' in preplanner:
-            raise NotImplementedError(f"Preplanner type `{preplanner}` not yet implemented in this study.")
-        if 'oracle' in replanner:
-            raise NotImplementedError(f"Replanner type `{replanner}` not yet implemented in this study.")
+        # if 'oracle' in preplanner:
+        #     raise NotImplementedError(f"Preplanner type `{preplanner}` not yet implemented in this study.")
+        # if 'oracle' in replanner:
+        #     raise NotImplementedError(f"Replanner type `{replanner}` not yet implemented in this study.")
+        if 'oracle' in preplanner or 'oracle' in replanner:
+            return {
+                "scenario_id": trial_id,
+                "status": 'oracle_skipped',
+                "results_dir": results_dir,
+                "elapsed_s": time.time() - t0,
+            }
 
         # generate scenario specifications from templates and trial parameters
         if printouts: tqdm.write(f" - Generated mission specifications for scenario {trial_id}")
