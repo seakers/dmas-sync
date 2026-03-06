@@ -14,7 +14,7 @@ from pyparsing import List
 from tqdm import tqdm
 
 from execsatm.tasks import GenericObservationTask
-from execsatm.observations import ObservationOpportunity
+from execsatm.observations import AtomicObservationOpportunity, ObservationOpportunity
 from execsatm.attributes import CapabilityRequirementAttributes, ObservationRequirementAttributes, SpatialCoverageRequirementAttributes, TemporalRequirementAttributes
 from execsatm.mission import Mission
 from execsatm.requirements import CapabilityRequirement, CategoricalRequirement, ConstantValueRequirement, ExpDecayRequirement, ExpSaturationRequirement, GaussianRequirement, IntervalInterpolationRequirement, LogThresholdRequirement, PerformancePreferenceStrategies, PerformanceRequirement, StepsRequirement, TriangleRequirement
@@ -151,6 +151,15 @@ class AbstractPlanner(ABC):
                 access_times = [target_coverage_data['time [s]'][i] for i in interval_indices]
                 off_nadir_angles = [target_coverage_data['off-nadir axis angle [deg]'][i] for i in interval_indices]
 
+                # validate instruments
+                interval_instruments = {target_coverage_data['instrument'][i] 
+                                        for i in interval_indices}
+                if len(interval_instruments) != 1:
+                    raise ValueError(
+                        f"Merged interval contains multiple instruments for target={target}: "
+                        f"{sorted(map(str, interval_instruments))}"
+                    )
+
                 # add access opportunity to map
                 access_opportunities[target].append( (access_interval, instrument_name, access_times, off_nadir_angles) )
             
@@ -284,15 +293,16 @@ class AbstractPlanner(ABC):
                     if slew_angles.is_empty(): continue  
 
                     # add task observation opportunity to list of task observation opportunities
-                    observation_opps.append(ObservationOpportunity(task,
-                                                                    instrument_name,
-                                                                    # use reduced access interval
-                                                                    overlapping_access_interval,
-                                                                    # take into acount possible tolerance in duration requirement
-                                                                    min(min_duration_req, overlapping_access_interval.span()), 
-                                                                    # use reduced slew angle interval
-                                                                    slew_angles
-                                                                ))
+                    observation_opps.append(AtomicObservationOpportunity(task,
+                                                                         instrument_name,
+                                                                         # use reduced access interval
+                                                                         overlapping_access_interval,
+                                                                         # use reduced slew angle interval
+                                                                         slew_angles,
+                                                                         # take into acount possible tolerance in duration requirement
+                                                                         min(min_duration_req, overlapping_access_interval.span()), 
+                                                                         # TODO calculate maximum duration requirement based on agent capabilities
+                                                                    ))
         
         # return list of task observation opportunities
         return sorted(observation_opps, key=lambda x: (x.accessibility, x.id))
@@ -521,7 +531,8 @@ class AbstractPlanner(ABC):
                     # TODO: look into ID being used. Ideally we would want a new ID for the combined task.
 
                     # merge all tasks in the clique into a single task p
-                    p = p.merge(q, must_overlap=must_overlap, max_duration=threshold)  # max duration of 5 minutes
+                    # p = p.merge(q, must_overlap=must_overlap, max_duration=threshold)  # max duration of 5 minutes
+                    p = p.merge(q, must_overlap=must_overlap)
 
                     # update progress bar
                     pbar.update(1)
@@ -533,7 +544,8 @@ class AbstractPlanner(ABC):
                     adj[p.id].discard(neighbor)
 
                     # reevaluate adjacency
-                    if p.can_merge(neighbor, must_overlap=must_overlap, max_duration=threshold):
+                    # if p.can_merge(neighbor, must_overlap=must_overlap, max_duration=threshold):
+                    if p.can_merge(neighbor, must_overlap=must_overlap):
                         # if p and neighbor can still be merged;
                         # add edge back to adjacency list
                         adj[neighbor.id].add(p)
@@ -637,12 +649,19 @@ class AbstractPlanner(ABC):
         # estimate measurment look angle 
         th_img = np.average([obs.slew_angles.left, obs.slew_angles.right])
 
+        # find observation time for each task in the observation opp
+        action_tasks_start_times = obs.get_earliest_starts(t_img)
+        action_task_duration = {
+            task : d_img - (t_task_img - t_img)
+            for task, t_task_img in action_tasks_start_times.items()
+        }
+
         # calculate task reward per parent task
         rewards = {parent_task : self._estimate_task_value(parent_task,
                                                             obs.instrument_name,
                                                             th_img,
-                                                            t_img,
-                                                            d_img,
+                                                            action_tasks_start_times[parent_task],
+                                                            action_task_duration[parent_task],
                                                             specs,
                                                             cross_track_fovs,
                                                             orbitdata,
@@ -728,7 +747,6 @@ class AbstractPlanner(ABC):
         return max([mission.calc_task_value(task, measurement) 
                     for measurement in measurement_performance.values()]) \
                         if len(measurement_performance.values()) > 0 else 0.0
-
         
     def __estimate_task_performance_metrics(self, 
                                             task : GenericObservationTask, 
@@ -1065,16 +1083,19 @@ class AbstractPlanner(ABC):
                 prev_attitude = [prev_observation.look_angle, 0.0, 0.0]
 
             # maneuver to point to target
-            if isinstance(state, SatelliteAgentState):                
+            if isinstance(state, SatelliteAgentState):       
+                # calculate required attitude change and maximum possible attitude change within the time available         
                 dth_req = abs(curr_observation.look_angle - prev_attitude[0])
                 dth_max = (curr_observation.t_start - t_prev) * max_slew_rate
 
+                # check if attitude maneuver is required
+                if abs(dth_req) <= self.EPS: 
+                    continue # already pointing in the same direction; ignore maneuver
+                
+                # check if attitude maneuver is possible within the time available
                 if dth_req > dth_max and abs(dth_req - dth_max) >= self.EPS: 
                     # maneuver impossible within timeframe
                     raise ValueError(f'Cannot schedule maneuver. Not enough time between observations')\
-                
-                # check if attitude maneuver is required
-                if abs(dth_req) <= self.EPS: continue # already pointing in the same direction; ignore maneuver
 
                 # calculate attitude duration    
                 th_0 = prev_attitude[0]
@@ -1244,7 +1265,7 @@ class AbstractPlanner(ABC):
                         t_i = state._t
                         d_i = 0.0
 
-                    observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate))
+                    observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate, j == 0))
 
                 # check if observations sequence is valid
                 if any([not self.is_observation_pair_valid(*params) 
@@ -1273,7 +1294,9 @@ class AbstractPlanner(ABC):
     def is_observation_pair_valid(self, 
                                   t_i, d_i, th_i, 
                                   t_j, d_j, th_j,
-                                  max_slew_rate) -> bool:
+                                  max_slew_rate,
+                                  start_pair = False
+                                  ) -> bool:
         # check inputs
         assert not np.isnan(th_j) and not np.isnan(th_i) # TODO: add case where the target is not visible by the agent at the desired time according to the precalculated orbitdata
 
@@ -1282,6 +1305,8 @@ class AbstractPlanner(ABC):
         
         # calculate time between measuremnets
         dt_measurements = t_j - (t_i + d_i)
+        if start_pair:
+            dt_measurements = 0.0 if t_j <= t_i <= t_j + d_j else dt_measurements
 
         return ((dt_measurements > dt_maneuver 
                 or abs(dt_measurements - dt_maneuver) < 1e-6)   # there is enough time to maneuver

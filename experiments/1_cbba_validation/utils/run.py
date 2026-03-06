@@ -193,8 +193,14 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                     printouts=printouts,
                     level=log_level_int
                 )
-            # Your code currently has this disabled; enable when ready:
-            mission.process_results(force_process=sim_cfg.force_postprocess, printouts=not sim_cfg.quiet)
+
+            # ensure we postprocess if we just ran the sim
+            force_postprocess = sim_cfg.force_postprocess or should_run_sim  
+
+            # process results
+            mission.process_results(force_process=force_postprocess, printouts=not sim_cfg.quiet)
+            
+            # set postprocess status for return summary
             post_status = "postprocessed" 
         else:
             post_status = "postprocessed_skipped_existing"
@@ -223,7 +229,15 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                     printouts=printouts,
                     level=log_level_int
                 )
-            mission.summarize_results(force_summarize=sim_cfg.force_summarize, printouts=not sim_cfg.quiet)
+
+            # ensure we summarize if we just ran or postprocessed the sim
+            force_summarize = sim_cfg.force_summarize or should_run_sim
+
+            # summarize results 
+            mission.summarize_results(force_summarize=force_summarize, 
+                                      printouts=not sim_cfg.quiet)
+            
+            # set summarize status for return summary
             sum_status = "summarized"
         else:
             sum_status = "summarized_skipped_existing"
@@ -236,6 +250,13 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                 "results_summary_path": results_summary_path,
                 "elapsed_s": time.time() - t0,
             }
+
+        # ------------------------------------------------------------
+        # Stage 5: Cleanup resources if needed (e.g., close memmaps, etc) 
+        # ------------------------------------------------------------
+        if mission is not None:
+            # ensure any open resources are closed
+            mission.close()  
 
         # ------------------------------------------------------------
         # Return summary

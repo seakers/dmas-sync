@@ -110,6 +110,9 @@ class SimulationEnvironment(object):
 
         # check if connectivity needs to be update
         if t not in self._current_connectivity_interval:
+            if t >= 1000.0:
+                x = 1 # breakpoint
+
             # update current connectivity matrix and components
             self._current_connectivity_interval, \
                 self._current_connectivity_components, \
@@ -293,8 +296,17 @@ class SimulationEnvironment(object):
         resp['observation_data'] = observation_data
         self._observation_history.extend(observation_data)    
 
+        # set completion status based on end time of observation action
+        if t_curr < t_end - 1e-6:
+            # observation action is still ongoing; 
+            #  mark as pending for nows
+            status = ActionStatuses.PENDING.value
+        else:
+            # observation action has completed; mark as completed
+            status = ActionStatuses.COMPLETED.value
+
         # return packaged results
-        return state, ActionStatuses.COMPLETED.value, [], [obs_data]
+        return state, status, [], [obs_data]
     
     def __perform_wait(self, 
                      state : SimulationAgentState,
@@ -323,33 +335,33 @@ class SimulationEnvironment(object):
                                 instrument_dict : dict,
                                 t_start : float,
                                 t_end : float
-                                ) -> dict:
+                                ) -> List[dict]:
         """
         Queries internal models or data and returns observation information being sensed by the agent
         """
-
         # if isinstance(agent_state, SatelliteAgentState):
         if agent_state_dict['state_type'] == SimulationAgentTypes.SATELLITE.value:
             # get orbit data for the agent
             agent_orbitdata : OrbitData = self._orbitdata[agent_state_dict['agent_name']]
 
-            # get access data for the agent
-            raw_access_data : Dict[str, list] = agent_orbitdata.gp_access_data.lookup_interval(t_start, t_end)
-                        
-            # get satellite's off-axis angle
-            satellite_off_axis_angle = agent_state_dict['attitude'][0]
-            
-            # collect instrument information
+            # unpack relevant information
             instrument_name = instrument_dict["name"]
-            instruments = np.asarray(raw_access_data["instrument"], dtype=str)
+            satellite_off_axis_angle = agent_state_dict['attitude'][0]
+                                    
+            # define interval characteristics for grouping observations 
             ID_COLS = {'instrument', 'agent name', 'grid index', 'GP index',
-           'lat [deg]', 'lon [deg]', 'pnt-opt index'}
-            
-            # create instrument mask for data filtering
-            inst_mask = (instruments == instrument_name)
+                     'lat [deg]', 'lon [deg]', 'pnt-opt index'}
 
-            # collect data for every instrument model onboard
-            obs_data = []
+            # get access data for the agent
+            raw_access_data : Dict[str, np.ndarray] \
+                = agent_orbitdata.gp_access_data.lookup_interval(t_start, t_end,
+                                                                 filters={"instrument": instrument_name})
+            safe_access_data = {col: np.array(vals, copy=True) for col, vals in raw_access_data.items()}
+
+            # initialize mask for instrument model filtering
+            mask = np.zeros_like(safe_access_data['time [s]'], dtype=bool)
+
+            # expand mask for every instrument model onboard
             for instrument_model in instrument_dict['mode']:
                 # get observation FOV from instrument model
                 if instrument_model['@type'] == 'Basic Sensor':
@@ -360,73 +372,66 @@ class SimulationEnvironment(object):
                     raise NotImplementedError(f"measurement data query not yet suported for sensor models of type {instrument_model['model_type']}.")
 
                 # query coverage data of everything that is within the field of view of the agent
-                # TODO Add along-track angle checking. Currently assumes that only cross-track maneuverability is available
-
-                angles = np.asarray(raw_access_data["off-nadir axis angle [deg]"])
-                angles_inst = angles[inst_mask]            # smaller array
-
-                mask = np.abs(angles_inst - satellite_off_axis_angle) <= instrument_off_axis_fov
-
-                matching_data = {col: np.asarray(vals)[inst_mask][mask] 
-                                    for col, vals in tqdm(raw_access_data.items(), 
-                                                       desc=f"{SimulationRoles.ENVIRONMENT.value}-Filtering access data for instrument {instrument_name}...", 
-                                                       leave=False,
-                                                       disable=len(raw_access_data)<10 or not self._printouts)
-                                }
+                cross_track_mask = np.abs(safe_access_data["off-nadir axis angle [deg]"] - satellite_off_axis_angle) <= instrument_off_axis_fov
+                # along_track_mask = None # TODO Add along-track angle checking. Currently assumes that only cross-track maneuverability is available
+                model_mask = cross_track_mask # & along_track_mask <- enable when along-track mask is implemented
                 
-                # convert columns to arrays once
-                cols = {k: np.asarray(v) for k, v in matching_data.items()}
-                grid = cols['grid index'].astype(np.int64, copy=False)
-                gp   = cols['GP index'].astype(np.int64, copy=False)
-                time = cols['time [s]']
+                # combine with existing mask for other instrument models
+                mask |= model_mask
+                                
+            # convert columns to arrays once
+            cols = {col: vals[mask] 
+                    for col, vals in safe_access_data.items()}
+            grid = cols['grid index'].astype(np.int64, copy=False)
+            gp   = cols['GP index'].astype(np.int64, copy=False)
+            time = cols['time [s]']
 
-                # check if there is any data to process
-                if len(time) == 0: continue
+            # check if there is any data to process
+            if len(time) == 0: return []
 
-                # ---- Build unique groups for (grid, gp) efficiently ----
-                # Stack into (n,2) and unique rows
-                pairs = np.column_stack((grid, gp))  # shape (n,2)
-                _, inv = np.unique(pairs, axis=0, return_inverse=True)
-                # inv[i] = group id of row i, groups are 0..G-1
+            # ---- Build unique groups for (grid, gp) efficiently ----
+            # Stack into (n,2) and unique rows
+            pairs = np.column_stack((grid, gp))  # shape (n,2)
+            _, inv = np.unique(pairs, axis=0, return_inverse=True)
+            # inv[i] = group id of row i, groups are 0..G-1
 
-                # Sort rows by group id so each group is contiguous
-                order = np.argsort(inv, kind="mergesort")
-                inv_sorted = inv[order]
+            # Sort rows by group id so each group is contiguous
+            order = np.argsort(inv, kind="mergesort")
+            inv_sorted = inv[order]
 
-                # Find group boundaries in the sorted order
-                # starts: indices in `order` where a new group begins
-                starts = np.r_[0, np.flatnonzero(inv_sorted[1:] != inv_sorted[:-1]) + 1]
-                ends   = np.r_[starts[1:], len(order)]
+            # Find group boundaries in the sorted order
+            # starts: indices in `order` where a new group begins
+            starts = np.r_[0, np.flatnonzero(inv_sorted[1:] != inv_sorted[:-1]) + 1]
+            ends   = np.r_[starts[1:], len(order)]
 
-                obs_data: list[dict] = []
+            # Iterate groups (G is usually much smaller than N)
+            obs_data : List[Dict] = []
+            for s,e in tqdm(zip(starts, ends), 
+                            desc=f"{SimulationRoles.ENVIRONMENT.value}-Merging observation data for instrument {instrument_name}...", 
+                            unit=' obs',
+                            disable=len(starts)<10 or not self._printouts,
+                            leave=False):
+                idx = order[s:e]  # row indices for this group
 
-                # Iterate groups (G is usually much smaller than N)
-                for s,e in tqdm(zip(starts, ends), 
-                                desc=f"{SimulationRoles.ENVIRONMENT.value}-Merging observation data for instrument {instrument_name}...", 
-                                unit=' obs',
-                                disable=len(starts)<10 or not self._printouts,
-                                leave=False):
-                    idx = order[s:e]  # row indices for this group
+                merged = {
+                    't_start': float(np.min(time[idx])),
+                    't_end':   float(np.max(time[idx])),
+                }
 
-                    merged = {
-                        't_start': float(np.min(time[idx])),
-                        't_end':   float(np.max(time[idx])),
-                    }
+                # For ID columns: take first value
+                # For other columns: collect list (or scalar if length 1)
+                for col, arr in cols.items():
+                    if col in ID_COLS:
+                        v = arr[idx[0]]
+                        merged[col] = v.item() if hasattr(v, "item") else v
+                    else:
+                        v = arr[idx]
+                        # Convert numpy scalars to Python types if needed
+                        lst = [x.item() if hasattr(x, "item") else x for x in v.tolist()]
+                        # merged[col] = lst[0] if len(lst) == 1 else lst
+                        merged[col] = lst[-1] # always take last value to reflect changes in observed parameters along the observation window (e.g. for moving targets)
 
-                    # For ID columns: take first value
-                    # For other columns: collect list (or scalar if length 1)
-                    for col, arr in cols.items():
-                        if col in ID_COLS:
-                            v = arr[idx[0]]
-                            merged[col] = v.item() if hasattr(v, "item") else v
-                        else:
-                            v = arr[idx]
-                            # Convert numpy scalars to Python types if needed
-                            lst = [x.item() if hasattr(x, "item") else x for x in v.tolist()]
-                            # merged[col] = lst[0] if len(lst) == 1 else lst
-                            merged[col] = lst[-1] # always take last value to reflect changes in observed parameters along the observation window (e.g. for moving targets)
-
-                    obs_data.append(dict(merged))
+                obs_data.append(merged)
 
             # return processed observation data
             return obs_data
@@ -434,7 +439,6 @@ class SimulationEnvironment(object):
         else:
             raise NotImplementedError(f"Measurement results query not yet supported for agents with state of type {agent_state_dict['state_type']}")
     
-
     """
     ----------------------
     RESULTS HANDLING METHODS
@@ -510,17 +514,18 @@ class SimulationEnvironment(object):
             connectivity_data : List[Tuple[Interval, Set[frozenset], Dict[str, Set[str]]]] = []
 
             # iterate through list of intervals within the simulation data
-            for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=0, t_max=self._t_curr, include_current=True):
+            # for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=0, t_max=self._t_curr, include_current=True):
+            for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw_fast(t=0, t_max=self._t_curr, include_current=True):                
                 interval, components, component_map \
                     = self.__interpret_agent_connectivity_data(agent_orbitdata, t_start, t_end, *component_indices)
                 
                 f.write('---\n')
                 f.write(f"**Interval:** {interval} [s]\n\n")
 
+                # TODO print connectivity matrix
                 # conn_matrix = conn_matrix_sparse.toarray()
                 # agent_names = list(component_map.keys())
 
-                # TODO print connectivity matrix
                 # f.write("**Connectivity Matrix:**\n\n")
                 # ## print table header 
                 # header = "||" + "  |".join([f"`{name:>5}`" for name in agent_names]) + "|\n"
@@ -599,7 +604,7 @@ class SimulationEnvironment(object):
         agent_orbitdata : OrbitData = next(iter(self._orbitdata.values()))
 
         # iterate through list of intervals in this time period 
-        for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw(t=t, include_current=True):
+        for t_start,t_end,*component_indices in agent_orbitdata.comms_links.iter_rows_raw_fast(t=t, include_current=True):
             # skip if time `t` is not in this interval
             if not (t_start <= t < t_end):
                 continue

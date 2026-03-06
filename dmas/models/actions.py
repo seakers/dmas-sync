@@ -390,6 +390,7 @@ class ObservationAction(AgentAction):
         out = super().to_dict()
         out['obs_opp'] = self.obs_opp.to_dict() if self.obs_opp else 'None'
         out['req'] = self.req
+        out['duration'] = self.t_end - self.t_start
         return out
 
 class WaitAction(AgentAction):

@@ -146,38 +146,42 @@ class Plan(ABC):
                 # possible conflicts exist, may need to repair 
                 for action in actions: self.add(action, t)
         
-    def add(self, action : AgentAction, t : float) -> None:
+    def add(self, new_action : AgentAction, t : float) -> None:
         """ adds action to plan """
         try:
             # check argument types
-            if not isinstance(action, AgentAction):
-                raise ValueError(f"Cannot place action of type `{type(action)}` in plan. Must be of type `{AgentAction}`.")
+            if not isinstance(new_action, AgentAction):
+                raise ValueError(f"Cannot place action of type `{type(new_action)}` in plan. Must be of type `{AgentAction}`.")
+
+            # # create a deep copy of the action to be added to avoid modifying the original action
+            # new_action = action_from_dict(**action.to_dict())
 
             # check if action is scheduled to occur during while another action is being performed
             interrupted_actions = [interrupted_action 
                                    for interrupted_action in self.actions
                                    if isinstance(interrupted_action, AgentAction)
-                                   and interrupted_action.t_start < action.t_start < interrupted_action.t_end]
+                                   and interrupted_action.t_start < new_action.t_start < interrupted_action.t_end]
             
             # check if another action is schduled during this action
             concurrent_actions = [concurrent_action 
                                   for concurrent_action in self.actions
                                   if isinstance(concurrent_action, AgentAction)
-                                  and action.t_start < concurrent_action.t_start
-                                  and concurrent_action.t_end < action.t_end
+                                  and new_action.t_start < concurrent_action.t_start
+                                  and concurrent_action.t_end < new_action.t_end
                                   ]
             concurrent_actions.sort(key=lambda a : a.t_start)
 
             # check if action occurs after another action was completed 
             previous_actions = [completed_action 
                                 for completed_action in self.actions
-                                if completed_action.t_end <= action.t_start]
+                                if completed_action.t_end <= new_action.t_start]
 
             if interrupted_actions:
                 earliest_interrupted_action : AgentAction = interrupted_actions.pop(0)
+                
                 if abs(earliest_interrupted_action.t_end - earliest_interrupted_action.t_start) < 1e-6:
                     # interrupted action has no duration, schedule task for right after
-                    self.actions.insert(self.actions.index(earliest_interrupted_action) + 1, action)
+                    self.actions.insert(self.actions.index(earliest_interrupted_action) + 1, new_action)
                     
                 else:
                     # interrupted action has a non-zero duration; split interrupted action into two 
@@ -189,8 +193,8 @@ class Plan(ABC):
                     continued_action.id = str(uuid.uuid1())
 
                     ## change start and end times for the interrupted and continued actions
-                    earliest_interrupted_action.t_end = action.t_start
-                    continued_action.t_start = action.t_end
+                    earliest_interrupted_action.t_end = new_action.t_start
+                    continued_action.t_start = new_action.t_end
 
                     # modify interrupted action
                     if isinstance(earliest_interrupted_action, TravelAction):
@@ -216,33 +220,33 @@ class Plan(ABC):
                     # place action in between the two split parts
                     self.actions[i_plan] = earliest_interrupted_action
                     self.actions.insert(i_plan + 1, continued_action)
-                    self.actions.insert(i_plan + 1, action)
+                    self.actions.insert(i_plan + 1, new_action)
 
             elif concurrent_actions:
                 # split action between concurent actions
                 for concurrent_action in concurrent_actions:
-                    if type(concurrent_action) == type(action):
+                    if type(concurrent_action) == type(new_action):
                         raise RuntimeError(f"Another action of the same type is being performed concurrently to another.")
                     elif abs(concurrent_action.t_end - concurrent_action.t_start) > 1e-6:
                         raise RuntimeError(f"Another action of non-zero is being performed concurrently to another.")
 
                     # create a copy of the action and assign it to start after concurrent action
-                    shortened_action : AgentAction = copy.copy(action)
+                    shortened_action : AgentAction = copy.copy(new_action)
                     shortened_action.t_end = concurrent_action.t_start
 
                     # check if new action has a non-zero time duration
                     if abs(shortened_action.t_end - shortened_action.t_start) >= 1e-6:   
                         # update current action's end time
-                        action.t_start = concurrent_action.t_end
+                        new_action.t_start = concurrent_action.t_end
                         
                         # add new action to plan
                         self.actions.insert(self.actions.index(concurrent_action), shortened_action)
 
                 # check if there is still time left in the action
-                if abs(action.t_end - action.t_start) >= 1e-6:   
+                if abs(new_action.t_end - new_action.t_start) >= 1e-6:   
                     # place action after last concurrent_action 
                     latest_action : AgentAction = concurrent_actions[-1]
-                    self.actions.insert(self.actions.index(latest_action) + 1, action) 
+                    self.actions.insert(self.actions.index(latest_action) + 1, new_action) 
                 else:
                     # action is too short after splitting; do not add to plan
                     pass
@@ -250,11 +254,11 @@ class Plan(ABC):
             elif previous_actions:
                 # place action after latest action ends
                 latest_action : AgentAction = previous_actions[-1]
-                self.actions.insert(self.actions.index(latest_action) + 1, action)
+                self.actions.insert(self.actions.index(latest_action) + 1, new_action)
 
             else:
                 # place action at the start of the plan
-                self.actions.insert(0, action)
+                self.actions.insert(0, new_action)
 
         finally:
             # sort actions chronollogically 
@@ -271,9 +275,9 @@ class Plan(ABC):
                 raise RuntimeError(f"Cannot place action in plan. {e} \n {str(self)}\ncurrent plan:\n{str(self)}")
 
     def update_action_completion(   self, 
-                                    completed_actions : list, 
-                                    aborted_actions : list, 
-                                    pending_actions : list,
+                                    completed_actions : List[AgentAction], 
+                                    aborted_actions : List[AgentAction], 
+                                    pending_actions : List[AgentAction],
                                     t : float
                                 ) -> Tuple[list, list]:
         """         
@@ -297,6 +301,13 @@ class Plan(ABC):
         expired_plan_actions = [action for action in self.actions
                            if 1e-9 < t - action.t_end]
         for action in expired_plan_actions: self.actions.remove(action)
+
+        # # update start time to pending actions that were not completed
+        # for pending_action in pending_actions:
+        #     matching_pending_actions = [action for action in self.actions
+        #                                 if pending_action.id == action.id]
+        #     for action in matching_pending_actions: 
+        #         action.t_start = t
 
         # return performed actions that were in the plan and expired actions that were not completed
         return performed_plan_actions, expired_plan_actions
