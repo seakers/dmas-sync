@@ -301,7 +301,7 @@
                 "--force-simulate",
                 // "--force-postprocess",
                 // "--force-summarize",
-                "--reduced",
+                // "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]
@@ -330,8 +330,8 @@
                 // "--only-simulate",
                 // "--only-postprocess",
                 // "--force-simulate",
-                // "--force-postprocess",
-                // "--force-summarize",
+                "--force-postprocess",
+                "--force-summarize",
                 // "--quiet",
                 // "--exceptions",
             ]
