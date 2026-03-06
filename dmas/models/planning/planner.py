@@ -646,6 +646,12 @@ class AbstractPlanner(ABC):
             #  count previous observations for each task in the observation opportunity
             task_n_obs, task_t_prevs = self._count_previous_observations_from_history(obs, t_img, observation_history)
         
+        # ensure all task keys are present in the observation opportunity
+        assert all(task in obs.tasks for task in task_n_obs.keys()), \
+            "All tasks in `task_n_obs` must be present in the observation opportunity."
+        assert all(task in obs.tasks for task in task_t_prevs.keys()), \
+            "All tasks in `task_t_prevs` must be present in the observation opportunity."
+
         # estimate measurment look angle 
         th_img = np.average([obs.slew_angles.left, obs.slew_angles.right])
 
@@ -668,7 +674,8 @@ class AbstractPlanner(ABC):
                                                             mission,
                                                             task_n_obs[parent_task],
                                                             task_t_prevs[parent_task])
-                     for parent_task in obs.tasks}
+                    #  for parent_task in obs.tasks}
+                    for parent_task in task_n_obs.keys()}
 
         # return total reward
         return sum(rewards.values())    

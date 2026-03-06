@@ -1388,11 +1388,14 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         
         # assign best observation numbers and previous observation times to observations in candidate path
         for obs_idx,obs in enumerate(candidate_path):
-            # get earliest observation time for this observation
+            # get earliest task observation times for this observation
             obs_t_img = obs.obs_opp.get_earliest_starts(obs.t_start)
 
             # iterate through matching tasks of this observation
             for task in obs.obs_opp.tasks:
+                # get observation time for this task in this observation opportunity
+                t_start = obs_t_img[task]
+
                 # check if sequence was modified for this parent task
                 if task in n_obs_best:
                     # extract observation time and revisit time from best sequences
@@ -1411,12 +1414,14 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     # assign best observation number and previous observation time
                     n_obs_candidate[obs_idx][task] = n_obs
                     t_prev_candidate[obs_idx][task] = t_prev
-                else:
+
+                elif task in proposed_bids:
                     # no best sequence found for this parent task; use existing bids from results
                     # get matching bid for this observation task
                     matching_bids = [bid for bid in proposed_bids[task].values()
                                     # if abs(bid.t_img - obs.t_start) <= self.EPS
-                                    if abs(bid.t_img - obs_t_img[task]) <= self.EPS
+                                    # if abs(bid.t_img - obs_t_img[task]) <= self.EPS
+                                    if abs(bid.t_img - t_start) <= self.EPS
                                     and bid.owner == state.agent_name]
                     
                     assert matching_bids, \
@@ -1428,14 +1433,26 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
                     # get previous matching observations for this task
                     prev_bids_self = [bid for bid in proposed_bids[task].values()
-                                        if bid.t_img < obs.t_start]
+                                        # if bid.t_img < obs.t_start
+                                        # if bid.t_img < obs_t_img[task]
+                                        if bid.t_img < t_start
+                                        ]
                     previous_bids_other = [bid for bid in self._results[task]
                                         if (bid.winner != state.agent_name)
-                                        and bid.t_img < obs.t_start]
-                    prevoous_bids_perf = [bid for bid in self._results[task]
+                                        # and bid.t_img < obs.t_start
+                                        # and bid.t_img < obs_t_img[task]
+                                        and bid.t_img < t_start
+                                        ]
+                    previous_bids_perf = [bid for bid in self._results[task]
                                         if bid.was_performed()
-                                        and bid.t_img < obs.t_start]
-                    prev_bids = prev_bids_self + previous_bids_other + prevoous_bids_perf
+                                        # and bid.t_img < obs.t_start
+                                        # and bid.t_img < obs_t_img[task]
+                                        and bid.t_img < t_start
+                                        ]
+                    prev_bids = prev_bids_self + previous_bids_other + previous_bids_perf
+
+                    assert matching_bid.n_obs == 0 or prev_bids, \
+                        "Previous bids should exist for observation numbers greater than zero."
 
                     # update previous observation counts
                     n_obs_candidate[obs_idx][task] = matching_bid.n_obs
@@ -1443,6 +1460,19 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
                     if matching_bid.n_obs > 0: assert t_prev_candidate[obs_idx][task] >= 0.0, \
                         "Previous observation time is not defined for observation number greater than zero."
+                elif state.get_time() in obs.obs_opp.accessibility:
+                    # this observation window is in progress; check if any bids were performed during this access
+                    matching_bids = [bid for bid in self._results[task] 
+                                     if bid.t_img in obs.obs_opp.accessibility
+                                     and bid.winner == state.agent_name
+                                     and bid.was_performed()]
+                    if not matching_bids:
+                        raise ValueError(f"No matching performed bids found for task {task} during current observation opportunity accessibility. Cannot assign observation number and previous observation time.")
+
+                    continue
+                
+                else:
+                    raise ValueError(f"Task {task} in proposed path does not have a best sequence or existing bid to assign observation number and previous observation time from.")
         
         # TODO assure all best observation numbers have been assigned
         

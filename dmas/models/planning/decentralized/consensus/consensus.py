@@ -128,8 +128,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         performed_observations : List[ObservationAction] = completed_observations + interrupted_observations
         # -------------------------------
         # DEBUG PRINTOUTS
-        # if self._debug and incoming_bids:
-        if self._debug:
+        if self._debug and incoming_bids:
+        # if self._debug:
+        # if "a" in state.agent_name and "3" in state.agent_name and state._t > 53_314.0:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
             self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
@@ -149,8 +150,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
-        # if (task_updates or results_updates or bundle_updates) and self._debug:
-        if self._debug:
+        if (task_updates or results_updates or bundle_updates) and self._debug:
+        # if self._debug:
+        # if "a" in state.agent_name and "3" in state.agent_name and state._t > 53_314.0:
             self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
             print(f'`{state.agent_name}` - Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
             if any([
@@ -1218,7 +1220,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # DEBUG PRINTOUTS
         if self._debug and new_bids:
         # if new_bids:
-        # if "c" in state.agent_name and "4" in state.agent_name and state._t > 29_879.0:
+        # if "a" in state.agent_name and "3" in state.agent_name and state._t > 53_314.0:
             self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
             self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
             print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
@@ -1619,9 +1621,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 prev_bid : Bid = None
                 for bid in bids:
                     # check if a matching bid was found
-                    # if (abs(bid.t_img - obs_act.t_start) <= self.EPS 
                     if (abs(bid.t_img - task_t_earliest) <= self.EPS
-                        and bid.winner == state.agent_name):
+                        and bid.winner == state.agent_name
+                        # and not bid.performed
+                        ):
                         # ensure only one matching bid exists
                         assert matching_bid is None, \
                             "There should only be one matching bid for the current time step."
@@ -1633,25 +1636,33 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     #  for this observation opportunity
                     elif(bid.t_img < obs_act.t_start
                          and bid.t_img in obs_act.obs_opp.accessibility
-                         and bid.performed):
+                         and bid.winner == state.agent_name
+                         and bid.performed
+                        ):
                         # ensure only one matching bid exists
                         assert matching_bid is None, \
                             "There should only be one matching bid for the current time step."                        
                         
                         # assign matching bid
                         matching_bid = bid
-                        x = 1
 
-                    # check if a previous bid was found
-                    elif bid.t_img < obs_act.t_start:
-                        if prev_bid is None or bid.t_img > prev_bid.t_img:
-                            # assign if most recent previous bid
-                            prev_bid = bid
+                    # # check if a previous bid was found
+                    # elif bid.t_img < obs_act.t_start:
+                    #     if prev_bid is None or bid.t_img > prev_bid.t_img:
+                    #         # assign if most recent previous bid
+                    #         prev_bid = bid
 
                 # ensure matching bid was found
                 assert matching_bid is not None, \
                     "Matching bid for observation in path not found in results. Was assigned without updating results."
                 
+                # get previous bid if it exists
+                prev_bid = bids[matching_bid.n_obs - 1] if matching_bid.n_obs > 0 else None
+                
+                # ensure previous bid exists if observation number is greater than 0
+                assert matching_bid.n_obs == 0 or prev_bid is not None, \
+                    "Observation number for matching bid is greater than 0 but no previous bid found in results."
+
                 # update previous observation counts
                 n_obs_i[task] = matching_bid.n_obs
                 t_prev_i[task] = prev_bid.t_img if prev_bid is not None else np.NINF
