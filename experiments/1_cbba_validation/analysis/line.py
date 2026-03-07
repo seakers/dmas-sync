@@ -74,7 +74,8 @@ def generate_line_plots(trial_name : str,
     #             )
 
     sns.boxplot(data=filtered_df,
-                y='Normalized Total Obtained Reward',
+                # y='Normalized Total Obtained Reward',
+                y='Total Obtained Reward [norm]',
                 x='Task Arrival Rate',
                 hue="Replanner", 
                 # palette=["m", "g"],
@@ -160,8 +161,8 @@ if __name__ == "__main__":
     # define trial name and parameters to filter results by
     base_dir = "/media/aslan15/easystore/Data/1_cbba_validation/2026_02_26_local"
 
-    trial_name = "full_factorial_trials_2026-02-22"
-    # trial_name = "full_factorial_trials_2026-02-23"
+    # trial_name = "full_factorial_trials_2026-02-22"
+    trial_name = "full_factorial_trials_2026-02-23"
 
     # experiment_col = "in_stress"
     experiment_col = "in_connectivity"

@@ -1420,7 +1420,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     # get matching bid for this observation task
                     matching_bids = [bid for bid in proposed_bids[task].values()
                                     # if abs(bid.t_img - obs.t_start) <= self.EPS
-                                    # if abs(bid.t_img - obs_t_img[task]) <= self.EPS
                                     if abs(bid.t_img - t_start) <= self.EPS
                                     and bid.owner == state.agent_name]
                     
@@ -1434,19 +1433,16 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     # get previous matching observations for this task
                     prev_bids_self = [bid for bid in proposed_bids[task].values()
                                         # if bid.t_img < obs.t_start
-                                        # if bid.t_img < obs_t_img[task]
                                         if bid.t_img < t_start
                                         ]
                     previous_bids_other = [bid for bid in self._results[task]
                                         if (bid.winner != state.agent_name)
                                         # and bid.t_img < obs.t_start
-                                        # and bid.t_img < obs_t_img[task]
                                         and bid.t_img < t_start
                                         ]
                     previous_bids_perf = [bid for bid in self._results[task]
                                         if bid.was_performed()
                                         # and bid.t_img < obs.t_start
-                                        # and bid.t_img < obs_t_img[task]
                                         and bid.t_img < t_start
                                         ]
                     prev_bids = prev_bids_self + previous_bids_other + previous_bids_perf

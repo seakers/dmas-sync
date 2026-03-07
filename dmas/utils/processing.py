@@ -2553,59 +2553,64 @@ class ResultsProcessor:
         # iterate throughout all accessible tasks and their corresponding access opportunities
         for task, accesses in accesses_per_task.items():
             for access_interval, agent_name, instrument_name in accesses:
-                # check if instrument can perform the task
-                if not ResultsProcessor.__can_perform_task(task, instrument_name): 
-                    continue # skip if instrument cannot perform task
-                
-                # get matching agent orbit data
-                agent_orbitdata = compiled_orbitdata[agent_name]
+                for lat,lon,grid_idx,gp_idx in task.location:
+                    # check if instrument can perform the task
+                    if not ResultsProcessor.__can_perform_task(task, instrument_name): 
+                        continue # skip if instrument cannot perform task
+                    
+                    # get matching agent orbit data
+                    agent_orbitdata = compiled_orbitdata[agent_name]
 
-                # extract minimum duration requirement for this task
-                min_duration_req : float = ResultsProcessor.__extract_minimum_duration_req(task, agent_orbitdata)
+                    # extract minimum duration requirement for this task
+                    min_duration_req : float = ResultsProcessor.__extract_minimum_duration_req(task, agent_orbitdata)
 
-                # ensure minimum duration requirement is a positive number
-                assert isinstance(min_duration_req, (int,float)) and min_duration_req >= 0.0, "minimum duration requirement must be a positive number."
+                    # ensure minimum duration requirement is a positive number
+                    assert isinstance(min_duration_req, (int,float)) and min_duration_req >= 0.0, "minimum duration requirement must be a positive number."
 
-                # check if overlapping access interval is long enough to perform the task
-                if access_interval.span() < min_duration_req - threshold: continue
+                    # check if overlapping access interval is long enough to perform the task
+                    if access_interval.span() < min_duration_req - threshold: continue
 
-                # get matching access interval in agent orbit data
-                target_coverage_data : dict \
-                    = agent_orbitdata.gp_access_data.lookup_interval(access_interval.left, 
-                                                                     access_interval.right,
-                                                                     filters={
-                                                                            'instrument': instrument_name,
-                                                                     }
-                                                                    )
-                # extract off-nadir angle data for matching access interval
-                reduced_th = target_coverage_data['off-nadir axis angle [deg]']
-                
-                # calculate slew angle interval 
-                off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[agent_name][instrument_name]/2,
-                                            off_axis_angle + cross_track_fovs[agent_name][instrument_name]/2)
-                                            for off_axis_angle in reduced_th]
+                    # get matching access interval in agent orbit data
+                    target_coverage_data : dict \
+                        = agent_orbitdata.gp_access_data.lookup_interval(access_interval.left, 
+                                                                        access_interval.right,
+                                                                        filters={
+                                                                                'instrument': instrument_name,
+                                                                                'grid index': grid_idx,
+                                                                                'GP index': gp_idx
+                                                                            }
+                                                                        )
+                    # extract off-nadir angle data for matching access interval
+                    reduced_th = target_coverage_data['off-nadir axis angle [deg]']
+                    
+                    # calculate slew angle interval 
+                    off_axis_angles = [Interval(off_axis_angle - cross_track_fovs[agent_name][instrument_name]/2,
+                                                off_axis_angle + cross_track_fovs[agent_name][instrument_name]/2)
+                                                for off_axis_angle in reduced_th]
 
-                # skip if no off-nadir angle data available for this access interval
-                if not off_axis_angles: continue 
+                    # skip if no off-nadir angle data available for this access interval
+                    if not off_axis_angles: 
+                        continue 
 
-                # merge off-nadir angle intervals to get overall slew angle interval for this access interval
-                slew_angles : Interval = reduce(lambda a, b: a.intersection(b), off_axis_angles)
-                
-                # skip if no valid slew angles
-                if slew_angles.is_empty(): continue  
+                    # merge off-nadir angle intervals to get overall slew angle interval for this access interval
+                    slew_angles : Interval = reduce(lambda a, b: a.intersection(b), off_axis_angles)
+                    
+                    # skip if no valid slew angles
+                    if slew_angles.is_empty(): 
+                        continue  
 
-                # add task observation opportunity to list of task observation opportunities
-                obs_opp = AtomicObservationOpportunity(task,
-                                                        instrument_name,
-                                                        # use reduced access interval
-                                                        access_interval,
-                                                        # use reduced slew angle interval
-                                                        slew_angles,
-                                                        # take into acount possible tolerance in duration requirement
-                                                        min(min_duration_req, access_interval.span()), 
-                                                        # TODO calculate maximum duration requirement based on agent capabilities
-                                                    )
-                task_observation_opps[task].append((obs_opp, agent_name))
+                    # add task observation opportunity to list of task observation opportunities
+                    obs_opp = AtomicObservationOpportunity(task,
+                                                            instrument_name,
+                                                            # use reduced access interval
+                                                            access_interval,
+                                                            # use reduced slew angle interval
+                                                            slew_angles,
+                                                            # take into acount possible tolerance in duration requirement
+                                                            min(min_duration_req, access_interval.span()), 
+                                                            # TODO calculate maximum duration requirement based on agent capabilities
+                                                        )
+                    task_observation_opps[task].append((obs_opp, agent_name))
 
             # sort task observation opportunities for this task by access interval start time
             task_observation_opps[task] = sorted(task_observation_opps[task], key=lambda x: (x[0].accessibility, x[0].id, x[1]))               
