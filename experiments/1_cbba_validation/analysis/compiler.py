@@ -106,6 +106,7 @@ def compile_results_summaries(trial_name : str,
         results_df['Average Messages Broadcasted per Task'] = results_df['Total Messages Broadcasted'] / results_df['Tasks Available']
 
     print(results_df[['Total Obtained Reward', 'Task Reward Dual Bound', 'Total Obtained Reward [norm]']].describe())
+    print(results_df[['Total Obtained Reward', 'Task Reward Dual Bound', 'Total Obtained Reward [norm]']])
 
     # define output paths for compiled results
     compiled_results_filename = f'{trial_name}_compiled_results.csv'

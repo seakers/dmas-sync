@@ -1787,7 +1787,8 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
                                                    )
 
         # initialize mission
-        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+        # self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=True)
+        self.simulation : Simulation = Simulation.from_dict(scenario_specs, overwrite=False)
 
         # execute mission
         self.simulation.execute()

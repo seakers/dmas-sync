@@ -413,7 +413,7 @@
                 "--trial-range", "0:256",
                 // "--profile-cpu",
                 // "--profile-mem",
-                // "--single-thread",
+                "--single-thread",
                 // "--only-precompute",
                 // "--only-simulate",
                 // "--only-postprocess",

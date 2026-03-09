@@ -389,10 +389,11 @@ class Simulation:
         agent_missions : Dict[str, Mission] = {agent.name : agent._mission
                                     for agent in self._agents}
         
-
+        # check if results summary already exists
+        prev_summary_exists = os.path.isfile(summary_path)
 
         # check if results summary file exists 
-        if os.path.isfile(summary_path) and not force_summarize:
+        if prev_summary_exists and not force_summarize:
             # file exists and reevaluate is False; skip results summary generation
             print(f"Results summary already exists at: `{summary_path}`")
             results_summary : pd.DataFrame = pd.read_csv(summary_path)
@@ -413,8 +414,18 @@ class Simulation:
                                                         precision=precision, 
                                                         printouts=printouts)
         else:
-            # results have not already stored in this simulation instance; 
-            #   process results and generate summary
+            # check if results summary file exists
+            if prev_summary_exists:
+                # results summary file exists but processed results are not stored in this simulation instance;
+                # use previous runtime stats from results summary and generate summary with previous runtime stats
+
+                # load previous runtime from results summary
+                prev_summary_df = pd.read_csv(summary_path)
+
+                # extract runtime value from previous summary
+                runtime_row = prev_summary_df[prev_summary_df['Metric'] == 'Simulation Runtime [s]']
+                        
+            # process results and generate summary
             processed_results = self.process_results(printouts=printouts)
 
             results_summary : pd.DataFrame \
@@ -427,10 +438,14 @@ class Simulation:
                                                         precision=precision, 
                                                         printouts=printouts)
             
+            
         # include runtime in results summary if simulation has been executed by this instance
         if self.__executed:
-            runtime_row = {'Metric' : 'Runtime [s]', 'Value' : round(self._t_f - self._t_0, precision)}
+            runtime_row = {'Metric' : 'Simulation Runtime [s]', 'Value' : round(self._t_f - self._t_0, precision)}
             results_summary = pd.concat([results_summary, pd.DataFrame([runtime_row])], ignore_index=True)
+        # else if previous summary exists and runtime row was extracted, include previous runtime in new summary
+        elif prev_summary_exists and 'runtime_row' in locals():
+            results_summary = pd.concat([results_summary, runtime_row], ignore_index=True)
 
         # log results summary
         if printouts:
