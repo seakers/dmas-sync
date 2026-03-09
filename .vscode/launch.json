@@ -287,12 +287,10 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                // "-t", "full_factorial_trials_2026-02-22",
-                "-t", "full_factorial_trials_2026-02-23",
+                "-t", "full_factorial_trials_2026-02-22",
+                // "-t", "full_factorial_trials_2026-02-23",
                 // "--trial-range", "69:70",
-                // "--trial-range", "70:71",
-                // "--trial-range", "217:218",
-                 "--trial-range", "0:1",
+                 "--trial-range", "100:101",
                 "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
@@ -407,10 +405,10 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                // "-t", "full_factorial_trials_2026-02-22",
-                "-t", "full_factorial_trials_2026-02-23",
-                // "--trial-range", "0:300",
-                "--trial-range", "0:256",
+                "-t", "full_factorial_trials_2026-02-22",
+                // "-t", "full_factorial_trials_2026-02-23",
+                "--trial-range", "0:225",
+                // "--trial-range", "0:256",
                 // "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
@@ -418,8 +416,8 @@
                 // "--only-simulate",
                 // "--only-postprocess",
                 // "--force-simulate",
-                "--force-postprocess",
-                "--force-summarize",
+                // "--force-postprocess",
+                // "--force-summarize",
                 "--quiet",
                 // "--exceptions",
             ]

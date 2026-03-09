@@ -1491,7 +1491,7 @@ class ResultsProcessor:
         total_obtained_utility = np.round(obtained_rewards_df['reward'].sum() - execution_costs_df['cost'].sum(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0
 
         reward_primal_bound, reward_dual_bound \
-            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions)
+            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, printouts)
         
         total_task_priority, total_observable_task_priority \
             = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
@@ -2225,16 +2225,71 @@ class ResultsProcessor:
                                   accesses_per_task: Dict[GenericObservationTask, List], 
                                   agent_specs: Dict[str, object],
                                   agent_missions: Dict[str, Mission],
+                                  printouts : bool
                                 ) -> Tuple[float, float]:
         # extract agent field of view specifications from agent specs object
         cross_track_fovs = {agent : ResultsProcessor._collect_fov_specs(specs) 
                             for agent,specs in agent_specs.items()}
 
         # calculate observation opportunities from accesses
-        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] \
+        atomic_observation_opps : Dict[str, List[ObservationOpportunity]] \
              = ResultsProcessor.single_task_observation_opportunity_from_accesses(
                     compiled_orbitdata, accesses_per_task, cross_track_fovs
                 )
+        
+        # define cluster threshold for tasks
+        threshold = 5*60 # seconds
+        threshold = max(task.availability.span() for task in accesses_per_task.keys()) / 2
+
+        # cluster observation opportunities across agents for each task
+        clustered_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] = {}
+        for agent_name, observation_opps in atomic_observation_opps.items():        
+            # check if observation opportunities are clusterable
+            obs_adjacency : Dict[str, set[ObservationOpportunity]] \
+                = ResultsProcessor.__check_task_observation_opportunity_clusterability(observation_opps, False, threshold, printouts)
+    
+            # cluster observation opportunities based on adjacency
+            clustered_opps : list[ObservationOpportunity] \
+                = ResultsProcessor.cluster_task_observation_opportunities(observation_opps, obs_adjacency, False, printouts)
+
+            # add clustered observation opportunities to the final list of observation opportunities available for scheduling
+            clustered_observation_opps[agent_name] = clustered_opps 
+
+            assert all([obs.slew_angles.span()-1e-6 <= cross_track_fovs[agent_name][obs.instrument_name] 
+                        for obs in clustered_opps]), \
+                f"Observation opportunities have slew angles larger than the maximum allowed field of view."
+        
+        # merge task across agents
+        merged_observation_opps : Dict[str, List[ObservationOpportunity]] = {}
+        for agent_name in clustered_observation_opps.keys():
+            merged = list(atomic_observation_opps[agent_name])
+            merged.extend(clustered_observation_opps[agent_name])
+            merged_observation_opps[agent_name] = merged
+
+        # group observation opportunities by tasks
+        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] = defaultdict(list)
+        for agent_name, observation_opps in merged_observation_opps.items():
+            for obs_opp in observation_opps:
+                for task in obs_opp.tasks:
+                    if task not in task_observation_opps:
+                        task_observation_opps[task] = []
+                    task_observation_opps[task].append((obs_opp, agent_name))
+
+        # sort observation opportunities for each task by observation time
+        for task, obs_opp_agent_list in task_observation_opps.items():
+            obs_time_pairs = []
+
+            # calculate earliest observation time for the approrpiate task in each observation opportunity
+            for obs_opp, agent_name in obs_opp_agent_list:
+                obs_opp : ObservationOpportunity
+                obs_opp_earliest_time = obs_opp.get_earliest_task_start(task)
+                obs_time_pairs.append((obs_opp, agent_name, obs_opp_earliest_time)) 
+
+            # sort observation opportunities by observation time
+            sorted_obs_time_pairs = sorted(obs_time_pairs, key=lambda x: x[2])
+
+            # add to final list of observation opportunities for this task, now sorted by observation time
+            task_observation_opps[task] = [(obs_opp, agent_name, obs_time) for obs_opp, agent_name, obs_time in sorted_obs_time_pairs]
         
         # TODO calculate primal bound using greedy oracle
         primal_bound = 0.0
@@ -2275,12 +2330,13 @@ class ResultsProcessor:
             # iterate throughout observation opportunities for this task.
             #  assume that all observation opportunities for this task can be utilized
             #  regardless of overlaps in access intervals or resource constraints
-            for n_obs, (obs_opp,agent_name) in enumerate(observation_opps):
-                # define observation time, observation duration, and look angle for this observation opportunity
-                t_obs = obs_opp.accessibility.left
-                d_obs = obs_opp.accessibility.span()
+            for n_obs, (obs_opp,agent_name,t_obs) in enumerate(observation_opps):
+                obs_opp : ObservationOpportunity
+                
+                # define observation duration, look angle for this observation opportunity, and previous observation time
+                d_obs = obs_opp.accessibility.span() - (t_obs - obs_opp.accessibility.left)
                 th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
-                t_prev = observation_opps[n_obs-1][0].accessibility.left if n_obs > 0 else 0.0
+                t_prev = observation_opps[n_obs-1][2] if n_obs > 0 else 0.0
 
                 # get matching agent mission
                 agent_mission = agent_missions[agent_name]
@@ -2308,8 +2364,7 @@ class ResultsProcessor:
                 task_utility += obs_opp_utility
 
             # add task utility to dual bound
-            dual_bound += task_utility
-            
+            dual_bound += task_utility            
 
         # return value
         return dual_bound
@@ -2543,17 +2598,17 @@ class ResultsProcessor:
                                                           accesses_per_task: Dict[GenericObservationTask, List[Tuple[Interval, str, str]]], 
                                                           cross_track_fovs : dict,
                                                           threshold : float = 1e-9
-                                                        ) -> Dict[GenericObservationTask, List[ObservationOpportunity]]:
+                                                        ) -> Dict[str, List[ObservationOpportunity]]:
         """ Creates one instance of a task observation opportunity per each access opportunity 
         for every available task """
 
-        # initiate task observation opportunities
-        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] = defaultdict(list)
+        # initiate task observation opportunities map: agent name -> list of observation opportunities for this agent
+        agent_task_observation_opps : Dict[str, List[ObservationOpportunity]] = defaultdict(list)
 
         # iterate throughout all accessible tasks and their corresponding access opportunities
         for task, accesses in accesses_per_task.items():
             for access_interval, agent_name, instrument_name in accesses:
-                for lat,lon,grid_idx,gp_idx in task.location:
+                for *_,grid_idx,gp_idx in task.location:
                     # check if instrument can perform the task
                     if not ResultsProcessor.__can_perform_task(task, instrument_name): 
                         continue # skip if instrument cannot perform task
@@ -2610,13 +2665,10 @@ class ResultsProcessor:
                                                             min(min_duration_req, access_interval.span()), 
                                                             # TODO calculate maximum duration requirement based on agent capabilities
                                                         )
-                    task_observation_opps[task].append((obs_opp, agent_name))
-
-            # sort task observation opportunities for this task by access interval start time
-            task_observation_opps[task] = sorted(task_observation_opps[task], key=lambda x: (x[0].accessibility, x[0].id, x[1]))               
+                    agent_task_observation_opps[agent_name].append(obs_opp)
                         
         # return task observation opportunities
-        return task_observation_opps
+        return agent_task_observation_opps
     
     @staticmethod
     def _collect_fov_specs(specs : Spacecraft) -> dict:
@@ -2740,3 +2792,229 @@ class ResultsProcessor:
 
         # No capability objectives specified; check if instrument has general capability
         return True
+    
+    @staticmethod
+    def __check_task_observation_opportunity_clusterability(
+            observation_opportunities : List[ObservationOpportunity], 
+            must_overlap : bool, 
+            threshold : float,
+            printouts : bool
+        ) -> dict:
+        """ 
+        Creates adjacency list for a given list of task observation opportunities.
+
+        #### Arguments
+        - `observation_opportunities` : A list of task observation opportunities to create the adjacency list for.
+        - `must_overlap` : Whether tasks' availability must overlap in availability time to be considered for clustering.
+        - `threshold` : The time threshold for clustering tasks in seconds [s].
+        """
+
+        # create adjacency list for tasks
+        adj : Dict[str, set[ObservationOpportunity]] = {task.id : set() for task in observation_opportunities}
+        assert len(adj) == len(observation_opportunities), \
+            "Duplicate observation opportunity IDs found when creating adjacency list."
+
+        if observation_opportunities:
+            # sort tasks by accessibility
+            observation_opportunities.sort(key=lambda a : a.accessibility) 
+            
+            # get min and max accessibility times
+            t_min = observation_opportunities[0].accessibility.left
+
+            # initialize bins
+            bins = defaultdict(list)
+            
+            # group task in bins by accessibility
+            for task in tqdm(observation_opportunities, leave=False, desc="Grouping tasks into bins", disable=not printouts):
+                task : ObservationOpportunity
+                center_time = (task.accessibility.left + task.accessibility.right) / 2 - t_min
+                bin_key = int(center_time // threshold)
+                bins[bin_key].append(task)
+
+            # populate adjacency list
+            with tqdm(total=len(observation_opportunities), desc="Checking task clusterability", leave=False, disable=not printouts) as pbar:
+                for b in bins:
+                    candidates : list[ObservationOpportunity] \
+                          = bins[b] + bins.get(b + 1, []) + bins.get(b - 1, [])
+                    for i in range(len(candidates)):
+                        for j in range(i + 1, len(candidates)):
+                            t1, t2 = candidates[i], candidates[j]
+                            if t1.can_merge(t2, must_overlap=must_overlap, max_duration=threshold):
+                                adj[t1.id].add(t2)
+                                adj[t2.id].add(t1)
+                        pbar.update(1)
+
+        # check if adjacency list is symmetric
+        for p in observation_opportunities:
+            assert p not in adj[p.id], \
+                f'Task {p.id} is in its own adjacency list.'
+            for q in adj[p.id]:
+                assert p in adj[q.id], \
+                    f'Task {p.id} is in the adjacency list of task {q.id} but not vice versa.'
+
+        return adj
+
+    @staticmethod
+    def cluster_task_observation_opportunities( 
+                                               observation_opportunities : List[ObservationOpportunity], 
+                                               adj : Dict[str, Set[ObservationOpportunity]], 
+                                               must_overlap : bool,
+                                               printouts : bool
+                                            ) -> list:
+        """ 
+        Clusters observation opportunities based on adjacency. 
+        
+        ```
+        while V!=Ø do
+            Pick a vertex p with largest degree from V. 
+                If such p are not unique, pick the p with highest priority.
+            
+            while N(p)=Ø do
+                Pick a neighbor q of p, q ∈ N(p), such that the number of their common neighbors is maximum. 
+                    If such p are not unique, pick the p with least edges being deleted.
+                    Again, if such p are still not unique, pick the p with highest priority.
+                Combine q and p into a new p
+                Delete edges from q and p that are not connected to their common neighbors
+                Reset neighbor collection N(p) for the new p
+            end while
+            
+            Output the cluster-task denoted by p
+            Delete p from V
+        end while
+        ```
+        
+        """         
+        # only keep observation opportunities that have at least one clusterable observation opportunity
+        v = [obs for obs in observation_opportunities if len(adj[obs.id]) > 0]
+        
+        # sort observation opportunities by degree of adjacency 
+        v : list[ObservationOpportunity] = ResultsProcessor.__sort_by_degree(observation_opportunities, adj)
+        
+        # combine observation opportunities into clusters
+        combined_obs : list[ObservationOpportunity] = []
+
+        with tqdm(total=len(v), desc="Merging overlapping observation opportunities", leave=False, disable=not printouts) as pbar:
+            while len(v) > 0:
+                # pop first observation opportunity from the list of observation opportunities to be scheduled
+                p : ObservationOpportunity = v.pop()
+
+                # get list of neighbors of p sorted by number of common neighbors
+                n_p : list[ObservationOpportunity] = ResultsProcessor.__sort_observation_opportunities_by_common_neighbors(p, list(adj[p.id]), adj)
+
+                # initialize clique with p
+                clique = set()
+
+                # update progress bar
+                pbar.update(1)
+
+                # while there are neighbors of p
+                while len(n_p) > 0:
+                    # pop first neighbor q from the list of neighbors
+                    q : ObservationOpportunity = n_p.pop()
+
+                    # Combine q and p into a new p                 
+                    clique.add(q)
+
+                    # find common neighbors of p and q
+                    common_neighbors : set[ObservationOpportunity] = adj[p.id].intersection(adj[q.id])
+                   
+                    # remove edges to p and q that do not include common neighbors
+                    for neighbor in adj[p.id].difference(common_neighbors): adj[neighbor.id].discard(p)
+                    for neighbor in adj[q.id]: adj[neighbor.id].discard(q)              
+                    
+                    # update edges of p and q to only include common neighbors
+                    adj[p.id].intersection_update(common_neighbors)
+                    
+                    # remove q from the adjacency list
+                    adj.pop(q.id)
+
+                    # remove q from the list of tasks to be scheduled
+                    v.remove(q)
+
+                    # Reset neighbor collection N_p for the new p;
+                    n_p : list[ObservationOpportunity] = ResultsProcessor.__sort_observation_opportunities_by_common_neighbors(p, list(adj[p.id]), adj)               
+
+                for q in clique: 
+                    # TODO: look into ID being used. Ideally we would want a new ID for the combined task.
+
+                    # merge all tasks in the clique into a single task p
+                    # p = p.merge(q, must_overlap=must_overlap, max_duration=threshold)  # max duration of 5 minutes
+                    p = p.merge(q, must_overlap=must_overlap)
+
+                    # update progress bar
+                    pbar.update(1)
+
+                # Update adjacency lists to capture new task requirements and clusterability
+                for neighbor in adj[p.id]:
+                    # remove p from neighbor's adjacency list and vice versa
+                    adj[neighbor.id].discard(p)
+                    adj[p.id].discard(neighbor)
+
+                    # reevaluate adjacency
+                    # if p.can_merge(neighbor, must_overlap=must_overlap, max_duration=threshold):
+                    if p.can_merge(neighbor, must_overlap=must_overlap):
+                        # if p and neighbor can still be merged;
+                        # add edge back to adjacency list
+                        adj[neighbor.id].add(p)
+                        adj[p.id].add(neighbor)
+
+                # DEBUGGING--------- 
+                # clique.add(p)
+                # cliques.append(sorted([observation_opportunities.index(t)+1 for t in clique]))
+                # ------------------
+
+                # add merged task to the list of combined tasks
+                combined_obs.append(p) 
+
+                # sort remaining task observation opportunities by degree of adjacency 
+                v : list[ObservationOpportunity] = ResultsProcessor.__sort_by_degree(v, adj)
+        
+        # return only observation opportunities that have multiple parents (avoid generating duplicate observation opportunities)
+        multiple_task_obs = [obs for obs in combined_obs if len(obs.tasks) > 1] 
+
+        # generate new id's for combined observation opportunities to avoid duplicate id's with single-task observation opportunities
+        for obs in multiple_task_obs:
+            obs.regenerate_id()
+
+        # return combined observation opportunities
+        return multiple_task_obs
+
+    
+    @staticmethod
+    def __sort_by_degree(obs_opportunities : List[ObservationOpportunity], adjacency : dict) -> list:
+        """ Sorts observation opportunities by degree of adjacency. """
+        # calculate degree of each observation opportunity
+        degrees : dict = {obs : len(adjacency[obs.id]) for obs in obs_opportunities}
+
+        # sort observation opportunities by degree and return
+        return sorted(obs_opportunities, key=lambda p: (degrees[p], 
+                                                        sum([parent_task.priority for parent_task in p.tasks]), 
+                                                        -p.accessibility.left,
+                                                        -p.accessibility.span(),
+                                                        p.id
+                                                        ))
+
+    @staticmethod
+    def __sort_observation_opportunities_by_common_neighbors(p : ObservationOpportunity, n_p : list, adjacency : dict) -> list:
+        # specify types
+        n_p : list[ObservationOpportunity] = n_p
+        adjacency : Dict[str, set[ObservationOpportunity]] = adjacency
+
+        # calculate common neighbors
+        common_neighbors : dict = {q : adjacency[p.id].intersection(adjacency[q.id]) 
+                                   for q in n_p}
+        
+        # calculate neighbors to delete
+        neighbors_to_delete : dict = {q : adjacency[p.id].difference(adjacency[q.id])
+                                      for q in n_p}
+        
+        # sort neighbors by number of common neighbors, number of edges to delete, priority and accessibility
+        return sorted(n_p, 
+                      key=lambda p: (len(common_neighbors[p]), 
+                                     -len(neighbors_to_delete[p]),
+                                     sum([parent_task.priority for parent_task in p.tasks]), 
+                                     -p.accessibility.left,
+                                     -p.accessibility.span(),
+                                      p.id
+                                    )
+                    )

@@ -453,8 +453,8 @@ def parallel_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Si
         # use specified max_workers
         max_workers = max(1, int(sim_cfg.max_workers))
     else:
-        # conservative default; cap at 3 to avoid overloading typical systems
-        max_workers = min(os.cpu_count() or 1, 3, len(trial_rows))
+        # conservative default; cap at 2 to avoid overloading typical systems
+        max_workers = min(os.cpu_count() or 1, 2, len(trial_rows))
 
     # if single_thread requested, fall back to serial
     if sim_cfg.single_thread or max_workers <= 1:
