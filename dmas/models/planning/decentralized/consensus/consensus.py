@@ -550,9 +550,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                             ) -> Tuple[list, List[Bid]]:
         """ Checks if planned observations were performed by parent agent and updates results accordingly. """
 
-        if state.agent_name == 'imager_c_sat_2' and state.get_time() >= 83_689.99:
-            x = 1
-
         # check if any observations were performed 
         if not performed_observations:
             # no performed observations; return without updates
