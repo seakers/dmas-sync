@@ -1,5 +1,4 @@
 from collections import defaultdict
-import copy
 from datetime import datetime
 import logging
 import os
@@ -409,10 +408,6 @@ class SimulationAgent(object):
         # unpack bus messages
         for bus_msg in bus_messages: 
             # add bus' contents to list of incoming messages
-            # incoming_messages.extend([message_from_dict(**msg) 
-            #                           if isinstance(msg, dict) 
-            #                           else msg    
-            #                           for msg in bus_msg.msgs])
             incoming_messages.extend(bus_msg.msgs)
             # remove original bus messages 
             incoming_messages.remove(bus_msg)

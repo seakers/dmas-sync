@@ -1,7 +1,6 @@
 from abc import abstractmethod
 from collections import defaultdict, deque
 from itertools import chain
-from sys import flags
 from typing import Dict, List, Tuple, Union
 
 import logging
@@ -83,7 +82,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._relevant_updates : List[Bid] = list()
 
         # initalize broadast time cache
-        self._broadcast_cache: Dict[tuple, List[float]] = dict()
+        # self._broadcast_times_cache: Dict[tuple, List[float]] = dict()
+        self._schedule_broadcasts_cache: Dict[tuple, tuple] = dict() # (t_curr, participating) -> (t_broadcasts, actions)
 
         # set parameters
         self._model = model
@@ -1711,7 +1711,53 @@ class ConsensusPlanner(AbstractReactivePlanner):
     """
     BROADCAST SCHEDULING
     """
-    def _schedule_broadcasts(self, state: SimulationAgentState, orbitdata: OrbitData, new_bids : dict) -> list:
+    def _schedule_broadcasts(self, state, orbitdata, new_bids) -> list:
+        """ Schedules broadcasts to be done by this agent """
+        # validate inputs
+        if not isinstance(state, (SatelliteAgentState, GroundOperatorAgentState)):
+            raise NotImplementedError(...)
+        elif orbitdata is None:
+            raise ValueError(...)
+
+        t_curr = state.get_time()
+        participating = self.__is_participating_in_consensus(new_bids)
+        cache_key = (t_curr, participating)
+
+        if cache_key in self._schedule_broadcasts_cache:
+            return self._schedule_broadcasts_cache[cache_key]
+
+        # Evict stale entries on time advance
+        if self._schedule_broadcasts_cache and next(iter(self._schedule_broadcasts_cache))[0] < t_curr:
+            self._schedule_broadcasts_cache.clear()
+
+        # Compute broadcast times (may itself hit its own cache)
+        t_broadcasts = self.__schedule_broadcast_times(state, orbitdata, new_bids)
+
+        broadcasts = []
+
+        if t_broadcasts:
+            has_bidded_tasks = any(
+                isinstance(task, EventObservationTask) and bids
+                for task, bids in self._results.items()
+            )
+            if has_bidded_tasks:
+                broadcasts = [FutureBroadcastMessageAction(FutureBroadcastMessageAction.BIDS, t) 
+                            for t in t_broadcasts]
+
+        preplan_broadcasts = [
+            action for action in self._preplan
+            if isinstance(action, BroadcastMessageAction)
+            and not isinstance(action, FutureBroadcastMessageAction)
+            and action.t_start > t_curr - self.EPS
+        ]
+
+        broadcasts.extend(preplan_broadcasts)
+        result = sorted(broadcasts, key=lambda action: action.t_start)
+
+        self._schedule_broadcasts_cache[cache_key] = result
+        return result
+
+    def _schedule_broadcasts_DEPRECATED(self, state: SimulationAgentState, orbitdata: OrbitData, new_bids : dict) -> list:
         """ Schedules broadcasts to be done by this agent """
         # validate inputs
         if not isinstance(state, (SatelliteAgentState, GroundOperatorAgentState)):
@@ -1719,21 +1765,17 @@ class ConsensusPlanner(AbstractReactivePlanner):
         elif orbitdata is None:
             raise ValueError(f'`orbitdata` required for agents of type `{type(state)}`.')
 
-        # -------------------------------
-        # DEBUG BREAKPOINTS
-        # x = 1
-        # -------------------------------
-
         # initialize list of broadcasts to be done
         broadcasts : List[AgentAction] = []       
 
         # generate bid messages to share bids in results
-        bidded_tasks = [
-            task
+        bidded_tasks = any(
+            # only consider bids for event-driven tasks
+            isinstance(task, EventObservationTask) \
+            # only tasks with bids
+            and bids
             for task,bids in self._results.items()
-            if isinstance(task, EventObservationTask)   # only consider bids for event-driven tasks
-            if bids                                     # only tasks with bids
-        ]
+        )
         
         # schedule broadcasts at future access opportunities
         t_broadcasts = self.__schedule_broadcast_times(state, orbitdata, new_bids)
@@ -1769,9 +1811,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # Get curent simulation time
         t_curr: float = state.get_time()
 
-        # Evict on time advance — O(1) due to insertion-ordered dict
-        if self._broadcast_cache and next(iter(self._broadcast_cache))[0] < t_curr:
-            self._broadcast_cache.clear()
+        # # Evict on time advance — O(1) due to insertion-ordered dict
+        # if self._broadcast_times_cache and next(iter(self._broadcast_times_cache))[0] < t_curr:
+        #     self._broadcast_times_cache.clear()
 
         # Early exit before any expensive work
         if not any(isinstance(t, EventObservationTask) for t in self._results):
@@ -1779,10 +1821,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # Defer consensus check until after early-exit (it shows up in profile)
         participating = self.__is_participating_in_consensus(new_bids)
-        cache_key = (t_curr, participating)
+        # cache_key = (t_curr, participating)
 
-        if cache_key in self._broadcast_cache:
-            return self._broadcast_cache[cache_key]
+        # if cache_key in self._broadcast_times_cache:
+        #     raise ValueError(f"Cache key {cache_key} found in broadcast times cache after eviction on time advance. This should not happen. Cache contents: {self._broadcast_times_cache}")
+        #     return self._broadcast_times_cache[cache_key]
 
         # ---------------------------------------------------------------
         # Cache miss: fully vectorized computation (no Python row loop)
@@ -1808,7 +1851,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         row_indices = np.where(in_window)[0] + i_start  # absolute indices into _buf
 
         if row_indices.size == 0:
-            self._broadcast_cache[cache_key] = []
+            # self._broadcast_times_cache[cache_key] = []
             return []
 
         # 3. Extract the entire block of matching rows in ONE memmap read
@@ -1867,7 +1910,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -----------------------------
         
         # store in cache for future calls at the same time step
-        self._broadcast_cache[cache_key] = t_broadcast_sorted
+        # self._broadcast_times_cache[cache_key] = t_broadcast_sorted
 
         # return sorted list of broadcast times
         return t_broadcast_sorted
