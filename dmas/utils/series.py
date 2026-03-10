@@ -398,82 +398,6 @@ class IntervalTable(AbstractTable):
             _extras_cols_in_order=np.array(extras_cols, dtype=np.int64),
         )
     
-    #     @classmethod
-#     def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "IntervalTable":
-#         # validate inputs 
-#         super().from_schema(schema, mmap_mode=mmap_mode)
-
-#         # extract in_dir from schema
-#         in_dir = schema.get("dir", None)
-
-#         # ensure required fields are in layout
-#         if in_dir is None: raise ValueError("schema missing 'dir'")
-#         if "files" in schema and "intervals" in schema["files"]:
-#             packed_key = "intervals"
-#         elif "files" in schema and "packed" in schema["files"]:
-#             packed_key = "packed"  # optional backward compat name
-#         else:
-#             raise ValueError("Packed IntervalTable schema must include files['intervals']")
-        
-#         # get number of rows in table from schema
-#         n = int(schema["n"])
-#         layout = schema.get("layout", None)
-#         if not layout:
-#             raise ValueError("Packed IntervalTable schema must include 'layout' list")
-#         k = len(layout)
-
-#         # enumerate columns in layout for indexing
-#         col = {name: i for i, name in enumerate(layout)}
-
-#         # check if table is empty
-#         if n == 0:
-#             # empty table; define empty `ndarray` with correct number of columns based on layout
-#             dtype = np.dtype(schema.get("packed_dtype", np.float64))
-#             buf = np.empty((0, k), dtype=dtype)
-
-#             start = buf[:, col["start"]] if "start" in col else np.empty((0,), dtype=dtype)
-#             end = buf[:, col["end"]] if "end" in col else np.empty((0,), dtype=dtype)
-#             prefix = buf[:, col["prefix_max_end"]] if "prefix_max_end" in col else np.empty((0,), dtype=dtype)
-
-#             extras = {name: buf[:, col[name]] for name in layout if name not in ("start", "end", "prefix_max_end")}
-#             return cls(_buf=buf, _start=start, _end=end, _prefix_max_end=prefix, _extras=extras, _meta=schema, _col=col)
-        
-#         # load packed data
-#         buf = np.load(os.path.join(in_dir, schema["files"][packed_key]), mmap_mode=mmap_mode)
-
-#         # validate shape of packed data
-#         if buf.shape[0] != n:
-#             raise AssertionError(f"expected packed rows {n}, got {buf.shape[0]}")
-#         if buf.shape[1] != k:
-#             raise AssertionError(f"expected packed columns {k} based on layout, got {buf.shape[1]}")
-
-#         # ensure required columns are present in layout
-#         for req in ("start", "end", "prefix_max_end"):
-#             if req not in col: raise ValueError(f"layout missing required column '{req}'")
-
-#         # extract required data into packed array
-#         start = buf[:, col["start"]]
-#         end = buf[:, col["end"]]
-#         prefix = buf[:, col["prefix_max_end"]]
-
-#         # package additional data
-#         extras: Dict[str, np.ndarray] = {}
-#         for name in layout:
-#             if name in ("start", "end", "prefix_max_end"):
-#                 continue
-#             extras[name] = buf[:, col[name]]
-
-#         # return `IntervalTable` object
-#         return cls(
-#             _buf=buf,
-#             _start=start,
-#             _end=end,
-#             _prefix_max_end=prefix,
-#             _extras=extras,
-#             _meta=schema,
-#             _col=col,
-#         )
-
     def __len__(self) -> int:
         return int(self._start.shape[0])
 
@@ -618,31 +542,6 @@ class IntervalTable(AbstractTable):
                 else:
                     comp = buf[i, components_slice]
                 yield s, e, comp   
-
-#     def iter_rows_raw(self, t: float, t_max: float = np.Inf, include_current: bool = False):        
-#         # find starting index using prefix max end times
-#         idx = np.searchsorted(self._prefix_max_end, t, side="left")
-
-#         # iterate through intervals starting from `idx`
-#         for i in range(idx, len(self._start)):
-#             # get interval start time
-#             s = self._start[i]
-            
-#             # early stop if start time is beyond `t_max`
-#             if s > t_max + 1e-6:
-#                 break
-            
-#             # get interval end time
-#             e = self._end[i]
-
-#             # ignore if interval ends before time `t`
-#             if e < t - 1e-6:
-#                 continue
-
-#             # if reached, t <= e and s is either current or in the future;
-#             # return raw row data if starts after time `t` or is current and `include_current` is True
-#             if include_current or s > t - 1e-6:
-#                 yield self.__row_from_index(i)
 
     # ---------------------------------------------------------------------
     # Interval lookups

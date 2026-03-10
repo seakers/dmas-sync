@@ -101,7 +101,7 @@ class SimulationAgent(object):
         
         # initialize trackers and data sinks
         self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
-        self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history")
+        self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history",flush_rows=1000)
         self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history",flush_rows=1000) 
 
         # save initial state to history

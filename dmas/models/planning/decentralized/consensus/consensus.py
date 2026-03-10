@@ -82,6 +82,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._incoming_event_tasks : list[GenericObservationTask] = list()
         self._relevant_updates : List[Bid] = list()
 
+        # initalize broadast time cache
+        self._broadcast_cache: Dict[tuple, List[float]] = dict()
+
         # set parameters
         self._model = model
         self._replan_threshold = replan_threshold
@@ -1761,10 +1764,103 @@ class ConsensusPlanner(AbstractReactivePlanner):
         return sorted(broadcasts, key=lambda action: action.t_start) 
 
     def __schedule_broadcast_times(self, state : SimulationAgentState, orbitdata : OrbitData, new_bids : dict) -> List[float]:
+        t_curr: float = state.get_time()
+
+        # Evict on time advance — O(1) due to insertion-ordered dict
+        if self._broadcast_cache and next(iter(self._broadcast_cache))[0] < t_curr:
+            self._broadcast_cache.clear()
+
+        # Early exit before any expensive work
+        if not any(isinstance(t, EventObservationTask) for t in self._results):
+            return []
+
+        # Defer consensus check until after early-exit (it shows up in profile)
+        participating = self.__is_participating_in_consensus(new_bids)
+        cache_key = (t_curr, participating)
+
+        if cache_key in self._broadcast_cache:
+            return self._broadcast_cache[cache_key]
+
+        # ---------------------------------------------------------------
+        # Cache miss: fully vectorized computation (no Python row loop)
+        # ---------------------------------------------------------------
+        t_next = max(self._preplan.t + self._preplan.horizon, t_curr)
+        cl = orbitdata.comms_links  # IntervalTable
+
+        # 1. Find the row window with searchsorted — same as iter_rows_packed does
+        #    but we take the whole slice at once instead of looping
+        i_start = int(np.searchsorted(cl._prefix_max_end, t_curr, side="left"))
+
+        # Slice start/end columns for the candidate window
+        s_arr = cl._start[i_start:]
+        e_arr = cl._end[i_start:]
+
+        # 2. Build boolean mask for rows in [t_curr, t_next] in one vectorized op
+        in_window = (s_arr <= t_next + 1e-6) & (e_arr >= t_curr - 1e-6)
+        if not participating:
+            # exclude intervals already in progress — only take future ones
+            in_window &= (s_arr >= t_curr - 1e-6) # exclude current if not participating
+
+        row_indices = np.where(in_window)[0] + i_start  # absolute indices into _buf
+
+        if row_indices.size == 0:
+            self._broadcast_cache[cache_key] = []
+            return []
+
+        # 3. Extract the entire block of matching rows in ONE memmap read
+        #    Shape: (M, K) where M = matching rows, K = columns
+        block = cl._buf[row_indices]  # single contiguous read vs M individual reads
+
+        u_idx = orbitdata.comms_target_indices[state.agent_name]
+        n_agents = len(orbitdata.comms_target_columns)
+        # cols_arr = np.array(orbitdata.comms_target_columns)
+        n_targets = len(orbitdata.comms_targets)
+
+        # Component columns start at index 3 (after start, end, prefix_max_end)
+        comps_block = block[:, 3:]           # shape (M, n_agents)
+        t_starts    = block[:, cl._col["start"]]  # shape (M,)
+
+        u_comps = comps_block[:, u_idx]      # shape (M,) — this agent's component per row
+
+        # 4. Vectorized membership: which agents share component with u in each row?
+        #    Shape: (M, n_agents) boolean
+        shared = comps_block == u_comps[:, np.newaxis]
+        shared[:, u_idx] = False             # exclude self
+
+        # 5. Walk rows in order, tracking covered agents with a boolean array
+        agents_considered = np.zeros(n_agents, dtype=bool)
+        n_covered = 0
+        t_broadcasts = []
+
+        for k in range(shared.shape[0]):
+            row_mask = shared[k]
+            new_agents = np.where(row_mask & ~agents_considered)[0]
+            if new_agents.size == 0:
+                continue
+
+            t_s = float(t_starts[k])
+            t_broadcasts.append(t_curr if t_curr > t_s else t_s)
+            agents_considered[new_agents] = True
+            n_covered += new_agents.size
+
+            if n_covered >= n_targets:
+                break
+
+        result = sorted(set(t_broadcasts))
+        # A = result
+        # B = self.__schedule_broadcast_times_DEPRECATED(state, orbitdata, new_bids)
+        # assert A == B, \
+        #     f"Optimized broadcast scheduling produced different results than original implementation.\nOptimized: {A}\nOriginal: {B}"
+        # raise NotImplementedError("Optimized broadcast scheduling implementation not yet validated. Compare results with original implementation and remove this error once validated.")
+        self._broadcast_cache[cache_key] = result
+        return result
+
+    def __schedule_broadcast_times_DEPRECATED(self, state : SimulationAgentState, orbitdata : OrbitData, new_bids : dict) -> List[float]:
         """ Schedule broadcast times for sharing bids in results with other agents."""
 
         # check if any shareble bids to share exist
-        if all([not isinstance(task, EventObservationTask) for task in self._results]):
+        # if all([not isinstance(task, EventObservationTask) for task in self._results]):
+        if not any(isinstance(task, EventObservationTask) for task in self._results):
             # No tasks with bids to share; return empty list
             return []
         
