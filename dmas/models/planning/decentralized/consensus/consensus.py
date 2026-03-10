@@ -128,6 +128,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         interrupted_observations : List[ObservationAction] = [action for action in pending_actions
                                                             if isinstance(action, ObservationAction)]
         performed_observations : List[ObservationAction] = completed_observations + interrupted_observations
+        
         # -------------------------------
         # DEBUG PRINTOUTS
         if self._debug and incoming_bids:

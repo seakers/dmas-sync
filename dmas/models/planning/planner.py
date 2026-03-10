@@ -621,7 +621,8 @@ class AbstractPlanner(ABC):
                                      mission : Mission,
                                      observation_history : LatestObservationTracker,
                                      task_n_obs : Dict[GenericObservationTask,int] = None,
-                                     task_t_prevs : Dict[GenericObservationTask,int] = None
+                                     task_t_prevs : Dict[GenericObservationTask,int] = None,
+                                     task_t_corrs : Dict[GenericObservationTask,int] = None
                                 ) -> float:
         """ 
         
@@ -641,16 +642,18 @@ class AbstractPlanner(ABC):
         """
         
         # check if previous observation counts and times are provided
-        if task_n_obs is None or task_t_prevs is None:
+        if task_n_obs is None or task_t_prevs is None or task_t_corrs is None:
             # no previous observation counts and times provided;
             #  count previous observations for each task in the observation opportunity
-            task_n_obs, task_t_prevs = self._count_previous_observations_from_history(obs, t_img, observation_history)
+            task_n_obs, task_t_prevs, task_t_corrs = self._count_previous_observations_from_history(obs, t_img, observation_history)
         
         # ensure all task keys are present in the observation opportunity
         assert all(task in obs.tasks for task in task_n_obs.keys()), \
             "All tasks in `task_n_obs` must be present in the observation opportunity."
         assert all(task in obs.tasks for task in task_t_prevs.keys()), \
             "All tasks in `task_t_prevs` must be present in the observation opportunity."
+        assert all(task in obs.tasks for task in task_t_corrs.keys()), \
+            "All tasks in `task_t_corrs` must be present in the observation opportunity."
 
         # estimate measurment look angle 
         th_img = np.average([obs.slew_angles.left, obs.slew_angles.right])
@@ -673,7 +676,8 @@ class AbstractPlanner(ABC):
                                                             orbitdata,
                                                             mission,
                                                             task_n_obs[parent_task],
-                                                            task_t_prevs[parent_task])
+                                                            task_t_prevs[parent_task],
+                                                            task_t_corrs[parent_task])
                     #  for parent_task in obs.tasks}
                     for parent_task in task_n_obs.keys()}
 
@@ -730,7 +734,8 @@ class AbstractPlanner(ABC):
                             orbitdata : OrbitData,
                             mission : Mission,
                             n_obs : int = 0,
-                            t_prev : float = np.NINF
+                            t_prev : float = np.NINF,
+                            t_corr : float = np.NINF,
                         ) -> float:
         
         assert isinstance(n_obs, int) and n_obs >= 0, \
@@ -739,6 +744,8 @@ class AbstractPlanner(ABC):
             "Previous observation time must be less than or equal to the current image time."
         if n_obs > 0: assert t_prev >= 0.0, \
             "Previous observation time must be non-negative if there are previous observations."
+        assert isinstance(t_corr, (int,float)), \
+            "Corrected observation time must be a numeric value."
 
         measurement_performance : dict = self.__estimate_task_performance_metrics(task, 
                                                                                  instrument_name, 
@@ -749,7 +756,8 @@ class AbstractPlanner(ABC):
                                                                                  cross_track_fovs, 
                                                                                  orbitdata, 
                                                                                  n_obs, 
-                                                                                 t_prev)
+                                                                                 t_prev,
+                                                                                 t_corr)
 
         return max([mission.calc_task_value(task, measurement) 
                     for measurement in measurement_performance.values()]) \
@@ -766,6 +774,7 @@ class AbstractPlanner(ABC):
                                             orbitdata : OrbitData,
                                             n_obs : int,
                                             t_prev : float,  
+                                            t_corr : float
                                         ) -> dict:
 
         # validate inputs
@@ -782,6 +791,7 @@ class AbstractPlanner(ABC):
         assert isinstance(orbitdata, OrbitData), "Orbit data must be of type `OrbitData`."
         assert n_obs >= 0, "Number of observations must be non-negative."
         assert t_prev <= t_img, "Last observation time must be before the current image time."
+        assert isinstance(t_corr, (int,float)), "Decorrelation time must be a numeric value"
 
         # get access metrics for given observation time, instrument, and look angle
         observation_performances = self.get_available_accesses(task, instrument_name, th_img, t_img, d_img, orbitdata, cross_track_fovs)

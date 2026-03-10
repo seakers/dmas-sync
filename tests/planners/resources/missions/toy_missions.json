@@ -1102,6 +1102,20 @@
                             "strategy" : "discrete_intervals",
                             "thresholds": [0, 10],
                             "scores": [0.5, 1.0]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 1],
+                            "scores": [1, 0.1]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute" : "coobservation_time [s]",
+                            "strategy" : "discrete_intervals",
+                            "thresholds": [0, 900, 3600],
+                            "scores": [1.0, 1.0, 0.1]
                         }
                     ]
                 }

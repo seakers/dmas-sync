@@ -1174,7 +1174,12 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     n_obs = seq_idx + len(performed_obs)
 
                     # get observation number and previous observation time
-                    t_prev = obs_times[seq_idx-1] if seq_idx > 0 else latest_performed_obs_time[0] if performed_obs else np.NINF
+                    if seq_idx == 0:
+                        t_prev = latest_performed_obs_time[0] if performed_obs else np.NINF
+                        t_corr = 0.0
+                    else:
+                        t_prev = obs_times[seq_idx-1] 
+                        t_corr = 0.0
                     
                     if n_obs > 0: assert t_prev >= 0.0, \
                         "Previous observation time is not defined for observation number greater than zero."
@@ -1216,7 +1221,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                                                orbitdata,
                                                                mission,
                                                                n_obs,
-                                                               t_prev
+                                                               t_prev,
+                                                               t_corr
                                                             )
                         
                         # -------------------------------
