@@ -296,9 +296,9 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
-                if True:
+                # if True:
                     # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                    x = 1 # breakpoint
+                    # x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
@@ -351,11 +351,8 @@ class SimulationAgent(object):
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if True:
-                # if "imager_c_sat_27" in curr_state.agent_name:
-                # if "a" in curr_state.agent_name and "3" in curr_state.agent_name and curr_state._t > 53_314.0:
-                if curr_state._t > 74_049.98:
-                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
-                    x = 1 # breakpoint
+                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    # x = 1 # breakpoint
                 # -------------------------------------
 
         # get next actions to perform from current plan
@@ -386,10 +383,10 @@ class SimulationAgent(object):
         # del action        # TODO check if needed
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
-        if True:
+        # if True:
             # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
             # self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
-            x = 1 # breakpoint
+            # x = 1 # breakpoint
         # -------------------------------------        
         
         # return next initial state and next actions to perform

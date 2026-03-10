@@ -130,10 +130,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         performed_observations : List[ObservationAction] = completed_observations + interrupted_observations
         # -------------------------------
         # DEBUG PRINTOUTS
-        # if self._debug and incoming_bids:
+        if self._debug and incoming_bids:
         # if self._debug:
-        # if "a" in state.agent_name and "3" in state.agent_name and state._t > 53_314.0:
-        if state._t > 74_049.98 and incoming_bids:
+        # if state._t > 74_049.98 and incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
             self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
@@ -153,9 +152,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
-        # if (task_updates or results_updates or bundle_updates) and self._debug:
+        if (task_updates or results_updates or bundle_updates) and self._debug:
         # if self._debug:
-        if (task_updates or results_updates or bundle_updates) and state._t > 74_049.98:
+        # if (task_updates or results_updates or bundle_updates) and state._t > 74_049.98:
             self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
             print(f'`{state.agent_name}` - Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
             if any([
@@ -1221,9 +1220,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
-        # if self._debug and new_bids:
+        if self._debug and new_bids:
         # if new_bids:
-        if state._t > 74_049.99 and new_bids:
+        # if state._t > 74_049.99 and new_bids:
             self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
             self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
             print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
