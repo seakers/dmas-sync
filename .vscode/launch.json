@@ -407,7 +407,7 @@
             "args": [
                 "-t", "full_factorial_trials_2026-02-22",
                 // "-t", "full_factorial_trials_2026-02-23",
-                "--trial-range", "191:225",
+                "--trial-range", "0:225",
                 // "--trial-range", "0:256",
                 // "--profile-cpu",
                 // "--profile-mem",
