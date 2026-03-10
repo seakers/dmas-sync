@@ -292,7 +292,7 @@
                 // "--trial-range", "69:70",
                  "--trial-range", "190:191",
                 "--profile-cpu",
-                "--profile-mem",
+                // "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
                 // "--only-simulate",

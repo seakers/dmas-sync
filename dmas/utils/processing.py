@@ -2239,7 +2239,7 @@ class ResultsProcessor:
         
         # define cluster threshold for tasks
         threshold = 5*60 # seconds
-        threshold = max(task.availability.span() for task in accesses_per_task.keys()) / 2 if accesses_per_task else threshold
+        # threshold = max(task.availability.span() for task in accesses_per_task.keys()) / 2 if accesses_per_task else threshold
 
         # cluster observation opportunities across agents for each task
         clustered_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] = {}

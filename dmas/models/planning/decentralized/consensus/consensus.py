@@ -131,9 +131,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
         performed_observations : List[ObservationAction] = completed_observations + interrupted_observations
         # -------------------------------
         # DEBUG PRINTOUTS
-        if self._debug and incoming_bids:
+        # if self._debug and incoming_bids:
         # if self._debug:
         # if "a" in state.agent_name and "3" in state.agent_name and state._t > 53_314.0:
+        if state._t > 74_049.98 and incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
             self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
@@ -153,9 +154,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
-        if (task_updates or results_updates or bundle_updates) and self._debug:
+        # if (task_updates or results_updates or bundle_updates) and self._debug:
         # if self._debug:
-        # if "a" in state.agent_name and "3" in state.agent_name and state._t > 53_314.0:
+        if (task_updates or results_updates or bundle_updates) and state._t > 74_049.98:
             self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
             print(f'`{state.agent_name}` - Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
             if any([
@@ -1221,9 +1222,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
-        if self._debug and new_bids:
+        # if self._debug and new_bids:
         # if new_bids:
-        # if "a" in state.agent_name and "3" in state.agent_name and state._t > 53_314.0:
+        if state._t > 74_049.99 and new_bids:
             self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
             self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
             print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
@@ -1764,6 +1765,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         return sorted(broadcasts, key=lambda action: action.t_start) 
 
     def __schedule_broadcast_times(self, state : SimulationAgentState, orbitdata : OrbitData, new_bids : dict) -> List[float]:
+        """ Schedule broadcast times for sharing bids in results with other agents."""
+        # Get curent simulation time
         t_curr: float = state.get_time()
 
         # Evict on time advance — O(1) due to insertion-ordered dict
@@ -1799,7 +1802,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         in_window = (s_arr <= t_next + 1e-6) & (e_arr >= t_curr - 1e-6)
         if not participating:
             # exclude intervals already in progress — only take future ones
-            in_window &= (s_arr >= t_curr - 1e-6) # exclude current if not participating
+            # in_window &= (s_arr >= t_curr - 1e-6) # exclude current if not participating
+            in_window &= (s_arr > t_curr + 1e-6) # exclude current if not participating
 
         row_indices = np.where(in_window)[0] + i_start  # absolute indices into _buf
 
@@ -1846,14 +1850,27 @@ class ConsensusPlanner(AbstractReactivePlanner):
             if n_covered >= n_targets:
                 break
 
-        result = sorted(set(t_broadcasts))
-        # A = result
+        # remove duplicates and sort broadcast times
+        t_broadcast_sorted = sorted(set(t_broadcasts))
+
+        # results validation
+        assert participating or (not t_broadcast_sorted) or t_broadcast_sorted[0] > t_curr, \
+            f"First broadcast time should be in the future if not participating in consensus.\nParticipating: {participating}\nFirst broadcast time: {t_broadcast_sorted[0]}\nCurrent time: {t_curr}"
+        
+        # -----------------------------
+        # DEBUG CHECKS
+        # A = t_broadcast_sorted
         # B = self.__schedule_broadcast_times_DEPRECATED(state, orbitdata, new_bids)
         # assert A == B, \
         #     f"Optimized broadcast scheduling produced different results than original implementation.\nOptimized: {A}\nOriginal: {B}"
         # raise NotImplementedError("Optimized broadcast scheduling implementation not yet validated. Compare results with original implementation and remove this error once validated.")
-        self._broadcast_cache[cache_key] = result
-        return result
+        # -----------------------------
+        
+        # store in cache for future calls at the same time step
+        self._broadcast_cache[cache_key] = t_broadcast_sorted
+
+        # return sorted list of broadcast times
+        return t_broadcast_sorted
 
     def __schedule_broadcast_times_DEPRECATED(self, state : SimulationAgentState, orbitdata : OrbitData, new_bids : dict) -> List[float]:
         """ Schedule broadcast times for sharing bids in results with other agents."""
@@ -1918,7 +1935,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 break
 
         # return sorted list of broadcast times
-        return sorted(t_broadcasts)
+        out = sorted(t_broadcasts)
+
+        assert include_current or out[0] > t_curr, \
+            f"First broadcast time should be in the future if not participating in consensus.\nInclude current: {include_current}\nFirst broadcast time: {out[0]}\nCurrent time: {t_curr}"
+
+        return out
 
     def __is_participating_in_consensus(self, new_bids : dict) -> bool:
         """ Check if this agent is currently participating in consensus bidding. """

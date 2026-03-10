@@ -494,7 +494,7 @@ class IntervalTable(AbstractTable):
             if e < t - 1e-6:
                 continue
 
-            if include_current or s > t - 1e-6:
+            if include_current or s > t + 1e-6:
                 yield i, buf[i]
 
     def iter_components_packed(

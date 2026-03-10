@@ -131,8 +131,8 @@ if __name__ == "__main__":
     # define trial parameters
     base_dir = "/media/aslan15/easystore/Data/1_cbba_validation/2026_02_26_local"
 
-    # trial_name = "full_factorial_trials_2026-02-22"
-    trial_name = "full_factorial_trials_2026-02-23"
+    trial_name = "full_factorial_trials_2026-02-22"
+    # trial_name = "full_factorial_trials_2026-02-23"
     
     # compile and save compiled results summaries for this trial
     compile_results_summaries(trial_name, 
