@@ -81,9 +81,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._incoming_event_tasks : list[GenericObservationTask] = list()
         self._relevant_updates : List[Bid] = list()
 
-        # initalize broadast time cache
-        # self._broadcast_times_cache: Dict[tuple, List[float]] = dict()
-        self._schedule_broadcasts_cache: Dict[tuple, tuple] = dict() # (t_curr, participating) -> (t_broadcasts, actions)
+        # initalize broadast cache
+        self._schedule_broadcasts_cache: Dict[tuple, list] = dict() # (t_curr, participating) -> (actions)
 
         # set parameters
         self._model = model
@@ -1715,15 +1714,20 @@ class ConsensusPlanner(AbstractReactivePlanner):
         """ Schedules broadcasts to be done by this agent """
         # validate inputs
         if not isinstance(state, (SatelliteAgentState, GroundOperatorAgentState)):
-            raise NotImplementedError(...)
+            raise NotImplementedError(f'Broadcast scheduling for agents of type `{type(state)}` not yet implemented.')
         elif orbitdata is None:
-            raise ValueError(...)
+            raise ValueError(f'`orbitdata` required for agents of type `{type(state)}`.')
 
+        # Get curent time 
         t_curr = state.get_time()
-        participating = self.__is_participating_in_consensus(new_bids)
-        cache_key = (t_curr, participating)
 
+        # Determine if agent is participating in consensus bidding
+        participating = self.__is_participating_in_consensus(new_bids)
+
+        # Check if broadcasts are already contained in cache
+        cache_key = (t_curr, participating)
         if cache_key in self._schedule_broadcasts_cache:
+            # Broadcasts exist in cache; return cached actions 
             return self._schedule_broadcasts_cache[cache_key]
 
         # Evict stale entries on time advance
@@ -1733,29 +1737,52 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # Compute broadcast times (may itself hit its own cache)
         t_broadcasts = self.__schedule_broadcast_times(state, orbitdata, new_bids)
 
+        # initialize list of broadcasts to be done
         broadcasts = []
 
+        # Schedule bid broadcast messages
         if t_broadcasts:
+            # check if sharable bids are contained in results
             has_bidded_tasks = any(
                 isinstance(task, EventObservationTask) and bids
                 for task, bids in self._results.items()
             )
             if has_bidded_tasks:
+                # create broadcast actions for each broadcast time
                 broadcasts = [FutureBroadcastMessageAction(FutureBroadcastMessageAction.BIDS, t) 
                             for t in t_broadcasts]
 
+        # include scheduled broadcasts from preplan
         preplan_broadcasts = [
             action for action in self._preplan
+            # extract only broadcast actions
             if isinstance(action, BroadcastMessageAction)
+            # exclude broadcasts of future information; 
+            #  these would be redundant with those scheduled here 
             and not isinstance(action, FutureBroadcastMessageAction)
+            # exclude past broadcasts; 
+            #  these should have already been performed
             and action.t_start > t_curr - self.EPS
         ]
-
         broadcasts.extend(preplan_broadcasts)
-        result = sorted(broadcasts, key=lambda action: action.t_start)
 
-        self._schedule_broadcasts_cache[cache_key] = result
-        return result
+        # -----------------------------
+        # DEBUG CHECKS
+        # A = broadcasts
+        # B = self._schedule_broadcasts_DEPRECATED(state, orbitdata, new_bids)
+        # assert len(A) == len(B) and all(abs(a.t_start - b.t_start) <= 1e-6 for a,b in zip(A, B)), \
+        #     f"Optimized broadcast scheduling produced different results than original implementation.\nOptimized: {A}\nOriginal: {B}"
+        # raise NotImplementedError("Optimized broadcast scheduling implementation not yet validated. Compare results with original implementation and remove this error once validated.")
+        # -----------------------------
+
+        # sort broadcasts by start time
+        sorted_broadcasts = sorted(broadcasts, key=lambda action: action.t_start)
+
+        # add to cache 
+        self._schedule_broadcasts_cache[cache_key] = sorted_broadcasts
+
+        # return broadcasts
+        return sorted_broadcasts
 
     def _schedule_broadcasts_DEPRECATED(self, state: SimulationAgentState, orbitdata: OrbitData, new_bids : dict) -> list:
         """ Schedules broadcasts to be done by this agent """
@@ -1811,21 +1838,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # Get curent simulation time
         t_curr: float = state.get_time()
 
-        # # Evict on time advance — O(1) due to insertion-ordered dict
-        # if self._broadcast_times_cache and next(iter(self._broadcast_times_cache))[0] < t_curr:
-        #     self._broadcast_times_cache.clear()
-
         # Early exit before any expensive work
         if not any(isinstance(t, EventObservationTask) for t in self._results):
             return []
 
         # Defer consensus check until after early-exit (it shows up in profile)
         participating = self.__is_participating_in_consensus(new_bids)
-        # cache_key = (t_curr, participating)
-
-        # if cache_key in self._broadcast_times_cache:
-        #     raise ValueError(f"Cache key {cache_key} found in broadcast times cache after eviction on time advance. This should not happen. Cache contents: {self._broadcast_times_cache}")
-        #     return self._broadcast_times_cache[cache_key]
 
         # ---------------------------------------------------------------
         # Cache miss: fully vectorized computation (no Python row loop)
@@ -1845,7 +1863,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         in_window = (s_arr <= t_next + 1e-6) & (e_arr >= t_curr - 1e-6)
         if not participating:
             # exclude intervals already in progress — only take future ones
-            # in_window &= (s_arr >= t_curr - 1e-6) # exclude current if not participating
             in_window &= (s_arr > t_curr + 1e-6) # exclude current if not participating
 
         row_indices = np.where(in_window)[0] + i_start  # absolute indices into _buf
@@ -1897,7 +1914,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         t_broadcast_sorted = sorted(set(t_broadcasts))
 
         # results validation
-        assert participating or (not t_broadcast_sorted) or t_broadcast_sorted[0] > t_curr, \
+        assert participating or (not t_broadcast_sorted) or (t_broadcast_sorted[0] > t_curr), \
             f"First broadcast time should be in the future if not participating in consensus.\nParticipating: {participating}\nFirst broadcast time: {t_broadcast_sorted[0]}\nCurrent time: {t_curr}"
         
         # -----------------------------
@@ -1909,9 +1926,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # raise NotImplementedError("Optimized broadcast scheduling implementation not yet validated. Compare results with original implementation and remove this error once validated.")
         # -----------------------------
         
-        # store in cache for future calls at the same time step
-        # self._broadcast_times_cache[cache_key] = t_broadcast_sorted
-
         # return sorted list of broadcast times
         return t_broadcast_sorted
 
