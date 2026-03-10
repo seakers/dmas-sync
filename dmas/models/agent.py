@@ -1,5 +1,4 @@
 from collections import defaultdict
-import copy
 from datetime import datetime
 import logging
 import os
@@ -101,7 +100,7 @@ class SimulationAgent(object):
         
         # initialize trackers and data sinks
         self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
-        self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history")
+        self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history",flush_rows=1000)
         self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history",flush_rows=1000) 
 
         # save initial state to history
@@ -297,9 +296,9 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
-                if True:
+                # if True:
                     # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                    x = 1 # breakpoint
+                    # x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
@@ -351,10 +350,9 @@ class SimulationAgent(object):
                 pending_actions = []
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
-                if True:
-                # if "imager_c_sat_27" in curr_state.agent_name:
-                #     self.__log_plan(self._plan, "REPLAN", logging.WARNING)
-                    x = 1 # breakpoint
+                # if True:
+                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    # x = 1 # breakpoint
                 # -------------------------------------
 
         # get next actions to perform from current plan
@@ -385,10 +383,10 @@ class SimulationAgent(object):
         # del action        # TODO check if needed
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
-        if True:
+        # if True:
             # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
             # self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
-            x = 1 # breakpoint
+            # x = 1 # breakpoint
         # -------------------------------------        
         
         # return next initial state and next actions to perform
@@ -407,10 +405,6 @@ class SimulationAgent(object):
         # unpack bus messages
         for bus_msg in bus_messages: 
             # add bus' contents to list of incoming messages
-            # incoming_messages.extend([message_from_dict(**msg) 
-            #                           if isinstance(msg, dict) 
-            #                           else msg    
-            #                           for msg in bus_msg.msgs])
             incoming_messages.extend(bus_msg.msgs)
             # remove original bus messages 
             incoming_messages.remove(bus_msg)
