@@ -1431,7 +1431,10 @@ class ResultsProcessor:
         # evaluate events co-observable based on accesses
         for event, observations in co_observation_acesses.items():
             # check if more than one type of observation is required for this event
-            if len(event_to_required_observations[event]) < 2: continue
+            if len(event_to_required_observations[event]) < 2: 
+                # only one or no observation types required;
+                #  co-observability classification not applicable
+                continue
             
             # initiate group 
             # best_co_obs_group = []
@@ -1477,6 +1480,12 @@ class ResultsProcessor:
 
         # evaluate events co-observable based on accesses
         for event, observations in possible_co_observations.items():
+            # check if more than one type of observation is required for this event
+            if len(event_to_required_observations[event]) < 2: 
+                # only one or no observation types required;
+                #  co-observability classification not applicable
+                continue
+
             # initiate group 
             # best_co_obs_group = []
             best_instruments_in_group = set()
