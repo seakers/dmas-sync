@@ -58,12 +58,16 @@ if __name__ == "__main__":
     print_scenario_banner('Experiment generator for Preplanner Parametric Study')
 
     # define the number of scenarios to generate per combination of parameters
-    n_scenarios = 1
+    n_scenarios = 3
 
     # define experiment parameters
     stress_test_params = {
         "Preplanner" : ["None"],
-        "Replanner": ["Greedy", "CBBA", "Oracle"],
+        "Replanner": [
+                        "Greedy", 
+                        "CBBA", 
+                        # "Oracle"
+                    ],
         "Num Sats": [12, 24, 48, 96, 192],
         "Latency": ["Low"],
         "Task Arrival Rate": [10, 50, 100, 500, 1000],
@@ -72,7 +76,11 @@ if __name__ == "__main__":
     }
     connectivity_test_params = {
         "Preplanner" : ["None"],
-        "Replanner": ["Greedy", "CBBA", "Oracle"],
+        "Replanner": [  
+                        "Greedy", 
+                        "CBBA", 
+                        # "Oracle"
+                    ],
         "Num Sats": [12, 24, 48, 96, 192],
         "Latency": ["High", "Medium", "Low"],
         "Task Arrival Rate": [10, 50, 100, 500, 1000],
@@ -80,8 +88,14 @@ if __name__ == "__main__":
         "Scenario" : range(n_scenarios),
     }
     validation_test_params = {
-        "Preplanner" : ["None", "DP"],
-        "Replanner": ["CBBA", "Oracle"],
+        "Preplanner" : [
+                        "None", 
+                        "DP"
+                    ],
+        "Replanner": [
+                        "None", 
+                        "CBBA",
+                    ],
         "Num Sats": [12, 24, 48, 96, 192],
         "Latency": ["High", "Medium", "Low"],
         "Task Arrival Rate": [10, 50, 100, 500, 1000],
@@ -92,7 +106,9 @@ if __name__ == "__main__":
     # define experiment parameter rules
     rules = [
         # Oracle replanner only allowed with no preplanner
-        lambda d: (d["Replanner"] != "Oracle") | (d["Preplanner"] == "None")
+        lambda d: (d["Replanner"] != "Oracle") | (d["Preplanner"] == "None"),
+        # None replanne not allowed with `None` preplanner (i.e. if no preplanner, must have a replanner)
+        lambda d: (d["Replanner"] != "None") | (d["Preplanner"] != "None") 
     ]
 
     # generate full enumeration of trials per experiment

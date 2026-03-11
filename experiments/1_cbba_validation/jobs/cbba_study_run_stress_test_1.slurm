@@ -8,8 +8,6 @@
 #SBATCH --mem=32G
 #SBATCH --array=0-74
 
-# --array=0-35
-
 set -euo pipefail
 
 # --- Go to your project in scratch ---
