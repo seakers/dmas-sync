@@ -303,9 +303,9 @@ class ResultsProcessor:
                 row['event type'],
                 (row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['GP index']),
                 row['detection time [s]'],
-                row['start time [s]'],
                 row['end time [s]'] - row['start time [s]'],
                 row['severity'],
+                row['start time [s]'],
                 row['id']
             )
             events_detected.append(event)
@@ -1453,14 +1453,16 @@ class ResultsProcessor:
                     # best_co_obs_group = co_obs_group
                     best_instruments_in_group = instruments_in_group
             
-            # classify co-observability of this event based on best co-observation group
-            if event_to_required_observations[event] == best_instruments_in_group:
-                events_co_observable_fully.add(event)
-            elif len(best_instruments_in_group) > 1:
-                events_co_observable_partially.add(event)
-
+            # check if more than one instrument is available to observe this event
             if len(best_instruments_in_group) > 1:
+                # add to set of co-observable events
                 events_co_observable.add(event)
+
+                # classify co-observability of this event based on best co-observation group
+                if event_to_required_observations[event] == best_instruments_in_group:
+                    events_co_observable_fully.add(event)
+                else:
+                    events_co_observable_partially.add(event)
 
         # classify observations
         possible_co_observations = defaultdict(list)
@@ -1503,16 +1505,17 @@ class ResultsProcessor:
                     # best_co_obs_group = co_obs_group
                     best_instruments_in_group = instruments_in_group
             
-            # classify co-observability of this event based on best co-observation group
-            if event_to_required_observations[event] == best_instruments_in_group:
-                events_co_obs_fully.add(event)
-            elif len(best_instruments_in_group) > 1:
-                events_co_obs_partially.add(event)
 
             # check if more than one instrument was involved in observations of this event
             if len(best_instruments_in_group) > 1:
                 # add to set of co-observed events
                 events_co_obs.add(event)
+
+                # classify co-observability of this event based on best co-observation group
+                if event_to_required_observations[event] == best_instruments_in_group:
+                    events_co_obs_fully.add(event)
+                else:
+                    events_co_obs_partially.add(event)
 
         return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
             events_co_obs, events_co_obs_fully, events_co_obs_partially
@@ -1727,27 +1730,27 @@ class ResultsProcessor:
 
                     ['P(Event Observation | Observation)', np.round(p_event_obs_if_obs,precision)],
                     ['P(Event Re-observation | Observation)', np.round(p_event_re_obs_if_obs,precision)],
-                    # ['P(Event Co-observation | Observation)', np.round(p_event_co_obs_if_obs,n_decimals)],
-                    # ['P(Event Full Co-observation | Observation)', np.round(p_event_co_obs_partially_if_obs,n_decimals)],
-                    # ['P(Event Partial Co-observation | Observation)', np.round(p_event_co_obs_fully_if_obs,n_decimals)],
+                    # ['P(Event Co-observation | Observation)', np.round(p_event_co_obs_if_obs,precision)],
+                    # ['P(Event Full Co-observation | Observation)', np.round(p_event_co_obs_partially_if_obs,precision)],
+                    # ['P(Event Partial Co-observation | Observation)', np.round(p_event_co_obs_fully_if_obs,precision)],
 
                     ['P(Event Observed | Observable)', np.round(p_event_observed_if_observable,precision)],
                     ['P(Event Re-observed | Re-observable)', np.round(p_event_re_obs_if_re_observable,precision)],
-                    # ['P(Event Co-observed | Co-observable)', np.round(p_event_co_obs_if_co_observable,n_decimals)],
-                    # ['P(Event Fully Co-observed | Fully Co-observable)', np.round(p_event_co_obs_fully_if_co_observable_fully,n_decimals)],
-                    # ['P(Event Partially Co-observed | Partially Co-observable)', np.round(p_event_co_obs_partial_if_co_observable_partially,n_decimals)],
+                    ['P(Event Co-observed | Co-observable)', np.round(p_event_co_obs_if_co_observable,precision)],
+                    ['P(Event Fully Co-observed | Fully Co-observable)', np.round(p_event_co_obs_fully_if_co_observable_fully,precision)],
+                    ['P(Event Partially Co-observed | Partially Co-observable)', np.round(p_event_co_obs_partial_if_co_observable_partially,precision)],
                     
                     ['P(Event Observed | Event Detected)', np.round(p_event_observed_if_detected,precision)],
                     ['P(Event Re-observed | Event Detected)', np.round(p_event_re_obs_if_detected,precision)],
-                    # ['P(Event Co-observed | Event Detected)', np.round(p_event_co_obs_if_detected,n_decimals)],
-                    # ['P(Event Co-observed Fully | Event Detected)', np.round(p_event_co_obs_fully_if_detected,n_decimals)],
-                    # ['P(Event Co-observed Partially | Event Detected)', np.round(p_event_co_obs_partial_if_detected,n_decimals)],
+                    ['P(Event Co-observed | Event Detected)', np.round(p_event_co_obs_if_detected,precision)],
+                    ['P(Event Co-observed Fully | Event Detected)', np.round(p_event_co_obs_fully_if_detected,precision)],
+                    ['P(Event Co-observed Partially | Event Detected)', np.round(p_event_co_obs_partial_if_detected,precision)],
 
                     ['P(Event Observed | Event Observable and Detected)', np.round(p_event_observed_if_detected,precision)],
                     ['P(Event Re-observed | Event Re-observable and Detected)', np.round(p_event_re_obs_if_detected,precision)],
-                    # ['P(Event Co-observed | Event Co-observable and Detected)', np.round(p_event_co_obs_if_detected,n_decimals)],
-                    # ['P(Event Co-observed Fully | Event Fully Co-observable and Detected)', np.round(p_event_co_obs_fully_if_detected,n_decimals)],
-                    # ['P(Event Co-observed Partially | Event Partially Co-observable and Detected)', np.round(p_event_co_obs_partial_if_detected,n_decimals)],
+                    ['P(Event Co-observed | Event Co-observable and Detected)', np.round(p_event_co_obs_if_detected,precision)],
+                    ['P(Event Co-observed Fully | Event Fully Co-observable and Detected)', np.round(p_event_co_obs_fully_if_detected,precision)],
+                    ['P(Event Co-observed Partially | Event Partially Co-observable and Detected)', np.round(p_event_co_obs_partial_if_detected,precision)],
 
                     # Task Observation Probabilities
                     # TODO add co-observation probabilities
@@ -2045,12 +2048,12 @@ class ResultsProcessor:
                                     events_observed : dict, 
                                     events_re_observable : dict,
                                     events_re_obs : dict, 
-                                    events_co_observable : dict,
-                                    events_co_obs : dict, 
-                                    events_co_observable_fully : dict,
-                                    events_co_obs_fully : dict, 
-                                    events_co_observable_partially : dict,
-                                    events_co_obs_partially : dict,
+                                    events_co_observable : set,
+                                    events_co_obs : set, 
+                                    events_co_observable_fully : set,
+                                    events_co_obs_fully : set, 
+                                    events_co_observable_partially : set,
+                                    events_co_obs_partially : set,
                                     tasks_known : list,
                                     tasks_observable : dict,
                                     tasks_observed : dict,
@@ -2117,16 +2120,14 @@ class ResultsProcessor:
                                                     if event in events_detected])
 
         # count number of co-observed and detected events 
-        n_events_co_obs_and_co_observable = len([event for event in events_co_obs
-                                                if event in events_co_observable])
-        n_events_co_obs_and_detected = len([event for event in events_co_obs
-                                                if event in events_detected])
-        n_events_co_obs_and_co_observable_and_detected = len([event for event in events_co_obs
-                                                                if event in events_co_observable
-                                                                and event in events_detected])
-        n_events_co_observable_and_detected = len([event for event in events_co_observable
-                                                    if event in events_detected])
-
+        n_events_co_obs_and_co_observable \
+            = len(events_co_obs.intersection(events_co_observable))
+        n_events_co_obs_and_detected \
+            = len(events_co_obs.intersection(events_detected))         
+        n_events_co_obs_and_co_observable_and_detected \
+            = len(events_co_obs.intersection(events_co_observable).intersection(events_detected))
+        n_events_co_observable_and_detected \
+            = len(events_co_observable.intersection(events_detected))
         
         n_events_fully_co_obs_and_fully_co_observable = len([event for event in events_co_obs_fully
                                                             if event in events_co_observable_fully])
