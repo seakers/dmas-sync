@@ -427,7 +427,7 @@ class ResultsProcessor:
             )
             known_tasks.append(task)
 
-        # suplement with event observation tasks
+        # suplement with event request tasks
         requested_tasks = [req.task for req in task_reqs 
                             if req.task not in known_tasks]
         known_tasks.extend(requested_tasks)
@@ -1364,6 +1364,151 @@ class ResultsProcessor:
     RESULTS SUMMARY METHODS
     """
     @staticmethod
+    def __classify_event_reobservations(
+            accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
+            observations_per_event : Dict[GeophysicalEvent, List[Dict]]
+        ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
+        # classify re-observations
+        events_re_observable = {event : accesses for event, accesses in accesses_per_event.items()
+                                 if len(accesses) > 1}
+        events_re_obs = {event : observations for event, observations in observations_per_event.items()
+                            if len(observations) > 1}
+
+        return events_re_observable, events_re_obs
+
+    @staticmethod
+    def __classify_event_coobservations(
+            accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
+            observations_per_event : Dict[GeophysicalEvent, List[Dict]],
+            known_tasks : List[GenericObservationTask],
+            t_corr : float = 3600.0 # TODO temp solution
+        ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
+        # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
+
+        # map events to tasks that observe them
+        event_to_task : Dict[GeophysicalEvent, GenericObservationTask] = dict()
+        for task in known_tasks:
+            if isinstance(task, EventObservationTask):
+                event = task.event
+                if event in event_to_task:
+                    raise NotImplementedError(f"Multiple tasks found for event {event.id}. Co-observability classification not yet supported for multiple tasks per event.")
+                event_to_task[event] = task
+        
+        # map events to required obserations for their tasks
+        event_to_required_observations : Dict[GeophysicalEvent, List[Dict]] = dict()
+        for event, task in event_to_task.items():
+            # initialize set of required observations
+            required_observations = set()
+
+            for req in task.objective:
+                # check for instrument capability requirements
+                if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
+                    for val in req.valid_values: required_observations.add(val)
+                # TODO include other capability requirements that define a co-observation here
+
+            # add to map of events to required observations
+            event_to_required_observations[event] = required_observations
+
+        # classify accesses
+        co_observation_acesses = defaultdict(list)
+        for event, observations in accesses_per_event.items():
+            for a in observations:
+                # unpack access
+                *_,instrument = a
+
+                # check if instrument is part of those required for this event 
+                if instrument.lower() in event_to_required_observations[event]:
+                    co_observation_acesses[event].append(a)
+
+            # sort accesses by start time
+            co_observation_acesses[event].sort(key=lambda x: x[0].left) 
+        
+        # initiate event co-observability sets
+        events_co_observable = set()
+        events_co_observable_fully = set()
+        events_co_observable_partially = set()
+
+        # evaluate events co-observable based on accesses
+        for event, observations in co_observation_acesses.items():
+            # check if more than one type of observation is required for this event
+            if len(event_to_required_observations[event]) < 2: continue
+            
+            # initiate group 
+            # best_co_obs_group = []
+            best_instruments_in_group = set()
+
+            for i,a in enumerate(observations):
+                # get accesses within the desired decorreleation time 
+                co_obs_group = [b for b in observations[i:]
+                                if b[0].left <= a[0].right + t_corr]
+
+                # get instruments in this co-observation group
+                instruments_in_group = {a[2].lower() for a in co_obs_group} | {a[2].lower()}
+                
+                # check if this group is the best so far
+                if len(instruments_in_group) > len(best_instruments_in_group):
+                    # best_co_obs_group = co_obs_group
+                    best_instruments_in_group = instruments_in_group
+            
+            # classify co-observability of this event based on best co-observation group
+            if event_to_required_observations[event] == best_instruments_in_group:
+                events_co_observable_fully.add(event)
+            elif len(best_instruments_in_group) > 1:
+                events_co_observable_partially.add(event)
+
+            if len(best_instruments_in_group) > 1:
+                events_co_observable.add(event)
+
+        # classify observations
+        possible_co_observations = defaultdict(list)
+        for event, observations in observations_per_event.items():
+            for a in observations:
+                # check if instrument is part of those required for this event 
+                if a['instrument'].lower() in event_to_required_observations[event]:
+                    possible_co_observations[event].append(a)
+
+            # sort accesses by start time
+            possible_co_observations[event].sort(key=lambda x: x['t_start'])
+
+        # initiate event co-observation sets
+        events_co_obs = set()
+        events_co_obs_fully = set()
+        events_co_obs_partially = set()  
+
+        # evaluate events co-observable based on accesses
+        for event, observations in possible_co_observations.items():
+            # initiate group 
+            # best_co_obs_group = []
+            best_instruments_in_group = set()
+
+            for i,a in enumerate(observations):
+                # get accesses within the desired decorreleation time 
+                co_obs_group = [b for b in observations[i:]
+                                if b['t_start'] <= a['t_end'] + t_corr]
+
+                # get instruments in this co-observation group
+                instruments_in_group = {a['instrument'].lower() for a in co_obs_group} | {a['instrument'].lower()}
+
+                # check if this group is the best so far
+                if len(instruments_in_group) > len(best_instruments_in_group):
+                    # best_co_obs_group = co_obs_group
+                    best_instruments_in_group = instruments_in_group
+            
+            # classify co-observability of this event based on best co-observation group
+            if event_to_required_observations[event] == best_instruments_in_group:
+                events_co_obs_fully.add(event)
+            elif len(best_instruments_in_group) > 1:
+                events_co_obs_partially.add(event)
+
+            # check if more than one instrument was involved in observations of this event
+            if len(best_instruments_in_group) > 1:
+                # add to set of co-observed events
+                events_co_obs.add(event)
+
+        return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
+            events_co_obs, events_co_obs_fully, events_co_obs_partially
+
+    @staticmethod
     def summarize_results(results_path : str,
                           compiled_orbitdata : Dict[str, OrbitData], 
                           events : List[GeophysicalEvent],
@@ -1388,19 +1533,14 @@ class ResultsProcessor:
                           printouts : bool = True
                         ) -> pd.DataFrame:      
 
-        # classify observations
-        events_re_observable = {event : accesses for event, accesses in accesses_per_event.items()
-                                 if len(accesses) > 1}
-        events_re_obs = {event : observations for event, observations in observations_per_event.items()
-                            if len(observations) > 1}
-        
-        # TODO: implement co-observability classification
-        events_co_observable = dict()
-        events_co_observable_fully = dict()
-        events_co_observable_partially = dict()
-        events_co_obs = dict()
-        events_co_obs_fully = dict()
-        events_co_obs_partially = dict()        
+        # classify re-observations
+        events_re_observable, events_re_obs \
+            = ResultsProcessor.__classify_event_reobservations(accesses_per_event, observations_per_event)
+
+        # clasify co-observations
+        events_co_observable, events_co_observable_fully, events_co_observable_partially, \
+            events_co_obs, events_co_obs_fully, events_co_obs_partially \
+                = ResultsProcessor.__classify_event_coobservations(accesses_per_event, observations_per_event, known_tasks)            
 
         # count observations performed
         # n_events, n_unique_event_obs, n_total_event_obs,
@@ -1785,25 +1925,28 @@ class ResultsProcessor:
 
         # count event co-observations
         n_events_co_obs = len(events_co_obs)
-        n_total_event_co_obs = sum([len(co_observations) for _,co_observations in events_co_obs.items()])        
+        # n_total_event_co_obs = sum([len(co_observations) for _,co_observations in events_co_obs.items()])        
+        n_total_event_co_obs = -1 # TODO
 
         assert n_events_co_obs <= n_events_observed
         assert n_total_event_co_obs <= n_observations
 
         n_events_fully_co_obs = len(events_co_obs_fully)
-        n_total_event_fully_co_obs = sum([len(full_co_observations) for _,full_co_observations in events_co_obs_fully.items()])        
+        # n_total_event_fully_co_obs = sum([len(full_co_observations) for _,full_co_observations in events_co_obs_fully.items()])        
+        n_total_event_fully_co_obs = -1 # TODO
         
         assert n_events_fully_co_obs <= n_events_observed
         assert n_total_event_fully_co_obs <= n_total_event_co_obs
 
         n_events_partially_co_obs = len(events_co_obs_partially)
-        n_total_event_partially_co_obs = sum([len(partial_co_observations) for _,partial_co_observations in events_co_obs_partially.items()])        
+        # n_total_event_partially_co_obs = sum([len(partial_co_observations) for _,partial_co_observations in events_co_obs_partially.items()])        
+        n_total_event_partially_co_obs = -1 # TODO
 
         assert n_events_partially_co_obs <= n_events_observed
         assert n_total_event_partially_co_obs <= n_total_event_co_obs
 
         assert n_events_co_obs == n_events_fully_co_obs + n_events_partially_co_obs
-        assert n_total_event_co_obs == n_total_event_fully_co_obs + n_total_event_partially_co_obs
+        # assert n_total_event_co_obs == n_total_event_fully_co_obs + n_total_event_partially_co_obs
 
         # count observations per task
         n_tasks = len(tasks_known)

@@ -1087,7 +1087,7 @@
                             "req_type": "capability",
                             "attribute": "instrument",
                             "strategy" : "explicit",
-                            "valid_values": ["VNIR hyper"]
+                            "valid_values": ["VNIR hyper", "VNIR multi"]
                         },
                         {
                             "req_type": "performance",

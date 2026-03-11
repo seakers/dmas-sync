@@ -54,7 +54,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_25 = False # single satellite bidding against a gs agent; gs announcer
         self.toy_26 = False # two satellites bidding against a gs agent; gs announcer
 
-        self.toy_27 = False # string of pearls with onboard event detection
+        self.toy_27 = True # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
         self.toy_29 = False # real vs planned reward comparison
         self.toy_30 = False # interrupted observations from external broadcast
@@ -2715,7 +2715,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ractive_spacecraft_2['name'] = 'sat2'
         ractive_spacecraft_2['planner'] = self.toy_planner_config() # no preplan capability
         ractive_spacecraft_2['spacecraftBus']['components']['adcs']['maxRate'] = 1.5
-        ractive_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # narrow swath instrument
+        ractive_spacecraft_2['instrument'] = self.instruments['VNIR multi'] # narrow swath instrument
         ractive_spacecraft_2['orbitState']['state']['inc'] = 0.0
         ractive_spacecraft_2['orbitState']['state']['ta'] = ractive_spacecraft_1['orbitState']['state']['ta'] - 15.0 # phase offset
         ractive_spacecraft_2['groundStationNetwork'] = gs_network

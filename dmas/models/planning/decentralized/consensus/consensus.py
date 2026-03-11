@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from ast import Set
 from collections import defaultdict, deque
 from itertools import chain
 from typing import Dict, List, Tuple, Union
@@ -128,11 +129,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
         interrupted_observations : List[ObservationAction] = [action for action in pending_actions
                                                             if isinstance(action, ObservationAction)]
         performed_observations : List[ObservationAction] = completed_observations + interrupted_observations
+        
         # -------------------------------
         # DEBUG PRINTOUTS
         if self._debug and incoming_bids:
-        # if self._debug:
-        # if state._t > 74_049.98 and incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
             self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
@@ -1749,6 +1749,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
             if has_bidded_tasks:
                 # create broadcast actions for each broadcast time
                 broadcasts = [FutureBroadcastMessageAction(FutureBroadcastMessageAction.BIDS, t) 
+                            for t in t_broadcasts]
+                # create broadcast actions for each broadcast time
+                broadcasts += [FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t, only_own_info=True) 
                             for t in t_broadcasts]
 
         # include scheduled broadcasts from preplan

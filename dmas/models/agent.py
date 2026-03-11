@@ -749,7 +749,8 @@ class SimulationAgent(object):
             # check if request should be included
             if future_broadcast.only_own_info:
                 # if only own info, include only own requests
-                if req.requester != state.agent_name: continue
+                if req.requester != state.agent_name: 
+                    continue
             else:
                 # include all agents' requests, filtered by desc if provided
                 if future_broadcast.desc is not None and req.task not in future_broadcast.desc:
