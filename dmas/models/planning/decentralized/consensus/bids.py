@@ -1400,6 +1400,9 @@ class Bid:
         self.t_bid = t
         self.main_measurement = self.NONE
 
+        # reset performed status
+        self.performed = False
+
         # update timestamp for the other bidder if given
         if other is None:
             self.t_stamps[self.owner] = t

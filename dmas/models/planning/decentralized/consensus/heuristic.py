@@ -470,10 +470,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 if task not in proposed_bids: proposed_bids[task] = dict()
                 proposed_bids[task][n_obs] = existing_bid.copy()
         
-        for proposed_task_bids in proposed_bids.values():
-            if not proposed_task_bids: 
-                x = 1 # debug breakpoint for empty proposed bids
-
         # extract observation number assignments for current path
         n_obs_proposed, t_prev_proposed \
             = self._count_observations_and_revisit_times_from_results(state, proposed_path)
@@ -510,11 +506,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             #     out = f'\nT{np.round(state.t,3)}[s]:\t\'{state.agent_name}\'\n'
             #     out += f'OBSERVATION OPPORTUNITY BEING CONSIDERED FOR BUNDLE ADDITION: \nt={proposed_observation.accessibility} (ParentID(s): [{req_id_short[:-1]}])\n'
             #     print(out)
-            for proposed_task_bids in proposed_bids.values():
-                if not proposed_task_bids: 
-                    x = 1 # debug breakpoint for empty proposed bids
 
-            if "a" in state.agent_name and "1" in state.agent_name and state._t > 4446:
+            if "imager_b_sat_9" in state.agent_name and state._t >= 4840.0:
                 x= 1 # debug breakpoint for specific agent and time
             # ------------------------------- 
 
@@ -540,9 +533,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 #     self._log_path('CANDIDATE PATH (DURING BUNDLE-BUILDING PHASE)', state, candidate_path)
                 #     changes_indices = [candidate_path.index(change) if change in candidate_path else None for change in path_changes]
                 #     print(f'Changes at: i={changes_indices}')
-                for proposed_task_bids in proposed_bids.values():
-                    if not proposed_task_bids: 
-                        x = 1 # debug breakpoint for empty proposed bids
                 # -------------------------------
 
                 # find best observation sequence for each parent task of the proposed task in this candidate path
@@ -1065,18 +1055,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             - t_prev_best : Dict[int, Dict[GenericObservationTask, float]] - Best previous observation times for each observation in the proposed path.
         """
 
-        # -------------------------------
-        empty_proposed_bids = False
-        for proposed_task_bids in proposed_bids.values():
-            if not proposed_task_bids: 
-                x = 1 # debug breakpoint for empty proposed bids
-                empty_proposed_bids = True
-                break
-
-        if not empty_proposed_bids and state._t > 13.0 and "imager_c_sat_5" in state.agent_name:
-            x= 1
-        # -------------------------------
-
         # extract modified task observation opportunities from path changes
         added_tasks : Set[GenericObservationTask] =\
             {task for obs_act in obs_added for task in obs_act.obs_opp.tasks}
@@ -1116,13 +1094,22 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # find best observation sequences for each parent task
         for task in modified_tasks_in_path:
             # assume parent task has been considered in results
-            assert task in self._results, f"Parent task {task} not being bid on by any agent; cannot generate bids."
+            assert task in self._results, \
+                f"Parent task {task} not being bid on by any agent; cannot generate bids."
             
             # count all previously performed observations for this parent task
+            performed_bids = [bid for bid in self._results[task]
+                              if bid.was_performed()]
+            
+            # # ensure all performed observations have a consecutive observation number
+            # assert all(bid.n_obs == i for i, bid in enumerate(performed_bids)), \
+            #     f"Performed bids for task {task} do not have consecutive observation numbers starting from zero."
+            
+            # extract observation times for all previously performed observations for this parent task
             performed_obs : list[Tuple[float,str,float,ObservationOpportunity]] = \
                             [(bid.t_img,bid.owner,np.NAN,None) 
-                             for bid in self._results[task] 
-                             if bid.was_performed()]
+                             for bid in performed_bids]            
+
             latest_performed_obs_time : Tuple[float,str,float,ObservationOpportunity] \
                 = max(performed_obs, key=lambda obs: obs[0]) if performed_obs else None
             
@@ -1160,13 +1147,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 n_obs_seq = []
                 is_sequence_valid = True
 
-                # -------------------------------
-                # DEBUG BREAKPOINT
-                for proposed_task_bids in proposed_bids.values():
-                    if not proposed_task_bids: 
-                        x = 1 # debug breakpoint for empty proposed bids
-                # -------------------------------
-
                 # evaluate sequence value for this agent
                 for seq_idx,(agent_name,t_obs,look_angle,obs_opp) in enumerate(zip(obs_names,obs_times,obs_look_angles,obs_tasks)):
                     
@@ -1193,13 +1173,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         # get observation value from winning bid
                         task_value = matching_bid.winning_bid
 
-                        # -------------------------------
-                        # DEBUG BREAKPOINT
-                        for proposed_task_bids in proposed_bids.values():
-                            if not proposed_task_bids: 
-                                x = 1 # debug breakpoint for empty proposed bids
-                        # -------------------------------
-
                     else: # observation is to be performed by this agent
                         # assume specific task was defined
                         assert isinstance(obs_opp, ObservationOpportunity), \
@@ -1218,14 +1191,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                                                n_obs,
                                                                t_prev
                                                             )
-                        
-                        # -------------------------------
-                        # DEBUG BREAKPOINT
-                        for proposed_task_bids in proposed_bids.values():
-                            if not proposed_task_bids: 
-                                x = 1 # debug breakpoint for empty proposed bids
-                        # -------------------------------
-                        
+                                                
                         # compare task value estimate against existing bids for this observation number
 
                         # if no existing bid for this observation number, accept if:
@@ -1234,37 +1200,15 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                 # 1) proposed observation value is positive 
                                 task_value > 0.0
                             ]
-                            # -------------------------------
-                            # DEBUG BREAKPOINT
-                            for proposed_task_bids in proposed_bids.values():
-                                if not proposed_task_bids: 
-                                    x = 1 # debug breakpoint for empty proposed bids
-                            # -------------------------------
 
                         # if there is an existing bid, accept if either:
                         else:
-                            # -------------------------------
-                            # DEBUG BREAKPOINT
-                            for proposed_task_bids in proposed_bids.values():
-                                if not proposed_task_bids: 
-                                    x = 1 # debug breakpoint for empty proposed bids
-                            # -------------------------------
-
-
                             # get existing bid
                             try:
                                 existing_bid : Bid = proposed_bids[task][n_obs]
                             except KeyError:
                                 existing_bid : Bid = self._results[task][n_obs]
                                 
-                            # -------------------------------
-                            # DEBUG BREAKPOINT
-                            for proposed_task_bids in proposed_bids.values():
-                                if not proposed_task_bids: 
-                                    x = 1 # debug breakpoint for empty proposed bids
-                            # -------------------------------
-
-
                             # get mutex bids for this observation
                             following_bids = [
                                                 mutex_bid
@@ -1285,37 +1229,16 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     and self._optimistic_bidding_counters[task][n_obs] > 0
                             ]
 
-                            # -------------------------------
-                            # DEBUG BREAKPOINT
-                            for proposed_task_bids in proposed_bids.values():
-                                if not proposed_task_bids: 
-                                    x = 1 # debug breakpoint for empty proposed bids
-                            # -------------------------------
-
                         # check if bid is accepted
                         if not any(accept_bid):
                             # bid not accepted; skip this sequence
                             is_sequence_valid = False
                             break
 
-                        # -------------------------------
-                        # DEBUG BREAKPOINT
-                        for proposed_task_bids in proposed_bids.values():
-                            if not proposed_task_bids: 
-                                x = 1 # debug breakpoint for empty proposed bids
-                        # -------------------------------
-
                     # accumulate sequence value
                     seq_values.append(task_value)     
                     t_prev_seq.append(t_prev) 
                     n_obs_seq.append(n_obs)   
-
-                    # -------------------------------
-                    # DEBUG BREAKPOINT
-                    for proposed_task_bids in proposed_bids.values():
-                        if not proposed_task_bids: 
-                            x = 1 # debug breakpoint for empty proposed bids
-                    # -------------------------------  
 
                 # skip to next sequence if current sequence is invalid
                 if not is_sequence_valid: 
@@ -1340,13 +1263,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     obs_names_best[task] = obs_names
                     vals_best[task] = seq_values  
 
-                # -------------------------------
-                # DEBUG BREAKPOINT
-                for proposed_task_bids in proposed_bids.values():
-                    if not proposed_task_bids: 
-                        x = 1 # debug breakpoint for empty proposed bids
-                # -------------------------------
-
         # check if a sequence was found for all modified parent tasks
         if any(value < 0.0 for value in best_values.values()):
             return None, None, None #, None
@@ -1355,9 +1271,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # DEBUG BREAKPOINT
         # if self._debug:
         #     x = 1
-        for proposed_task_bids in proposed_bids.values():
-            if not proposed_task_bids: 
-                x = 1 # debug breakpoint for empty proposed bids
         # -------------------------------
             
         # filter out observations from other agents in best sequences
@@ -1473,12 +1386,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # TODO assure all best observation numbers have been assigned
         
         # TODO assure assignments are consistent within candidate path
-
-        # -------------------------------
-        for proposed_task_bids in proposed_bids.values():
-            if not proposed_task_bids: 
-                x = 1 # debug breakpoint for empty proposed bids
-        # -------------------------------
 
         # return updated observation numbers and previous observation times
         return n_obs_candidate, t_prev_candidate, new_bids #, abandoned_bids

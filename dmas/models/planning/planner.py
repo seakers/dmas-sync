@@ -486,7 +486,11 @@ class AbstractPlanner(ABC):
         # combine observation opportunities into clusters
         combined_obs : list[ObservationOpportunity] = []
 
-        with tqdm(total=len(v), desc="Merging overlapping observation opportunities", leave=False, disable=not self._printouts) as pbar:
+        with tqdm(total=len(v), 
+                  desc="Merging overlapping observation opportunities", 
+                  leave=False, 
+                  disable=not self._printouts or len(v)<10
+                  ) as pbar:
             while len(v) > 0:
                 # pop first observation opportunity from the list of observation opportunities to be scheduled
                 p : ObservationOpportunity = v.pop()
