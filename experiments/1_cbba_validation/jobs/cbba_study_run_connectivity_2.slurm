@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=cbba_study_exp_1_run
-#SBATCH --output=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.out
-#SBATCH --error=experiments/1_0_cbba_stress_test/logs/cbba_stress_%A_%a.err
+#SBATCH --output=experiments/1_cbba_validation/logs/cbba_connectivity_%A_%a.out
+#SBATCH --error=experiments/1_cbba_validation/logs/cbba_connectivity_%A_%a.err
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -12,7 +12,7 @@ set -euo pipefail
 
 # --- Go to your project in scratch ---
 cd "$SCRATCH/src/dmas-sync"
-mkdir -p experiments/1_0_cbba_stress_test/logs
+mkdir -p experiments/1_cbba_validation/logs
 
 # --- Load Modules ---
 module purge
