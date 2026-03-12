@@ -3,8 +3,10 @@ import os
 from matplotlib import pyplot as plt
 import pandas as pd
 import seaborn as sns
+import numpy as np
+from scipy import stats
 
-def print_runtime_data(trial_name : str, 
+def generate_plots(trial_name : str, 
                         experiment_col : str,
                         base_dir : str = None) -> None:
     """ Generates line plots for the compiled results of a given trial, showing the impact of number of satellites and arrival rate on key metrics. """
@@ -49,15 +51,19 @@ def print_runtime_data(trial_name : str,
         return
     
     # define save directory and filename for plot
-    save_dir = os.path.join(base_dir, 'plots', 'rq1')
+    save_dir = os.path.join(base_dir, 'plots', 'rq1', trial_name)
     os.makedirs(save_dir, exist_ok=True)
 
     # if saving to external directory, also save a copy to the local analysis directory 
     local_save_dir = os.path.join(local_base_dir, 'plots', 'rq1')
     os.makedirs(local_save_dir, exist_ok=True)
 
-    # --- Runtime vs. Num of Tasks ---
+    # Create a palette keyed to your Num Sats values
+    num_sats_values = sorted(filtered_df['Num Sats'].unique())
+    palette = sns.color_palette("rocket_r", n_colors=len(num_sats_values))
+    color_map = dict(zip(num_sats_values, palette))
 
+    # --- Runtime vs. Num of Tasks ---
     f, ax = plt.subplots(figsize=(8, 6))
     ax.set_xscale("log")
     ax.set_yscale("log")
@@ -69,17 +75,22 @@ def print_runtime_data(trial_name : str,
                 # col='Replanner',
                 # row='Replanner',
                 # kind="line",
-                # palette="tab10", 
+                # palette="rocket_r", 
+                palette=color_map,
                 # err_style="bars",
                 markers=True, 
                 dashes=False,
                 ax=ax
             )
         
-    plt.grid(True)
+    # plt.grid(True)
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax.set_ylabel('Simulation Runtime (s)')    
+    plt.tight_layout()
 
     # define filename for plot
-    plot_filename = f'{trial_name}-{str("Simulation Runtime [s]").replace(" ", "_").replace("[s]","s")}.png'
+    plot_filename = f'{str("Simulation Runtime (s)").replace(" ", "_").replace("(s)","s")}.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     
@@ -92,9 +103,6 @@ def print_runtime_data(trial_name : str,
     print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
 
     # --- #N Messages vs. Num of Tasks ---
-    # fig = plt.figure(layout='constrained', figsize=(10, 4))
-    # subfigs = fig.subfigures(1, 2, wspace=0.07)
-
     f, ax = plt.subplots(figsize=(8, 6))
     ax.set_xscale("log")
     ax.set_yscale("log")
@@ -107,17 +115,22 @@ def print_runtime_data(trial_name : str,
                 # col='Replanner',
                 # row='Replanner',
                 # kind="line",
-                # palette="tab10", 
+                # palette="rocket_r", 
+                palette=color_map,
                 # err_style="bars",
                 markers=True, 
                 dashes=False,
                 ax=ax
             )
         
-    plt.grid(True)
+    # plt.grid(True)
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax.set_ylabel('Total Messages Broadcasted')    
+    plt.tight_layout()
 
     # define filename for plot
-    plot_filename = f'{trial_name}-{str("Total Messages Broadcasted").replace(" ", "_").replace("[s]","s")}.png'
+    plot_filename = f'{str("Total Messages Broadcasted").replace(" ", "_").replace("(s)","s")}.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     
@@ -133,9 +146,6 @@ def print_runtime_data(trial_name : str,
     print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
 
     # --- #N Messages / Task vs. Num of Tasks ---
-    # fig = plt.figure(layout='constrained', figsize=(10, 4))
-    # subfigs = fig.subfigures(1, 2, wspace=0.07)
-
     f, ax = plt.subplots(figsize=(8, 6))
     ax.set_xscale("log")
     ax.set_yscale("log")
@@ -147,17 +157,225 @@ def print_runtime_data(trial_name : str,
                 # col='Replanner',
                 # row='Replanner',
                 # kind="line",
-                # palette="tab10", 
+                # palette="rocket_r", 
+                palette=color_map,
                 # err_style="bars",
                 markers=True, 
                 dashes=False,
                 ax=ax
             )
         
-    plt.grid(True)
+    # plt.grid(True)
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax.set_ylabel('Average Messages Broadcasted per Task')
+    plt.tight_layout()
 
     # define filename for plot
-    plot_filename = f'{trial_name}-{str("Average Messages Broadcasted per Task").replace(" ", "_").replace("[s]","s")}.png'
+    plot_filename = f'{str("Average Messages Broadcasted per Task").replace(" ", "_").replace("(s)","s")}.png'
+    save_path = os.path.join(save_dir, plot_filename)
+    local_save_path = os.path.join(local_save_dir, plot_filename)
+    
+    # save plot 
+    plt.savefig(save_path)
+    if base_dir != local_base_dir:
+        plt.savefig(local_save_path)
+
+    # print completion message with paths to saved plots
+    print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
+
+    # --- Reward vs. Num of Tasks ---
+    f, ax = plt.subplots(figsize=(8, 6))
+    ax.set_xscale("log")
+    # ax.set_yscale("log")
+
+    # Scatter plot
+    sns.scatterplot(
+        data=filtered_df,
+        y='Total Obtained Reward [norm]',
+        x='Task Arrival Rate',
+        hue='Num Sats',
+        palette=color_map,
+        ax=ax,
+    )
+
+    for num_sats, group in filtered_df.groupby('Num Sats'):
+        x = group['Task Arrival Rate'].values
+        y = group['Total Obtained Reward [norm]'].values
+
+        # Log-linear fit: y = a + b*log10(x)
+        slope, intercept, r, _, se = stats.linregress(np.log10(x), y)
+
+        x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 100)
+        y_fit = intercept + slope * np.log10(x_fit)
+
+        ax.plot(x_fit, y_fit, color=color_map[num_sats], linewidth=1.5,
+                linestyle='--', alpha=0.7, label='_nolegend_')
+
+        x_mid = 10**((np.log10(x.min()) + np.log10(x.max())) / 2)
+        y_mid = intercept + slope * np.log10(x_mid)
+        ax.text(x_mid, y_mid + 0.02, rf'$b={slope:.2f}$',
+                fontsize=7, color=color_map[num_sats], ha='center')
+
+    # for num_sats, group in filtered_df.groupby('Num Sats'):
+    #     x = group['Task Arrival Rate'].values
+    #     y = group['Total Obtained Reward [norm]'].values
+    #     log_x = np.log10(x)
+
+    #     slope, intercept, r, p, se = linregress(log_x, y)
+
+    #     x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 100)
+    #     log_x_fit = np.log10(x_fit)
+    #     y_fit = intercept + slope * log_x_fit
+
+    #     # 95% confidence interval
+    #     n = len(x)
+    #     t_val = stats.t.ppf(0.975, df=n - 2)
+    #     x_mean = log_x.mean()
+    #     se_line = se * np.sqrt(1/n + (log_x_fit - x_mean)**2 / np.sum((log_x - x_mean)**2))
+
+    #     ax.plot(x_fit, y_fit, color=color_map[num_sats], linewidth=1.5,
+    #             linestyle='--', alpha=0.8, label='_nolegend_')
+    #     ax.fill_between(x_fit,
+    #                     y_fit - t_val * se_line,
+    #                     y_fit + t_val * se_line,
+    #                     color=color_map[num_sats], alpha=0.12)
+
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax.set_ylabel('Total Obtained Reward (normalized)')
+    plt.tight_layout()
+
+    # define filename for plot
+    plot_filename = f'{str("Total Obtained Reward (normalized)").replace(" ", "_").replace("(normalized)","normalized")}.png'
+    save_path = os.path.join(save_dir, plot_filename)
+    local_save_path = os.path.join(local_save_dir, plot_filename)
+    
+    # save plot 
+    plt.savefig(save_path)
+    if base_dir != local_base_dir:
+        plt.savefig(local_save_path)
+
+    # print completion message with paths to saved plots
+    print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
+    
+    # --- Utility vs. Num of Tasks ---
+    f, ax = plt.subplots(figsize=(8, 6))
+    ax.set_xscale("log")
+    # ax.set_yscale("log")
+
+    # Scatter plot
+    sns.scatterplot(
+        data=filtered_df,
+        y='Total Obtained Utility [norm]',
+        x='Task Arrival Rate',
+        hue='Num Sats',
+        palette=color_map,
+        ax=ax,
+    )
+
+    for num_sats, group in filtered_df.groupby('Num Sats'):
+        x = group['Task Arrival Rate'].values
+        y = group['Total Obtained Utility [norm]'].values
+
+        # Log-linear fit: y = a + b*log10(x)
+        slope, intercept, r, _, se = stats.linregress(np.log10(x), y)
+
+        x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 100)
+        y_fit = intercept + slope * np.log10(x_fit)
+
+        ax.plot(x_fit, y_fit, color=color_map[num_sats], linewidth=1.5,
+                linestyle='--', alpha=0.7, label='_nolegend_')
+
+        x_mid = 10**((np.log10(x.min()) + np.log10(x.max())) / 2)
+        y_mid = intercept + slope * np.log10(x_mid)
+        ax.text(x_mid, y_mid + 0.02, rf'$b={slope:.2f}$',
+                fontsize=7, color=color_map[num_sats], ha='center')
+
+    # for num_sats, group in filtered_df.groupby('Num Sats'):
+    #     x = group['Task Arrival Rate'].values
+    #     y = group['Total Obtained Utility [norm]'].values
+    #     log_x = np.log10(x)
+
+    #     slope, intercept, r, p, se = linregress(log_x, y)
+
+    #     x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 100)
+    #     log_x_fit = np.log10(x_fit)
+    #     y_fit = intercept + slope * log_x_fit
+
+    #     # 95% confidence interval
+    #     n = len(x)
+    #     t_val = stats.t.ppf(0.975, df=n - 2)
+    #     x_mean = log_x.mean()
+    #     se_line = se * np.sqrt(1/n + (log_x_fit - x_mean)**2 / np.sum((log_x - x_mean)**2))
+
+    #     ax.plot(x_fit, y_fit, color=color_map[num_sats], linewidth=1.5,
+    #             linestyle='--', alpha=0.8, label='_nolegend_')
+    #     ax.fill_between(x_fit,
+    #                     y_fit - t_val * se_line,
+    #                     y_fit + t_val * se_line,
+    #                     color=color_map[num_sats], alpha=0.12)
+
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax.set_ylabel('Total Obtained Utility (normalized)')
+    plt.tight_layout()
+
+    # define filename for plot
+    plot_filename = f'{str("Total Obtained Utility (normalized)").replace(" ", "_").replace("(normalized)","normalized")}.png'
+    save_path = os.path.join(save_dir, plot_filename)
+    local_save_path = os.path.join(local_save_dir, plot_filename)
+    
+    # save plot 
+    plt.savefig(save_path)
+    if base_dir != local_base_dir:
+        plt.savefig(local_save_path)
+
+    # print completion message with paths to saved plots
+    print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
+
+    # --- #N Messages vs. Runtime ---
+    f, ax = plt.subplots(figsize=(8, 6))
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+
+    # Scatter plot
+    sns.scatterplot(
+        data=filtered_df,
+        x='Total Messages Broadcasted',
+        y='Simulation Runtime [s]',
+        hue='Num Sats',
+        palette=color_map,
+        ax=ax,
+    )
+
+    # Power-law trendline per group
+    for num_sats, group in filtered_df.groupby('Num Sats'):
+        x = group['Total Messages Broadcasted'].values
+        y = group['Simulation Runtime [s]'].values
+
+        # Fit in log-log space → power law y = a * x^b
+        slope, intercept, r, _, _ = stats.linregress(np.log10(x), np.log10(y))
+
+        x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 100)
+        y_fit = 10**intercept * x_fit**slope
+
+        ax.plot(x_fit, y_fit, color=color_map[num_sats], linewidth=1.5,
+                linestyle='--', alpha=0.7, label='_nolegend_')
+
+        # Optional: annotate slope on the trendline
+        x_mid = 10**((np.log10(x.min()) + np.log10(x.max())) / 2)
+        y_mid = 10**intercept * x_mid**slope
+        ax.text(x_mid, y_mid * 1.15, f'b={slope:.1f}',
+                fontsize=7, color=color_map[num_sats], ha='center')
+
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Total Messages Broadcasted')
+    ax.set_ylabel('Simulation Runtime (s)')
+    plt.tight_layout()
+
+    # define filename for plot
+    plot_filename = f'Relplot-Total_Messages_Broadcasted-vs-Simulation_Runtime.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     
@@ -170,31 +388,47 @@ def print_runtime_data(trial_name : str,
     print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
 
     # --- #N Messages / Task vs. Runtime ---
-    # fig = plt.figure(layout='constrained', figsize=(10, 4))
-    # subfigs = fig.subfigures(1, 2, wspace=0.07)
-
     f, ax = plt.subplots(figsize=(8, 6))
     ax.set_xscale("log")
     ax.set_yscale("log")
 
-    sns.relplot(data=filtered_df, 
-                y='Simulation Runtime [s]',
-                x='Average Messages Broadcasted per Task',
-                hue='Num Sats',
-                # col='Replanner',
-                # row='Replanner',
-                # kind="line",
-                # palette="tab10", 
-                # err_style="bars",
-                # markers=True, 
-                # dashes=False,
-                # ax=ax
-            )
-        
-    plt.grid(True)
+    # Scatter plot
+    sns.scatterplot(
+        data=filtered_df,
+        x='Average Messages Broadcasted per Task',
+        y='Simulation Runtime [s]',
+        hue='Num Sats',
+        palette=color_map,
+        ax=ax,
+    )
+
+    # Power-law trendline per group
+    for num_sats, group in filtered_df.groupby('Num Sats'):
+        x = group['Average Messages Broadcasted per Task'].values
+        y = group['Simulation Runtime [s]'].values
+
+        # Fit in log-log space → power law y = a * x^b
+        slope, intercept, r, _, _ = stats.linregress(np.log10(x), np.log10(y))
+
+        x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 100)
+        y_fit = 10**intercept * x_fit**slope
+
+        ax.plot(x_fit, y_fit, color=color_map[num_sats], linewidth=1.5,
+                linestyle='--', alpha=0.7, label='_nolegend_')
+
+        # Optional: annotate slope on the trendline
+        x_mid = 10**((np.log10(x.min()) + np.log10(x.max())) / 2)
+        y_mid = 10**intercept * x_mid**slope
+        ax.text(x_mid, y_mid * 1.15, f'b={slope:.1f}',
+                fontsize=7, color=color_map[num_sats], ha='center')
+
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Average Messages Broadcasted per Task')
+    ax.set_ylabel('Simulation Runtime (s)')
+    plt.tight_layout()
 
     # define filename for plot
-    plot_filename = f'{trial_name}-{str("Replot").replace(" ", "_").replace("[s]","s")}.png'
+    plot_filename = f'Relplot-Average_Messages_Broadcasted_per_Task-vs-Simulation_Runtime.png'    
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     
@@ -219,7 +453,7 @@ if __name__ == "__main__":
     # experiment_col = "in_validation"
 
     # print runtime data
-    print_runtime_data(trial_name, 
+    generate_plots(trial_name, 
                        experiment_col,
                     #    base_dir
                     )
