@@ -1897,41 +1897,60 @@ class ConsensusPlanner(AbstractReactivePlanner):
         agents_considered = np.zeros(n_agents, dtype=bool)
         n_covered = 0
         t_broadcasts = []
-        prev_cohort = np.ones(n_agents, dtype=bool)  
 
         for k in range(shared.shape[0]):
+            # unpack row 
             row_mask = shared[k]
+
+            # obtain list of new agents in this row that have not yet been considered
             new_agents = np.where(row_mask & ~agents_considered)[0]
+
+            # check if there are any new agents in this row
             if new_agents.size == 0:
+                # no new agents in this row; skip to next row
                 continue
+            
+            # classify new agents in this row as either remaining in the cohort from the previous row 
+            #   or new to the cohort compared to the previous row
+            prev_cohort_mask = shared[k-1] if k > 0 else np.ones(n_agents, dtype=bool)
+            remaining_cohort = np.where(row_mask & prev_cohort_mask)[0]
+            new_to_cohort = np.where(row_mask & ~prev_cohort_mask)[0]
 
-            remaining_cohort = np.where(row_mask & prev_cohort)[0]
-
+            # calculate broadcast time for this row
             t_s = float(t_starts[k])
             t_broadcast = t_curr if t_curr > t_s else t_s
 
             v_next = next((v_idx for v_idx in remaining_cohort 
-                            if "relay" not in orbitdata.comms_target_columns[v_idx] 
-                            and "tdrss" not in orbitdata.comms_target_columns[v_idx]
-                            and "announcer" not in orbitdata.comms_target_columns[v_idx]
+                            if "relay" not in (v := orbitdata.comms_target_columns[v_idx]) 
+                            and "tdrss" not in v
+                            and "announcer" not in v
                             # and # TODO add more filters for non-relevant targets here
-                            ), np.Inf) # if remaining_cohort.size > 0 else -1
+                            ), np.Inf)
 
-            if ((participating and abs(t_broadcast - t_curr) <= 1e-6)
-                # or remaining_cohort.size == 0 
-                or u_idx < v_next
+            # schedule broadcast if:
+            if (
+                # is participating in the current bidding interval
+                (participating and abs(t_broadcast - t_curr) <= 1e-6)
+                # or there are new agents to cover in this cohort 
+                #   and I am the senior-most agent from the previous cohort
+                or (new_to_cohort.size > 0 and u_idx < v_next)
                 ):
                 t_broadcasts.append(t_broadcast)
-            else:
-                x= 1 
+            # -----------------------------
+            # else:
+                # t_broadcasts.append(t_broadcast)
+                # x = 1 # breakpoint for debugging broadcast scheduling logic
+            # -----------------------------
 
-            # t_s = float(t_starts[k])
-            # t_broadcasts.append(t_curr if t_curr > t_s else t_s)
+            # mark agents in this row as considered
             agents_considered[new_agents] = True
-            n_covered += new_agents.size
-            prev_cohort = row_mask
 
+            # update count of covered targets
+            n_covered += new_agents.size
+            
+            # check if all targets have been covered
             if n_covered >= n_targets:
+                # if so, stop scheduling broadcasts
                 break
 
         # remove duplicates and sort broadcast times

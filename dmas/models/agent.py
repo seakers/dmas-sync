@@ -296,9 +296,9 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
-                # if True:
+                if True:
                     # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                    # x = 1 # breakpoint
+                    x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
@@ -350,8 +350,8 @@ class SimulationAgent(object):
                 pending_actions = []
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
-                # if True:
-                if curr_state._t > 32_299.0:
+                if True:
+                # if curr_state._t > 32_299.0:
                     # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------

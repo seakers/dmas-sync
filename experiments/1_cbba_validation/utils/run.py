@@ -1,6 +1,7 @@
 import cProfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import copy
+import datetime
 import random
 import sys
 import tracemalloc
@@ -119,6 +120,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                 "status": 'oracle_skipped',
                 "results_dir": results_dir,
                 "elapsed_s": time.time() - t0,
+                "time" : datetime.datetime.now().strftime("%H:%M:%S"),
             }
 
         # generate scenario specifications from templates and trial parameters
@@ -152,6 +154,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                     "orbitdata_dir": orbitdata_dir,
                     "results_dir": results_dir,
                     "elapsed_s": time.time() - t0,
+                    "time" : datetime.datetime.now().strftime("%H:%M:%S"),
                 }
 
         # ------------------------------------------------------------
@@ -179,6 +182,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                 "status": "simulated_only" if should_run_sim else "simulated_only_skipped_existing",
                 "results_dir": results_dir,
                 "elapsed_s": time.time() - t0,
+                "time" : datetime.datetime.now().strftime("%H:%M:%S"),
             }
 
         # ------------------------------------------------------------
@@ -219,6 +223,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                 "results_dir": results_dir,
                 "results_summary_path": results_summary_path,
                 "elapsed_s": time.time() - t0,
+                "time" : datetime.datetime.now().strftime("%H:%M:%S"),
             }
         
         # ------------------------------------------------------------
@@ -256,6 +261,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                 "results_dir": results_dir,
                 "results_summary_path": results_summary_path,
                 "elapsed_s": time.time() - t0,
+                "time" : datetime.datetime.now().strftime("%H:%M:%S"),
             }
 
         # ------------------------------------------------------------
@@ -276,6 +282,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             "results_dir": results_dir,
             "results_summary_path": results_summary_path,
             "elapsed_s": time.time() - t0,
+            "time" : datetime.datetime.now().strftime("%H:%M:%S"),
         }
 
     except Exception as e:
@@ -291,6 +298,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             "traceback": traceback.print_exc(),
             "results_dir": results_dir,
             "elapsed_s": time.time() - t0,
+            "time" : datetime.datetime.now().strftime("%H:%M:%S"),
         }
     
     finally:
@@ -413,10 +421,10 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
                 # check if error was encountered
                 if status == "error":
                     # log error message
-                    pbar.write(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                    pbar.write(f"[scenario {sid}] ERROR at {res.get('time')} after {elapsed:.1f}s: {res.get('error')}")
                 else:
                     # log normal status message
-                    pbar.write(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+                    pbar.write(f"[scenario {sid}] {status} in {elapsed:.1f}s at {res.get('time')}")
             else:
                 # print to console if no progress bar (still respect quiet mode)
                 sid = res.get("scenario_id", "???")
@@ -425,10 +433,10 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
 
                 if status == "error":
                     # log error message
-                    print(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                    print(f"[scenario {sid}] ERROR at {res.get('time')} after {elapsed:.1f}s: {res.get('error')}")
                 else:
                     # log normal status message
-                    print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+                    print(f"[scenario {sid}] {status} in {elapsed:.1f}s at {res.get('time')}")
 
     finally:
         # close progress bar if used
@@ -512,10 +520,10 @@ def parallel_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Si
                     # check if error was encountered
                     if status == "error":
                         # log error message
-                        pbar.write(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                        pbar.write(f"[scenario {sid}] ERROR at {res.get('time')} after {elapsed:.1f}s: {res.get('error')}")
                     else:
                         # log normal status message
-                        pbar.write(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+                        pbar.write(f"[scenario {sid}] {status} in {elapsed:.1f}s at {res.get('time')}")
                 else:
                     # print to console if no progress bar (still respect quiet mode)
                     sid = res.get("scenario_id", "???")
@@ -524,10 +532,10 @@ def parallel_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Si
 
                     if status == "error":
                         # log error message
-                        print(f"[scenario {sid}] ERROR after {elapsed:.1f}s: {res.get('error')}")
+                        print(f"[scenario {sid}] ERROR at {res.get('time')} after {elapsed:.1f}s: {res.get('error')}")
                     else:
                         # log normal status message
-                        print(f"[scenario {sid}] {status} in {elapsed:.1f}s")
+                        print(f"[scenario {sid}] {status} in {elapsed:.1f}s at {res.get('time')}")
 
     finally:
         if pbar is not None:
