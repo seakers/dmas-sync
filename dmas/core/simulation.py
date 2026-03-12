@@ -145,7 +145,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            # t = 32_000.0 # TODO remove after testing
+            # t = 30_000.0 # TODO remove after testing
             
             # initialize state-action pairs
             state_action_pairs = {
@@ -153,6 +153,8 @@ class Simulation:
                 agent.name : (agent.get_state(), None) 
                 for agent in self._agents
             }
+
+            iter_counter = 0
 
             # execute simulation loop
             with tqdm(total=tf, 
@@ -219,6 +221,14 @@ class Simulation:
 
                     # update current time
                     t += dt_progress
+
+                    if dt_progress > 1e-6:
+                        iter_counter = 0
+                    else:
+                        iter_counter += 1
+                    if iter_counter > 1000:
+                        raise RuntimeError(f"ERROR: Simulation may be stuck at t={t:.2f}s. No agent actions ending after this time for {iter_counter} iterations.")
+                        
 
                     # reset agent percepts for next cycle
                     for *_,msgs,obs_data in agent_observations.values():

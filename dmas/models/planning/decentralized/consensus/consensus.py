@@ -133,6 +133,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
         # DEBUG PRINTOUTS
         if self._debug and incoming_bids:
+        # if state._t > 32_299.0 and incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
             self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
@@ -153,8 +154,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
         # DEBUG PRINTOUTS
         if (task_updates or results_updates or bundle_updates) and self._debug:
-        # if self._debug:
-        # if (task_updates or results_updates or bundle_updates) and state._t > 74_049.98:
+        # if (task_updates or results_updates or bundle_updates) and state._t > 32_299.0:
             self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
             print(f'`{state.agent_name}` - Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
             if any([
@@ -1200,6 +1200,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
              # -------------------------------
             # DEBUG PRINTOUTS
             if self._debug and new_bids:
+            # if new_bids and state._t > 32_299.0:
             # if new_bids:
                 self._log_results('PLANNING PHASE - RESULTS (AFTER LOADING PREPLAN)', state, self._results)
                 self._log_bundle('PLANNING PHASE - BUNDLE (AFTER LOADING PREPLAN)', state, self._bundle)
@@ -1221,8 +1222,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
         # DEBUG PRINTOUTS
         if self._debug and new_bids:
-        # if new_bids:
-        # if state._t > 74_049.99 and new_bids:
+        # if state._t > 32_299.0 and new_bids:
             self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
             self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
             print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
@@ -1897,6 +1897,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         agents_considered = np.zeros(n_agents, dtype=bool)
         n_covered = 0
         t_broadcasts = []
+        prev_cohort = np.ones(n_agents, dtype=bool)  
 
         for k in range(shared.shape[0]):
             row_mask = shared[k]
@@ -1904,10 +1905,31 @@ class ConsensusPlanner(AbstractReactivePlanner):
             if new_agents.size == 0:
                 continue
 
+            remaining_cohort = np.where(row_mask & prev_cohort)[0]
+
             t_s = float(t_starts[k])
-            t_broadcasts.append(t_curr if t_curr > t_s else t_s)
+            t_broadcast = t_curr if t_curr > t_s else t_s
+
+            v_next = next((v_idx for v_idx in remaining_cohort 
+                            if "relay" not in orbitdata.comms_target_columns[v_idx] 
+                            and "tdrss" not in orbitdata.comms_target_columns[v_idx]
+                            and "announcer" not in orbitdata.comms_target_columns[v_idx]
+                            # and # TODO add more filters for non-relevant targets here
+                            ), np.Inf) # if remaining_cohort.size > 0 else -1
+
+            if ((participating and abs(t_broadcast - t_curr) <= 1e-6)
+                # or remaining_cohort.size == 0 
+                or u_idx < v_next
+                ):
+                t_broadcasts.append(t_broadcast)
+            else:
+                x= 1 
+
+            # t_s = float(t_starts[k])
+            # t_broadcasts.append(t_curr if t_curr > t_s else t_s)
             agents_considered[new_agents] = True
             n_covered += new_agents.size
+            prev_cohort = row_mask
 
             if n_covered >= n_targets:
                 break

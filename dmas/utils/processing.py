@@ -458,7 +458,12 @@ class ResultsProcessor:
         if default_tasks_df is not None:
             known_tasks_df = pd.concat([known_tasks_df, default_tasks_df], axis=0)
         if not event_tasks_df.empty:
-            known_tasks_df = pd.concat([known_tasks_df, event_tasks_df], axis=0)        
+            known_tasks_df = pd.concat([known_tasks_df, event_tasks_df], axis=0)    
+
+        # remove duplicates
+        known_tasks = list(set(known_tasks))
+        known_tasks_df = known_tasks_df.drop_duplicates(subset='id').reset_index(drop=True) \
+            if not known_tasks_df.empty else pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])  
         
         # return known tasks dataframe and list of known tasks
         return known_tasks_df, known_tasks
