@@ -145,7 +145,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            t = 1_000.0 # TODO remove after testing
+            # t = 32_000.0 # TODO remove after testing
             
             # initialize state-action pairs
             state_action_pairs = {
@@ -164,6 +164,9 @@ class Simulation:
                       file=sys.stderr,
                       disable=not self._printouts
                     ) as pbar:
+                
+                # update progress bar if starting time is greater than 0 (e.g. for testing or debugging purposes)
+                if t > 0.0: pbar.update(t)
                 
                 # ----- main event-driven simulation loop -----
                 while t < tf:
@@ -261,8 +264,7 @@ class Simulation:
             self.__executed = False 
             raise e
 
-        finally:
-            
+        finally:            
             # print results for the simulation environment regardless of the execution outcome
             self._environment.print_results()
 
