@@ -145,7 +145,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            # t = 30_000.0 # TODO remove after testing
+            t = 1_000.0 # TODO remove after testing
             
             # initialize state-action pairs
             state_action_pairs = {
@@ -153,10 +153,6 @@ class Simulation:
                 agent.name : (agent.get_state(), None) 
                 for agent in self._agents
             }
-
-            # ----- memory usage checkpoint -----
-            # self.__profile_current_memory(t)
-            # -----------------------------------
 
             # execute simulation loop
             with tqdm(total=tf, 

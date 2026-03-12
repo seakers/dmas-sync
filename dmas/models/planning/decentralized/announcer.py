@@ -99,6 +99,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         # initialize broadcasts from parent planner
         # broadcasts : List[BroadcastMessageAction] = super()._schedule_broadcasts(state, observations, orbitdata, t)
         broadcasts : List[BroadcastMessageAction] = []
+        t_curr : float = state.get_time()
 
         # get list of future events
         future_events : List[GeophysicalEvent] = [event for event in tqdm(self.events, 
@@ -157,7 +158,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                                                                  include_current=True):
                 # unpack row data
                 t_start = float(row[orbitdata.comms_links._col["start"]])
-                t_end   = float(row[orbitdata.comms_links._col["end"]])
+                # t_end   = float(row[orbitdata.comms_links._col["end"]])
                 comps   = row[3:]  
 
                 # get communication targets for this interval based on component membership
@@ -172,22 +173,10 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                     continue
 
                 # calculate broadcast time to earliest in this access interval
-                t_broadcast : float = max(t_start, task_req.t_req)
+                t_broadcast : float = max(t_start, task_req.t_req, t_curr)
 
                 # add broadcast time to set of broadcast times and assign request to be broadcast at this time
                 t_broadcasts[t_broadcast].append(task_request_msg)
-
-            # # iterate through list of intervals in this time period 
-            # for t_start,*_ in orbitdata.comms_links.iter_rows_raw_fast(t=event.availability.left, 
-            #                                                             t_max=event.availability.right, 
-            #                                                             include_current=True):
-            #     # TODO consider only scheduling one broadcast per agent. No need to reannounce to the same agents
-
-            #     # calculate broadcast time to earliest in this access interval
-            #     t_broadcast : float = max(t_start, task_req.t_req)
-                
-            #     # add broadcast time to set of broadcast times and assign request to be broadcast at this time
-            #     t_broadcasts[t_broadcast].append(task_request_msg)
                 
         # iterate through access start times to find active requests
         for t_broadcast, task_requests_msgs in tqdm(t_broadcasts.items(),
