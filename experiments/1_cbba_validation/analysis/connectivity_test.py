@@ -31,9 +31,6 @@ def generate_plots(trial_name : str,
         raise ValueError(f"Experiment column `{experiment_col}` not found in results DataFrame. Available columns: {results_df.columns.tolist()}")
     filtered_df = results_df[results_df[experiment_col] == True]
 
-    # filter results to only include rows with CBBA replanner
-    filtered_df = filtered_df[filtered_df['Replanner'] == 'CBBA']
-
     # Fill in missing values
     ## preplanner column
     filtered_df['Preplanner'] = filtered_df['Preplanner'].fillna('No Preplanner')
@@ -63,34 +60,105 @@ def generate_plots(trial_name : str,
     palette = sns.color_palette("rocket_r", n_colors=len(num_sats_values))
     color_map = dict(zip(num_sats_values, palette))
 
-    # # --- Runtime vs. Num of Tasks ---
-    # f, ax = plt.subplots(figsize=(8, 6))
-    # ax.set_xscale("log")
-    # ax.set_yscale("log")
+    # --- Runtime vs. Num of Tasks ---
+    # filter results to only include rows with CBBA replanner
+    cbba_df = filtered_df[filtered_df['Replanner'] == 'CBBA']
 
-    # sns.lineplot(data=filtered_df, 
-    #             y='Simulation Runtime [s]',
-    #             x='Task Arrival Rate',
-    #             hue='Num Sats',
-    #             # col='Replanner',
-    #             # row='Replanner',
-    #             # kind="line",
-    #             # palette="rocket_r", 
-    #             palette=color_map,
-    #             # err_style="bars",
-    #             markers=True, 
-    #             dashes=False,
-    #             ax=ax
-    #         )
+    f, ax = plt.subplots(figsize=(8, 6))
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+
+    latency_dashes = {
+        'Low':    '',           # solid — no interruption
+        'Medium': (4, 2),       # dashed
+        'High':   (1, 2),       # dotted — most "broken up"
+    }
+
+    sns.lineplot(data=cbba_df, 
+                y='Simulation Runtime [s]',
+                x='Task Arrival Rate',
+                hue='Num Sats',
+                style='Latency',
+                palette=color_map,
+                dashes=latency_dashes,
+                ax=ax
+            )
         
-    # # plt.grid(True)
-    # ax.grid(True, which='both', linestyle='--', linewidth=0.4)
-    # ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
-    # ax.set_ylabel('Simulation Runtime (s)')    
+    # plt.grid(True)
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax.set_ylabel('Simulation Runtime (s)')    
+    plt.tight_layout()
+
+    # define filename for plot
+    plot_filename = f'{str("Simulation Runtime (s)").replace(" ", "_").replace("(s)","s")}.png'
+    save_path = os.path.join(save_dir, plot_filename)
+    local_save_path = os.path.join(local_save_dir, plot_filename)
+    
+    # save plot 
+    plt.savefig(save_path)
+    if base_dir != local_base_dir:
+        plt.savefig(local_save_path)
+
+    # print completion message with paths to saved plots
+    print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
+
+    # --- Reward vs. Latency ---
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+
+    for ax, replanner in zip(axes, ['CBBA', 'Greedy']):
+        subset = filtered_df[filtered_df['Replanner'] == replanner]
+        summary = subset.groupby(['Num Sats', 'Latency'])['Total Obtained Reward [norm]'].mean().reset_index()
+        
+        sns.barplot(data=summary, x='Num Sats', y='Total Obtained Reward [norm]',
+                    hue='Latency', hue_order=['Low', 'Medium', 'High'],
+                    palette={'Low': '#2ecc71', 'Medium': '#f39c12', 'High': '#e74c3c'},
+                    errorbar='sd', 
+                    ax=ax)
+        ax.set_title(rf'Replanner: {replanner}')
+        ax.set_xlabel('Number of Satellites')
+        ax.set_ylabel('Total Obtained Reward (normalized)')
+        ax.axhline(1.0, color='gray', linestyle='--', linewidth=0.8, alpha=0.6)
+        ax.legend(title='Latency')
+
+    plt.suptitle(r'Effect of Latency on Mission Reward — RQ3', fontsize=13)
+    plt.tight_layout()
+
+    # define filename for plot
+    plot_filename = f'{str("Reward vs Latency").replace(" ", "_").replace("(s)","s")}.png'
+    save_path = os.path.join(save_dir, plot_filename)
+    local_save_path = os.path.join(local_save_dir, plot_filename)
+    
+    # save plot 
+    plt.savefig(save_path)
+    if base_dir != local_base_dir:
+        plt.savefig(local_save_path)
+
+    # # --- Response Time vs. Latency ---
+    # fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+
+    # for ax, replanner in zip(axes, ['CBBA', 'Greedy']):
+    #     subset = filtered_df[filtered_df['Replanner'] == replanner]
+    #     summary = subset.groupby(['Num Sats', 'Latency'])['Total Obtained Reward [norm]'].mean().reset_index()
+        
+    #     sns.barplot(data=summary, 
+    #                 x='Num Sats', 
+    #                 y='Total Obtained Reward [norm]',
+    #                 hue='Latency', hue_order=['Low', 'Medium', 'High'],
+    #                 palette={'Low': '#2ecc71', 'Medium': '#f39c12', 'High': '#e74c3c'},
+    #                 errorbar='sd',                    
+    #                 ax=ax)
+    #     ax.set_title(rf'Replanner: {replanner}')
+    #     ax.set_xlabel('Number of Satellites')
+    #     ax.set_ylabel('Total Obtained Reward (normalized)')
+    #     ax.axhline(1.0, color='gray', linestyle='--', linewidth=0.8, alpha=0.6)
+    #     ax.legend(title='Latency')
+
+    # plt.suptitle(r'Effect of Latency on Mission Reward — RQ3', fontsize=13)
     # plt.tight_layout()
 
     # # define filename for plot
-    # plot_filename = f'{str("Simulation Runtime (s)").replace(" ", "_").replace("(s)","s")}.png'
+    # plot_filename = f'{str("Reward vs Latency").replace(" ", "_").replace("(s)","s")}.png'
     # save_path = os.path.join(save_dir, plot_filename)
     # local_save_path = os.path.join(local_save_dir, plot_filename)
     
@@ -98,9 +166,6 @@ def generate_plots(trial_name : str,
     # plt.savefig(save_path)
     # if base_dir != local_base_dir:
     #     plt.savefig(local_save_path)
-
-    # # print completion message with paths to saved plots
-    # print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
 
     # # --- #N Messages vs. Num of Tasks ---
     # f, ax = plt.subplots(figsize=(8, 6))
