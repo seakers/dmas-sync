@@ -221,6 +221,8 @@ orbit_data
 **tests/**/results
 *geodata*
 swifa/
+*archive*
+*/archive/*
 
 # Experiments
 **experiments/0_0_orbit_connectivity/orbits/**

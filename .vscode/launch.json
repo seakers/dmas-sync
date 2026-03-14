@@ -267,7 +267,7 @@
             "name": "EXPERIMENT 1: PREP - Connectivity Analysis",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceRoot}/experiments/1_cbba_validation/connectivity.py",
+            "program": "${workspaceRoot}/experiments/1_cbba_validation/utils/connectivity.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "cwd": "${workspaceRoot}",
