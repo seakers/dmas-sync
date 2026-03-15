@@ -36,5 +36,5 @@ python ./experiments/1_cbba_validation/study.py \
   -t full_factorial_trials_2026-03-15 \
   --trial-range "${start}:${end}" \
   --single-thread --quiet --exceptions \
-  --simulate-only --force-simulate # --force-postprocess # --force-summarize \
+  --only-simulate --force-simulate # --force-postprocess # --force-summarize \
   # --profile-cpu --profile-mem 
