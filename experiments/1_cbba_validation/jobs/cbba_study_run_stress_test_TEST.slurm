@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --array=0-0
+#SBATCH --array=69-74
 
 set -euo pipefail
 
@@ -33,7 +33,7 @@ end=$((1+i))
 
 # --- Run ---
 python ./experiments/1_cbba_validation/study.py \
-  -t full_factorial_trials_2026-03-15 \
+  -t full_factorial_trials_2026-03-16 \
   --trial-range "${start}:${end}" \
   --single-thread --quiet --exceptions \
   --simulate-only --force-simulate # --force-postprocess # --force-summarize \
