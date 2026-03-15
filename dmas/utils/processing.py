@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, deque
 from functools import reduce
 import os
 from typing import Dict, List, Set, Tuple
@@ -34,10 +34,14 @@ class ResultsProcessor:
                         compiled_orbitdata : Dict[str, OrbitData], 
                         agent_missions : Dict[str, Mission], 
                         events : List[GeophysicalEvent],
+                        agent_specs : Dict[str, object],
                         printouts: bool = True
                     ) -> Tuple:
         """ processes simulation results after execution """
-        
+        # extract agent field of view specifications from agent specs object
+        cross_track_fovs = {agent : ResultsProcessor._collect_fov_specs(specs) 
+                            for agent,specs in agent_specs.items()}
+
         # load results
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
@@ -68,7 +72,7 @@ class ResultsProcessor:
 
         ## tasks
         observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(known_tasks, observations_per_gp, agent_missions, printouts)
-        obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, printouts)
+        obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, agent_specs, cross_track_fovs, compiled_orbitdata, printouts)
 
         # print compiled data
         processed_results_path = os.path.join(results_path)
@@ -100,6 +104,9 @@ class ResultsProcessor:
     @staticmethod
     def __compile_obtained_rewards(observations_per_task : Dict[GenericObservationTask, List[dict]], 
                                    agent_missions : Dict[str, Mission], 
+                                   agent_specs : Dict[str, object],
+                                   cross_track_fovs : Dict[str, float],
+                                   compiled_orbitdata : Dict[str, OrbitData],
                                    printouts : bool
                                 ) -> pd.DataFrame:
         # initialize list of obtained rewards
@@ -110,60 +117,42 @@ class ResultsProcessor:
             
             # initialize previous observation time for revisit time calculation
             t_prev = np.NINF
-            
+
+            if "EventObservationTask-'generic parameter'@(0,2324)-EVENT-e21c2b8e" in task.id:
+                x = 1 # breakpoint
+
             # iterate observations by start time 
-            for n_obs,obs_perf in enumerate(sorted(observations, key=lambda obs: obs['t_start'])):
+            for n_obs,obs_perf in enumerate(sorted(observations, key=lambda obs: obs['time [s]'])):
                 # unpack observation information
                 observing_agent = obs_perf['agent name']
                 instrument_name : str = obs_perf['instrument']
-                loc = (obs_perf['lat [deg]'], obs_perf['lon [deg]'], obs_perf['grid index'], obs_perf['GP index'])
-                d_img = obs_perf['t_end'] - obs_perf['t_start']
-                t_img = obs_perf['time [s]']
+                # loc = (obs_perf['lat [deg]'], obs_perf['lon [deg]'], obs_perf['grid index'], obs_perf['GP index'])
+                # t_img = obs_perf['time [s]']
+                t_img = max(obs_perf['t_start'], task.availability.left) 
+                d_img = obs_perf['t_end'] - t_img
+                assert t_img <= obs_perf['t_end'] + 1e-9, \
+                    f"Observation time {t_img} is after end of observation window at {obs_perf['t_end']}."
 
                 # get matching mission for observing agent
-                mission : Mission = agent_missions[observing_agent]
+                agent_mission : Mission = agent_missions[observing_agent]
 
-                # update observation performance information
-                obs_perf.update({ 
-                    SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
-                    TemporalRequirementAttributes.DURATION.value : d_img,
-                    TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
-                    #TODO Co-observation time
-                    TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
-                    TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
-                    TemporalRequirementAttributes.OBS_TIME.value : t_img,
-                    "t_end" : t_img + d_img,
-                    ObservationRequirementAttributes.OBSERVATION_NUMBER.value : n_obs + 1, # including this observation
-                })
-
-                # handle special case of first observation
-                if n_obs == 0:
-                    obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
-
-                # TODO update instrument-specific observation performance information
-                # if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower())
-                #     or ('vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower())):
-                #     if isinstance(instrument_spec.spectral_resolution, str):
-                #         obs_perf.update({
-                #             ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
-                #         })
-                #     elif isinstance(instrument_spec.spectral_resolution, (int,float)):
-                #         obs_perf.update({
-                #             ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
-                #         })
-                #     else:
-                #         raise ValueError('Unsupported type for spectral resolution in instrument specification.')
-                    
-                # elif ('altimeter' in instrument_name.lower()
-                #     or 'altimeter' in instrument_spec._type.lower()):
-                #     obs_perf.update({
-                #         ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
-                #     })
-                # else:
-                #     raise NotImplementedError(f'Calculation of task reward not yet supported for instruments of type `{instrument_name.lower()}`.')
+                measurement_performance \
+                        = ResultsProcessor.__estimate_task_performance_metrics(task,
+                                                                            instrument_name,
+                                                                            obs_perf['look angle [deg]'],
+                                                                            t_img,
+                                                                            d_img,
+                                                                            agent_specs[observing_agent],
+                                                                            cross_track_fovs[observing_agent],
+                                                                            compiled_orbitdata[observing_agent],
+                                                                            n_obs,
+                                                                            t_prev,
+                                                                        )
 
                 # evaluate reward for this observation
-                reward = mission.calc_task_value(task, obs_perf)
+                reward = max([agent_mission.calc_task_value(task, measurement) 
+                                for measurement in measurement_performance.values()]) \
+                                    if len(measurement_performance.values()) > 0 else 0.0
 
                 # add reward information to observation performance information
                 reward_dict = {
@@ -182,8 +171,16 @@ class ResultsProcessor:
         # construct obtained rewards dataframe
         if obtained_rewards_data:
             obtained_rewards_df = pd.DataFrame(obtained_rewards_data)
+            # sort by task id, observation time
+            obtained_rewards_df = obtained_rewards_df.sort_values(by=['task_id', 't_img']).reset_index(drop=True)
         else:
             obtained_rewards_df = pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent', 'instrument', 'reward'])
+        
+        # ----------------------------------
+        # DEBUG PRINTOUTS
+        # if printouts:
+        #     print(obtained_rewards_df.to_string(index=False))
+        # ----------------------------------
 
         # return obtained rewards dataframe
         return obtained_rewards_df
@@ -678,7 +675,7 @@ class ResultsProcessor:
         # look for accesses to each event for each agent
         for event in tqdm(events, 
                             desc='Classifying event accesses, detections, and observations', 
-                            leave=True,
+                            leave=False,
                             disable=not printouts):
             # unpackage event
             *_,event_grid_idx,event_gp_idx = event.location
@@ -869,7 +866,7 @@ class ResultsProcessor:
         accesses_per_task : Dict[GenericObservationTask, list] = defaultdict(list)
         accesses_per_task_df_data = []
 
-        for task in tqdm(known_tasks, desc="Processing task accessibility", leave=True, disable=not printouts):
+        for task in tqdm(known_tasks, desc="Processing task accessibility", leave=False, disable=not printouts):
             # compile observation requirements for this task
             instrument_capability_reqs : Dict[str, set] = defaultdict(set)
 
@@ -1050,7 +1047,7 @@ class ResultsProcessor:
 
         for event in tqdm(events, 
                             desc='Classifying event accesses, detections, and observations', 
-                            leave=True,
+                            leave=False,
                             disable=not printouts):
             # unpackage event
             *_,event_grid_idx,event_gp_idx = event.location
@@ -1175,7 +1172,7 @@ class ResultsProcessor:
         task_observations_df_data = []
 
         # itarate through tasks and find matching observations
-        for task in tqdm(known_tasks, desc="Processing task observations", leave=True, disable=not printouts):
+        for task in tqdm(known_tasks, desc="Processing task observations", leave=False, disable=not printouts):
             # compile observation requirements for this task
             instrument_capability_reqs : Dict[str, set] = defaultdict(set)
 
@@ -1192,6 +1189,9 @@ class ResultsProcessor:
 
             # find all accesses and observations that match this task
             task_observations = []
+
+            if "EventObservationTask-'generic parameter'@(0,2324)-EVENT-e21c2b8e" in task.id:
+                x = 1 # breakpoint
                 
             # check all task locations
             for location in task.location:
@@ -1275,7 +1275,36 @@ class ResultsProcessor:
                 # append to task lists
                 task_observations.extend(matching_observations)
             
-            if task_observations: tasks_observed[task] = task_observations
+            if task_observations: 
+
+                # sort by observation start time
+                task_observations.sort(key=lambda x: x['t_start']) 
+
+                # check if any overlapping observations were found for this task; 
+                # if so, merge to avoid repeated observations
+                merged_observations = []
+                for obs in task_observations:
+                    if not merged_observations:
+                        merged_observations.append(obs)
+                    else:
+                        merged = False
+                        for prev_obs in reversed(merged_observations):
+                            # check if this observation overlaps with the previous one
+                            if obs['t_start'] <= prev_obs['t_end'] + 1e-9 and obs['agent name'] == prev_obs['agent name'] and obs['instrument'] == prev_obs['instrument']:
+                                # if so, merge by extending the end time and updating n_obs and t_rev
+                                prev_obs['t_end'] = max(prev_obs['t_end'], obs['t_end'])
+                                prev_obs['n_obs'] = min(prev_obs['n_obs'], obs['n_obs'])
+                                prev_obs['t_rev'] = min(prev_obs['t_rev'], obs['t_rev'])
+                                merged = True
+                            
+                            if merged: break
+
+                        if not merged:
+                            merged_observations.append(obs)              
+
+                # assign observations to this task in map of tasks observed
+                # tasks_observed[task] = task_observations
+                tasks_observed[task] = merged_observations
 
         # convert task observations data to dataframe
         task_observations_df = pd.DataFrame(task_observations_df_data)
@@ -1367,164 +1396,7 @@ class ResultsProcessor:
 
     """
     RESULTS SUMMARY METHODS
-    """
-    @staticmethod
-    def __classify_event_reobservations(
-            accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
-            observations_per_event : Dict[GeophysicalEvent, List[Dict]]
-        ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
-        # classify re-observations
-        events_re_observable = {event : accesses for event, accesses in accesses_per_event.items()
-                                 if len(accesses) > 1}
-        events_re_obs = {event : observations for event, observations in observations_per_event.items()
-                            if len(observations) > 1}
-
-        return events_re_observable, events_re_obs
-
-    @staticmethod
-    def __classify_event_coobservations(
-            accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
-            observations_per_event : Dict[GeophysicalEvent, List[Dict]],
-            known_tasks : List[GenericObservationTask],
-            t_corr : float = 3600.0 # TODO temp solution
-        ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
-        # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
-
-        # map events to tasks that observe them
-        event_to_task : Dict[GeophysicalEvent, GenericObservationTask] = dict()
-        for task in known_tasks:
-            if isinstance(task, EventObservationTask):
-                event = task.event
-                if event in event_to_task:
-                    raise NotImplementedError(f"Multiple tasks found for event {event.id}. Co-observability classification not yet supported for multiple tasks per event.")
-                event_to_task[event] = task
-        
-        # map events to required obserations for their tasks
-        event_to_required_observations : Dict[GeophysicalEvent, List[Dict]] = dict()
-        for event, task in event_to_task.items():
-            # initialize set of required observations
-            required_observations = set()
-
-            for req in task.objective:
-                # check for instrument capability requirements
-                if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
-                    for val in req.valid_values: required_observations.add(val)
-                # TODO include other capability requirements that define a co-observation here
-
-            # add to map of events to required observations
-            event_to_required_observations[event] = required_observations
-
-        # classify accesses
-        co_observation_acesses = defaultdict(list)
-        for event, observations in accesses_per_event.items():
-            for a in observations:
-                # unpack access
-                *_,instrument = a
-
-                # check if instrument is part of those required for this event 
-                if instrument.lower() in event_to_required_observations[event]:
-                    co_observation_acesses[event].append(a)
-
-            # sort accesses by start time
-            co_observation_acesses[event].sort(key=lambda x: x[0].left) 
-        
-        # initiate event co-observability sets
-        events_co_observable = set()
-        events_co_observable_fully = set()
-        events_co_observable_partially = set()
-
-        # evaluate events co-observable based on accesses
-        for event, observations in co_observation_acesses.items():
-            # check if more than one type of observation is required for this event
-            if len(event_to_required_observations[event]) < 2: 
-                # only one or no observation types required;
-                #  co-observability classification not applicable
-                continue
-            
-            # initiate group 
-            # best_co_obs_group = []
-            best_instruments_in_group = set()
-
-            for i,a in enumerate(observations):
-                # get accesses within the desired decorreleation time 
-                co_obs_group = [b for b in observations[i:]
-                                if b[0].left <= a[0].right + t_corr]
-
-                # get instruments in this co-observation group
-                instruments_in_group = {a[2].lower() for a in co_obs_group} | {a[2].lower()}
-                
-                # check if this group is the best so far
-                if len(instruments_in_group) > len(best_instruments_in_group):
-                    # best_co_obs_group = co_obs_group
-                    best_instruments_in_group = instruments_in_group
-            
-            # check if more than one instrument is available to observe this event
-            if len(best_instruments_in_group) > 1:
-                # add to set of co-observable events
-                events_co_observable.add(event)
-
-                # classify co-observability of this event based on best co-observation group
-                if event_to_required_observations[event] == best_instruments_in_group:
-                    events_co_observable_fully.add(event)
-                else:
-                    events_co_observable_partially.add(event)
-
-        # classify observations
-        possible_co_observations = defaultdict(list)
-        for event, observations in observations_per_event.items():
-            for a in observations:
-                # check if instrument is part of those required for this event 
-                if a['instrument'].lower() in event_to_required_observations[event]:
-                    possible_co_observations[event].append(a)
-
-            # sort accesses by start time
-            possible_co_observations[event].sort(key=lambda x: x['t_start'])
-
-        # initiate event co-observation sets
-        events_co_obs = set()
-        events_co_obs_fully = set()
-        events_co_obs_partially = set()  
-
-        # evaluate events co-observable based on accesses
-        for event, observations in possible_co_observations.items():
-            # check if more than one type of observation is required for this event
-            if len(event_to_required_observations[event]) < 2: 
-                # only one or no observation types required;
-                #  co-observability classification not applicable
-                continue
-
-            # initiate group 
-            # best_co_obs_group = []
-            best_instruments_in_group = set()
-
-            for i,a in enumerate(observations):
-                # get accesses within the desired decorreleation time 
-                co_obs_group = [b for b in observations[i:]
-                                if b['t_start'] <= a['t_end'] + t_corr]
-
-                # get instruments in this co-observation group
-                instruments_in_group = {a['instrument'].lower() for a in co_obs_group} | {a['instrument'].lower()}
-
-                # check if this group is the best so far
-                if len(instruments_in_group) > len(best_instruments_in_group):
-                    # best_co_obs_group = co_obs_group
-                    best_instruments_in_group = instruments_in_group
-            
-
-            # check if more than one instrument was involved in observations of this event
-            if len(best_instruments_in_group) > 1:
-                # add to set of co-observed events
-                events_co_obs.add(event)
-
-                # classify co-observability of this event based on best co-observation group
-                if event_to_required_observations[event] == best_instruments_in_group:
-                    events_co_obs_fully.add(event)
-                else:
-                    events_co_obs_partially.add(event)
-
-        return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
-            events_co_obs, events_co_obs_fully, events_co_obs_partially
-
+    """   
     @staticmethod
     def summarize_results(results_path : str,
                           compiled_orbitdata : Dict[str, OrbitData], 
@@ -1648,7 +1520,7 @@ class ResultsProcessor:
         total_obtained_utility = np.round(obtained_rewards_df['reward'].sum() - execution_costs_df['cost'].sum(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0
 
         reward_primal_bound, reward_dual_bound \
-            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, printouts)
+            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
         
         total_task_priority, total_observable_task_priority \
             = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
@@ -1845,7 +1717,169 @@ class ResultsProcessor:
                     # ['Results Directory', results_path]
                 ]
 
+        assert total_obtained_reward <= reward_dual_bound, \
+            "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
+        assert total_obtained_utility <= reward_dual_bound, \
+            "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
+
         return pd.DataFrame(summary_data, columns=summary_headers)    
+
+    @staticmethod
+    def __classify_event_reobservations(
+            accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
+            observations_per_event : Dict[GeophysicalEvent, List[Dict]]
+        ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
+        # classify re-observations
+        events_re_observable = {event : accesses for event, accesses in accesses_per_event.items()
+                                 if len(accesses) > 1}
+        events_re_obs = {event : observations for event, observations in observations_per_event.items()
+                            if len(observations) > 1}
+
+        return events_re_observable, events_re_obs
+
+    @staticmethod
+    def __classify_event_coobservations(
+            accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
+            observations_per_event : Dict[GeophysicalEvent, List[Dict]],
+            known_tasks : List[GenericObservationTask],
+            t_corr : float = 3600.0 # TODO temp solution
+        ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
+        # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
+
+        # map events to tasks that observe them
+        event_to_task : Dict[GeophysicalEvent, GenericObservationTask] = dict()
+        for task in known_tasks:
+            if isinstance(task, EventObservationTask):
+                event = task.event
+                if event in event_to_task:
+                    raise NotImplementedError(f"Multiple tasks found for event {event.id}. Co-observability classification not yet supported for multiple tasks per event.")
+                event_to_task[event] = task
+        
+        # map events to required obserations for their tasks
+        event_to_required_observations : Dict[GeophysicalEvent, List[Dict]] = dict()
+        for event, task in event_to_task.items():
+            # initialize set of required observations
+            required_observations = set()
+
+            for req in task.objective:
+                # check for instrument capability requirements
+                if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
+                    for val in req.valid_values: required_observations.add(val)
+                # TODO include other capability requirements that define a co-observation here
+
+            # add to map of events to required observations
+            event_to_required_observations[event] = required_observations
+
+        # classify accesses
+        co_observation_acesses = defaultdict(list)
+        for event, observations in accesses_per_event.items():
+            for a in observations:
+                # unpack access
+                *_,instrument = a
+
+                # check if instrument is part of those required for this event 
+                if instrument.lower() in event_to_required_observations[event]:
+                    co_observation_acesses[event].append(a)
+
+            # sort accesses by start time
+            co_observation_acesses[event].sort(key=lambda x: x[0].left) 
+        
+        # initiate event co-observability sets
+        events_co_observable = set()
+        events_co_observable_fully = set()
+        events_co_observable_partially = set()
+
+        # evaluate events co-observable based on accesses
+        for event, observations in co_observation_acesses.items():
+            # check if more than one type of observation is required for this event
+            if len(event_to_required_observations[event]) < 2: 
+                # only one or no observation types required;
+                #  co-observability classification not applicable
+                continue
+            
+            # initiate group 
+            # best_co_obs_group = []
+            best_instruments_in_group = set()
+
+            for i,a in enumerate(observations):
+                # get accesses within the desired decorreleation time 
+                co_obs_group = [b for b in observations[i:]
+                                if b[0].left <= a[0].right + t_corr]
+
+                # get instruments in this co-observation group
+                instruments_in_group = {a[2].lower() for a in co_obs_group} | {a[2].lower()}
+                
+                # check if this group is the best so far
+                if len(instruments_in_group) > len(best_instruments_in_group):
+                    # best_co_obs_group = co_obs_group
+                    best_instruments_in_group = instruments_in_group
+            
+            # check if more than one instrument is available to observe this event
+            if len(best_instruments_in_group) > 1:
+                # add to set of co-observable events
+                events_co_observable.add(event)
+
+                # classify co-observability of this event based on best co-observation group
+                if event_to_required_observations[event] == best_instruments_in_group:
+                    events_co_observable_fully.add(event)
+                else:
+                    events_co_observable_partially.add(event)
+
+        # classify observations
+        possible_co_observations = defaultdict(list)
+        for event, observations in observations_per_event.items():
+            for a in observations:
+                # check if instrument is part of those required for this event 
+                if a['instrument'].lower() in event_to_required_observations[event]:
+                    possible_co_observations[event].append(a)
+
+            # sort accesses by start time
+            possible_co_observations[event].sort(key=lambda x: x['t_start'])
+
+        # initiate event co-observation sets
+        events_co_obs = set()
+        events_co_obs_fully = set()
+        events_co_obs_partially = set()  
+
+        # evaluate events co-observable based on accesses
+        for event, observations in possible_co_observations.items():
+            # check if more than one type of observation is required for this event
+            if len(event_to_required_observations[event]) < 2: 
+                # only one or no observation types required;
+                #  co-observability classification not applicable
+                continue
+
+            # initiate group 
+            # best_co_obs_group = []
+            best_instruments_in_group = set()
+
+            for i,a in enumerate(observations):
+                # get accesses within the desired decorreleation time 
+                co_obs_group = [b for b in observations[i:]
+                                if b['t_start'] <= a['t_end'] + t_corr]
+
+                # get instruments in this co-observation group
+                instruments_in_group = {a['instrument'].lower() for a in co_obs_group} | {a['instrument'].lower()}
+
+                # check if this group is the best so far
+                if len(instruments_in_group) > len(best_instruments_in_group):
+                    # best_co_obs_group = co_obs_group
+                    best_instruments_in_group = instruments_in_group
+            
+
+            # check if more than one instrument was involved in observations of this event
+            if len(best_instruments_in_group) > 1:
+                # add to set of co-observed events
+                events_co_obs.add(event)
+
+                # classify co-observability of this event based on best co-observation group
+                if event_to_required_observations[event] == best_instruments_in_group:
+                    events_co_obs_fully.add(event)
+                else:
+                    events_co_obs_partially.add(event)
+
+        return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
+            events_co_obs, events_co_obs_fully, events_co_obs_partially
 
     @staticmethod
     def __count_observations(orbitdata : Dict[str, OrbitData], 
@@ -2383,6 +2417,7 @@ class ResultsProcessor:
                                   accesses_per_task: Dict[GenericObservationTask, List], 
                                   agent_specs: Dict[str, object],
                                   agent_missions: Dict[str, Mission],
+                                  obtained_rewards_df : pd.DataFrame,
                                   printouts : bool
                                 ) -> Tuple[float, float]:
         # extract agent field of view specifications from agent specs object
@@ -2447,14 +2482,15 @@ class ResultsProcessor:
             sorted_obs_time_pairs = sorted(obs_time_pairs, key=lambda x: x[2])
 
             # add to final list of observation opportunities for this task, now sorted by observation time
-            task_observation_opps[task] = [(obs_opp, agent_name, obs_time) for obs_opp, agent_name, obs_time in sorted_obs_time_pairs]
+            task_observation_opps[task] = [(obs_opp, agent_name, obs_time) 
+                                           for obs_opp, agent_name, obs_time in sorted_obs_time_pairs]
         
         # TODO calculate primal bound using greedy oracle
         primal_bound = 0.0
 
         # calculate dual bound using a relaxed version of the problem         
         dual_bound = ResultsProcessor.__calculate_dual_bound(
-                task_observation_opps, compiled_orbitdata, agent_missions, agent_specs, cross_track_fovs
+                task_observation_opps, compiled_orbitdata, agent_missions, agent_specs, cross_track_fovs, obtained_rewards_df, printouts
             )
 
         # return bound values
@@ -2475,57 +2511,116 @@ class ResultsProcessor:
                         agent_missions: Dict[str, Mission],
                         agent_specs: Dict[str, object],
                         cross_track_fovs : Dict[str, float],
+                        obtained_rewards_df : pd.DataFrame,
+                        printouts : bool
                     ) -> float:
         # initiate bound value to 0
-        dual_bound = 0.0
+        dual_bound = dict()
+        dual_n_obs = dict()
 
         # calculate the utility for each task
-        for task, observation_opps in task_observation_opps.items():
+        for task, observation_opps in tqdm(task_observation_opps.items(),
+                                           desc='Calculating dual bound',
+                                           disable=not printouts or len(task_observation_opps) < 10,
+                                           leave=False,
+                                        ):
             
-            # initialize task utility to 0
-            task_utility = 0.0
-
-            # iterate throughout observation opportunities for this task.
-            #  assume that all observation opportunities for this task can be utilized
-            #  regardless of overlaps in access intervals or resource constraints
-            for n_obs, (obs_opp,agent_name,t_obs) in enumerate(observation_opps):
+            # calculate meaurement performance for each observation opportunity for this task and calculate the utility of each observation opportunity for this task
+            measurement_performance_per_obs_opp = {}
+            for obs_opp, agent_name, obs_time in observation_opps:
                 obs_opp : ObservationOpportunity
-                
-                # define observation duration, look angle for this observation opportunity, and previous observation time
-                d_obs = obs_opp.accessibility.span() - (t_obs - obs_opp.accessibility.left)
-                th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
-                t_prev = observation_opps[n_obs-1][2] if n_obs > 0 else 0.0
 
-                # get matching agent mission
-                agent_mission = agent_missions[agent_name]
-                
+                # define observation duration, look angle for this observation opportunity, and previous observation time
+                d_obs = obs_opp.accessibility.span() - (obs_time - obs_opp.accessibility.left)
+                th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
+                t_prev = 0.0
+
                 # estimate measurement performance for this observation opportunity
                 measurement_performance \
-                    = ResultsProcessor.__estimate_task_performance_metrics(task,
-                                                                           obs_opp.instrument_name,
-                                                                           th,
-                                                                           t_obs,
-                                                                           d_obs,
-                                                                           agent_specs[agent_name],
-                                                                           cross_track_fovs[agent_name],
-                                                                           compiled_orbitdata[agent_name],
-                                                                           n_obs,
-                                                                           t_prev
+                        = ResultsProcessor.__estimate_task_performance_metrics(task,
+                                                                            obs_opp.instrument_name,
+                                                                            th,
+                                                                            obs_time,
+                                                                            d_obs,
+                                                                            agent_specs[agent_name],
+                                                                            cross_track_fovs[agent_name],
+                                                                            compiled_orbitdata[agent_name],
+                                                                            0,
+                                                                            0.0
                                                                         )
+                # store measurement performance for this observation opportunity
+                measurement_performance_per_obs_opp[(obs_opp, agent_name, obs_time)] = measurement_performance
 
-                # calculate utility of this observation opportunity
-                obs_opp_utility = max([agent_mission.calc_task_value(task, measurement) 
-                            for measurement in measurement_performance.values()]) \
-                                if len(measurement_performance.values()) > 0 else 0.0
+            # compile observation opportunities for this task across agents and sort by observation time
+            available_obs_times = [ 
+                (obs_time, agent_name, (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2, obs_opp)
+                for obs_opp, agent_name, obs_time in observation_opps
+            ]
 
-                # add to dual bound
-                task_utility += obs_opp_utility
+            # generate all possible observation time opportunities
+            feasible_sequences = ResultsProcessor._find_feasible_observation_sequences_for_task(available_obs_times)
+            
+            # initialize search for best observation sequence for this task to 0 utility
+            task_utility = 0.0
+            best_sequence = None
 
-            # add task utility to dual bound
-            dual_bound += task_utility            
+            # find sequence that maximizes value for this agent
+            for obs_names,obs_times,obs_look_angles,obs_tasks in tqdm(feasible_sequences,
+                                                                      desc=f'Finding best observation sequence for task {task.id.split("-")[-1]}',
+                                                                      disable=not printouts or len(feasible_sequences) < 10,
+                                                                      leave=False
+                                                                    ):
+                # initiate sequence value tracker
+                sequence_utility = 0.0
 
+                # evaluate sequence value for this agent
+                for n_obs,(agent_name,t_obs,_,obs_opp) in enumerate(zip(obs_names,obs_times,obs_look_angles,obs_tasks)):
+                    # get matching agent mission
+                    agent_mission = agent_missions[agent_name]
+                    d_obs = obs_opp.accessibility.span() - (t_obs - obs_opp.accessibility.left)
+                    t_prev = obs_times[n_obs-1] if n_obs > 0 else 0.0
+                    
+                    # get measurement performance for this observation opportunity
+                    measurement_performance \
+                        = measurement_performance_per_obs_opp[(obs_opp, agent_name, t_obs)]
+
+                    # update observation number and previous observation time 
+                    for measurement in measurement_performance.values():
+                        measurement[ObservationRequirementAttributes.OBSERVATION_NUMBER.value] = n_obs + 1
+                        if n_obs > 0:
+                            measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = t_obs - t_prev
+                        else:
+                            measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
+
+                    # calculate utility of this observation opportunity
+                    obs_opp_utility = max([agent_mission.calc_task_value(task, measurement) 
+                                for measurement in measurement_performance.values()]) \
+                                    if len(measurement_performance.values()) > 0 else 0.0
+                    
+                    # add to sequence utility
+                    sequence_utility += obs_opp_utility
+
+                # check if this sequence has higher utility than the best found sequence for this task so far
+                if sequence_utility > task_utility:
+                    task_utility = sequence_utility
+                    best_sequence = (obs_names,obs_times,obs_look_angles,obs_tasks)
+            
+            # add best sequence utility for this task to the dual bound
+            dual_bound[task] = task_utility
+
+            # find observations performed for this task in the current solution
+            obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
+
+            # ensure that the best sequence utility for this task is at least as high as the reward obtained for this task in the current solution
+            if sum(obs['reward']) > task_utility:
+                x = 1
+
+        dual_bound_df = pd.DataFrame(list(dual_bound.items()), columns=['task','reward'])
+        dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
+        if printouts: print(dual_bound_df.to_string(index=False))
+            
         # return value
-        return dual_bound
+        return sum(dual_bound.values())
     
     @staticmethod
     def __estimate_task_performance_metrics( 
@@ -3176,3 +3271,55 @@ class ResultsProcessor:
                                       p.id
                                     )
                     )
+
+    @staticmethod
+    def _find_feasible_observation_sequences_for_task(
+                                                      available_obs : List[tuple]
+                                                    ) -> List[Tuple[List[str], List[float]]]:
+        """ Find feasible observation number sequences for a given task. """
+        # initialize feasible sequence tracker
+        feasible_sequences = []
+
+        # count minimum sequence length; use number of occurrences of this agent in available observation times
+        min_seq_length = 1 # for now, assume minimum sequence length of 1
+
+        # create dfs queue
+        dfs_queue = deque()
+
+        # seed dfs with initial observations from this agent
+        for obs in available_obs: dfs_queue.append([obs])
+
+        # perform dfs to find feasible sequences
+        while dfs_queue:
+            # pop current sequence from stack
+            current_sequence = dfs_queue.pop()
+
+            # check if current sequence can be accepted
+            if (len(current_sequence) >= min_seq_length                 # meets minimum length requirements
+                ):
+                # sequence can be accepted; decompose sequence into component lists
+                obs_names = [agent_name for _,agent_name,_,_ in current_sequence]
+                obs_times = [t_img for t_img,_,_,_ in current_sequence]
+                obs_look_angles = [look_angle for _,_,look_angle,_ in current_sequence]
+                obs_opps = [obs_opp for _,_,_,obs_opp in current_sequence]
+                
+                # add to feasible sequences
+                feasible_sequences.append((obs_names, obs_times, obs_look_angles, obs_opps))               
+
+            # check for available successors
+            successors = [obs for obs in available_obs
+                          if obs[0] > current_sequence[-1][0]
+                        #   and not any(obs[3].is_mutually_exclusive(prev_obs[3]) 
+                        #                 for prev_obs in current_sequence)
+                        ]
+
+            # queue successors
+            for obs_next in successors:
+                # create new sequence with successor added
+                new_sequence = [obs for obs in current_sequence] + [obs_next]
+
+                # add new sequence to dfs stack
+                dfs_queue.append(new_sequence)
+
+        # return feasible sequences
+        return feasible_sequences

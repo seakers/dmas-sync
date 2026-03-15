@@ -339,11 +339,16 @@ class Simulation:
         else:            
             if printouts: print("Processing simulation results...")
 
+            # map agent names to their respective specifications and missions
+            agent_specs : Dict[str, object] = {agent.name : agent._specs
+                                            for agent in self._agents}
+
             # process results and store processed 
             self.__processed_results = ResultsProcessor.process_results(self._results_path,
                                                                  self._orbitdata,
                                                                  agent_missions,
                                                                  self._events,
+                                                                 agent_specs,
                                                                  printouts=printouts)
 
 

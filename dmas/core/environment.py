@@ -386,6 +386,14 @@ class SimulationEnvironment(object):
             gp   = cols['GP index'].astype(np.int64, copy=False)
             time = cols['time [s]']
 
+            # (28.245396, 21.612813, 0, 2324)
+            # if 2324 in gp:
+            #     y = 1 # breakpoint
+            #     a : Dict[str, np.ndarray] \
+            #     = agent_orbitdata.gp_access_data.lookup_interval(t_start, t_end,
+            #                                                      filters={"instrument": instrument_name})
+            #     x = 1 # breakpoint
+
             # check if there is any data to process
             if len(time) == 0: return []
 
@@ -432,6 +440,11 @@ class SimulationEnvironment(object):
                         merged[col] = lst[-1] # always take last value to reflect changes in observed parameters along the observation window (e.g. for moving targets)
 
                 obs_data.append(merged)
+
+            # adjust start and end times of observation data to reflect actual observation window for this action
+            for obs in obs_data:
+                obs['t_start'] = max(obs['t_start'], t_start)
+                obs['t_end'] = min(obs['t_end'], t_end)
 
             # return processed observation data
             return obs_data

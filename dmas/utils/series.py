@@ -999,6 +999,7 @@ class AccessTable(AbstractTable):
             return self.__rows_from_slice(slice(0, 0), include_extras, columns, decode, None)
 
         ti0 = self._time_to_index_floor(t_start)
+        # ti0 -= 1 if ti0 > 0 else 0  # include previous bucket for boundary conditions
         ti1 = self._time_to_index_floor(t_end)
 
         if ti0 == ti1:
@@ -1116,8 +1117,9 @@ class AccessTable(AbstractTable):
 
         # Fine-grained time bounds within the bucket slice (often needed)
         if exact_time_filter and (not np.isinf(t_start) or not np.isinf(t_end)):
+            dt = float(self._meta["time_step"])
             tview = self._t[s]
-            m = (tview >= t_start) & (tview <= t_end)
+            m = (tview >= t_start - dt) & (tview <= t_end)
             mask = m if mask is None else (mask & m)
             if mask is not None and (not mask.any()):
                 return mask

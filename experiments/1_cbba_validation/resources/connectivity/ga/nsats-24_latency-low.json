@@ -1,7 +1,7 @@
 {
     "default": "deny",
     "groups": {
-        "imaging_sats": [
+        "instruments": [
             "imager_a_sat_0",
             "imager_b_sat_0",
             "imager_c_sat_0",
@@ -25,38 +25,14 @@
             "imager_c_sat_6",
             "imager_a_sat_7",
             "imager_b_sat_7",
-            "imager_c_sat_7",
-            "imager_a_sat_8",
-            "imager_b_sat_8",
-            "imager_c_sat_8",
-            "imager_a_sat_9",
-            "imager_b_sat_9",
-            "imager_c_sat_9",
-            "imager_a_sat_10",
-            "imager_b_sat_10",
-            "imager_c_sat_10",
-            "imager_a_sat_11",
-            "imager_b_sat_11",
-            "imager_c_sat_11",
-            "imager_a_sat_12",
-            "imager_b_sat_12",
-            "imager_c_sat_12",
-            "imager_a_sat_13",
-            "imager_b_sat_13",
-            "imager_c_sat_13",
-            "imager_a_sat_14",
-            "imager_b_sat_14",
-            "imager_c_sat_14",
-            "imager_a_sat_15",
-            "imager_b_sat_15",
-            "imager_c_sat_15"
+            "imager_c_sat_7"
         ],
-        "relay_sats": [
+        "relays": [
             "tdrss_sat_0",
             "tdrss_sat_1",
             "tdrss_sat_2"
         ],
-        "ground_stations": [
+        "groundStations": [
             "NEN"
         ]
     },
@@ -65,17 +41,20 @@
             "action": "allow",
             "scope": "between",
             "targets": [
-                "imaging_sats",
-                "ground_stations"
+                "instruments",
+                "relays",
+                "groundStations"
             ]
         },
         {
             "action": "allow",
-            "scope": "between",
-            "targets": [
-                "relay_sats",
-                "ground_stations"
-            ]
+            "scope": "within",
+            "targets": "instruments"
+        },
+        {
+            "action": "allow",
+            "scope": "within",
+            "targets": "relays"
         }
     ],
     "overrides": []
