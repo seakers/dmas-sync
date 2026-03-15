@@ -441,11 +441,6 @@ class SimulationEnvironment(object):
 
                 obs_data.append(merged)
 
-            # adjust start and end times of observation data to reflect actual observation window for this action
-            for obs in obs_data:
-                obs['t_start'] = max(obs['t_start'], t_start)
-                obs['t_end'] = min(obs['t_end'], t_end)
-
             # return processed observation data
             return obs_data
 

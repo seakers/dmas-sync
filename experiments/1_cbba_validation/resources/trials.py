@@ -58,13 +58,13 @@ if __name__ == "__main__":
     print_scenario_banner('Experiment generator for Preplanner Parametric Study')
 
     # define the number of scenarios to generate per combination of parameters
-    n_scenarios = 3
+    n_scenarios = 1
 
     # define experiment parameters
     stress_test_params = {
         "Preplanner" : ["None"],
         "Replanner": [
-                        "Greedy", 
+                        # "Greedy", 
                         "CBBA", 
                         # "Oracle"
                     ],
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     connectivity_test_params = {
         "Preplanner" : ["None"],
         "Replanner": [  
-                        "Greedy", 
+                        # "Greedy", 
                         "CBBA", 
                         # "Oracle"
                     ],
@@ -94,6 +94,7 @@ if __name__ == "__main__":
                     ],
         "Replanner": [
                         "None", 
+                        "Greedy",
                         "CBBA",
                     ],
         "Num Sats": [12, 24, 48, 96, 192],

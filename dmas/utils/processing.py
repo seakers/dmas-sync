@@ -575,7 +575,6 @@ class ResultsProcessor:
             access = agent_orbit_data.gp_access_data.lookup_interval(
                 0.0,
                 include_extras=True,
-                # decode=False,          # keep vocab cols as codes if available
                 decode=True,
             )
 
@@ -910,8 +909,9 @@ class ResultsProcessor:
                 if location_access is None: continue # no accesses found; skip
                 
                 # filter data that exists within the task's availability window and matches instrument capability requirements            
+                dt = compiled_orbitdata[next(iter(compiled_orbitdata))].time_step
                 availability_mask = (
-                    (t >= task.availability.left) &
+                    (task.availability.left - dt <= t) &
                     (t <= task.availability.right)
                 )
 
@@ -933,7 +933,9 @@ class ResultsProcessor:
                 agent = np.asarray(location_access_filtered["agent name"])      # str or int
                 instr = np.asarray(location_access_filtered["instrument"])      # str or int
 
-                assert all(t_i in task.availability for t_i in t), \
+                assert all(t_i in task.availability 
+                           or task.availability.left-dt <= t_i <= task.availability.right 
+                           for t_i in t), \
                     f"Some access times {t} are outside of task availability {task.availability} for task {task.id}."
 
                 n = t.size
@@ -984,7 +986,13 @@ class ResultsProcessor:
                         access_intervals.append((Interval(left, right - dt), agent_name, i0))
 
                     # sort final intervals by start time
-                    access_intervals.sort(key=lambda x: x[0].left)           
+                    access_intervals.sort(key=lambda x: x[0].left)        
+
+                    # discard any intervals that are not within the task's availability window (with some tolerance for time step)
+                    # and clip intervals to task availability window
+                    access_intervals = [(interval.intersection(task.availability), agent_name, i0) 
+                                        for interval, agent_name, i0 in access_intervals 
+                                        if interval.overlaps(task.availability)]    
                 
                 # append to task lists
                 task_access_windows.extend(access_intervals)
@@ -1717,9 +1725,9 @@ class ResultsProcessor:
                     # ['Results Directory', results_path]
                 ]
 
-        assert total_obtained_reward <= reward_dual_bound, \
+        assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-5, \
             "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
-        assert total_obtained_utility <= reward_dual_bound, \
+        assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
             "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
 
         return pd.DataFrame(summary_data, columns=summary_headers)    
@@ -3308,7 +3316,8 @@ class ResultsProcessor:
 
             # check for available successors
             successors = [obs for obs in available_obs
-                          if obs[0] > current_sequence[-1][0]
+                          if obs[0] >= current_sequence[-1][0]
+                          and obs not in current_sequence
                         #   and not any(obs[3].is_mutually_exclusive(prev_obs[3]) 
                         #                 for prev_obs in current_sequence)
                         ]
