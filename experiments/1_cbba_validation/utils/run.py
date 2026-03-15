@@ -161,7 +161,10 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # Stage 2: Simulate / propagate (controlled by force/only + cache)
         # ------------------------------------------------------------
         already_done = _is_simulation_complete(results_dir)
-        should_run_sim = sim_cfg.force_simulate or (not already_done) or sim_cfg.only_simulate
+        should_run_sim = (sim_cfg.force_simulate 
+                          or (not already_done) 
+                        #   or (sim_cfg.only_simulate and not already_done)
+                        )
 
         mission = None
         if should_run_sim:

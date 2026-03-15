@@ -182,8 +182,8 @@ sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_run_2.slurm
 Runs all cases for the LHS trials in a parallellized process.
 ```
 cd $SCRATCH/src/dmas-sync
-sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_run_parallel_1.slurm
-sbatch ./experiments/1_0_cbba_stress_test/jobs/cbba_study_run_parallel_2.slurm
+sbatch experiments/1_cbba_validation/jobs/cbba_study_run_stress_test_1.slurm
+sbatch experiments/1_cbba_validation/jobs/cbba_study_run_stress_test_2.slurm
 ```
 
 #### Propagate Only

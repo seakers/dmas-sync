@@ -35,5 +35,6 @@ end=$((1+i))
 python ./experiments/1_cbba_validation/study.py \
   -t full_factorial_trials_2026-03-16 \
   --trial-range "${start}:${end}" \
-  --single-thread --quiet --exceptions # \
-  # --profile-cpu --profile-mem # --force-simulate # --force-postprocess # --force-summarize
+  --single-thread --quiet --exceptions \
+  --simulate-only --force-simulate # --force-postprocess # --force-summarize \
+  # --profile-cpu --profile-mem 

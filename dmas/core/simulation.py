@@ -282,6 +282,19 @@ class Simulation:
         """ prints simulation results after execution """
         # TODO add any results printing here
 
+        # print runtime stats
+        if self.__executed:
+            runtime = self._t_f - self._t_0
+            with open(os.path.join(self._results_path, 'runtime.json'), 'w') as runtime_file:
+                out = {
+                    'Total Simulation Runtime [s]' : runtime,
+                    'Total Simulation Runtime [min]' : runtime / 60
+                }
+                runtime_file.write(json.dumps(out, indent=4))
+                # runtime_file.write(f"{'='*30} SIMULATION RUNTIME {'='*30}\n")
+                # runtime_file.write(f"Total Simulation Runtime: {runtime:.2f} seconds ({runtime/60:.2f} minutes)")
+                # runtime_file.write(f"\n{'='*80}\n")
+
     def __profile_current_memory(self, t : float, n_lines : float = 8) -> None:
         # profile memory usage at current time step
         current, peak = tracemalloc.get_traced_memory()
