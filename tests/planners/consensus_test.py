@@ -30,7 +30,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_2 = False  # single sat    no default mission  one event
         self.toy_3 = False  # two sats      no default mission  one event
         self.toy_4 = False  # two sats      no default mission  one event           optimistic bidding
-        self.toy_5 = True  # two sats      no default mission  one event           comm delays
+        self.toy_5 = False  # two sats      no default mission  one event           comm delays
         self.toy_6 = False  # two sats      no default mission  two targets         two events
         self.toy_7 = False  # two sats      no default mission  two targets         two events at different times
         self.toy_8 = False  # single sat    default mission     multiple targets    no events
@@ -54,7 +54,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_25 = False # single satellite bidding against a gs agent; gs announcer
         self.toy_26 = False # two satellites bidding against a gs agent; gs announcer
 
-        self.toy_27 = False # string of pearls with onboard event detection
+        self.toy_27 = True # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
         self.toy_29 = False # real vs planned reward comparison
         self.toy_30 = False # interrupted observations from external broadcast

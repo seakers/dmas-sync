@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from collections import defaultdict, deque
 from functools import reduce
 import os
 from typing import Dict, List, Set, Tuple
 import numpy as np
+import math
 
 from tqdm import tqdm
 import pandas as pd
@@ -706,12 +709,14 @@ class ResultsProcessor:
             # get matching accesses for this location
             location_key = (event_grid_idx, event_gp_idx)
             location_access : Dict[str, np.ndarray] = accesses_per_gp.get(location_key, None)
-            t = location_access["time [s]"]
-            agent = location_access["agent name"]
-            instr = location_access["instrument"]
             
             # check if there are any accesses for this location
             if location_access is None: continue # no accesses found; skip
+            
+            # unpack access information
+            t = location_access["time [s]"]
+            agent = location_access["agent name"]
+            instr = location_access["instrument"]
             
             # filter data that exists within the task's availability window and matches instrument capability requirements            
             availability_mask = (
@@ -1533,6 +1538,12 @@ class ResultsProcessor:
         total_task_priority, total_observable_task_priority \
             = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
 
+        # validate reward values
+        assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-6, \
+            "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
+        assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
+            "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
+
         # Generate summary
         summary_headers = ['Metric', 'Value']
         summary_data = [
@@ -1724,11 +1735,6 @@ class ResultsProcessor:
                     # Results dir
                     # ['Results Directory', results_path]
                 ]
-
-        assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-5, \
-            "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
-        assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
-            "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
 
         return pd.DataFrame(summary_data, columns=summary_headers)    
 
@@ -2512,8 +2518,165 @@ class ResultsProcessor:
         
         return total_task_priority, total_observable_task_priority
 
+    # ---------------------------------------------------------------------------
+    # Drop-in replacement for __calculate_dual_bound
+    # ---------------------------------------------------------------------------
+
     @staticmethod
     def __calculate_dual_bound(
+        task_observation_opps: Dict,
+        compiled_orbitdata: Dict,
+        agent_missions: Dict,
+        agent_specs: Dict,
+        cross_track_fovs: Dict,
+        obtained_rewards_df: pd.DataFrame,
+        printouts: bool,
+        bo_n_initial: int = 8,
+        bo_n_iterations: int = 20,
+    ) -> float:
+        estimate_fn = ResultsProcessor.__estimate_task_performance_metrics
+
+        dual_bound = dict()
+        dual_n_obs = dict()
+
+        for task, observation_opps in tqdm(
+            task_observation_opps.items(),
+            desc='Calculating dual bound',
+            disable=not printouts or len(task_observation_opps) < 10,
+            leave=False,
+        ):
+            # Build available_obs_times and enumerate feasible sequences
+            # (identical to original)
+            available_obs_times = [
+                (obs_time, agent_name,
+                (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2,
+                obs_opp)
+                for obs_opp, agent_name, obs_time in observation_opps
+            ]
+
+            feasible_sequences = ResultsProcessor._find_longest_observation_sequence_for_task(
+                available_obs_times
+            )
+
+            task_utility = 0.0
+            best_sequence = None
+
+            for obs_names, obs_times, obs_look_angles, obs_opps in tqdm(
+                feasible_sequences,
+                desc=f'Finding best observation sequence for task {task.id.split("-")[-1]}',
+                disable=not printouts or len(feasible_sequences) < 10,
+                leave=False,
+            ):
+                sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
+
+                t_starts = [obs_opp.task_accessibility[task.id].left  for obs_opp in obs_opps]
+                t_ends   = [obs_opp.task_accessibility[task.id].right - obs_opp.task_min_duration[task.id]
+                            for obs_opp in obs_opps]
+
+                def objective(times: list[tuple], _seq=sequence) -> float:
+                    return ResultsProcessor._evaluate_sequence_at_times(
+                        task, _seq, times,
+                        agent_missions, agent_specs,
+                        cross_track_fovs, compiled_orbitdata,
+                        estimate_fn,
+                    )
+
+                optimiser = _SequenceTimeOptimiser(
+                    n_dims=len(sequence),
+                    n_initial=bo_n_initial,
+                    n_iterations=bo_n_iterations,
+                )
+                best_times, sequence_utility = optimiser.optimise(
+                    t_starts, t_ends, objective
+                )
+
+                if sequence_utility > task_utility:
+                    task_utility = sequence_utility
+                    best_sequence = (obs_names, best_times, obs_look_angles, obs_opps)
+
+            dual_bound[task] = task_utility
+
+            # Sanity check (preserved from original)
+            obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
+            if sum(obs['reward']) - 1e-6 > task_utility:
+                x = 1  # set breakpoint here when debugging bound violations
+                a = ResultsProcessor._find_longest_observation_sequence_for_task(
+                    available_obs_times
+                )
+                y = 1  # set breakpoint here when debugging bound violations
+
+        dual_bound_df = pd.DataFrame(
+            list(dual_bound.items()), columns=['task', 'reward']
+        )
+        dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
+        if printouts:
+            print(dual_bound_df.to_string(index=False))
+
+        return sum(dual_bound.values())
+    
+    # ---------------------------------------------------------------------------
+    # Sequence evaluation — estimate_fn called at every t_obs
+    # ---------------------------------------------------------------------------
+
+    @staticmethod
+    def _evaluate_sequence_at_times(
+        task,
+        sequence: list[tuple],          # (agent_name, t_earliest_obs, look_angle, obs_opp)
+        times: list[tuple],
+        agent_missions: Dict[str,Mission],
+        agent_specs: dict,
+        cross_track_fovs: dict,
+        compiled_orbitdata: dict,
+        estimate_fn,
+    ) -> float:
+        """
+        Score a sequence at given observation times.
+
+        estimate_fn is called for every observation at every BO iteration
+        because measurement_performance depends on t_obs (through d_obs and
+        any other time-dependent fields it computes internally).
+        """
+        total = 0.0
+        for n_obs, ((agent_name, _, th, obs_opp), time) in enumerate(
+            zip(sequence, times)
+        ):
+            t_prev = times[n_obs-1][0] if n_obs > 0 else 0.0
+
+            # Recompute geometry at the actual observation time
+            t_obs = time[0]
+            d_obs = time[1]
+
+            measurement_performance : dict = estimate_fn(
+                task,
+                obs_opp.instrument_name,
+                th,
+                t_obs,
+                d_obs,
+                agent_specs[agent_name],
+                cross_track_fovs[agent_name],
+                compiled_orbitdata[agent_name],
+                n_obs,
+                t_prev,
+            )
+
+            # for measurement in measurement_performance.values():
+            #     measurement[ObservationRequirementAttributes.OBSERVATION_NUMBER.value] = n_obs + 1
+            #     measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = (
+            #         t_obs - t_prev if n_obs > 0 else 0.0
+            #     )
+
+            obs_opp_utility = max(
+                agent_missions[agent_name].calc_task_value(task, measurement, False)
+                for measurement in measurement_performance.values()
+            ) if measurement_performance else 0.0
+
+            total += obs_opp_utility
+
+        return total
+
+    """
+    @staticmethod
+    def __calculate_dual_bound_DEPRECATED(
                         task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]],
                         compiled_orbitdata : Dict[str, OrbitData],
                         agent_missions: Dict[str, Mission],
@@ -2644,7 +2807,8 @@ class ResultsProcessor:
             
         # return value
         return sum(dual_bound.values())
-    
+    """
+
     @staticmethod
     def __estimate_task_performance_metrics( 
                                             task : GenericObservationTask, 
@@ -3348,17 +3512,12 @@ class ResultsProcessor:
                         if not (excluded & (1 << j))]
 
             if not valid_succs:
-                # This is a maximal sequence (no successors) — record it
-                if depth > best_depth:
-                    best_depth = depth
-                    leaf_nodes = [(depth, node_id)]
-                elif depth == best_depth:
-                    leaf_nodes.append((depth, node_id))
-            else:
-                for j in valid_succs:
-                    new_node_id = len(node_info)
-                    node_info.append((j, node_id))
-                    stack.append((j, new_node_id, excluded | mx_mask[j] | (1 << j), depth + 1))
+                leaf_nodes.append((depth, node_id))
+            
+            for j in valid_succs:
+                new_node_id = len(node_info)
+                node_info.append((j, node_id))
+                stack.append((j, new_node_id, excluded | mx_mask[j] | (1 << j), depth + 1))
 
         # --- Reconstruct only the longest sequences ---
         def reconstruct(node_id):
@@ -3379,7 +3538,7 @@ class ResultsProcessor:
             obs_opps       = [s[3]   for s in seq]
             results.append((obs_names, obs_times, obs_look_angles, obs_opps))
 
-        results.sort(key=lambda x: (*x[1],))
+        results.sort(key=lambda x: (len(x), *x[1]))
         return results
 
     # @staticmethod
@@ -3434,3 +3593,125 @@ class ResultsProcessor:
 
     #     # return feasible sequences
     #     return feasible_sequences
+
+# ---------------------------------------------------------------------------
+# Bayesian Optimisation over observation times
+# ---------------------------------------------------------------------------
+
+class _SequenceTimeOptimiser:
+    """
+    Optimises observation times for a fixed ordered sequence of access windows.
+    Each delta_i in [0,1] maps to a valid observation time for window i,
+    guaranteed to be strictly after t_{i-1}.
+    """
+
+    def __init__(
+        self,
+        n_dims: int,
+        n_initial: int = 8,
+        n_iterations: int = 20,
+        kappa: float = 2.576,
+        noise: float = 1e-6,
+        length_scale: float = 0.3,
+    ):
+        self.n_dims = n_dims
+        self.n_initial = n_initial
+        self.n_iterations = n_iterations
+        self.kappa = kappa
+        self.noise = noise
+        self.length_scale = length_scale
+        self._X: list[np.ndarray] = []
+        self._y: list[float] = []
+
+    def _k(self, a: np.ndarray, b: np.ndarray) -> float:
+        d = a - b
+        return float(np.exp(-0.5 * np.dot(d, d) / self.length_scale ** 2))
+
+    def _posterior(self, x: np.ndarray) -> tuple[float, float]:
+        if not self._X:
+            return 0.0, 1.0
+        n = len(self._X)
+        K = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i, n):
+                v = self._k(self._X[i], self._X[j])
+                K[i, j] = K[j, i] = v
+        K += self.noise * np.eye(n)
+        k_star = np.array([self._k(x, xi) for xi in self._X])
+        mu = float(k_star @ np.linalg.solve(K, np.array(self._y)))
+        var = max(1.0 - float(k_star @ np.linalg.solve(K, k_star)), 1e-9)
+        return mu, math.sqrt(var)
+
+    def _acq(self, x: np.ndarray) -> float:
+        mu, sigma = self._posterior(x)
+        return mu + self.kappa * sigma
+
+    @staticmethod
+    def deltas_to_times(
+        deltas: np.ndarray,
+        t_starts: list[float],
+        t_ends: list[float],
+        eps: float = 1e-6,
+    ) -> list[float]:
+        times = []
+        prev = -math.inf
+        for delta, t_start, t_end in zip(deltas, t_starts, t_ends):
+            lo = max(t_start, prev + eps)
+            hi = t_end
+            if lo > hi:
+                lo = hi
+            s = lo + delta * (hi - lo)
+            d = hi - s
+            times.append((s,d))
+            prev = times[-1][0]
+        return times
+
+    def optimise(
+        self,
+        t_starts: list[float],
+        t_ends: list[float],
+        objective,
+    ) -> tuple[list[float], float]:
+        """Returns (best_times, best_reward)."""
+        self._X = []
+        self._y = []
+        best_times: list[float] = []
+        best_reward = -math.inf
+
+        def _eval(deltas: np.ndarray) -> float:
+            return objective(self.deltas_to_times(deltas, t_starts, t_ends))
+
+        # initial guess 1: earliest times in each window
+        earliest_deltas = np.zeros(self.n_dims)
+        earliest_reward = _eval(earliest_deltas)
+        self._X.append(earliest_deltas.copy())
+        self._y.append(earliest_reward)
+        if earliest_reward > best_reward:
+            best_reward = earliest_reward
+            best_times = self.deltas_to_times(earliest_deltas, t_starts, t_ends)
+
+        # initial guess 2: sample random times in each window
+        for _ in range(self.n_initial):
+            d = np.random.uniform(0, 1, self.n_dims)
+            r = _eval(d)
+            self._X.append(d.copy())
+            self._y.append(r)
+            if r > best_reward:
+                best_reward = r
+                best_times = self.deltas_to_times(d, t_starts, t_ends)
+
+        for _ in range(self.n_iterations):
+            best_acq, best_cand = -math.inf, None
+            for _ in range(30):
+                cand = np.random.uniform(0, 1, self.n_dims)
+                a = self._acq(cand)
+                if a > best_acq:
+                    best_acq, best_cand = a, cand
+            r = _eval(best_cand)
+            self._X.append(best_cand.copy())
+            self._y.append(r)
+            if r > best_reward:
+                best_reward = r
+                best_times = self.deltas_to_times(best_cand, t_starts, t_ends)
+
+        return best_times, best_reward
