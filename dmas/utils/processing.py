@@ -2570,7 +2570,7 @@ class ResultsProcessor:
                 sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
 
                 t_starts = [obs_opp.task_accessibility[task.id].left  for obs_opp in obs_opps]
-                t_ends   = [obs_opp.task_accessibility[task.id].right - obs_opp.task_min_duration[task.id]
+                t_ends   = [obs_opp.task_accessibility[task.id].right # - obs_opp.task_min_duration[task.id]
                             for obs_opp in obs_opps]
 
                 def objective(times: list[tuple], _seq=sequence) -> float:
@@ -2640,12 +2640,12 @@ class ResultsProcessor:
         for n_obs, ((agent_name, _, th, obs_opp), time) in enumerate(
             zip(sequence, times)
         ):
-            t_prev = times[n_obs-1][0] if n_obs > 0 else 0.0
-
-            # Recompute geometry at the actual observation time
+            # unpack observation time details
             t_obs = time[0]
             d_obs = time[1]
+            t_prev = times[n_obs-1][0] if n_obs > 0 else 0.0
 
+            # Recompute performance at the current observation time
             measurement_performance : dict = estimate_fn(
                 task,
                 obs_opp.instrument_name,
@@ -2658,12 +2658,6 @@ class ResultsProcessor:
                 n_obs,
                 t_prev,
             )
-
-            # for measurement in measurement_performance.values():
-            #     measurement[ObservationRequirementAttributes.OBSERVATION_NUMBER.value] = n_obs + 1
-            #     measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = (
-            #         t_obs - t_prev if n_obs > 0 else 0.0
-            #     )
 
             obs_opp_utility = max(
                 agent_missions[agent_name].calc_task_value(task, measurement, False)
@@ -3474,7 +3468,9 @@ class ResultsProcessor:
         mx_mask = [0] * n
         for i in range(n):
             for j in range(i + 1, n):
-                if available_obs[i][3].is_mutually_exclusive(available_obs[j][3]):
+                # if available_obs[i][3].is_mutually_exclusive(available_obs[j][3]):
+                if (available_obs[i][1] == available_obs[j][1]
+                    and available_obs[i][3].is_mutually_exclusive(available_obs[j][3])):
                     mx_mask[i] |= (1 << j)
                     mx_mask[j] |= (1 << i)
 
