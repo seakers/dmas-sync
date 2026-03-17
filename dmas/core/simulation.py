@@ -291,9 +291,6 @@ class Simulation:
                     'Total Simulation Runtime [min]' : runtime / 60
                 }
                 runtime_file.write(json.dumps(out, indent=4))
-                # runtime_file.write(f"{'='*30} SIMULATION RUNTIME {'='*30}\n")
-                # runtime_file.write(f"Total Simulation Runtime: {runtime:.2f} seconds ({runtime/60:.2f} minutes)")
-                # runtime_file.write(f"\n{'='*80}\n")
 
     def __profile_current_memory(self, t : float, n_lines : float = 8) -> None:
         # profile memory usage at current time step
@@ -439,39 +436,39 @@ class Simulation:
                                                         *processed_results, 
                                                         precision=precision, 
                                                         printouts=printouts)
-        else:
-            # check if results summary file exists
-            if prev_summary_exists:
-                # results summary file exists but processed results are not stored in this simulation instance;
-                # use previous runtime stats from results summary and generate summary with previous runtime stats
-
-                # load previous runtime from results summary
-                prev_summary_df = pd.read_csv(summary_path)
-
-                # extract runtime value from previous summary
-                runtime_row = prev_summary_df[prev_summary_df['Metric'] == 'Simulation Runtime [s]']
-                        
+        else:                        
             # process results and generate summary
             processed_results = self.process_results(printouts=printouts)
 
             results_summary : pd.DataFrame \
                 = ResultsProcessor.summarize_results(self._results_path,
-                                                        self._orbitdata,
-                                                        self._events,
-                                                        agent_specs,
-                                                        agent_missions,
-                                                        *processed_results, 
-                                                        precision=precision, 
-                                                        printouts=printouts)
+                                                     self._orbitdata,
+                                                     self._events,
+                                                     agent_specs,
+                                                     agent_missions,
+                                                     *processed_results, 
+                                                     precision=precision, 
+                                                     printouts=printouts
+                                                    )
             
             
         # include runtime in results summary if simulation has been executed by this instance
         if self.__executed:
             runtime_row = {'Metric' : 'Simulation Runtime [s]', 'Value' : round(self._t_f - self._t_0, precision)}
-            results_summary = pd.concat([results_summary, pd.DataFrame([runtime_row])], ignore_index=True)
-        # else if previous summary exists and runtime row was extracted, include previous runtime in new summary
-        elif prev_summary_exists and 'runtime_row' in locals():
-            results_summary = pd.concat([results_summary, runtime_row], ignore_index=True)
+        else:
+            # load runtime json
+            runtime_json_path = os.path.join(self._results_path, 'runtime.json')
+            if not os.path.isfile(runtime_json_path):
+                raise ValueError(f"Runtime JSON file not found at `{runtime_json_path}`. Cannot include runtime stats in results summary.")
+            
+            with open(runtime_json_path, 'r') as runtime_file:
+                runtime_data = json.load(runtime_file)
+                runtime_seconds = runtime_data.get('Total Simulation Runtime [s]', None)
+                if runtime_seconds is not None:
+                    runtime_row = {'Metric' : 'Simulation Runtime [s]', 'Value' : round(runtime_seconds, precision)}
+                else:
+                    raise ValueError(f"Runtime value not found in `{runtime_json_path}`. Proceeding without runtime stats.")
+        results_summary = pd.concat([results_summary, pd.DataFrame([runtime_row])], ignore_index=True)
 
         # log results summary
         if printouts:

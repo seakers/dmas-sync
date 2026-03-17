@@ -2526,6 +2526,21 @@ class ResultsProcessor:
         dual_bound = dict()
         dual_n_obs = dict()
 
+        # remove any requirements that are to be ignored in the reward calculation for this bound calculation
+        ignored_requirements_for_bound_calculation = [
+            TemporalRequirementAttributes.DURATION.value,
+            TemporalRequirementAttributes.REVISIT_TIME.value,
+            TemporalRequirementAttributes.CO_OBSERVATION_TIME.value,
+            TemporalRequirementAttributes.RESPONSE_TIME.value,
+            TemporalRequirementAttributes.RESPONSE_TIME_NORM.value,
+            TemporalRequirementAttributes.OBS_TIME.value,
+
+        ]
+        for mission in agent_missions.values():
+            for obj in mission:
+                obj.requirements = {key : req for key,req in obj.requirements.items()
+                                    if req.attribute not in ignored_requirements_for_bound_calculation}
+
         # calculate the utility for each task
         for task, observation_opps in tqdm(task_observation_opps.items(),
                                            desc='Calculating dual bound',
@@ -2566,7 +2581,7 @@ class ResultsProcessor:
             ]
 
             # generate all possible observation time opportunities
-            feasible_sequences = ResultsProcessor._find_feasible_observation_sequences_for_task(available_obs_times)
+            feasible_sequences = ResultsProcessor._find_longest_observation_sequence_for_task(available_obs_times)
             
             # initialize search for best observation sequence for this task to 0 utility
             task_utility = 0.0
@@ -2601,7 +2616,7 @@ class ResultsProcessor:
                             measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
 
                     # calculate utility of this observation opportunity
-                    obs_opp_utility = max([agent_mission.calc_task_value(task, measurement) 
+                    obs_opp_utility = max([agent_mission.calc_task_value(task, measurement, False) 
                                 for measurement in measurement_performance.values()]) \
                                     if len(measurement_performance.values()) > 0 else 0.0
                     
@@ -3281,54 +3296,141 @@ class ResultsProcessor:
                     )
 
     @staticmethod
-    def _find_feasible_observation_sequences_for_task(
-                                                      available_obs : List[tuple]
-                                                    ) -> List[Tuple[List[str], List[float]]]:
-        """ Find feasible observation number sequences for a given task. """
-        # initialize feasible sequence tracker
-        feasible_sequences = []
+    def _find_longest_observation_sequence_for_task(
+        available_obs: List[tuple]
+    ) -> List[Tuple[List[str], List[float]]]:
+        """Find feasible observation number sequences for a given task."""
+        
+        n = len(available_obs)
+        if not n:
+            return []
 
-        # count minimum sequence length; use number of occurrences of this agent in available observation times
-        min_seq_length = 1 # for now, assume minimum sequence length of 1
+        # --- Precompute mutual exclusivity as a bitmask per observation ---
+        # mx_mask[i] is a bitmask of all j where obs[i] and obs[j] are mutually exclusive
+        mx_mask = [0] * n
+        for i in range(n):
+            for j in range(i + 1, n):
+                if available_obs[i][3].is_mutually_exclusive(available_obs[j][3]):
+                    mx_mask[i] |= (1 << j)
+                    mx_mask[j] |= (1 << i)
 
-        # create dfs queue
-        dfs_queue = deque()
+        # --- Precompute valid successors for each index ---
+        # A successor j of i must satisfy: obs[j][0] >= obs[i][0] and j > i
+        successors = [[] for _ in range(n)]
+        for i in range(n):
+            t_i = available_obs[i][0]
+            for j in range(i + 1, n):
+                if available_obs[j][0] >= t_i:
+                    successors[i].append(j)
 
-        # seed dfs with initial observations from this agent
-        for obs in available_obs: dfs_queue.append([obs])
+        # --- DFS with parent pointers and exclusion bitmask ---
+        # Stack items: (current_index, parent_index, excluded_mask, depth)
+        # We track parent pointers to reconstruct paths without copying lists
+        
+        # node_info[node_id] = (obs_index, parent_node_id)
+        node_info = []  # (obs_idx, parent_node_id)
+        
+        # Stack: (obs_idx, parent_node_id, excluded_bitmask, depth)
+        stack = []
+        for i in range(n):
+            node_id = len(node_info)
+            node_info.append((i, -1))
+            stack.append((i, node_id, mx_mask[i] | (1 << i), 1))
 
-        # perform dfs to find feasible sequences
-        while dfs_queue:
-            # pop current sequence from stack
-            current_sequence = dfs_queue.pop()
+        best_depth = 0
+        leaf_nodes = []  # (depth, node_id) for maximal sequences
 
-            # check if current sequence can be accepted
-            if (len(current_sequence) >= min_seq_length                 # meets minimum length requirements
-                ):
-                # sequence can be accepted; decompose sequence into component lists
-                obs_names = [agent_name for _,agent_name,_,_ in current_sequence]
-                obs_times = [t_img for t_img,_,_,_ in current_sequence]
-                obs_look_angles = [look_angle for _,_,look_angle,_ in current_sequence]
-                obs_opps = [obs_opp for _,_,_,obs_opp in current_sequence]
+        while stack:
+            obs_idx, node_id, excluded, depth = stack.pop()
+
+            # Find valid successors (not excluded, time-ordered)
+            valid_succs = [j for j in successors[obs_idx] 
+                        if not (excluded & (1 << j))]
+
+            if not valid_succs:
+                # This is a maximal sequence (no successors) — record it
+                if depth > best_depth:
+                    best_depth = depth
+                    leaf_nodes = [(depth, node_id)]
+                elif depth == best_depth:
+                    leaf_nodes.append((depth, node_id))
+            else:
+                for j in valid_succs:
+                    new_node_id = len(node_info)
+                    node_info.append((j, node_id))
+                    stack.append((j, new_node_id, excluded | mx_mask[j] | (1 << j), depth + 1))
+
+        # --- Reconstruct only the longest sequences ---
+        def reconstruct(node_id):
+            path = []
+            while node_id != -1:
+                obs_idx, parent = node_info[node_id]
+                path.append(available_obs[obs_idx])
+                node_id = parent
+            path.reverse()
+            return path
+
+        results = []
+        for _, node_id in leaf_nodes:
+            seq = reconstruct(node_id)
+            obs_names      = [s[1]   for s in seq]
+            obs_times      = [s[0]   for s in seq]
+            obs_look_angles = [s[2]  for s in seq]
+            obs_opps       = [s[3]   for s in seq]
+            results.append((obs_names, obs_times, obs_look_angles, obs_opps))
+
+        results.sort(key=lambda x: (*x[1],))
+        return results
+
+    # @staticmethod
+    # def _find_feasible_observation_sequences_for_task_DEPRECATED(
+    #                                                   available_obs : List[tuple]
+    #                                                 ) -> List[Tuple[List[str], List[float]]]:
+    #     """ Find feasible observation number sequences for a given task. """
+    #     # initialize feasible sequence tracker
+    #     feasible_sequences = []
+
+    #     # count minimum sequence length; use number of occurrences of this agent in available observation times
+    #     min_seq_length = 1 # for now, assume minimum sequence length of 1
+
+    #     # create dfs queue
+    #     dfs_queue = deque()
+
+    #     # seed dfs with initial observations from this agent
+    #     for obs in available_obs: dfs_queue.append([obs])
+
+    #     # perform dfs to find feasible sequences
+    #     while dfs_queue:
+    #         # pop current sequence from stack
+    #         current_sequence = dfs_queue.pop()
+
+    #         # check if current sequence can be accepted
+    #         if (len(current_sequence) >= min_seq_length                 # meets minimum length requirements
+    #             ):
+    #             # sequence can be accepted; decompose sequence into component lists
+    #             obs_names = [agent_name for _,agent_name,_,_ in current_sequence]
+    #             obs_times = [t_img for t_img,_,_,_ in current_sequence]
+    #             obs_look_angles = [look_angle for _,_,look_angle,_ in current_sequence]
+    #             obs_opps = [obs_opp for _,_,_,obs_opp in current_sequence]
                 
-                # add to feasible sequences
-                feasible_sequences.append((obs_names, obs_times, obs_look_angles, obs_opps))               
+    #             # add to feasible sequences
+    #             feasible_sequences.append((obs_names, obs_times, obs_look_angles, obs_opps))               
 
-            # check for available successors
-            successors = [obs for obs in available_obs
-                          if obs[0] >= current_sequence[-1][0]
-                          and obs not in current_sequence
-                        #   and not any(obs[3].is_mutually_exclusive(prev_obs[3]) 
-                        #                 for prev_obs in current_sequence)
-                        ]
+    #         # check for available successors
+    #         successors = [obs for obs in available_obs
+    #                       if obs[0] >= current_sequence[-1][0]
+    #                       and obs not in current_sequence
+    #                     #   and not any(obs[3].is_mutually_exclusive(prev_obs[3]) 
+    #                     #                 for prev_obs in current_sequence)
+    #                     ]
 
-            # queue successors
-            for obs_next in successors:
-                # create new sequence with successor added
-                new_sequence = [obs for obs in current_sequence] + [obs_next]
+    #         # queue successors
+    #         for obs_next in successors:
+    #             # create new sequence with successor added
+    #             new_sequence = [obs for obs in current_sequence] + [obs_next]
 
-                # add new sequence to dfs stack
-                dfs_queue.append(new_sequence)
+    #             # add new sequence to dfs stack
+    #             dfs_queue.append(new_sequence)
 
-        # return feasible sequences
-        return feasible_sequences
+    #     # return feasible sequences
+    #     return feasible_sequences

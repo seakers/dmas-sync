@@ -300,9 +300,9 @@ class FutureBroadcastMessageAction(BroadcastMessageAction):
     BIDS = 'BIDS'                           # broadcast latest bids for a task
     REQUESTS = 'measurement requests'       # broadcast latest known active measurement requests
     OBSERVATIONS = 'observation results'    # broadcast latest observation info
-    REWARD = 'REWARD'                       # broadcast latest reward grid information
+    REWARD_GRID = 'REWARD_GRID'             # broadcast latest reward grid information
     STATE = 'agent state'                   # broadcast latest agent state information
-    FUTURE_BROADCAST_TYPES = [PLAN, BIDS, REQUESTS, OBSERVATIONS, REWARD, STATE]
+    FUTURE_BROADCAST_TYPES = [PLAN, BIDS, REQUESTS, OBSERVATIONS, REWARD_GRID, STATE]
         
     def __init__(self, 
                 broadcast_type : str,

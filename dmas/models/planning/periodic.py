@@ -33,7 +33,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
     def __init__(   self, 
                     horizon : float = np.Inf,
                     period : float = np.Inf,
-                    sharing : str = OPPORTUNISTIC,
+                    sharing : str = PERIODIC,
                     debug : bool = False,
                     logger: logging.Logger = None,
                     printouts : bool = True
@@ -177,41 +177,38 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 raise ValueError(f'`orbitdata` required for agents of type `{type(state)}`.')
 
             # initialize list of broadcasts to be done
-            broadcasts = []       
+            broadcasts = []  
+
+            # determine current time        
+            t_curr : float  = state.get_time() if t is None else t  
+            t_next : float = t_curr + self._horizon              
 
             if self._sharing == self.NONE: 
                 pass # no broadcasts scheduled
 
             elif self._sharing == self.PERIODIC:        
-                # determine current time        
-                t_curr : float  = state.get_time() if t is None else t                
-
                 # determine number of periods within the planning horizon
                 n_periods = int(self._horizon // self._period)
 
                 # schedule broadcasts at the end of each period
                 for i in range(n_periods):
                     # calculate broadcast time
-                    t_broadcast : float = t_curr + self._period * (i + 1) - 5e-3  # ensure broadcast happens before the end of the planning period
+                    t_broadcast : float = t_curr + self._period * (i + 1) # - 5e-3  # ensure broadcast happens before the end of the planning period
 
-                    # generate plan message to share state
-                    state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
-
-                    # generate plan message to share completed observations
-                    observations_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.OBSERVATIONS, t_broadcast)
-
-                    # generate plan message to share any task requests generated
-                    task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
+                    # generate future broadcast messages for this broadcast period
+                    future_broadcasts = self.__generate_future_broadcasts(t_broadcast)
 
                     # add to client broadcast list
-                    broadcasts.extend([state_msg, observations_msg, task_requests_msg])
+                    broadcasts.extend(future_broadcasts)
 
             elif self._sharing == self.OPPORTUNISTIC:
+                raise NotImplementedError(f'Opportunistic sharing mode not yet implemented.')
+            
                 # initialize set of times when broadcasts are scheduled
                 t_access_starts = set()     
                 
                 # get access intervals with a client agent within the planning horizon
-                access_intervals : List[Tuple[Interval, str]] = orbitdata.get_next_agent_accesses(state.get_time(), include_current=True)
+                access_intervals : List[Tuple[Interval, str]] = orbitdata.get_next_agent_accesses(t_curr, t_next, include_current=True)
 
                 # collect access start times for future reference
                 t_access_starts.update([access.left for access,_ in access_intervals if not access.is_empty()])
@@ -227,23 +224,13 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                     if next_access.right <= state.get_time() + self._period: continue
 
                     # get last access interval and calculate broadcast time
-                    # t_broadcast : float = max(next_access.left, state.t+self.period-5e-3) # ensure broadcast happens before the end of the planning period
-                    t_broadcast : float = max(
-                                            min(next_access.left + 5*self.EPS,    # give buffer time for access to start
-                                                next_access.right),               # ensure broadcast is before access ends
-                                        state.get_time())                                # ensure broadcast is not in the past
+                    t_broadcast : float = max(next_access + 5e-3, state.get_time()) 
 
-                    # generate plan message to share state
-                    state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
-
-                    # generate plan message to share completed observations
-                    observations_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.OBSERVATIONS, t_broadcast)
-
-                    # generate plan message to share any task requests generated
-                    task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
+                    # generate future broadcast messages for this access opportunity
+                    future_broadcasts = self.__generate_future_broadcasts(t_broadcast)
 
                     # add to client broadcast list
-                    broadcasts.extend([state_msg, observations_msg, task_requests_msg])
+                    broadcasts.extend(future_broadcasts)
 
                 # connection waits; allows for messages to be received right after access start times
                 waits = [WaitAction(t_access_start, t_access_start) for t_access_start in t_access_starts]
@@ -260,6 +247,26 @@ class AbstractPeriodicPlanner(AbstractPlanner):
             # assert all([isinstance(broadcast, BroadcastMessageAction) for broadcast in broadcasts]), \
             #     f'Broadcasts not scheduled correctly. Is of type `{type(broadcasts)}`.'
 
+    def __generate_future_broadcasts(self, t_broadcast : float) -> list:
+        # generate plan message to share state
+        state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
+
+        # generate plan message to share completed observations
+        observations_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.OBSERVATIONS, t_broadcast)
+        
+        # generate plan message to share latest reward grid information
+        reward_grid_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REWARD_GRID, t_broadcast)
+
+        # generate plan message to share any task requests generated
+        task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
+
+        # compile and return broadcast list
+        return [
+                # state_msg, 
+                # observations_msg, 
+                reward_grid_msg,
+                task_requests_msg
+            ]
     
     def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:
         """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """

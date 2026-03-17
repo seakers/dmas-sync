@@ -350,9 +350,10 @@ class SimulationAgent(object):
                 pending_actions = []
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
-                if True:
-                # if curr_state._t > 32_299.0:
-                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                # if True:
+                if curr_state._t > 27_879.00:
+                # if "imager_c_sat_0" in curr_state.agent_name and curr_state._t > 48_648.0 and self._plan.actions:
+                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -385,9 +386,10 @@ class SimulationAgent(object):
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         # if True:
-            # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-            # self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
-            # x = 1 # breakpoint
+        if curr_state._t > 27_879.00:
+            self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
+            self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
+            x = 1 # breakpoint
         # -------------------------------------        
         
         # return next initial state and next actions to perform
@@ -705,6 +707,9 @@ class SimulationAgent(object):
             elif bt == FutureBroadcastMessageAction.BIDS:
                 msgs.extend(self._compile_bid_broadcasts(state, t))
 
+            elif bt == FutureBroadcastMessageAction.REWARD_GRID:
+                msgs.extend(self._compile_reward_grid_broadcast(state, t))
+
             else:
                 raise NotImplementedError(f"Future broadcast type {bt} not supported.")
 
@@ -781,6 +786,11 @@ class SimulationAgent(object):
 
         # return messages list
         return compiled_bid_msgs
+
+    def _compile_reward_grid_broadcast(self, state : SimulationAgentState, t: float) -> List[SimulationMessage]:
+        # TODO implement reward grid broadcasting
+        raise NotImplementedError("Reward grid broadcasting is not yet implemented.")
+        return []
 
     def _merge_broadcast_actions_if_needed(self, 
                                            actions : List[AgentAction], 
