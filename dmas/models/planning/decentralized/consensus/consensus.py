@@ -1722,30 +1722,18 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # Get curent time 
         t_curr = state.get_time()
 
-        debug_case = t_curr > 27_879.00 and ("imager_b_sat_29" in state.agent_name or "imager_b_sat_62" in state.agent_name)
-            # x = 1 # breakpoint
-
         # Determine if agent is participating in consensus bidding
         participating = self.__is_participating_in_consensus(new_bids)
 
         # Check if broadcasts are already contained in cache
         cache_key = (t_curr, participating)
         if cache_key in self._schedule_broadcasts_cache:
-            if debug_case:
-                tqdm.write(f'Cache hit for {state.agent_name} broadcast scheduling at time {t_curr} with participating={self.__is_participating_in_consensus_DEBUGGER(new_bids)}. Returning cached broadcasts.')
-
             # Broadcasts exist in cache; return cached actions 
             return self._schedule_broadcasts_cache[cache_key]
 
         # Evict stale entries on time advance
         if self._schedule_broadcasts_cache and next(iter(self._schedule_broadcasts_cache))[0] < t_curr:
-            if debug_case:
-                tqdm.write(f'Cache eviction for {state.agent_name} broadcast scheduling at time {t_curr}. Evicting stale cache entries.')
-            
             self._schedule_broadcasts_cache.clear()
-
-        if debug_case:
-            tqdm.write(f'Cache miss for {state.agent_name} broadcast scheduling at time {t_curr} with participating={self.__is_participating_in_consensus_DEBUGGER(new_bids)}. Computing broadcasts and updating cache.')
 
         # Compute broadcast times (may itself hit its own cache)
         t_broadcasts = self.__schedule_broadcast_times(state, orbitdata, new_bids)
@@ -2064,12 +2052,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 or self._bundle_changes_performed
             )
     
-    def __is_participating_in_consensus_DEBUGGER(self, new_bids : dict) -> bool:
-        """ Check if this agent is currently participating in consensus bidding. """
-        return (int(bool(new_bids)), 
-                int(self._performed_bundle_observations), 
-                int(self._bundle_changes_performed)
-            )
+    # def __is_participating_in_consensus_DEBUGGER(self, new_bids : dict) -> bool:
+    #     """ Check if this agent is currently participating in consensus bidding. """
+    #     return (int(bool(new_bids)), 
+    #             int(self._performed_bundle_observations), 
+    #             int(self._bundle_changes_performed)
+    #         )
 
     """
     REPLAN SCHEDULING

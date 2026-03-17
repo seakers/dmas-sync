@@ -1102,23 +1102,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                      key=lambda bid: bid.n_obs, default=None)
             n_obs_last_performed = last_performed_bid.n_obs if last_performed_bid else -1
 
+            # extract observation times for all previously performed observations for this parent task
             latest_performed_obs_time : Tuple[float,str,float,ObservationOpportunity] \
                   = (last_performed_bid.t_img, last_performed_bid.owner, np.NAN, None) if last_performed_bid else None
-            
-            # performed_bids = [bid for bid in self._results[task]
-            #                   if bid.was_performed()]
-            # # ensure all performed observations have a consecutive observation number
-            # assert all(bid.n_obs == i for i, bid in enumerate(performed_bids)), \
-            #     f"Performed bids for task {task} do not have consecutive observation numbers starting from zero."
-            
-            # extract observation times for all previously performed observations for this parent task
-            # performed_obs : list[Tuple[float,str,float,ObservationOpportunity]] = \
-            #                 [(bid.t_img,bid.owner,np.NAN,None) 
-            #                  for bid in performed_bids]            
-
-            # latest_performed_obs_time : Tuple[float,str,float,ObservationOpportunity] \
-            #     = max(performed_obs, key=lambda obs: obs[0]) if performed_obs else None
-            
+                        
             # initialize feasible observation sequences for this task
             available_obs_times : list[Tuple[float,str,float,ObservationOpportunity]] = []
 
@@ -1159,7 +1146,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 for seq_idx,(agent_name,t_obs,look_angle,obs_opp) in enumerate(zip(obs_names,obs_times,obs_look_angles,obs_tasks)):
                     
                     # get observation number for this observation
-                    # n_obs = seq_idx + len(performed_obs)
                     n_obs = seq_idx + (n_obs_last_performed + 1)
 
                     # get observation number and previous observation time
