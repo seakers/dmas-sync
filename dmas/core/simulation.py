@@ -145,7 +145,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            # t = 30_000.0 # TODO remove after testing
+            # t = 21_000.0 # TODO remove after testing
             
             # initialize state-action pairs
             state_action_pairs = {

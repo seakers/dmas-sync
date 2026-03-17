@@ -7,8 +7,7 @@ import numpy as np
 from scipy import stats
 
 def generate_plots(trial_name : str, 
-                        experiment_col : str,
-                        base_dir : str = None) -> None:
+                    base_dir : str = None) -> None:
     """ Generates line plots for the compiled results of a given trial, showing the impact of number of satellites and arrival rate on key metrics. """
 
     # define base directory if not provided
@@ -27,6 +26,7 @@ def generate_plots(trial_name : str,
     results_df = pd.read_csv(compiled_results_path)
 
     # filter results to only include rows where experiment_col is True
+    experiment_col = "in_stress"
     if experiment_col not in results_df.columns:
         raise ValueError(f"Experiment column `{experiment_col}` not found in results DataFrame. Available columns: {results_df.columns.tolist()}")
     filtered_df = results_df[results_df[experiment_col] == True]
@@ -445,16 +445,12 @@ if __name__ == "__main__":
     # define trial name and parameters to filter results by
     base_dir = "/media/aslan15/easystore/Data/1_cbba_validation/2026_02_26_local"
 
-    trial_name = "full_factorial_trials_2026-02-22"
+    # trial_name = "full_factorial_trials_2026-02-22"
     # trial_name = "full_factorial_trials_2026-02-23"
-
-    experiment_col = "in_stress"
-    # experiment_col = "in_connectivity"
-    # experiment_col = "in_validation"
+    trial_name = "full_factorial_trials_2026-03-15"
 
     # print runtime data
     generate_plots(trial_name, 
-                       experiment_col,
                     #    base_dir
                     )
 

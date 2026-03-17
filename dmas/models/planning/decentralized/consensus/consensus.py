@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 from itertools import chain
 from typing import Dict, List, Tuple, Union
 
+from tqdm import tqdm
 import logging
 
 import numpy as np
@@ -133,7 +134,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
         # DEBUG PRINTOUTS
         if self._debug and incoming_bids:
-        # if state._t > 32_299.0 and incoming_bids:
+        # debug_case = state._t > 27_879.00 and ("imager_b_sat_29" in state.agent_name or "imager_b_sat_62" in state.agent_name)
+        # if debug_case and incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
             self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
@@ -152,9 +154,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
             "Bundle and path lengths do not match after consensus phase."
 
         # -------------------------------
-        # DEBUG PRINTOUTS
+        # DEBUG PRINTOUTS        
         if (task_updates or results_updates or bundle_updates) and self._debug:
-        # if (task_updates or results_updates or bundle_updates) and state._t > 32_299.0:
+        # if (task_updates or results_updates or bundle_updates) and debug_case:
             self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
             print(f'`{state.agent_name}` - Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
             if any([
@@ -1720,18 +1722,30 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # Get curent time 
         t_curr = state.get_time()
 
+        debug_case = t_curr > 27_879.00 and ("imager_b_sat_29" in state.agent_name or "imager_b_sat_62" in state.agent_name)
+            # x = 1 # breakpoint
+
         # Determine if agent is participating in consensus bidding
         participating = self.__is_participating_in_consensus(new_bids)
 
         # Check if broadcasts are already contained in cache
         cache_key = (t_curr, participating)
         if cache_key in self._schedule_broadcasts_cache:
+            if debug_case:
+                tqdm.write(f'Cache hit for {state.agent_name} broadcast scheduling at time {t_curr} with participating={self.__is_participating_in_consensus_DEBUGGER(new_bids)}. Returning cached broadcasts.')
+
             # Broadcasts exist in cache; return cached actions 
             return self._schedule_broadcasts_cache[cache_key]
 
         # Evict stale entries on time advance
         if self._schedule_broadcasts_cache and next(iter(self._schedule_broadcasts_cache))[0] < t_curr:
+            if debug_case:
+                tqdm.write(f'Cache eviction for {state.agent_name} broadcast scheduling at time {t_curr}. Evicting stale cache entries.')
+            
             self._schedule_broadcasts_cache.clear()
+
+        if debug_case:
+            tqdm.write(f'Cache miss for {state.agent_name} broadcast scheduling at time {t_curr} with participating={self.__is_participating_in_consensus_DEBUGGER(new_bids)}. Computing broadcasts and updating cache.')
 
         # Compute broadcast times (may itself hit its own cache)
         t_broadcasts = self.__schedule_broadcast_times(state, orbitdata, new_bids)
@@ -2048,6 +2062,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 or self._performed_bundle_observations 
                 # or self._task_announcements_received
                 or self._bundle_changes_performed
+            )
+    
+    def __is_participating_in_consensus_DEBUGGER(self, new_bids : dict) -> bool:
+        """ Check if this agent is currently participating in consensus bidding. """
+        return (int(bool(new_bids)), 
+                int(self._performed_bundle_observations), 
+                int(self._bundle_changes_performed)
             )
 
     """

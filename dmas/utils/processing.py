@@ -1764,7 +1764,7 @@ class ResultsProcessor:
                 event_to_task[event] = task
         
         # map events to required obserations for their tasks
-        event_to_required_observations : Dict[GeophysicalEvent, List[Dict]] = dict()
+        event_to_required_observations : Dict[GeophysicalEvent, Set[Dict]] = defaultdict(set)
         for event, task in event_to_task.items():
             # initialize set of required observations
             required_observations = set()
