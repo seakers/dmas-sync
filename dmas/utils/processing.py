@@ -6,6 +6,7 @@ import os
 from typing import Dict, List, Set, Tuple
 import numpy as np
 import math
+import random
 
 from tqdm import tqdm
 import pandas as pd
@@ -120,9 +121,6 @@ class ResultsProcessor:
             
             # initialize previous observation time for revisit time calculation
             t_prev = np.NINF
-
-            if "EventObservationTask-'generic parameter'@(0,2324)-EVENT-e21c2b8e" in task.id:
-                x = 1 # breakpoint
 
             # iterate observations by start time 
             for n_obs,obs_perf in enumerate(sorted(observations, key=lambda obs: obs['time [s]'])):
@@ -2519,8 +2517,321 @@ class ResultsProcessor:
         return total_task_priority, total_observable_task_priority
 
     # ---------------------------------------------------------------------------
-    # Drop-in replacement for __calculate_dual_bound
+    # Sequence evaluation
     # ---------------------------------------------------------------------------
+    
+    @staticmethod
+    def _evaluate_sequence_at_times(
+        task,
+        sequence: list[tuple],     # (agent_name, t_earliest_obs, look_angle, obs_opp)
+        times: list[tuple],        # (t_obs, d_obs) per observation
+        agent_missions: dict,
+        agent_specs: dict,
+        cross_track_fovs: dict,
+        compiled_orbitdata: dict,
+        estimate_fn,
+    ) -> float:
+        total = 0.0
+        for n_obs, ((agent_name, _, th, obs_opp), (t_obs, d_obs)) in enumerate(
+            zip(sequence, times)
+        ):
+            t_prev = times[n_obs - 1][0] if n_obs > 0 else 0.0
+    
+            measurement_performance = estimate_fn(
+                task,
+                obs_opp.instrument_name,
+                th,
+                t_obs,
+                d_obs,
+                agent_specs[agent_name],
+                cross_track_fovs[agent_name],
+                compiled_orbitdata[agent_name],
+                n_obs,
+                t_prev,
+            )
+    
+            for measurement in measurement_performance.values():
+                measurement[ObservationRequirementAttributes.OBSERVATION_NUMBER.value] = n_obs + 1
+                measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = (
+                    t_obs - t_prev if n_obs > 0 else 0.0
+                )
+    
+            obs_opp_utility = max(
+                agent_missions[agent_name].calc_task_value(task, measurement, False)
+                for measurement in measurement_performance.values()
+            ) if measurement_performance else 0.0
+    
+            total += obs_opp_utility
+    
+        return total
+    
+    
+    # ---------------------------------------------------------------------------
+    # Simulated Annealing over sequences (outer loop)
+    # ---------------------------------------------------------------------------
+    
+    @staticmethod
+    def __sa_best_sequence(
+        task,
+        available_obs: list[tuple],
+        agent_missions: dict,
+        agent_specs: dict,
+        cross_track_fovs: dict,
+        compiled_orbitdata: dict,
+        estimate_fn,
+        bo_n_initial: int,
+        bo_n_iterations: int,
+        bo_n_acq_candidates: int,
+        sa_t_initial: float,
+        sa_t_final: float,
+        sa_cooling: float,
+        sa_steps_per_temp: int,
+        seed: int | None,
+    ) -> tuple[list[tuple], list[tuple], float]:
+        """
+        Simulated Annealing over valid ordered subsets of available_obs.
+        Returns (best_sequence, best_times, best_reward).
+        """
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed)
+    
+        n = len(available_obs)
+        if n == 0:
+            return [], [], 0.0
+    
+        # Precompute mutual exclusivity bitmasks
+        mx_mask = [0] * n
+        # for i in range(n):
+        #     for j in range(i + 1, n):
+        #         if available_obs[i][3].is_mutually_exclusive(available_obs[j][3]):
+        #             mx_mask[i] |= (1 << j)
+        #             mx_mask[j] |= (1 << i)
+    
+        def are_exclusive(i: int, j: int) -> bool:
+            return bool(mx_mask[i] & (1 << j))
+    
+        def is_valid(indices: list[int]) -> bool:
+            for k in range(len(indices)):
+                for l in range(k + 1, len(indices)):
+                    if are_exclusive(indices[k], indices[l]):
+                        return False
+            for k in range(len(indices) - 1):
+                if available_obs[indices[k]][0] > available_obs[indices[k + 1]][0]:
+                    return False
+            return True
+        
+        _eval_cache: dict[frozenset, tuple] = {}
+        
+        # def evaluate(indices: list[int]) -> tuple[list[tuple], float]:
+        def evaluate(indices: list[int]) -> tuple[list[tuple], float]:
+            key = frozenset(indices)  # note: loses ordering, add tuple key if order matters
+            if key in _eval_cache:
+                return _eval_cache[key]
+            
+            # ... run BO ...
+            sequence = [
+                (available_obs[i][1], available_obs[i][0],
+                available_obs[i][2], available_obs[i][3])
+                for i in indices
+            ]
+            t_starts = [
+                available_obs[i][3].task_accessibility[task.id].left
+                for i in indices
+            ]
+            t_ends = [
+                available_obs[i][3].task_accessibility[task.id].right
+                for i in indices
+            ]
+            d_min = [
+                # available_obs[i][3].task_accessibility[task.id].span()
+                0.0
+                for i in indices
+            ]
+    
+            def objective(times: list[tuple]) -> float:
+                return ResultsProcessor._evaluate_sequence_at_times(
+                    task, sequence, times,
+                    agent_missions, agent_specs,
+                    cross_track_fovs, compiled_orbitdata,
+                    estimate_fn,
+                )
+    
+            opt = _SequenceTimeOptimiser(
+                n_dims=len(indices),
+                n_initial=bo_n_initial,
+                n_iterations=bo_n_iterations,
+                n_acq_candidates=bo_n_acq_candidates,
+            )
+            # return opt.optimise(t_starts, t_ends, d_min, objective)
+            best_times, reward = opt.optimise(t_starts, t_ends, d_min, objective)
+            
+            _eval_cache[key] = (best_times, reward)
+            return best_times, reward
+    
+        # Greedy initialisation
+        sorted_idx = sorted(range(n), key=lambda i: available_obs[i][0])
+        current_indices = [sorted_idx[0]]
+        excluded = mx_mask[sorted_idx[0]] | (1 << sorted_idx[0])
+        for i in sorted_idx[1:]:
+            if not (excluded & (1 << i)):
+                if available_obs[i][0] >= available_obs[current_indices[-1]][0]:
+                    current_indices.append(i)
+                    excluded |= mx_mask[i] | (1 << i)
+    
+        current_times, current_reward = evaluate(current_indices)
+        best_indices = list(current_indices)
+        best_times   = list(current_times)
+        best_reward  = current_reward
+        in_sequence  = set(current_indices)
+
+        # if len(available_obs) == 1:
+        #     best_sequence = [
+        #         (available_obs[i][1], available_obs[i][0],
+        #         available_obs[i][2], available_obs[i][3])
+        #         for i in best_indices
+        #     ]
+        #     return best_sequence, best_times, best_reward
+    
+        # SA main loop
+        temperature = sa_t_initial
+    
+        while temperature > sa_t_final:
+            for _ in range(sa_steps_per_temp):
+                excluded_from_current = [i for i in range(n) if i not in in_sequence]
+    
+                ops = []
+                if len(current_indices) > 1:
+                    ops.append('remove')
+                if excluded_from_current:
+                    ops.append('add')
+                if len(current_indices) > 1 and excluded_from_current:
+                    ops.append('swap')
+                if not ops:
+                    break
+    
+                op = random.choice(ops)
+                candidate = list(current_indices)
+    
+                if op == 'remove':
+                    pos = random.randrange(len(candidate))
+                    candidate.pop(pos)
+    
+                elif op == 'add':
+                    new_idx = random.choice(excluded_from_current)
+                    valid_positions = []
+                    for pos in range(len(candidate) + 1):
+                        trial = candidate[:pos] + [new_idx] + candidate[pos:]
+                        if is_valid(trial):
+                            valid_positions.append(pos)
+                    if not valid_positions:
+                        continue
+                    pos = random.choice(valid_positions)
+                    candidate.insert(pos, new_idx)
+    
+                elif op == 'swap':
+                    pos = random.randrange(len(candidate))
+                    new_idx = random.choice(excluded_from_current)
+                    candidate[pos] = new_idx
+                    if not is_valid(candidate):
+                        continue
+    
+                new_times, new_reward = evaluate(candidate)
+                delta = new_reward - current_reward
+    
+                if delta > 0 or random.random() < math.exp(delta / temperature):
+                    current_indices = candidate
+                    current_times   = new_times
+                    current_reward  = new_reward
+                    in_sequence     = set(current_indices)
+    
+                    if new_reward > best_reward:
+                        best_reward  = new_reward
+                        best_indices = list(candidate)
+                        best_times   = list(new_times)
+    
+            temperature *= sa_cooling
+    
+        best_sequence = [
+            (available_obs[i][1], available_obs[i][0],
+            available_obs[i][2], available_obs[i][3])
+            for i in best_indices
+        ]
+        return best_sequence, best_times, best_reward
+    
+    
+    # ---------------------------------------------------------------------------
+    # Main dual bound calculator
+    # ---------------------------------------------------------------------------
+    
+    @staticmethod
+    def __calculate_dual_bound_SA(
+        task_observation_opps: Dict,
+        compiled_orbitdata: Dict,
+        agent_missions: Dict,
+        agent_specs: Dict,
+        cross_track_fovs: Dict,
+        obtained_rewards_df: pd.DataFrame,
+        printouts: bool,
+        bo_n_initial: int = 8,
+        bo_n_iterations: int = 20,
+        bo_n_acq_candidates: int = 300,
+        sa_t_initial: float = 1.0,
+        sa_t_final: float = 1e-3,
+        sa_cooling: float = 0.95,
+        sa_steps_per_temp: int = 15,
+        sa_seed: int | None = None,
+    ) -> float:
+        estimate_fn = ResultsProcessor.__estimate_task_performance_metrics
+    
+        dual_bound = dict()
+        dual_n_obs = dict()
+    
+        for task, observation_opps in tqdm(
+            task_observation_opps.items(),
+            desc='Calculating dual bound',
+            disable=not printouts or len(task_observation_opps) < 10,
+            leave=False,
+        ):
+            available_obs_times = [
+                (obs_time, agent_name,
+                (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2,
+                obs_opp)
+                for obs_opp, agent_name, obs_time in observation_opps
+            ]
+    
+            _, best_times, task_utility = ResultsProcessor.__sa_best_sequence(
+                task,
+                available_obs_times,
+                agent_missions,
+                agent_specs,
+                cross_track_fovs,
+                compiled_orbitdata,
+                estimate_fn,
+                bo_n_initial        = bo_n_initial,
+                bo_n_iterations     = bo_n_iterations,
+                bo_n_acq_candidates = bo_n_acq_candidates,
+                sa_t_initial        = sa_t_initial,
+                sa_t_final          = sa_t_final,
+                sa_cooling          = sa_cooling,
+                sa_steps_per_temp   = sa_steps_per_temp,
+                seed                = sa_seed,
+            )
+    
+            dual_bound[task] = task_utility
+    
+            obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
+            if sum(obs['reward']) - 1e-6 > task_utility:
+                x = 1  # set breakpoint here when debugging bound violations
+    
+        dual_bound_df = pd.DataFrame(
+            list(dual_bound.items()), columns=['task', 'reward']
+        )
+        dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
+        if printouts:
+            print(dual_bound_df.to_string(index=False))
+    
+        return sum(dual_bound.values())
 
     @staticmethod
     def __calculate_dual_bound(
@@ -2554,7 +2865,9 @@ class ResultsProcessor:
                 for obs_opp, agent_name, obs_time in observation_opps
             ]
 
-            feasible_sequences = ResultsProcessor._find_longest_observation_sequence_for_task(
+            # feasible_sequences = ResultsProcessor._find_longest_observation_sequence_for_task(
+            feasible_sequences = ResultsProcessor._find_all_maximal_sequences(
+
                 available_obs_times
             )
 
@@ -2570,8 +2883,12 @@ class ResultsProcessor:
                 sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
 
                 t_starts = [obs_opp.task_accessibility[task.id].left  for obs_opp in obs_opps]
-                t_ends   = [obs_opp.task_accessibility[task.id].right # - obs_opp.task_min_duration[task.id]
-                            for obs_opp in obs_opps]
+                t_ends   = [obs_opp.task_accessibility[task.id].right for obs_opp in obs_opps]
+                d_min = [0 for _ in obs_opps]
+                # d_min = [obs_opp.task_min_duration[task.id] \
+                #             if i > 0 and obs_names[i] == obs_names[i-1] else 0.0
+                #          for i,obs_opp in enumerate(obs_opps)
+                #         ]
 
                 def objective(times: list[tuple], _seq=sequence) -> float:
                     return ResultsProcessor._evaluate_sequence_at_times(
@@ -2587,7 +2904,7 @@ class ResultsProcessor:
                     n_iterations=bo_n_iterations,
                 )
                 best_times, sequence_utility = optimiser.optimise(
-                    t_starts, t_ends, objective
+                    t_starts, t_ends, d_min, objective
                 )
 
                 if sequence_utility > task_utility:
@@ -2599,16 +2916,17 @@ class ResultsProcessor:
             # Sanity check (preserved from original)
             obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
             if sum(obs['reward']) - 1e-6 > task_utility:
+                tqdm.write(f"Warning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}. Please check for bugs in the dual bound calculation.")
                 x = 1  # set breakpoint here when debugging bound violations
-                a = ResultsProcessor._find_longest_observation_sequence_for_task(
-                    available_obs_times
-                )
-                y = 1  # set breakpoint here when debugging bound violations
+                # a = ResultsProcessor._find_longest_observation_sequence_for_task(
+                #     available_obs_times
+                # )
+                # y = 1  # set breakpoint here when debugging bound violations
 
         dual_bound_df = pd.DataFrame(
             list(dual_bound.items()), columns=['task', 'reward']
         )
-        dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
+        # dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
         if printouts:
             print(dual_bound_df.to_string(index=False))
 
@@ -3454,6 +3772,76 @@ class ResultsProcessor:
                     )
 
     @staticmethod
+    def _find_all_maximal_sequences(
+        available_obs: List[tuple],
+    ) -> List[Tuple[List[str], List[float], List[float], List]]:
+        """
+        Returns all maximal feasible ordered sequences regardless of length.
+        A sequence is maximal if no further observation can be appended.
+        """
+        n = len(available_obs)
+        if not n:
+            return []
+    
+        mx_mask = [0] * n
+        # for i in range(n):
+        #     for j in range(i + 1, n):
+        #         if available_obs[i][3].is_mutually_exclusive(available_obs[j][3]):
+        #             mx_mask[i] |= (1 << j)
+        #             mx_mask[j] |= (1 << i)
+    
+        successors = [[] for _ in range(n)]
+        for i in range(n):
+            t_i = available_obs[i][0]
+            for j in range(i + 1, n):
+                if available_obs[j][0] >= t_i:
+                    successors[i].append(j)
+    
+        node_info = []
+        stack = []
+        for i in range(n):
+            node_id = len(node_info)
+            node_info.append((i, -1))
+            stack.append((i, node_id, mx_mask[i] | (1 << i), 1))
+    
+        leaf_nodes = []
+        while stack:
+            obs_idx, node_id, excluded, depth = stack.pop()
+            valid_succs = [j for j in successors[obs_idx]
+                        if not (excluded & (1 << j))]
+            if not valid_succs:
+                leaf_nodes.append((depth, node_id))
+            else:
+                for j in valid_succs:
+                    new_node_id = len(node_info)
+                    node_info.append((j, node_id))
+                    stack.append((j, new_node_id,
+                                excluded | mx_mask[j] | (1 << j),
+                                depth + 1))
+    
+        def reconstruct(node_id):
+            path = []
+            while node_id != -1:
+                obs_idx, parent = node_info[node_id]
+                path.append(available_obs[obs_idx])
+                node_id = parent
+            path.reverse()
+            return path
+    
+        results = []
+        for _, node_id in leaf_nodes:
+            seq = reconstruct(node_id)
+            results.append((
+                [s[1] for s in seq],
+                [s[0] for s in seq],
+                [s[2] for s in seq],
+                [s[3] for s in seq],
+            ))
+    
+        results.sort(key=lambda x: (*x[1],))
+        return results
+    
+    @staticmethod
     def _find_longest_observation_sequence_for_task(
         available_obs: List[tuple]
     ) -> List[Tuple[List[str], List[float]]]:
@@ -3466,13 +3854,13 @@ class ResultsProcessor:
         # --- Precompute mutual exclusivity as a bitmask per observation ---
         # mx_mask[i] is a bitmask of all j where obs[i] and obs[j] are mutually exclusive
         mx_mask = [0] * n
-        for i in range(n):
-            for j in range(i + 1, n):
-                # if available_obs[i][3].is_mutually_exclusive(available_obs[j][3]):
-                if (available_obs[i][1] == available_obs[j][1]
-                    and available_obs[i][3].is_mutually_exclusive(available_obs[j][3])):
-                    mx_mask[i] |= (1 << j)
-                    mx_mask[j] |= (1 << i)
+        # for i in range(n):
+        #     for j in range(i + 1, n):
+        #         # if available_obs[i][3].is_mutually_exclusive(available_obs[j][3]):
+        #         if (available_obs[i][1] == available_obs[j][1]
+        #             and available_obs[i][3].is_mutually_exclusive(available_obs[j][3])):
+        #             mx_mask[i] |= (1 << j)
+        #             mx_mask[j] |= (1 << i)
 
         # --- Precompute valid successors for each index ---
         # A successor j of i must satisfy: obs[j][0] >= obs[i][0] and j > i
@@ -3605,7 +3993,8 @@ class _SequenceTimeOptimiser:
         self,
         n_dims: int,
         n_initial: int = 8,
-        n_iterations: int = 20,
+        n_iterations: int = 20, # 8,
+        n_acq_candidates: int = 30, # 300,
         kappa: float = 2.576,
         noise: float = 1e-6,
         length_scale: float = 0.3,
@@ -3613,19 +4002,31 @@ class _SequenceTimeOptimiser:
         self.n_dims = n_dims
         self.n_initial = n_initial
         self.n_iterations = n_iterations
+        self.n_acq_candidates = n_acq_candidates
         self.kappa = kappa
         self.noise = noise
         self.length_scale = length_scale
+
         self._X: list[np.ndarray] = []
         self._y: list[float] = []
+
+        # Cholesky cache — rebuilt once per new point, not per _posterior call
+        self._L: np.ndarray | None = None       # lower triangular Cholesky of K
+        self._alpha: np.ndarray | None = None   # L^{-T} L^{-1} y
+
+    # -----------------------------------------------------------------------
+    # Kernel
+    # -----------------------------------------------------------------------
 
     def _k(self, a: np.ndarray, b: np.ndarray) -> float:
         d = a - b
         return float(np.exp(-0.5 * np.dot(d, d) / self.length_scale ** 2))
 
-    def _posterior(self, x: np.ndarray) -> tuple[float, float]:
-        if not self._X:
-            return 0.0, 1.0
+    # -----------------------------------------------------------------------
+    # Cache management — call once after every new (x, y) pair is added
+    # -----------------------------------------------------------------------
+
+    def _update_cache(self):
         n = len(self._X)
         K = np.zeros((n, n))
         for i in range(n):
@@ -3633,81 +4034,173 @@ class _SequenceTimeOptimiser:
                 v = self._k(self._X[i], self._X[j])
                 K[i, j] = K[j, i] = v
         K += self.noise * np.eye(n)
+
+        # Normalise y to zero mean, unit variance before fitting
+        y = np.array(self._y)
+        self._y_mean = y.mean()
+        self._y_std  = y.std() if y.std() > 1e-9 else 1.0
+        y_norm = (y - self._y_mean) / self._y_std
+
+        self._L = np.linalg.cholesky(K)
+        self._alpha = np.linalg.solve(
+            self._L.T, np.linalg.solve(self._L, y_norm)  # fit on normalised y
+        )
+
+    def _add_point(self, x: np.ndarray, y: float):
+        """Add a new observed point and refresh the cache."""
+        self._X.append(x.copy())
+        self._y.append(y)
+        self._update_cache()
+
+    # -----------------------------------------------------------------------
+    # Posterior — O(n) per call thanks to cached L and alpha
+    # -----------------------------------------------------------------------
+
+    def _posterior(self, x: np.ndarray) -> tuple[float, float]:
+        if not self._X:
+            return 0.0, 1.0
         k_star = np.array([self._k(x, xi) for xi in self._X])
-        mu = float(k_star @ np.linalg.solve(K, np.array(self._y)))
-        var = max(1.0 - float(k_star @ np.linalg.solve(K, k_star)), 1e-9)
-        return mu, math.sqrt(var)
+        mu_norm = float(k_star @ self._alpha)
+        v = np.linalg.solve(self._L, k_star)
+        var = max(1.0 - float(v @ v), 1e-9)
+
+        # Denormalise mu back to original scale for acquisition and best tracking
+        mu = mu_norm * self._y_std + self._y_mean
+        sigma = math.sqrt(var) * self._y_std
+        return mu, sigma
 
     def _acq(self, x: np.ndarray) -> float:
         mu, sigma = self._posterior(x)
         return mu + self.kappa * sigma
+    
+    def _acq_ei(self, x: np.ndarray) -> float:
+        mu, sigma = self._posterior(x)
+        best = max(self._y)
+        z = (mu - best) / (sigma + 1e-9)
+        # standard normal PDF and CDF
+        ei = (mu - best) * self._normal_cdf(z) + sigma * self._normal_pdf(z)
+        return max(ei, 0.0)
+
+    @staticmethod
+    def _normal_pdf(z: float) -> float:
+        return math.exp(-0.5 * z * z) / math.sqrt(2 * math.pi)
+
+    @staticmethod
+    def _normal_cdf(z: float) -> float:
+        return 0.5 * (1.0 + math.erf(z / math.sqrt(2)))
+
+    # -----------------------------------------------------------------------
+    # Reparameterisation
+    # -----------------------------------------------------------------------
 
     @staticmethod
     def deltas_to_times(
         deltas: np.ndarray,
         t_starts: list[float],
         t_ends: list[float],
+        d_min: list[float],
         eps: float = 1e-6,
-    ) -> list[float]:
+    ) -> tuple[list[tuple], bool]:
+        """
+        Map delta_i in [0,1] to a strictly ordered sequence of
+        (t_obs, d_obs) pairs. Returns (times, is_feasible).
+        """
         times = []
         prev = -math.inf
-        for delta, t_start, t_end in zip(deltas, t_starts, t_ends):
+        feasible = True
+        for delta, t_start, t_end, d in zip(deltas, t_starts, t_ends, d_min):
             lo = max(t_start, prev + eps)
             hi = t_end
             if lo > hi:
-                lo = hi
-            s = lo + delta * (hi - lo)
-            d = hi - s
-            times.append((s,d))
-            prev = times[-1][0]
-        return times
+                feasible = False
+                lo = t_start
+            t_obs = lo + delta * max(hi - lo, 0.0)
+            d_obs = t_end - t_obs   # remaining duration from obs time to end
+            times.append((t_obs, d_obs))
+            prev = t_obs
+        return times, feasible
+
+    # -----------------------------------------------------------------------
+    # Main optimise loop
+    # -----------------------------------------------------------------------
 
     def optimise(
         self,
         t_starts: list[float],
         t_ends: list[float],
+        d_min: list[float],
         objective,
-    ) -> tuple[list[float], float]:
+        eps: float = 1e-6,
+    ) -> tuple[list[tuple], float]:
         """Returns (best_times, best_reward)."""
         self._X = []
         self._y = []
-        best_times: list[float] = []
+        self._L = None
+        self._alpha = None
+        best_times: list[tuple] = []
         best_reward = -math.inf
 
         def _eval(deltas: np.ndarray) -> float:
-            return objective(self.deltas_to_times(deltas, t_starts, t_ends))
+            times, feasible = self.deltas_to_times(deltas, t_starts, t_ends, d_min, eps)
+            if feasible:
+                return objective(times)
+            violation = sum(
+                max(0.0, times[i-1][0] - times[i][0] + eps)
+                for i in range(1, len(times))
+            )
+            return -violation
 
-        # initial guess 1: earliest times in each window
-        earliest_deltas = np.zeros(self.n_dims)
-        earliest_reward = _eval(earliest_deltas)
-        self._X.append(earliest_deltas.copy())
-        self._y.append(earliest_reward)
-        if earliest_reward > best_reward:
-            best_reward = earliest_reward
-            best_times = self.deltas_to_times(earliest_deltas, t_starts, t_ends)
+        def _try(deltas: np.ndarray):
+            """Evaluate, update cache, update best."""
+            nonlocal best_reward, best_times
+            r = _eval(deltas)
+            self._add_point(deltas, r)      # O(n³) here, once per point
+            if r > best_reward:
+                best_reward = r
+                best_times, _ = self.deltas_to_times(
+                    deltas, t_starts, t_ends, d_min, eps
+                )
 
-        # initial guess 2: sample random times in each window
+        # --- Deterministic anchors ---
+        _try(np.zeros(self.n_dims))         # earliest times
+        _try(np.ones(self.n_dims))          # latest times
+
+        # mixed boundary anchors — one per dimension
+        for i in range(self.n_dims):
+            d = np.full(self.n_dims, 0.5)
+            d[i] = 0.0
+            _try(d)
+            d[i] = 1.0
+            _try(d)
+
+        # --- Random initial samples ---
         for _ in range(self.n_initial):
-            d = np.random.uniform(0, 1, self.n_dims)
-            r = _eval(d)
-            self._X.append(d.copy())
-            self._y.append(r)
-            if r > best_reward:
-                best_reward = r
-                best_times = self.deltas_to_times(d, t_starts, t_ends)
+            _try(np.random.uniform(0, 1, self.n_dims))
 
+        # --- BO iterations ---
+        # Acquisition maximisation is now cheap (O(n) per candidate)
+        # so n_acq_candidates=300 costs little compared to one _eval call.
         for _ in range(self.n_iterations):
-            best_acq, best_cand = -math.inf, None
-            for _ in range(30):
-                cand = np.random.uniform(0, 1, self.n_dims)
-                a = self._acq(cand)
-                if a > best_acq:
-                    best_acq, best_cand = a, cand
-            r = _eval(best_cand)
-            self._X.append(best_cand.copy())
-            self._y.append(r)
-            if r > best_reward:
-                best_reward = r
-                best_times = self.deltas_to_times(best_cand, t_starts, t_ends)
+            candidates = np.random.uniform(0, 1, (self.n_acq_candidates, self.n_dims))
+            # acqs = np.array([self._acq(c) for c in candidates])
+            acqs = np.array([self._acq_ei(c) for c in candidates])
+            
+            _try(candidates[np.argmax(acqs)])
+
+        # after main BO loop, before returning
+        best_delta = self._X[np.argmax(self._y)]
+        for _ in range(10):
+            # small perturbations around best, clipped to [0,1]
+            perturbed = np.clip(
+                best_delta + np.random.normal(0, 0.05, self.n_dims),
+                0, 1
+            )
+            _try(perturbed)
+
+        # also explicitly try snapping each dimension to its nearest boundary
+        for i in range(self.n_dims):
+            snapped = best_delta.copy()
+            snapped[i] = 0.0 if best_delta[i] < 0.5 else 1.0
+            _try(snapped)
 
         return best_times, best_reward

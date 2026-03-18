@@ -413,6 +413,7 @@ class SimulationEnvironment(object):
             # starts: indices in `order` where a new group begins
             starts = np.r_[0, np.flatnonzero(inv_sorted[1:] != inv_sorted[:-1]) + 1]
             ends   = np.r_[starts[1:], len(order)]
+            
 
             # Iterate groups (G is usually much smaller than N)
             obs_data : List[Dict] = []
@@ -425,8 +426,11 @@ class SimulationEnvironment(object):
 
                 merged = {
                     't_start': max(float(np.min(time[idx])), t_start),
-                    't_end':   float(np.max(time[idx])),
+                    't_end':   min(float(np.max(time[idx])) + agent_orbitdata.time_step, t_end),
                 }
+
+                assert merged['t_end'] >=  merged['t_start'], \
+                    f"Invalid merged observation times: t_start={merged['t_start']}[s], t_end={merged['t_end']}[s] for group with grid={grid[idx[0]]} and gp={gp[idx[0]]} for instrument {instrument_name}."
 
                 # For ID columns: take first value
                 # For other columns: collect list (or scalar if length 1)
