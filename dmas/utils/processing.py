@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import reduce
 import os
+import time
 from typing import Dict, List, Set, Tuple
 import numpy as np
 import math
@@ -2525,21 +2526,30 @@ class ResultsProcessor:
     @staticmethod
     def _evaluate_sequence_at_times(
         task,
-        sequence: list[tuple],     # (agent_name, t_earliest_obs, look_angle, obs_opp)
-        times: list[tuple],        # (t_obs, d_obs) per observation
-        agent_missions: dict,
-        agent_specs: dict,
-        cross_track_fovs: dict,
-        compiled_orbitdata: dict,
+        sequence,
+        times,
+        agent_missions : Dict[str,Mission],
+        agent_specs,
+        cross_track_fovs,
+        compiled_orbitdata,
         estimate_fn,
+        precomputed_accesses=None,
+        precomputed_obj_relevances=None,    # new
     ) -> float:
         total = 0.0
         for n_obs, ((agent_name, _, th, obs_opp), (t_obs, d_obs)) in enumerate(
             zip(sequence, times)
         ):
             t_prev = times[n_obs - 1][0] if n_obs > 0 else 0.0
+
+            cached_accesses = precomputed_accesses.get((obs_opp, agent_name)) \
+                    if precomputed_accesses else None
+            cached_obj_relevances = precomputed_obj_relevances.get(agent_name) \
+                    if precomputed_obj_relevances else None
+            t_prev = times[n_obs - 1][0] if n_obs > 0 else 0.0
+            
     
-            measurement_performance = estimate_fn(
+            measurement_performance : dict = estimate_fn(
                 task,
                 obs_opp.instrument_name,
                 th,
@@ -2550,6 +2560,7 @@ class ResultsProcessor:
                 compiled_orbitdata[agent_name],
                 n_obs,
                 t_prev,
+                precomputed_accesses=cached_accesses,
             )
     
             for measurement in measurement_performance.values():
@@ -2559,7 +2570,7 @@ class ResultsProcessor:
                 )
     
             obs_opp_utility = max(
-                agent_missions[agent_name].calc_task_value(task, measurement, False)
+                agent_missions[agent_name].calc_task_value(task, measurement, cached_obj_relevances, False)
                 for measurement in measurement_performance.values()
             ) if measurement_performance else 0.0
     
@@ -2567,6 +2578,65 @@ class ResultsProcessor:
     
         return total
     
+
+        # @staticmethod
+        # def _evaluate_sequence_at_times(
+        #     task,
+        #     sequence,
+        #     times,
+        #     agent_missions,
+        #     agent_specs,
+        #     cross_track_fovs,
+        #     compiled_orbitdata,
+        #     estimate_fn,
+        #     precomputed_accesses=None,
+        #     precomputed_obj_relevances=None,    # new
+        # ) -> float:
+        #     total = 0.0
+        #     for n_obs, ((agent_name, _, th, obs_opp), (t_obs, d_obs)) in enumerate(
+        #         zip(sequence, times)
+        #     ):
+        #         t_prev = times[n_obs - 1][0] if n_obs > 0 else 0.0
+
+        #         cached_accesses = precomputed_accesses.get((obs_opp, agent_name)) \
+        #                 if precomputed_accesses else None
+        #         cached_obj_relevances = precomputed_obj_relevances.get(agent_name) \
+        #                 if precomputed_obj_relevances else None
+
+        #         measurement_performance = estimate_fn(
+        #             task, obs_opp.instrument_name, th,
+        #             t_obs, d_obs,
+        #             agent_specs[agent_name],
+        #             cross_track_fovs[agent_name],
+        #             compiled_orbitdata[agent_name],
+        #             n_obs, t_prev,
+        #             precomputed_accesses=cached_accesses,
+        #         )
+
+        #         for measurement in measurement_performance.values():
+        #             measurement[ObservationRequirementAttributes.OBSERVATION_NUMBER.value] = n_obs + 1
+        #             measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = (
+        #                 t_obs - t_prev if n_obs > 0 else 0.0
+        #             )
+
+        #         if precomputed_obj_relevances is not None:
+        #             obj_relevances = precomputed_obj_relevances[agent_name]
+        #             obs_opp_utility = max(
+        #                 ResultsProcessor._calc_task_value_fast(
+        #                     agent_missions[agent_name], task, measurement,
+        #                     obj_relevances, False
+        #                 )
+        #                 for measurement in measurement_performance.values()
+        #             ) if measurement_performance else 0.0
+        #         else:
+        #             obs_opp_utility = max(
+        #                 agent_missions[agent_name].calc_task_value(task, measurement, False)
+        #                 for measurement in measurement_performance.values()
+        #             ) if measurement_performance else 0.0
+
+        #         total += obs_opp_utility
+
+        #     return total
     
     # ---------------------------------------------------------------------------
     # Simulated Annealing over sequences (outer loop)
@@ -2586,9 +2656,12 @@ class ResultsProcessor:
         bo_n_acq_candidates: int,
         sa_t_initial: float,
         sa_t_final: float,
-        sa_cooling: float,
-        sa_steps_per_temp: int,
+        # sa_cooling: float,
+        # sa_steps_per_temp: int,
         seed: int | None,
+        precomputed_accesses = None,      
+        precomputed_obj_relevances = None, 
+        printouts : bool = None,
     ) -> tuple[list[tuple], list[tuple], float]:
         """
         Simulated Annealing over valid ordered subsets of available_obs.
@@ -2601,6 +2674,15 @@ class ResultsProcessor:
         n = len(available_obs)
         if n == 0:
             return [], [], 0.0
+
+        # adapt SA parameters based on problem size
+        n_windows = len(available_obs)
+        # n_temp_levels = max(20, min(50, n_windows * 3))
+        n_temp_levels = max(10, min(30, n_windows * 2))
+        sa_cooling = (sa_t_final / sa_t_initial) ** (1.0 / n_temp_levels)
+        # sa_steps_per_temp = max(5, min(15, n_windows))
+        sa_steps_per_temp = max(3, min(10, n_windows))
+        n_iter_approx = n_temp_levels * sa_steps_per_temp 
     
         # Precompute mutual exclusivity bitmasks
         mx_mask = [0] * n
@@ -2625,9 +2707,13 @@ class ResultsProcessor:
         
         _eval_cache: dict[frozenset, tuple] = {}
         
-        # def evaluate(indices: list[int]) -> tuple[list[tuple], float]:
-        def evaluate(indices: list[int]) -> tuple[list[tuple], float]:
-            key = frozenset(indices)  # note: loses ordering, add tuple key if order matters
+        def _canonical_key(indices: list[int]) -> tuple:
+            # sort by the actual observation time of each window
+            return tuple(sorted(indices, key=lambda i: available_obs[i][0]))
+        
+        def evaluate_cheap(indices):
+            # key = tuple(indices)    # preserves order
+            key = _canonical_key(indices)  # order-invariant key
             if key in _eval_cache:
                 return _eval_cache[key]
             
@@ -2656,20 +2742,59 @@ class ResultsProcessor:
                     task, sequence, times,
                     agent_missions, agent_specs,
                     cross_track_fovs, compiled_orbitdata,
-                    estimate_fn,
+                    estimate_fn, precomputed_accesses, 
+                    precomputed_obj_relevances
                 )
+
+            opt = _SequenceTimeOptimiser(
+                n_dims=len(indices),
+                n_initial=3,        # was bo_n_initial (8)
+                n_iterations=5,     # was bo_n_iterations (20)
+                n_acq_candidates=50 # was 300
+            )
+
+            best_times, reward = opt.optimise(t_starts, t_ends, d_min, objective)
+            _eval_cache[key] = (best_times, reward)
+            return best_times, reward
+
+        def evaluate_full(indices):
+            # called once on the winner — no caching needed
+            # ... run BO ...
+            sequence = [
+                (available_obs[i][1], available_obs[i][0],
+                available_obs[i][2], available_obs[i][3])
+                for i in indices
+            ]
+            t_starts = [
+                available_obs[i][3].task_accessibility[task.id].left
+                for i in indices
+            ]
+            t_ends = [
+                available_obs[i][3].task_accessibility[task.id].right
+                for i in indices
+            ]
+            d_min = [
+                # available_obs[i][3].task_accessibility[task.id].span()
+                0.0
+                for i in indices
+            ]
     
+            def objective(times: list[tuple]) -> float:
+                return ResultsProcessor._evaluate_sequence_at_times(
+                    task, sequence, times,
+                    agent_missions, agent_specs,
+                    cross_track_fovs, compiled_orbitdata,
+                    estimate_fn, precomputed_accesses, 
+                    precomputed_obj_relevances
+                )
+
             opt = _SequenceTimeOptimiser(
                 n_dims=len(indices),
                 n_initial=bo_n_initial,
                 n_iterations=bo_n_iterations,
                 n_acq_candidates=bo_n_acq_candidates,
             )
-            # return opt.optimise(t_starts, t_ends, d_min, objective)
-            best_times, reward = opt.optimise(t_starts, t_ends, d_min, objective)
-            
-            _eval_cache[key] = (best_times, reward)
-            return best_times, reward
+            return opt.optimise(t_starts, t_ends, d_min, objective)
     
         # Greedy initialisation
         sorted_idx = sorted(range(n), key=lambda i: available_obs[i][0])
@@ -2681,87 +2806,90 @@ class ResultsProcessor:
                     current_indices.append(i)
                     excluded |= mx_mask[i] | (1 << i)
     
-        current_times, current_reward = evaluate(current_indices)
+        current_times, current_reward = evaluate_cheap(current_indices)
         best_indices = list(current_indices)
         best_times   = list(current_times)
         best_reward  = current_reward
         in_sequence  = set(current_indices)
-
-        # if len(available_obs) == 1:
-        #     best_sequence = [
-        #         (available_obs[i][1], available_obs[i][0],
-        #         available_obs[i][2], available_obs[i][3])
-        #         for i in best_indices
-        #     ]
-        #     return best_sequence, best_times, best_reward
     
         # SA main loop
         temperature = sa_t_initial
     
-        while temperature > sa_t_final:
-            for _ in range(sa_steps_per_temp):
-                excluded_from_current = [i for i in range(n) if i not in in_sequence]
-    
-                ops = []
-                if len(current_indices) > 1:
-                    ops.append('remove')
-                if excluded_from_current:
-                    ops.append('add')
-                if len(current_indices) > 1 and excluded_from_current:
-                    ops.append('swap')
-                if not ops:
-                    break
-    
-                op = random.choice(ops)
-                candidate = list(current_indices)
-    
-                if op == 'remove':
-                    pos = random.randrange(len(candidate))
-                    candidate.pop(pos)
-    
-                elif op == 'add':
-                    new_idx = random.choice(excluded_from_current)
-                    valid_positions = []
-                    for pos in range(len(candidate) + 1):
-                        trial = candidate[:pos] + [new_idx] + candidate[pos:]
-                        if is_valid(trial):
-                            valid_positions.append(pos)
-                    if not valid_positions:
-                        continue
-                    pos = random.choice(valid_positions)
-                    candidate.insert(pos, new_idx)
-    
-                elif op == 'swap':
-                    pos = random.randrange(len(candidate))
-                    new_idx = random.choice(excluded_from_current)
-                    candidate[pos] = new_idx
-                    if not is_valid(candidate):
-                        continue
-    
-                new_times, new_reward = evaluate(candidate)
-                delta = new_reward - current_reward
-    
-                if delta > 0 or random.random() < math.exp(delta / temperature):
-                    current_indices = candidate
-                    current_times   = new_times
-                    current_reward  = new_reward
-                    in_sequence     = set(current_indices)
-    
-                    if new_reward > best_reward:
-                        best_reward  = new_reward
-                        best_indices = list(candidate)
-                        best_times   = list(new_times)
-    
-            temperature *= sa_cooling
+        n_iter_approx = int(np.log(sa_t_final / sa_t_initial) / np.log(sa_cooling) * sa_steps_per_temp)
+
+        with tqdm(total=n_iter_approx, 
+                  desc=f'Optimizing observation sequence for task {task.id.split("-")[-1]}', 
+                  disable=not printouts or n_iter_approx < 100,
+                  leave=False
+                  ) as pbar:
+            while temperature > sa_t_final:
+                for _ in range(sa_steps_per_temp):
+                    excluded_from_current = [i for i in range(n) if i not in in_sequence]
+        
+                    ops = []
+                    if len(current_indices) > 1:
+                        ops.append('remove')
+                    if excluded_from_current:
+                        ops.append('add')
+                    if len(current_indices) > 1 and excluded_from_current:
+                        ops.append('swap')
+                    if not ops:
+                        break
+        
+                    op = random.choice(ops)
+                    candidate = list(current_indices)
+        
+                    if op == 'remove':
+                        pos = random.randrange(len(candidate))
+                        candidate.pop(pos)
+        
+                    elif op == 'add':
+                        new_idx = random.choice(excluded_from_current)
+                        valid_positions = []
+                        for pos in range(len(candidate) + 1):
+                            trial = candidate[:pos] + [new_idx] + candidate[pos:]
+                            if is_valid(trial):
+                                valid_positions.append(pos)
+                        if not valid_positions:
+                            continue
+                        pos = random.choice(valid_positions)
+                        candidate.insert(pos, new_idx)
+        
+                    elif op == 'swap':
+                        pos = random.randrange(len(candidate))
+                        new_idx = random.choice(excluded_from_current)
+                        candidate[pos] = new_idx
+                        if not is_valid(candidate):
+                            continue
+        
+                    new_times, new_reward = evaluate_cheap(candidate)
+                    delta = new_reward - current_reward
+        
+                    if delta > 0 or random.random() < math.exp(delta / temperature):
+                        current_indices = candidate
+                        current_times   = new_times
+                        current_reward  = new_reward
+                        in_sequence     = set(current_indices)
+        
+                        if new_reward > best_reward:
+                            best_reward  = new_reward
+                            best_indices = list(candidate)
+                            best_times   = list(new_times)
+        
+                    pbar.update(1)
+
+                temperature *= sa_cooling
     
         best_sequence = [
             (available_obs[i][1], available_obs[i][0],
             available_obs[i][2], available_obs[i][3])
             for i in best_indices
         ]
+
+        best_times, best_reward = evaluate_full(best_indices)
+
         return best_sequence, best_times, best_reward
-    
-    
+        
     # ---------------------------------------------------------------------------
     # Main dual bound calculator
     # ---------------------------------------------------------------------------
@@ -2795,6 +2923,27 @@ class ResultsProcessor:
             disable=not printouts or len(task_observation_opps) < 10,
             leave=False,
         ):
+            precomputed_accesses = {}
+            for obs_opp,agent_name,_ in tqdm(observation_opps, 
+                                             desc=f'Precomputing accesses for task {task.id.split("-")[-1]}',
+                                             disable=not printouts or len(observation_opps) < 10,
+                                             leave=False):
+                th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
+                t_start = obs_opp.task_accessibility[task.id].left
+                t_end   = obs_opp.task_accessibility[task.id].right
+                
+                # Query the full window once — widest possible d_img
+                accesses = ResultsProcessor.get_available_accesses(
+                    task,
+                    obs_opp.instrument_name,
+                    th,
+                    t_start,                    # earliest possible t_img
+                    t_end - t_start,            # full window duration
+                    compiled_orbitdata[agent_name],
+                    cross_track_fovs[agent_name],
+                )
+                precomputed_accesses[(obs_opp, agent_name)] = accesses
+            
             available_obs_times = [
                 (obs_time, agent_name,
                 (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2,
@@ -2815,9 +2964,10 @@ class ResultsProcessor:
                 bo_n_acq_candidates = bo_n_acq_candidates,
                 sa_t_initial        = sa_t_initial,
                 sa_t_final          = sa_t_final,
-                sa_cooling          = sa_cooling,
-                sa_steps_per_temp   = sa_steps_per_temp,
+                # sa_cooling          = sa_cooling,
+                # sa_steps_per_temp   = sa_steps_per_temp,
                 seed                = sa_seed,
+                precomputed_accesses = precomputed_accesses
             )
     
             dual_bound[task] = task_utility
@@ -2839,7 +2989,7 @@ class ResultsProcessor:
     def __calculate_dual_bound(
         task_observation_opps: Dict,
         compiled_orbitdata: Dict,
-        agent_missions: Dict,
+        agent_missions: Dict[str, Mission],
         agent_specs: Dict,
         cross_track_fovs: Dict,
         obtained_rewards_df: pd.DataFrame,
@@ -2857,7 +3007,29 @@ class ResultsProcessor:
             desc='Calculating dual bound',
             disable=not printouts or len(task_observation_opps) < 10,
             leave=False,
-        ):
+        ):                       
+            # precompute accesses for all observation opportunities of this task 
+            precomputed_accesses = {}
+            for obs_opp,agent_name,_ in tqdm(observation_opps, 
+                                             desc=f'Precomputing accesses for task {task.id.split("-")[-1]}',
+                                             disable=not printouts or len(observation_opps) < 10,
+                                             leave=False):
+                th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
+                t_start = obs_opp.task_accessibility[task.id].left
+                t_end   = obs_opp.task_accessibility[task.id].right
+                
+                # Query the full window once — widest possible d_img
+                accesses = ResultsProcessor.get_available_accesses(
+                    task,
+                    obs_opp.instrument_name,
+                    th,
+                    t_start,                    # earliest possible t_img
+                    t_end - t_start,            # full window duration
+                    compiled_orbitdata[agent_name],
+                    cross_track_fovs[agent_name],
+                )
+                precomputed_accesses[(obs_opp, agent_name)] = accesses
+
             # Build available_obs_times and enumerate feasible sequences
             # (identical to original)
             available_obs_times = [
@@ -2867,101 +3039,104 @@ class ResultsProcessor:
                 for obs_opp, agent_name, obs_time in observation_opps
             ]
 
-            # feasible_sequences = ResultsProcessor._find_longest_observation_sequence_for_task(
+            # get all feasible sequences of observations for this task 
             feasible_sequences = ResultsProcessor._find_all_maximal_sequences(
-
                 available_obs_times
             )
 
-            def _optimise_sequence(args):
-                """Top-level function (must be picklable — no lambda, no closure)."""
-                (task, sequence, t_starts, t_ends, d_min,
-                agent_missions, agent_specs, cross_track_fovs,
-                compiled_orbitdata, estimate_fn,
-                bo_n_initial, bo_n_iterations) = args
+            # Precompute objective to task relevance for each (task, agent) pair 
+            precomputed_obj_relevances = {
+                agent_name: mission.relate_objectives_to_task(task)
+                for agent_name, mission in agent_missions.items()
+            }
 
-                def objective(times):
-                    return ResultsProcessor._evaluate_sequence_at_times(
-                        task, sequence, times,
-                        agent_missions, agent_specs,
-                        cross_track_fovs, compiled_orbitdata,
-                        estimate_fn,
-                    )
-
-                opt = _SequenceTimeOptimiser(
-                    n_dims=len(sequence),
-                    n_initial=bo_n_initial,
-                    n_iterations=bo_n_iterations,
-                    # n_acq_candidates=bo_n_acq_candidates,
+            t0 = time.time()
+            if len(feasible_sequences) > 16:  # heuristic threshold for when to switch to SA
+                # Simulated Annealing over sequences (outer loop) + BO for optimising observation times (inner loop)
+                method = 'SA'
+        
+                _, best_times, task_utility = ResultsProcessor.__sa_best_sequence(
+                    task,
+                    available_obs_times,
+                    agent_missions,
+                    agent_specs,
+                    cross_track_fovs,
+                    compiled_orbitdata,
+                    estimate_fn,
+                    bo_n_initial,
+                    bo_n_iterations,
+                    300,
+                    1.0,
+                    1e-3,
+                    None,
+                    precomputed_accesses = precomputed_accesses,
+                    precomputed_obj_relevances = precomputed_obj_relevances,
+                    printouts = printouts                    
                 )
-                return opt.optimise(t_starts, t_ends, d_min, objective)
-
-
-            # Inside __calculate_dual_bound, replace the inner loop:
-            all_args = []
-            for obs_names, obs_times, obs_look_angles, obs_opps in feasible_sequences:
-                sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
-                t_starts = [o.task_accessibility[task.id].left  for o in obs_opps]
-                t_ends   = [o.task_accessibility[task.id].right for o in obs_opps]
-                d_min    = [o.task_accessibility[task.id].span() for o in obs_opps]
-                all_args.append((
-                    task, sequence, t_starts, t_ends, d_min,
+                
+            else:
+                # Parallelised exhaustive sequence optimisation 
+                def _optimise_sequence(args):
+                    """Top-level function (must be picklable — no lambda, no closure)."""
+                    (task, sequence, t_starts, t_ends, d_min,
                     agent_missions, agent_specs, cross_track_fovs,
                     compiled_orbitdata, estimate_fn,
-                    bo_n_initial, bo_n_iterations,
-                ))
+                    bo_n_initial, bo_n_iterations, precomputed_accesses, precomputed_obj_relevances) = args
 
-            with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-                results = list(executor.map(_optimise_sequence, all_args))
+                    def objective(times):
+                        return ResultsProcessor._evaluate_sequence_at_times(
+                            task, sequence, times,
+                            agent_missions, agent_specs,
+                            cross_track_fovs, compiled_orbitdata,
+                            estimate_fn, 
+                            precomputed_accesses=precomputed_accesses,
+                            precomputed_obj_relevances=precomputed_obj_relevances
+                        )
 
-            task_utility = max(r[1] for r in results)
+                    opt = _SequenceTimeOptimiser(
+                        n_dims=len(sequence),
+                        n_initial=bo_n_initial,
+                        n_iterations=bo_n_iterations,
+                        # n_acq_candidates=bo_n_acq_candidates,
+                    )
+                    return opt.optimise(t_starts, t_ends, d_min, objective)
 
-            # task_utility = 0.0
-            # best_sequence = None
+                all_args = []
+                for obs_names, obs_times, obs_look_angles, obs_opps in feasible_sequences:
+                    sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
+                    t_starts = [o.task_accessibility[task.id].left  for o in obs_opps]
+                    t_ends   = [o.task_accessibility[task.id].right for o in obs_opps]
+                    d_min    = [0.0 for o in obs_opps]
+                    # d_min    = [o.task_accessibility[task.id].span() for o in obs_opps]
 
-            # for obs_names, obs_times, obs_look_angles, obs_opps in tqdm(
-            #     feasible_sequences,
-            #     desc=f'Finding best observation sequence for task {task.id.split("-")[-1]}',
-            #     disable=not printouts or len(feasible_sequences) < 10,
-            #     leave=False,
-            # ):
-            #     sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
+                    all_args.append((
+                        task, sequence, t_starts, t_ends, d_min,
+                        agent_missions, agent_specs, cross_track_fovs,
+                        compiled_orbitdata, estimate_fn,
+                        bo_n_initial, bo_n_iterations, precomputed_accesses, precomputed_obj_relevances
+                    ))
 
-            #     t_starts = [obs_opp.task_accessibility[task.id].left  for obs_opp in obs_opps]
-            #     t_ends   = [obs_opp.task_accessibility[task.id].right for obs_opp in obs_opps]
-            #     d_min = [0 for _ in obs_opps]
-            #     # d_min = [obs_opp.task_min_duration[task.id] \
-            #     #             if i > 0 and obs_names[i] == obs_names[i-1] else 0.0
-            #     #          for i,obs_opp in enumerate(obs_opps)
-            #     #         ]
+                if len(feasible_sequences) > 4:
+                    method = 'Exhaustive BO (Parallellized)'
+                    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+                        results = list(executor.map(_optimise_sequence, all_args))
+                else:
+                    method = 'Exhaustive BO (Serial)'
+                    results = [_optimise_sequence(args) for args in all_args]
 
-            #     def objective(times: list[tuple], _seq=sequence) -> float:
-            #         return ResultsProcessor._evaluate_sequence_at_times(
-            #             task, _seq, times,
-            #             agent_missions, agent_specs,
-            #             cross_track_fovs, compiled_orbitdata,
-            #             estimate_fn,
-            #         )
-
-            #     optimiser = _SequenceTimeOptimiser(
-            #         n_dims=len(sequence),
-            #         n_initial=bo_n_initial,
-            #         n_iterations=bo_n_iterations,
-            #     )
-            #     best_times, sequence_utility = optimiser.optimise(
-            #         t_starts, t_ends, d_min, objective
-            #     )
-
-            #     if sequence_utility > task_utility:
-            #         task_utility = sequence_utility
-            #         best_sequence = (obs_names, best_times, obs_look_angles, obs_opps)
+                task_utility = max(r[1] for r in results)
+            
+            elapsed = time.time() - t0
+            if printouts:
+                tqdm.write(f"Task {task.id.split('-')[-1]}: {len(feasible_sequences)} sequences, "
+                        f"{len(available_obs_times)} windows -> {method} in {elapsed:.2f}s")
 
             dual_bound[task] = task_utility
 
             # Sanity check (preserved from original)
             obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
             if sum(obs['reward']) - 1e-6 > task_utility:
-                tqdm.write(f"Warning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}. Please check for bugs in the dual bound calculation.")
+                if printouts: tqdm.write(f"Warning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}. Please check for bugs in the dual bound calculation.")
                 x = 1  # set breakpoint here when debugging bound violations
                 # a = ResultsProcessor._find_longest_observation_sequence_for_task(
                 #     available_obs_times
@@ -2972,8 +3147,7 @@ class ResultsProcessor:
             list(dual_bound.items()), columns=['task', 'reward']
         )
         # dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
-        if printouts:
-            print(dual_bound_df.to_string(index=False))
+        if printouts: print(dual_bound_df.to_string(index=False))
 
         return sum(dual_bound.values())
     
@@ -2981,55 +3155,55 @@ class ResultsProcessor:
     # Sequence evaluation — estimate_fn called at every t_obs
     # ---------------------------------------------------------------------------
 
-    @staticmethod
-    def _evaluate_sequence_at_times(
-        task,
-        sequence: list[tuple],          # (agent_name, t_earliest_obs, look_angle, obs_opp)
-        times: list[tuple],
-        agent_missions: Dict[str,Mission],
-        agent_specs: dict,
-        cross_track_fovs: dict,
-        compiled_orbitdata: dict,
-        estimate_fn,
-    ) -> float:
-        """
-        Score a sequence at given observation times.
+    # @staticmethod
+    # def _evaluate_sequence_at_times(
+    #     task,
+    #     sequence: list[tuple],          # (agent_name, t_earliest_obs, look_angle, obs_opp)
+    #     times: list[tuple],
+    #     agent_missions: Dict[str,Mission],
+    #     agent_specs: dict,
+    #     cross_track_fovs: dict,
+    #     compiled_orbitdata: dict,
+    #     estimate_fn,
+    # ) -> float:
+    #     """
+    #     Score a sequence at given observation times.
 
-        estimate_fn is called for every observation at every BO iteration
-        because measurement_performance depends on t_obs (through d_obs and
-        any other time-dependent fields it computes internally).
-        """
-        total = 0.0
-        for n_obs, ((agent_name, _, th, obs_opp), time) in enumerate(
-            zip(sequence, times)
-        ):
-            # unpack observation time details
-            t_obs = time[0]
-            d_obs = time[1]
-            t_prev = times[n_obs-1][0] if n_obs > 0 else 0.0
+    #     estimate_fn is called for every observation at every BO iteration
+    #     because measurement_performance depends on t_obs (through d_obs and
+    #     any other time-dependent fields it computes internally).
+    #     """
+    #     total = 0.0
+    #     for n_obs, ((agent_name, _, th, obs_opp), time) in enumerate(
+    #         zip(sequence, times)
+    #     ):
+    #         # unpack observation time details
+    #         t_obs = time[0]
+    #         d_obs = time[1]
+    #         t_prev = times[n_obs-1][0] if n_obs > 0 else 0.0
 
-            # Recompute performance at the current observation time
-            measurement_performance : dict = estimate_fn(
-                task,
-                obs_opp.instrument_name,
-                th,
-                t_obs,
-                d_obs,
-                agent_specs[agent_name],
-                cross_track_fovs[agent_name],
-                compiled_orbitdata[agent_name],
-                n_obs,
-                t_prev,
-            )
+    #         # Recompute performance at the current observation time
+    #         measurement_performance : dict = estimate_fn(
+    #             task,
+    #             obs_opp.instrument_name,
+    #             th,
+    #             t_obs,
+    #             d_obs,
+    #             agent_specs[agent_name],
+    #             cross_track_fovs[agent_name],
+    #             compiled_orbitdata[agent_name],
+    #             n_obs,
+    #             t_prev,
+    #         )
 
-            obs_opp_utility = max(
-                agent_missions[agent_name].calc_task_value(task, measurement, False)
-                for measurement in measurement_performance.values()
-            ) if measurement_performance else 0.0
+    #         obs_opp_utility = max(
+    #             agent_missions[agent_name].calc_task_value(task, measurement, False)
+    #             for measurement in measurement_performance.values()
+    #         ) if measurement_performance else 0.0
 
-            total += obs_opp_utility
+    #         total += obs_opp_utility
 
-        return total
+    #     return total
 
     """
     @staticmethod
@@ -3178,6 +3352,7 @@ class ResultsProcessor:
                                             orbitdata : OrbitData,
                                             n_obs : int,
                                             t_prev : float,  
+                                            precomputed_accesses = None
                                         ) -> dict:
 
         # validate inputs
@@ -3195,8 +3370,12 @@ class ResultsProcessor:
         assert n_obs >= 0, "Number of observations must be non-negative."
         assert t_prev <= t_img, "Last observation time must be before the current image time."
 
-        # get access metrics for given observation time, instrument, and look angle
-        observation_performances = ResultsProcessor.get_available_accesses(task, instrument_name, th_img, t_img, d_img, orbitdata, cross_track_fovs)
+        # Use precomputed accesses if available, otherwise fall back to lookup
+        if precomputed_accesses is not None:
+            observation_performances = precomputed_accesses
+        else:
+            # get access metrics for given observation time, instrument, and look angle
+            observation_performances = ResultsProcessor.get_available_accesses(task, instrument_name, th_img, t_img, d_img, orbitdata, cross_track_fovs)
 
         # check if there are no valid observations for this task
         if any([len(observation_performances[col]) == 0 for col in observation_performances]): 
