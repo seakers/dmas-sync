@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import reduce
 import os
 from typing import Dict, List, Set, Tuple
@@ -8,6 +9,7 @@ import numpy as np
 import math
 import random
 
+import scipy
 from tqdm import tqdm
 import pandas as pd
 
@@ -2871,45 +2873,88 @@ class ResultsProcessor:
                 available_obs_times
             )
 
-            task_utility = 0.0
-            best_sequence = None
+            def _optimise_sequence(args):
+                """Top-level function (must be picklable — no lambda, no closure)."""
+                (task, sequence, t_starts, t_ends, d_min,
+                agent_missions, agent_specs, cross_track_fovs,
+                compiled_orbitdata, estimate_fn,
+                bo_n_initial, bo_n_iterations) = args
 
-            for obs_names, obs_times, obs_look_angles, obs_opps in tqdm(
-                feasible_sequences,
-                desc=f'Finding best observation sequence for task {task.id.split("-")[-1]}',
-                disable=not printouts or len(feasible_sequences) < 10,
-                leave=False,
-            ):
-                sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
-
-                t_starts = [obs_opp.task_accessibility[task.id].left  for obs_opp in obs_opps]
-                t_ends   = [obs_opp.task_accessibility[task.id].right for obs_opp in obs_opps]
-                d_min = [0 for _ in obs_opps]
-                # d_min = [obs_opp.task_min_duration[task.id] \
-                #             if i > 0 and obs_names[i] == obs_names[i-1] else 0.0
-                #          for i,obs_opp in enumerate(obs_opps)
-                #         ]
-
-                def objective(times: list[tuple], _seq=sequence) -> float:
+                def objective(times):
                     return ResultsProcessor._evaluate_sequence_at_times(
-                        task, _seq, times,
+                        task, sequence, times,
                         agent_missions, agent_specs,
                         cross_track_fovs, compiled_orbitdata,
                         estimate_fn,
                     )
 
-                optimiser = _SequenceTimeOptimiser(
+                opt = _SequenceTimeOptimiser(
                     n_dims=len(sequence),
                     n_initial=bo_n_initial,
                     n_iterations=bo_n_iterations,
+                    # n_acq_candidates=bo_n_acq_candidates,
                 )
-                best_times, sequence_utility = optimiser.optimise(
-                    t_starts, t_ends, d_min, objective
-                )
+                return opt.optimise(t_starts, t_ends, d_min, objective)
 
-                if sequence_utility > task_utility:
-                    task_utility = sequence_utility
-                    best_sequence = (obs_names, best_times, obs_look_angles, obs_opps)
+
+            # Inside __calculate_dual_bound, replace the inner loop:
+            all_args = []
+            for obs_names, obs_times, obs_look_angles, obs_opps in feasible_sequences:
+                sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
+                t_starts = [o.task_accessibility[task.id].left  for o in obs_opps]
+                t_ends   = [o.task_accessibility[task.id].right for o in obs_opps]
+                d_min    = [o.task_accessibility[task.id].span() for o in obs_opps]
+                all_args.append((
+                    task, sequence, t_starts, t_ends, d_min,
+                    agent_missions, agent_specs, cross_track_fovs,
+                    compiled_orbitdata, estimate_fn,
+                    bo_n_initial, bo_n_iterations,
+                ))
+
+            with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+                results = list(executor.map(_optimise_sequence, all_args))
+
+            task_utility = max(r[1] for r in results)
+
+            # task_utility = 0.0
+            # best_sequence = None
+
+            # for obs_names, obs_times, obs_look_angles, obs_opps in tqdm(
+            #     feasible_sequences,
+            #     desc=f'Finding best observation sequence for task {task.id.split("-")[-1]}',
+            #     disable=not printouts or len(feasible_sequences) < 10,
+            #     leave=False,
+            # ):
+            #     sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
+
+            #     t_starts = [obs_opp.task_accessibility[task.id].left  for obs_opp in obs_opps]
+            #     t_ends   = [obs_opp.task_accessibility[task.id].right for obs_opp in obs_opps]
+            #     d_min = [0 for _ in obs_opps]
+            #     # d_min = [obs_opp.task_min_duration[task.id] \
+            #     #             if i > 0 and obs_names[i] == obs_names[i-1] else 0.0
+            #     #          for i,obs_opp in enumerate(obs_opps)
+            #     #         ]
+
+            #     def objective(times: list[tuple], _seq=sequence) -> float:
+            #         return ResultsProcessor._evaluate_sequence_at_times(
+            #             task, _seq, times,
+            #             agent_missions, agent_specs,
+            #             cross_track_fovs, compiled_orbitdata,
+            #             estimate_fn,
+            #         )
+
+            #     optimiser = _SequenceTimeOptimiser(
+            #         n_dims=len(sequence),
+            #         n_initial=bo_n_initial,
+            #         n_iterations=bo_n_iterations,
+            #     )
+            #     best_times, sequence_utility = optimiser.optimise(
+            #         t_starts, t_ends, d_min, objective
+            #     )
+
+            #     if sequence_utility > task_utility:
+            #         task_utility = sequence_utility
+            #         best_sequence = (obs_names, best_times, obs_look_angles, obs_opps)
 
             dual_bound[task] = task_utility
 
@@ -4022,50 +4067,143 @@ class _SequenceTimeOptimiser:
         d = a - b
         return float(np.exp(-0.5 * np.dot(d, d) / self.length_scale ** 2))
 
+    def _k_vector(self, x: np.ndarray) -> np.ndarray:
+        """Compute k(x, xi) for all xi in self._X in one vectorised call."""
+        X = np.array(self._X)           # (n, d)
+        diff = X - x                    # (n, d)
+        sq_dist = np.einsum('nd,nd->n', diff, diff)  # (n,)
+        return np.exp(-0.5 * sq_dist / self.length_scale ** 2)
+    
+    def _k_matrix(self, X_query: np.ndarray) -> np.ndarray:
+        """k(X_query, X_train) — shape (n_query, n_train)"""
+        diff = X_query[:, None, :] - np.array(self._X)[None, :, :]  # (q, n, d)
+        sq_dist = np.einsum('qnd,qnd->qn', diff, diff)
+        return np.exp(-0.5 * sq_dist / self.length_scale ** 2)
+
     # -----------------------------------------------------------------------
     # Cache management — call once after every new (x, y) pair is added
     # -----------------------------------------------------------------------
 
-    def _update_cache(self):
-        n = len(self._X)
-        K = np.zeros((n, n))
-        for i in range(n):
-            for j in range(i, n):
-                v = self._k(self._X[i], self._X[j])
-                K[i, j] = K[j, i] = v
-        K += self.noise * np.eye(n)
+    # def _update_cache(self):
+    #     n = len(self._X)
+    #     K = np.zeros((n, n))
+    #     for i in range(n):
+    #         for j in range(i, n):
+    #             v = self._k(self._X[i], self._X[j])
+    #             K[i, j] = K[j, i] = v
+    #     K += self.noise * np.eye(n)
 
-        # Normalise y to zero mean, unit variance before fitting
+    #     # Normalise y to zero mean, unit variance before fitting
+    #     y = np.array(self._y)
+    #     self._y_mean = y.mean()
+    #     self._y_std  = y.std() if y.std() > 1e-9 else 1.0
+    #     y_norm = (y - self._y_mean) / self._y_std
+
+    #     self._L = np.linalg.cholesky(K)
+    #     self._alpha = np.linalg.solve(
+    #         self._L.T, np.linalg.solve(self._L, y_norm)  # fit on normalised y
+    #     )
+
+    def _update_cache(self):
+        """Full refactorisation — only called when cache is cold."""
+        X = np.array(self._X)
+        diff = X[:, None, :] - X[None, :, :]
+        sq_dist = np.einsum('ijd,ijd->ij', diff, diff)
+        K = np.exp(-0.5 * sq_dist / self.length_scale ** 2)
+        K += self.noise * np.eye(len(self._X))
+
         y = np.array(self._y)
         self._y_mean = y.mean()
         self._y_std  = y.std() if y.std() > 1e-9 else 1.0
         y_norm = (y - self._y_mean) / self._y_std
 
         self._L = np.linalg.cholesky(K)
-        self._alpha = np.linalg.solve(
-            self._L.T, np.linalg.solve(self._L, y_norm)  # fit on normalised y
-        )
+        self._L_inv = np.linalg.solve(self._L, np.eye(len(self._X)))  # always in sync
+        self._alpha = np.linalg.solve(self._L.T, np.linalg.solve(self._L, y_norm))
+
+    # def _add_point(self, x: np.ndarray, y: float):
+    #     """Add a new observed point and refresh the cache."""
+    #     self._X.append(x.copy())
+    #     self._y.append(y)
+    #     self._update_cache()
 
     def _add_point(self, x: np.ndarray, y: float):
-        """Add a new observed point and refresh the cache."""
         self._X.append(x.copy())
         self._y.append(y)
-        self._update_cache()
+
+        if self._L is None:
+            self._update_cache()
+            return
+
+        # Rank-1 Cholesky update
+        n = len(self._X) - 1
+        X_prev = np.array(self._X[:-1])
+        diff = X_prev - x
+        sq_dist = np.einsum('nd,nd->n', diff, diff)
+        k_new = np.exp(-0.5 * sq_dist / self.length_scale ** 2)
+        k_self = 1.0 + self.noise
+
+        v = self._L_inv @ k_new        # O(n²) — L_inv already cached
+        new_diag = math.sqrt(max(k_self - float(v @ v), 1e-9))
+
+        new_L = np.zeros((n + 1, n + 1))
+        new_L[:n, :n] = self._L
+        new_L[n,  :n] = v
+        new_L[n,   n] = new_diag
+        self._L = new_L
+
+        # Update L_inv via block matrix inverse formula
+        # [ L    0        ]^{-1}   [ L_inv         0        ]
+        # [ v^T  new_diag ]      = [ -v^T L_inv / new_diag  1/new_diag ]
+        new_L_inv = np.zeros((n + 1, n + 1))
+        new_L_inv[:n, :n] = self._L_inv
+        new_L_inv[n,  :n] = -(v @ self._L_inv) / new_diag
+        new_L_inv[n,   n] = 1.0 / new_diag
+        self._L_inv = new_L_inv
+
+        # Recompute alpha (y_mean/y_std change with each point)
+        y_arr = np.array(self._y)
+        self._y_mean = y_arr.mean()
+        self._y_std  = y_arr.std() if y_arr.std() > 1e-9 else 1.0
+        y_norm = (y_arr - self._y_mean) / self._y_std
+        self._alpha = self._L_inv.T @ (self._L_inv @ y_norm)  # O(n²), no solve needed
 
     # -----------------------------------------------------------------------
     # Posterior — O(n) per call thanks to cached L and alpha
     # -----------------------------------------------------------------------
 
+    # def _posterior(self, x: np.ndarray) -> tuple[float, float]:
+    #     if not self._X:
+    #         return 0.0, 1.0
+    #     k_star = np.array([self._k(x, xi) for xi in self._X])
+    #     mu_norm = float(k_star @ self._alpha)
+    #     v = np.linalg.solve(self._L, k_star)
+    #     var = max(1.0 - float(v @ v), 1e-9)
+
+    #     # Denormalise mu back to original scale for acquisition and best tracking
+    #     mu = mu_norm * self._y_std + self._y_mean
+    #     sigma = math.sqrt(var) * self._y_std
+    #     return mu, sigma
+
+    # def _posterior(self, x: np.ndarray) -> tuple[float, float]:
+    #     if not self._X:
+    #         return 0.0, 1.0
+    #     k_star = self._k_vector(x)      # vectorised, no Python loop
+    #     mu_norm = float(k_star @ self._alpha)
+    #     v = np.linalg.solve(self._L, k_star)
+    #     var = max(1.0 - float(v @ v), 1e-9)
+    #     mu    = mu_norm * self._y_std + self._y_mean
+    #     sigma = math.sqrt(var) * self._y_std
+    #     return mu, sigma
+
     def _posterior(self, x: np.ndarray) -> tuple[float, float]:
         if not self._X:
             return 0.0, 1.0
-        k_star = np.array([self._k(x, xi) for xi in self._X])
+        k_star = self._k_vector(x)
         mu_norm = float(k_star @ self._alpha)
-        v = np.linalg.solve(self._L, k_star)
+        v = self._L_inv @ k_star        # pure matmul, no solve
         var = max(1.0 - float(v @ v), 1e-9)
-
-        # Denormalise mu back to original scale for acquisition and best tracking
-        mu = mu_norm * self._y_std + self._y_mean
+        mu    = mu_norm * self._y_std + self._y_mean
         sigma = math.sqrt(var) * self._y_std
         return mu, sigma
 
@@ -4080,6 +4218,19 @@ class _SequenceTimeOptimiser:
         # standard normal PDF and CDF
         ei = (mu - best) * self._normal_cdf(z) + sigma * self._normal_pdf(z)
         return max(ei, 0.0)
+    
+    def _acq_ei_batch(self, X_query: np.ndarray) -> np.ndarray:
+        """EI for all candidates at once — shape (n_query,)"""
+        K_qs = self._k_matrix(X_query)                    # (q, n)
+        mu_norm = K_qs @ self._alpha                       # (q,)
+        V = (self._L_inv @ K_qs.T).T                      # (q, n)
+        var = np.maximum(1.0 - np.einsum('qn,qn->q', V, V), 1e-9)  # (q,)
+        mu    = mu_norm * self._y_std + self._y_mean
+        sigma = np.sqrt(var) * self._y_std
+        best  = max(self._y)
+        z = (mu - best) / (sigma + 1e-9)
+        ei = (mu - best) * self._ndtr(z) + sigma * self._npdf(z)
+        return np.maximum(ei, 0.0)
 
     @staticmethod
     def _normal_pdf(z: float) -> float:
@@ -4088,6 +4239,14 @@ class _SequenceTimeOptimiser:
     @staticmethod
     def _normal_cdf(z: float) -> float:
         return 0.5 * (1.0 + math.erf(z / math.sqrt(2)))
+    
+    @staticmethod
+    def _npdf(z: np.ndarray) -> np.ndarray:
+        return np.exp(-0.5 * z * z) / math.sqrt(2 * math.pi)
+
+    @staticmethod
+    def _ndtr(z: np.ndarray) -> np.ndarray:
+        return 0.5 * (1.0 + scipy.special.erf(z / math.sqrt(2)))
 
     # -----------------------------------------------------------------------
     # Reparameterisation
@@ -4178,14 +4337,16 @@ class _SequenceTimeOptimiser:
             _try(np.random.uniform(0, 1, self.n_dims))
 
         # --- BO iterations ---
-        # Acquisition maximisation is now cheap (O(n) per candidate)
-        # so n_acq_candidates=300 costs little compared to one _eval call.
         for _ in range(self.n_iterations):
             candidates = np.random.uniform(0, 1, (self.n_acq_candidates, self.n_dims))
-            # acqs = np.array([self._acq(c) for c in candidates])
-            acqs = np.array([self._acq_ei(c) for c in candidates])
+            acqs = self._acq_ei_batch(candidates)   # one vectorised call
+            _try(candidates[np.argmax(acqs)])        
+        # for _ in range(self.n_iterations):
+        #     candidates = np.random.uniform(0, 1, (self.n_acq_candidates, self.n_dims))
+        #     # acqs = np.array([self._acq(c) for c in candidates])
+        #     acqs = np.array([self._acq_ei(c) for c in candidates])
             
-            _try(candidates[np.argmax(acqs)])
+        #     _try(candidates[np.argmax(acqs)])
 
         # after main BO loop, before returning
         best_delta = self._X[np.argmax(self._y)]
