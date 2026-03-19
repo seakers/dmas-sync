@@ -366,7 +366,7 @@ class ObservationRecord:
             return True
         return False
 
-    def merge(self, foreign: "ObservationRecord") -> bool:
+    def merge(self, foreign: Any[ObservationRecord, dict]) -> bool:
         """
         Merge *foreign* into self using peer-share semantics:
           - ``n_obs``          : summed
@@ -376,18 +376,34 @@ class ObservationRecord:
 
         Returns True if any field changed.
         """
-        merged_n_obs = self.n_obs + foreign.n_obs
+        try:
+            merged_n_obs = self.n_obs + foreign['n_obs']
 
-        if foreign.t_last >= self.t_last:
-            changed = (merged_n_obs != self.n_obs
-                       or foreign.t_last != self.t_last)
-            self.n_obs           = merged_n_obs
-            self.t_last          = foreign.t_last
-            self.last_actor      = foreign.last_actor
-            self.last_instrument = foreign.last_instrument
-        else:
-            changed    = merged_n_obs != self.n_obs
-            self.n_obs = merged_n_obs
+            if foreign['t_last'] >= self.t_last:
+                changed = (merged_n_obs != self.n_obs
+                        or foreign['t_last'] != self.t_last)
+                self.n_obs           = merged_n_obs
+                self.t_last          = foreign['t_last']
+                self.last_actor      = foreign['last_actor']
+                self.last_instrument = foreign['last_instrument']
+            else:
+                changed    = merged_n_obs != self.n_obs
+                self.n_obs = merged_n_obs
+
+        except KeyError:
+            foreign : ObservationRecord
+            merged_n_obs = self.n_obs + foreign.n_obs
+
+            if foreign.t_last >= self.t_last:
+                changed = (merged_n_obs != self.n_obs
+                        or foreign.t_last != self.t_last)
+                self.n_obs           = merged_n_obs
+                self.t_last          = foreign.t_last
+                self.last_actor      = foreign.last_actor
+                self.last_instrument = foreign.last_instrument
+            else:
+                changed    = merged_n_obs != self.n_obs
+                self.n_obs = merged_n_obs
 
         return changed
 
@@ -456,6 +472,7 @@ class TaskObservationTracker:
     _owner:       str
     _records:     Dict[str, ObservationRecord]    # task_id  → state
     _loc_to_tasks: Dict[LocationKey, Set[str]]    # (grid, gp) → {task_id, ...}
+    _shareable:    Set[str]
 
     # ------------------------------------------------------------------
     # Construction
@@ -468,23 +485,25 @@ class TaskObservationTracker:
             _owner        = owner_name,
             _records      = {},
             _loc_to_tasks = {},
+            _shareable    = set(),
         )
 
     # ------------------------------------------------------------------
     # Task lifecycle  (driven entirely by SimulationAgent)
     # ------------------------------------------------------------------
 
-    def register_task(self, task: GenericObservationTask) -> bool:
+    def register_task(self, task: GenericObservationTask, shareable: bool = False) -> bool:
         """
         Register *task* and index all of its target locations.
 
-        Accepts any ``GenericObservationTask`` subclass.  Location tuples
-        are expected to follow the ``(lat, lon, grid_index, gp_index)``
-        convention defined on ``GenericObservationTask``; only the integer
-        ``(grid_index, gp_index)`` pair is used as the map key.
-
-        Safe to call on an already-registered task (no-op).
-        Returns True if the task was newly registered.
+        Parameters
+        ----------
+        shareable:
+            If True, this task's observation state will be included in
+            ``encode()`` output.  Default False — callers must opt in
+            explicitly.  Typical usage:
+            - DefaultMissionTask  → shareable=False
+            - EventObservationTask → shareable=True
         """
         tid = task.id
         if tid in self._records:
@@ -498,6 +517,9 @@ class TaskObservationTracker:
             # loc = (lat, lon, grid_index, gp_index)
             key: LocationKey = (int(loc[2]), int(loc[3]))
             self._loc_to_tasks.setdefault(key, set()).add(tid)
+
+        # opt in to sharing this task's observation state if requested
+        if shareable: self._shareable.add(tid)
 
         return True
 
@@ -519,13 +541,18 @@ class TaskObservationTracker:
             task_set = self._loc_to_tasks.get(key)
             if task_set is not None:
                 task_set.discard(tid)
-                # Drop the key entirely when no tasks remain at this location
                 if not task_set:
-                    del self._loc_to_tasks[key]
+                    # del self._loc_to_tasks[key]
+                    self._loc_to_tasks.pop(key, None)
+        
+        # remove records for this task
+        self._records.pop(tid, None)
 
-        del self._records[tid]
+        # discard task from shareable set
+        self._shareable.discard(tid)
+
         return True
-
+    
     def is_registered(self, task_id: str) -> bool:
         return task_id in self._records
 
@@ -639,11 +666,11 @@ class TaskObservationTracker:
     # Update path 2 — peer knowledge broadcast
     # ------------------------------------------------------------------
 
-    def update_from_peer(self, encoded: str) -> Dict[str, str]:
+    def update_from_peer(self, payload: object) -> Dict[str, str]:
         """
         Merge knowledge received from a peer agent.
 
-        The payload is a JSON string produced by ``encode()``.  The agent
+        The payload is a dictionary produced by ``encode()``.  The agent
         must have already processed any accompanying ``MeasurementRequestMessage``
         so that every task_id in the payload is registered here.
 
@@ -664,16 +691,45 @@ class TaskObservationTracker:
             If the payload references an unregistered task_id, indicating
             ``__update_requests_and_tasks`` was not called first.
         """
-        payload  = json.loads(encoded)
         outcomes: Dict[str, str] = {}
 
-        for task_id, state_dict in payload.get("records", {}).items():
-            if not self.is_registered(task_id):
-                raise UnknownTaskError(task_id, "update_from_peer()")
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+            for task_id, state_dict in payload.get("records", {}).items():
+                if not self.is_registered(task_id):
+                    raise UnknownTaskError(task_id, "update_from_peer()")
 
-            foreign = ObservationRecord.from_dict(state_dict)
-            changed = self._records[task_id].merge(foreign)
-            outcomes[task_id] = "updated" if changed else "unchanged"
+                foreign = ObservationRecord.from_dict(state_dict)
+                changed = self._records[task_id].merge(foreign)
+                outcomes[task_id] = "updated" if changed else "unchanged"
+
+        elif isinstance(payload, dict):
+            for task_id, state_dict in payload.get("records", {}).items():
+                if not self.is_registered(task_id):
+                    raise UnknownTaskError(task_id, "update_from_peer()")
+
+                foreign = ObservationRecord.from_dict(state_dict)
+                changed = self._records[task_id].merge(foreign)
+                outcomes[task_id] = "updated" if changed else "unchanged"
+
+        elif isinstance(payload, list):
+            for tid,t_last,n_obs,last_actor,last_instrument in payload:
+                task_id = str(tid)
+                if not self.is_registered(task_id):
+                    raise UnknownTaskError(task_id, "update_from_peer()")
+
+                foreign = {
+                    "t_last": float(t_last) if t_last is not None else -math.inf,
+                    "n_obs": int(n_obs),
+                    "last_actor": str(last_actor) if last_actor is not None else None,
+                    "last_instrument": str(last_instrument) if last_instrument is not None else None,
+                }
+                changed = self._records[task_id].merge(foreign)
+                outcomes[task_id] = "updated" if changed else "unchanged"
+
+        else:
+            raise ValueError(f"Unsupported payload type: {type(payload)}. Expected str, dict, or list.")
+
 
         return outcomes
 
@@ -718,7 +774,8 @@ class TaskObservationTracker:
     def encode(
         self,
         task_ids: Optional[Iterable[str]] = None,
-    ) -> str:
+        encoding_type : type = list
+    ) -> dict:
         """
         Encode observation state as a JSON string for peer broadcast.
 
@@ -745,13 +802,45 @@ class TaskObservationTracker:
           }
         }
         """
-        ids = list(task_ids) if task_ids is not None else list(self._records)
-        records = {
-            tid: self._records[tid].to_dict()
-            for tid in ids
-            if tid in self._records
-        }
-        return json.dumps(
-            {"sender": self._owner, "records": records},
-            separators=(",", ":"),
-        )
+        if task_ids is not None:
+            # Caller-specified subset: respect it exactly, no shareability filter
+            ids = [tid for tid in task_ids if tid in self._records]
+        else:
+            # Default: only shareable tasks
+            ids = list(self._shareable)
+        
+        if encoding_type is list:
+            payload = []
+            for tid in ids:
+                record = self._records.get(tid)
+                if record is not None:
+                    # Skip tasks with no observations
+                    if record.n_obs <= 0: continue  
+
+                    # Encode as a tuple: (task_id, t_last, n_obs, last_actor, last_instrument)
+                    datum = (tid, record.t_last, record.n_obs, record.last_actor, record.last_instrument)
+                    payload.append(datum)
+
+        elif encoding_type is dict:
+            records = {
+                tid: self._records[tid].to_dict()
+                for tid in ids
+                if tid in self._records
+            }
+            payload = {"sender": self._owner, "records": records}
+
+        elif encoding_type is str:
+            records = {
+                tid: self._records[tid].to_dict()
+                for tid in ids
+                if tid in self._records
+            }
+            payload = json.dumps(
+                {"sender": self._owner, "records": records},
+                separators=(",", ":"),
+            )
+
+        else:
+            raise ValueError(f"Unsupported encoding_type: {encoding_type}. Supported types are dict and list.")
+                
+        return payload

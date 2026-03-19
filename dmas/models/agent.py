@@ -16,7 +16,7 @@ from execsatm.tasks import GenericObservationTask, DefaultMissionTask, EventObse
 from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
 
-from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementBidMessage, MeasurementRequestMessage, ObservationResultsMessage, SimulationMessage, SimulationMessageTypes
+from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementBidMessage, MeasurementRequestMessage, ObservationResultsMessage, RewardGridMessage, SimulationMessage, SimulationMessageTypes
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
@@ -106,11 +106,10 @@ class SimulationAgent(object):
         
         # add default mission tasks to observation tracker
         for task in self._known_tasks.values(): 
-            self._observations_tracker.register_task(task)   
+            self._observations_tracker.register_task(task, False) # default tasks are not shareable   
 
         # save initial state to history
         self.__update_state_history(initial_state)     
-
 
     @staticmethod
     def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> Dict[Tuple, GenericObservationTask]:
@@ -230,7 +229,7 @@ class SimulationAgent(object):
         self._state = curr_state
 
         # unpack and classify incoming messages
-        incoming_reqs, external_measurements, \
+        incoming_reqs, external_measurements, reward_grid_msgs, \
             external_states, external_action_statuses, misc_messages \
                 = self.__classify_incoming_messages(curr_state, incoming_messages)
 
@@ -259,7 +258,7 @@ class SimulationAgent(object):
         self.__update_observation_history(my_measurements)
 
         # update observations tracker with my measurements and external measurements
-        self.__update_observations_tracker(my_measurements, external_measurements)
+        self.__update_observations_tracker(my_measurements, external_measurements, reward_grid_msgs)
 
         # TODO update mission objectives from requests
 
@@ -391,11 +390,11 @@ class SimulationAgent(object):
         # del action        # TODO check if needed
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
-        # if True:
+        if True:
         # if curr_state._t > 83_000.00 and "imager_c_sat_40" in curr_state.agent_name and not isinstance(next_action, WaitAction):
-        #     self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-        #     self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
-        #     x = 1 # breakpoint
+            self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
+            self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
+            x = 1 # breakpoint
         # -------------------------------------        
         
         # return next initial state and next actions to perform
@@ -404,7 +403,12 @@ class SimulationAgent(object):
     def __classify_incoming_messages(self, 
                                      state : SimulationAgentState,
                                      incoming_messages : List[SimulationMessage]
-                                    ) -> Tuple[List[MeasurementRequestMessage], List[Tuple[str, list]], List[AgentStateMessage], List[AgentActionMessage], List[SimulationMessage]]:
+                                    ) -> Tuple[List[MeasurementRequestMessage], 
+                                               List[Tuple[str, list]], 
+                                               List[AgentStateMessage], 
+                                               List[AgentActionMessage], 
+                                               List[RewardGridMessage], 
+                                               List[SimulationMessage]]:
         """ Classify incoming messages into their respective types """
 
         # check if there exist any bus messages in incoming messages
@@ -419,10 +423,10 @@ class SimulationAgent(object):
             incoming_messages.remove(bus_msg)
 
         # define classified message lists
-        incoming_reqs, observation_msgs, \
+        incoming_reqs, observation_msgs, reward_grid_msgs, \
             external_measurements, external_states, \
                 external_action_statuses, misc_messages \
-                    = [], [], [], [], [], []
+                    = [], [], [], [], [], [], []
 
         # classify incoming messages
         for msg in incoming_messages:
@@ -432,6 +436,8 @@ class SimulationAgent(object):
                 observation_msgs.append(msg)
                 if isinstance(msg.instrument, str):
                     external_measurements.append((msg.instrument, msg.observation_data))
+            elif isinstance(msg, RewardGridMessage):
+                reward_grid_msgs.append(msg)
             elif isinstance(msg, AgentStateMessage) and msg.src != state.agent_name:
                 external_states.append(msg)
             elif isinstance(msg, AgentActionMessage):
@@ -440,7 +446,7 @@ class SimulationAgent(object):
                 misc_messages.append(msg)
 
         # return classified messages
-        return incoming_reqs, external_measurements, \
+        return incoming_reqs, external_measurements, reward_grid_msgs, \
             external_states, external_action_statuses, list(misc_messages)
     
     def __process_action_completion(self, action_status_pairs : List[Tuple[AgentAction, str]]) -> tuple:
@@ -505,7 +511,8 @@ class SimulationAgent(object):
 
         # register new tasks with observation tracker
         for task in new_tasks.values():
-            self._observations_tracker.register_task(task)
+            shareable = not isinstance(task, DefaultMissionTask) # default mission tasks are not shareable
+            self._observations_tracker.register_task(task, shareable)
 
         # return new_reqs.values(), new_tasks.values()
         return list(new_reqs.values()), list(new_tasks.values())    
@@ -553,7 +560,8 @@ class SimulationAgent(object):
 
     def __update_observations_tracker(self, 
                                       my_observations : List[Tuple[str, List[Dict[str, Any]]]], 
-                                      external_observations : List[Tuple[str, List[Dict[str, Any]]]]) -> None:
+                                      external_observations : List[Tuple[str, List[Dict[str, Any]]]], 
+                                      reward_grid_msgs : List[RewardGridMessage]) -> None:
         """ Updates the observation history with the completed observations. """
         if my_observations:
             # Each element is (instrument_name, obs_list); pass the lists directly.
@@ -561,9 +569,13 @@ class SimulationAgent(object):
             measurements = [obs_list for _, obs_list in my_observations]
             self._observations_tracker.update_from_observations(measurements)
 
+        
         if external_observations:
-            for encoded in external_observations:
-                self._observations_tracker.update_from_peer(encoded)
+            measurements = [obs_list for _, obs_list in external_observations]
+            self._observations_tracker.update_from_observations(measurements)
+
+        for msg in reward_grid_msgs:
+            self._observations_tracker.update_from_peer(msg.payload)
         
         # update observation history
         # if my_observations:
@@ -819,10 +831,18 @@ class SimulationAgent(object):
         return compiled_bid_msgs
 
     def _compile_reward_grid_broadcast(self, state : SimulationAgentState, t: float) -> List[SimulationMessage]:
-        # TODO implement reward grid broadcasting
-        # TaskObservationTracker
-        # raise NotImplementedError("Reward grid broadcasting is not yet implemented.")
-        return []
+        # collect reward grid information from observations tracker
+        payload = self._observations_tracker.encode()
+
+        # check if there is no information to share
+        if not payload:
+            return [] # if so, return empty list
+
+        # generate reward grid message
+        reward_grid_msg = RewardGridMessage(state.agent_name, state.agent_name, payload)
+
+        # return message in list
+        return [reward_grid_msg]
 
     def _merge_broadcast_actions_if_needed(self, 
                                            actions : List[AgentAction], 

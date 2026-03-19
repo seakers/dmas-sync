@@ -258,14 +258,14 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         reward_grid_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REWARD_GRID, t_broadcast)
 
         # generate plan message to share any task requests generated
-        task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
+        task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast, only_own_info=False)
 
         # compile and return broadcast list
         return [
                 # state_msg, 
                 # observations_msg, 
+                task_requests_msg,
                 reward_grid_msg,
-                task_requests_msg
             ]
     
     def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:

@@ -10,7 +10,7 @@ class SimulationMessageTypes(Enum):
     AGENT_STATE = 'AGENT_STATE'
     CONNECTIVITY_UPDATE = 'CONNECTIVITY_UPDATE'
     MEASUREMENT_BID = 'MEASUREMENT_BID'
-    BID_RESULTS = 'BID_RESULTS'
+    REWARD_GRID = 'REWARD_GRID'
     PLAN = 'PLAN'
     SENSES = 'SENSES'
     OBSERVATION = 'OBSERVATION'
@@ -114,8 +114,8 @@ def message_from_dict(msg_type : str, **kwargs) -> SimulationMessage:
         return AgentConnectivityUpdate(**kwargs)
     elif msg_type == SimulationMessageTypes.MEASUREMENT_BID.value:
         return MeasurementBidMessage(**kwargs)
-    # elif msg_type == SimulationMessageTypes.BID_RESULTS.value:
-    #     return BidResultsMessage(**kwargs)
+    elif msg_type == SimulationMessageTypes.REWARD_GRID.value:
+        return RewardGridMessage(**kwargs)
     elif msg_type == SimulationMessageTypes.PLAN.value:
         return PlanMessage(**kwargs)
     elif msg_type == SimulationMessageTypes.SENSES.value:
@@ -336,6 +336,23 @@ class MeasurementBidMessage(SimulationMessage):
     #         for task_id, bid_list in self.results.items()
     #     }
     #     return msg_dict
+
+class RewardGridMessage(SimulationMessage):
+    def __init__(self,
+                 src: str,
+                 dst: str,
+                 payload : object,
+                 id: str = None,
+                 path : list = [],
+                 **_
+                 ):
+        """
+        ## Reward Grid Message
+
+        Informs other agents of the reward grid information held by the sender
+        """
+        super().__init__(src, dst, SimulationMessageTypes.REWARD_GRID.value, id, path)
+        self.payload = payload
 
 class PlanMessage(SimulationMessage):
     """
