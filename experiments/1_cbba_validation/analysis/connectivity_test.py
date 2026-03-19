@@ -26,10 +26,17 @@ def generate_plots(trial_name : str,
     # load compiled results
     results_df = pd.read_csv(compiled_results_path)
 
+    # print(results_df)
+
     # filter results to only include rows where experiment_col is True
     if experiment_col not in results_df.columns:
         raise ValueError(f"Experiment column `{experiment_col}` not found in results DataFrame. Available columns: {results_df.columns.tolist()}")
-    filtered_df = results_df[results_df[experiment_col] == True]
+    mask = ( (results_df["in_connectivity"] == True) |            
+            ((results_df["in_validation"] == True) & (results_df['Replanner'] == "Greedy")) )
+    
+    filtered_df = results_df[mask]
+    print(filtered_df)
+    # filtered_df = results_df[results_df[experiment_col] == True]
 
     # Fill in missing values
     ## preplanner column
@@ -133,6 +140,9 @@ def generate_plots(trial_name : str,
     plt.savefig(save_path)
     if base_dir != local_base_dir:
         plt.savefig(local_save_path)
+
+
+
 
     # # --- Response Time vs. Latency ---
     # fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
@@ -510,8 +520,9 @@ if __name__ == "__main__":
     # define trial name and parameters to filter results by
     base_dir = "/media/aslan15/easystore/Data/1_cbba_validation/2026_02_26_local"
 
-    trial_name = "full_factorial_trials_2026-02-22"
+    # trial_name = "full_factorial_trials_2026-02-22"
     # trial_name = "full_factorial_trials_2026-02-23"
+    trial_name = "full_factorial_trials_2026-03-15"
 
     # experiment_col = "in_stress"
     experiment_col = "in_connectivity"

@@ -54,3 +54,18 @@ def argmax(values, rel_tol=1e-9, abs_tol=0.0):
                 return i        
             
         raise ValueError("No maximum value found in the list.")
+
+"""
+Improved dual bound calculation.
+
+estimate_task_performance_metrics is called inside the BO objective on every
+function evaluation, since measurement_performance depends on t_obs through
+d_obs and potentially other fields. Pre-computation is not valid here.
+"""
+
+
+
+
+
+
+

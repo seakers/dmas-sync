@@ -507,8 +507,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             #     out += f'OBSERVATION OPPORTUNITY BEING CONSIDERED FOR BUNDLE ADDITION: \nt={proposed_observation.accessibility} (ParentID(s): [{req_id_short[:-1]}])\n'
             #     print(out)
 
-            if "imager_b_sat_9" in state.agent_name and state._t >= 4840.0:
-                x= 1 # debug breakpoint for specific agent and time
+            # if "imager_b_sat_9" in state.agent_name and state._t >= 4840.0:
+            #     x= 1 # debug breakpoint for specific agent and time
             # ------------------------------- 
 
             
@@ -630,12 +630,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # update list of proposed bids
             proposed_bids = updated_proposed_bids
 
-            for proposed_task_bids in proposed_bids.values():
-                if not proposed_task_bids: 
-                    x = 1 # debug breakpoint for empty proposed bids
-
             # -------------------------------
             # DEBUG PRINTOUTS
+            # for proposed_task_bids in proposed_bids.values():
+            #     if not proposed_task_bids: 
+            #         x = 1 # debug breakpoint for empty proposed bids
             # if self._debug:
             #     self._log_results('PROPOSED BIDS (DURING BUNDLE-BUILDING PHASE)', state, proposed_bids)
             #     self._log_path('CURRENT PATH (DURING BUNDLE-BUILDING PHASE)', state, proposed_path)
@@ -1098,21 +1097,14 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 f"Parent task {task} not being bid on by any agent; cannot generate bids."
             
             # count all previously performed observations for this parent task
-            performed_bids = [bid for bid in self._results[task]
-                              if bid.was_performed()]
-            
-            # # ensure all performed observations have a consecutive observation number
-            # assert all(bid.n_obs == i for i, bid in enumerate(performed_bids)), \
-            #     f"Performed bids for task {task} do not have consecutive observation numbers starting from zero."
-            
-            # extract observation times for all previously performed observations for this parent task
-            performed_obs : list[Tuple[float,str,float,ObservationOpportunity]] = \
-                            [(bid.t_img,bid.owner,np.NAN,None) 
-                             for bid in performed_bids]            
+            last_performed_bid = max([bid for bid in self._results[task] if bid.was_performed()],
+                                     key=lambda bid: bid.n_obs, default=None)
+            n_obs_last_performed = last_performed_bid.n_obs if last_performed_bid else -1
 
+            # extract observation times for all previously performed observations for this parent task
             latest_performed_obs_time : Tuple[float,str,float,ObservationOpportunity] \
-                = max(performed_obs, key=lambda obs: obs[0]) if performed_obs else None
-            
+                  = (last_performed_bid.t_img, last_performed_bid.owner, np.NAN, None) if last_performed_bid else None
+                        
             # initialize feasible observation sequences for this task
             available_obs_times : list[Tuple[float,str,float,ObservationOpportunity]] = []
 
@@ -1120,7 +1112,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             scheduled_obs_times : list[Tuple[float,str,float,ObservationOpportunity]] = \
                   [(bid.t_img,bid.winner,np.NAN,None) for bid in self._results[task] 
                    if bid.winner != state.agent_name and bid.has_winner()
-                   and not bid.was_performed()]
+                   and not bid.was_performed()
+                   and bid.n_obs > n_obs_last_performed
+                   ]
 
             # include proposed task imaging time 
             available_obs_times.extend(scheduled_obs_times)
@@ -1151,10 +1145,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 for seq_idx,(agent_name,t_obs,look_angle,obs_opp) in enumerate(zip(obs_names,obs_times,obs_look_angles,obs_tasks)):
                     
                     # get observation number for this observation
-                    n_obs = seq_idx + len(performed_obs)
+                    n_obs = seq_idx + (n_obs_last_performed + 1)
 
                     # get observation number and previous observation time
-                    t_prev = obs_times[seq_idx-1] if seq_idx > 0 else latest_performed_obs_time[0] if performed_obs else np.NINF
+                    t_prev = obs_times[seq_idx-1] if seq_idx > 0 else latest_performed_obs_time[0] if last_performed_bid else np.NINF
                     
                     if n_obs > 0: assert t_prev >= 0.0, \
                         "Previous observation time is not defined for observation number greater than zero."
@@ -1205,9 +1199,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         else:
                             # get existing bid
                             try:
-                                existing_bid : Bid = proposed_bids[task][n_obs]
-                            except KeyError:
                                 existing_bid : Bid = self._results[task][n_obs]
+                            except KeyError:
+                                existing_bid : Bid = proposed_bids[task][n_obs]
                                 
                             # get mutex bids for this observation
                             following_bids = [
@@ -1269,8 +1263,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         # -------------------------------
         # DEBUG BREAKPOINT
-        # if self._debug:
-        #     x = 1
+        # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
+        # if self._debug or debug_case:
+            # x = 1
         # -------------------------------
             
         # filter out observations from other agents in best sequences
@@ -1308,6 +1303,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             for task in obs.obs_opp.tasks:
                 # get observation time for this task in this observation opportunity
                 t_start = obs_t_img[task]
+
+                # check if observation would have been performed before the current time step based on minimum task duration
+                if t_start + obs.obs_opp.task_min_duration[task.id] < state.get_time():
+                    # if so, skip assignment since it cannot be modified by path changes
+                    continue
 
                 # check if sequence was modified for this parent task
                 if task in n_obs_best:
@@ -1400,7 +1400,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         feasible_sequences = []
 
         # count number of completed observations for this task
-        performed_bids = [bid for bid in self._results[task] if bid.was_performed()]
+        # performed_bids = [bid for bid in self._results[task] if bid.was_performed()]
+        last_performed_bid = max([bid for bid in self._results[task] if bid.was_performed()],
+                                     key=lambda bid: bid.n_obs, default=None)
+        n_obs_last_performed = last_performed_bid.n_obs if last_performed_bid else -1
 
         # count minimum sequence length; use number of occurrences of this agent in available observation times
         min_seq_length = sum(1 for _,agent_name,*_ in available_obs if agent_name == state.agent_name)
@@ -1422,7 +1425,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # if last observation is from another agent, check consistency with known results
             if agent_obs != state.agent_name:
                 # determine observation number for this observation
-                n_obs = len(current_sequence) + len(performed_bids) - 1
+                # n_obs = len(current_sequence) + len(performed_bids) - 1
+                n_obs = len(current_sequence) + n_obs_last_performed
 
                 # check if bid for this observation exists
                 if task not in self._results:

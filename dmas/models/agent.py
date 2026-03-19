@@ -99,7 +99,7 @@ class SimulationAgent(object):
         self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
         # initialize trackers and data sinks
-        self._observations_tracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
+        self._observations_tracker : LatestObservationTracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
         self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history",flush_rows=1000)
         self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history",flush_rows=1000) 
 
@@ -351,10 +351,10 @@ class SimulationAgent(object):
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if True:
-                if curr_state._t > 27_879.00:
+                # if curr_state._t > 27_879.00 and ("imager_b_sat_29" in curr_state.agent_name or "imager_b_sat_62" in curr_state.agent_name):
                 # if "imager_c_sat_0" in curr_state.agent_name and curr_state._t > 48_648.0 and self._plan.actions:
-                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
-                    x = 1 # breakpoint
+                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    # x = 1 # breakpoint
                 # -------------------------------------
 
         # get next actions to perform from current plan
@@ -386,10 +386,10 @@ class SimulationAgent(object):
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         # if True:
-        if curr_state._t > 27_879.00:
-            self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-            self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
-            x = 1 # breakpoint
+        # if curr_state._t > 83_000.00 and "imager_c_sat_40" in curr_state.agent_name and not isinstance(next_action, WaitAction):
+        #     self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
+        #     self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
+        #     x = 1 # breakpoint
         # -------------------------------------        
         
         # return next initial state and next actions to perform
@@ -789,6 +789,7 @@ class SimulationAgent(object):
 
     def _compile_reward_grid_broadcast(self, state : SimulationAgentState, t: float) -> List[SimulationMessage]:
         # TODO implement reward grid broadcasting
+        LatestObservationTracker
         raise NotImplementedError("Reward grid broadcasting is not yet implemented.")
         return []
 

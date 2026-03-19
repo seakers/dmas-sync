@@ -95,13 +95,20 @@ def compile_results_summaries(trial_name : str,
     # perform normalization of metrics if desired (e.g. normalize rewards by number of tasks)
     if 'Total Obtained Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
         results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Task Reward Dual Bound']
+        # results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Total Observable Task Priority']
+        
     if 'Total Obtained Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
         results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Task Reward Dual Bound']
+        # results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Total Observable Task Priority']
 
     if 'Total Planned Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
         results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Task Reward Dual Bound']
+        # results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Total Observable Task Priority']
+
     if 'Total Planned Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
         results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Task Reward Dual Bound']
+        # results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Total Observable Task Priority']
+
     if 'Total Messages Broadcasted' in results_df.columns and 'Tasks Available' in results_df.columns:
         results_df['Average Messages Broadcasted per Task'] = results_df['Total Messages Broadcasted'] / results_df['Tasks Available']
 
@@ -131,8 +138,9 @@ if __name__ == "__main__":
     # define trial parameters
     base_dir = "/media/aslan15/easystore/Data/1_cbba_validation/2026_02_26_local"
 
-    trial_name = "full_factorial_trials_2026-02-22"
+    # trial_name = "full_factorial_trials_2026-02-22"
     # trial_name = "full_factorial_trials_2026-02-23"
+    trial_name = "full_factorial_trials_2026-03-15"
     
     # compile and save compiled results summaries for this trial
     compile_results_summaries(trial_name, 
