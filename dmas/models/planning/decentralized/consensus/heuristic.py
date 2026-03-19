@@ -1200,9 +1200,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         else:
                             # get existing bid
                             try:
-                                existing_bid : Bid = proposed_bids[task][n_obs]
-                            except KeyError:
                                 existing_bid : Bid = self._results[task][n_obs]
+                            except KeyError:
+                                existing_bid : Bid = proposed_bids[task][n_obs]
                                 
                             # get mutex bids for this observation
                             following_bids = [
@@ -1264,8 +1264,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         # -------------------------------
         # DEBUG BREAKPOINT
-        # if self._debug:
-        #     x = 1
+        debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
+        if self._debug or debug_case:
+            x = 1
         # -------------------------------
             
         # filter out observations from other agents in best sequences

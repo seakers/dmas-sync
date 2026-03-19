@@ -133,8 +133,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # -------------------------------
         # DEBUG PRINTOUTS
+        debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
         if self._debug and incoming_bids:
-        # debug_case = state._t > 27_879.00 and ("imager_b_sat_29" in state.agent_name or "imager_b_sat_62" in state.agent_name)
         # if debug_case and incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
@@ -167,7 +167,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 print(f'`{state.agent_name}` - Relevant updates detected; replanning is required.')
             else:
                 print(f'`{state.agent_name}` - No relevant updates detected; no replanning required.')
-            # self._log_bundle('CONSENSUS PHASE - BUNDLE (AFTER)', state, self._bundle)
+            self._log_bundle('CONSENSUS PHASE - BUNDLE (AFTER)', state, self._bundle)
             self._log_path('CONSENSUS PHASE - PATH (AFTER)', state, self._path)
         # -------------------------------
 
@@ -1223,8 +1223,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
+        debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
         if self._debug and new_bids:
-        # if state._t > 32_299.0 and new_bids:
+        # if debug_case and new_bids:
             self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
             self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
             print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
@@ -2168,7 +2169,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
                 try:
                     instrument = bid.main_measurement
-                    if len(instrument) < 4: 
+                    if len(instrument) < 5: 
                         instrument = instrument + '\t'  # pad short instrument names for formatting
                     if bid.winner != bid.NONE:
                         line = f'{req_id_short} {bid.n_obs}\t{instrument}\t{bid_winner.lower()}\t{np.round(bid.winning_bid,4)}\t{np.round(bid.t_img,1)}\t{np.round(bid.t_bid,1)}\t{self._optimistic_bidding_counters[bid.task][bid.n_obs]}\t{(bid.performed)}\n'

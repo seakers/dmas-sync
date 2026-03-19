@@ -94,20 +94,20 @@ def compile_results_summaries(trial_name : str,
 
     # perform normalization of metrics if desired (e.g. normalize rewards by number of tasks)
     if 'Total Obtained Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
-        # results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Task Reward Dual Bound']
-        results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Total Observable Task Priority']
+        results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Task Reward Dual Bound']
+        # results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Total Observable Task Priority']
         
     if 'Total Obtained Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
-        # results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Task Reward Dual Bound']
-        results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Total Observable Task Priority']
+        results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Task Reward Dual Bound']
+        # results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Total Observable Task Priority']
 
     if 'Total Planned Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
-        # results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Task Reward Dual Bound']
-        results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Total Observable Task Priority']
+        results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Task Reward Dual Bound']
+        # results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Total Observable Task Priority']
 
     if 'Total Planned Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
-        # results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Task Reward Dual Bound']
-        results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Total Observable Task Priority']
+        results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Task Reward Dual Bound']
+        # results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Total Observable Task Priority']
 
     if 'Total Messages Broadcasted' in results_df.columns and 'Tasks Available' in results_df.columns:
         results_df['Average Messages Broadcasted per Task'] = results_df['Total Messages Broadcasted'] / results_df['Tasks Available']

@@ -386,10 +386,10 @@ class SimulationAgent(object):
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         # if True:
-        # if curr_state._t > 27_879.00 and not isinstance(next_action, WaitAction):
-        #     self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-        #     self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
-        #     x = 1 # breakpoint
+        if curr_state._t > 24_909.00 and not isinstance(next_action, WaitAction):
+            self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
+            self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
+            x = 1 # breakpoint
         # -------------------------------------        
         
         # return next initial state and next actions to perform
