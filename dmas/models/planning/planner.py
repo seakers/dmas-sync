@@ -22,7 +22,8 @@ from execsatm.utils import Interval
 
 from dmas.models.actions import ObservationAction
 from dmas.models.planning.plan import Plan
-from dmas.models.trackers import LatestObservationTracker
+# from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import *
 from dmas.models.science.requests import *
 from dmas.core.messages import *
@@ -623,7 +624,7 @@ class AbstractPlanner(ABC):
                                      cross_track_fovs : Dict[str, float],
                                      orbitdata : OrbitData,
                                      mission : Mission,
-                                     observation_history : LatestObservationTracker,
+                                     observation_history : TaskObservationTracker,
                                      task_n_obs : Dict[GenericObservationTask,int] = None,
                                      task_t_prevs : Dict[GenericObservationTask,int] = None
                                 ) -> float:
@@ -687,38 +688,57 @@ class AbstractPlanner(ABC):
     def _count_previous_observations_from_history(self,
                                                    obs : ObservationOpportunity,
                                                    t_img : float,
-                                                   observation_history : LatestObservationTracker,
+                                                   observation_history : TaskObservationTracker,
                                                 ) -> Tuple[Dict[GenericObservationTask,int], Dict[GenericObservationTask,float]]:
         """ Counts the number of previous observations for each task in the observation opportunity. """
         # initialize observation counts and previous observation times
         task_n_obs : Dict[GenericObservationTask,int] = {task : 0 for task in obs.tasks} 
-        task_t_prev : Dict[GenericObservationTask,int] = {task : np.NINF for task in obs.tasks} 
+        task_t_prev : Dict[GenericObservationTask,float] = {task : np.NINF for task in obs.tasks} 
 
         # Find tergets per task
         for task in obs.tasks:
-            # iterate through task targets
-            for *_,grid_index,gp_index in task.location:
-                # unpack grid and gp indices
-                grid_index,gp_index = int(grid_index), int(gp_index)
+            # get latest observation info for this task
+            task_history = observation_history.lookup(task.id)
 
-                # get past observations for this target before current image time
-                # target_observation : ObservationTracker = observation_history.get_observation_history(grid_index, gp_index)
-                target_history = observation_history.lookup(grid_index, gp_index)
-                t_prev,n_obs,_ = list(target_history.values())
+            # unpack observation history for this task
+            n_obs = task_history['n_obs']
+            t_prev = task_history['t_last']
 
-                # check if there are no previous observations for this target
-                # if target_observation is None: continue  
-                if n_obs == -1: continue
+            # check if there are no previous observations for this task
+            if n_obs == -1: continue
 
-                # count number of previous observations and observation time for this task
-                # task_n_obs[task] += target_observation.n_obs
-                # task_t_prev[task] = max(task_t_prev[task], target_observation.t_last) if target_observation.t_last <= t_img else task_t_prev[task]
-                task_n_obs[task] += n_obs
-                task_t_prev[task] = max(task_t_prev[task], t_prev) if t_prev <= t_img else task_t_prev[task]
+            # count number of previous observations and observation time for this task
+            task_n_obs[task] = max(n_obs, task_n_obs[task])
+            task_t_prev[task] = max(task_t_prev[task], t_prev) if t_prev <= t_img else task_t_prev[task]
 
-                # validate previous observation time
-                if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, \
-                    "Previous observation time must be non-negative."
+            # validate previous observation time
+            if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, \
+                "Previous observation time must be non-negative."
+            x = 1
+
+            # # iterate through task targets
+            # for *_,grid_index,gp_index in task.location:
+            #     # unpack grid and gp indices
+            #     grid_index,gp_index = int(grid_index), int(gp_index)
+
+            #     # get past observations for this target before current image time
+            #     # target_observation : ObservationTracker = observation_history.get_observation_history(grid_index, gp_index)
+            #     target_history = observation_history.lookup(grid_index, gp_index)
+            #     t_prev,n_obs,_ = list(target_history.values())
+
+            #     # check if there are no previous observations for this target
+            #     # if target_observation is None: continue  
+            #     if n_obs == -1: continue
+
+            #     # count number of previous observations and observation time for this task
+            #     # task_n_obs[task] += target_observation.n_obs
+            #     # task_t_prev[task] = max(task_t_prev[task], target_observation.t_last) if target_observation.t_last <= t_img else task_t_prev[task]
+            #     task_n_obs[task] += n_obs
+            #     task_t_prev[task] = max(task_t_prev[task], t_prev) if t_prev <= t_img else task_t_prev[task]
+
+            #     # validate previous observation time
+            #     if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, \
+            #         "Previous observation time must be non-negative."
                     
         # return observation counts and previous observation times
         return task_n_obs, task_t_prev

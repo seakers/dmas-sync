@@ -11,7 +11,7 @@ from execsatm.utils import Interval
 
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.models.actions import ObservationAction
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.planning.plan import Plan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.states import SimulationAgentState
@@ -59,7 +59,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     current_plan : Plan,
                                     orbitdata : OrbitData,
                                     mission : Mission,
-                                    observation_history : LatestObservationTracker
+                                    observation_history : TaskObservationTracker
                                     ) -> tuple:    
         """ Build bundle from latest periodic preplan. """
         # compile instrument field of view specifications   
@@ -150,7 +150,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                        tasks : List[GenericObservationTask],
                        orbitdata : OrbitData,
                        mission : Mission,
-                       observation_history : LatestObservationTracker
+                       observation_history : TaskObservationTracker
                     ) -> tuple:
         
         """ Build new bundle and path according to selected heuristic model. """
@@ -338,7 +338,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : LatestObservationTracker
+                                       observation_history : TaskObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using earliest-access heuristic. 
@@ -362,7 +362,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : LatestObservationTracker
+                                       observation_history : TaskObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using task-value as main heuristic for order of task addition in bundle building process. 
@@ -396,7 +396,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : LatestObservationTracker
+                                       observation_history : TaskObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using task priority as main heuristic for order of task addition in bundle building process. 
@@ -430,7 +430,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        sorted_observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : LatestObservationTracker
+                                       observation_history : TaskObservationTracker
                                     ) -> Tuple[list, List[ObservationAction], dict]:
         """ 
         Build bundle using a given heuristic. Attempts to insert tasks into existing path, right-shift existing tasks to accommodate for new 
@@ -1043,7 +1043,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                                                      cross_track_fovs : dict,
                                                                      orbitdata : OrbitData,
                                                                      mission : Mission,
-                                                                     observation_history : LatestObservationTracker
+                                                                     observation_history : TaskObservationTracker
                                                                     ) -> Tuple[Dict[int, Dict[GenericObservationTask, int]], 
                                                                                 Dict[int, Dict[GenericObservationTask, float]],
                                                                                 Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]]]:

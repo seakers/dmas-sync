@@ -12,9 +12,9 @@ class TestHeuristic(PlannerTester, unittest.TestCase):
         self.multiple_sat_lakes : bool = False
 
         ## toy cases
-        self.toy_1 = False  # single sat    default mission     single target, no events
+        self.toy_1 = True  # single sat    default mission     single target, no events
         self.toy_2 = False  # single sat    no default mission  one event
-        self.toy_3 = True  # two sats      no default mission  one event
+        self.toy_3 = False  # two sats      no default mission  one event
     
     def planner_name(self) -> str:
         return "heuristic"
@@ -25,8 +25,10 @@ class TestHeuristic(PlannerTester, unittest.TestCase):
             "preplanner": {
                 "@type": "heuristic",
                 "debug": "False",
-                # "horizon": 1000,
+                "horizon": 600,
                 "period" : 200,
+                # "sharing" : "periodic",
+                "sharing" : "none",
             },
             # "replanner": {
             #     "@type": "heuristic",

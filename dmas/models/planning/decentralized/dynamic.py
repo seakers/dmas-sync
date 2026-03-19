@@ -11,7 +11,7 @@ from execsatm.mission import Mission
 from execsatm.utils import Interval
 
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import *
 from dmas.models.actions import *
 from dmas.models.science.requests import *
@@ -57,7 +57,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                                orbitdata : OrbitData, 
                                observation_opportunities : list,
                                mission : Mission,
-                               observation_history : LatestObservationTracker
+                               observation_history : TaskObservationTracker
                                ) -> List[ObservationAction]:
         
         if not isinstance(state, SatelliteAgentState):
@@ -119,7 +119,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                          observation_opportunities : List[ObservationOpportunity], 
                          orbitdata : OrbitData,
                          mission : Mission, 
-                         observation_history : LatestObservationTracker,
+                         observation_history : TaskObservationTracker,
                          specs : Spacecraft, 
                          payload : dict,
                          cross_track_fovs : Dict[str, float],
@@ -314,7 +314,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                            observation_opportunities : List[ObservationOpportunity], 
                            orbitdata : OrbitData,
                            mission : Mission, 
-                           observation_history : LatestObservationTracker,
+                           observation_history : TaskObservationTracker,
                            specs : Spacecraft, 
                            payload : dict,
                            cross_track_fovs : Dict[str, float],

@@ -10,7 +10,7 @@ from dmas.models.actions import AgentAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.planner import AbstractPlanner
 from dmas.models.science.requests import TaskRequest
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
 
@@ -49,6 +49,6 @@ class AbstractReactivePlanner(AbstractPlanner):
                         orbitdata : OrbitData,
                         mission : Mission,
                         tasks : List[GenericObservationTask],
-                        observation_history : LatestObservationTracker,
+                        observation_history : TaskObservationTracker,
                     ) -> Plan:
         pass

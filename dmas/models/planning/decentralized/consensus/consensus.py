@@ -18,7 +18,7 @@ from execsatm.mission import Mission
 
 from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.reactive import AbstractReactivePlanner
-from dmas.models.trackers import DataSink, LatestObservationTracker
+from dmas.models.trackers import DataSink, TaskObservationTracker
 from dmas.models.planning.plan import Plan, PeriodicPlan, ReactivePlan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.science.requests import TaskRequest
@@ -1102,7 +1102,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                       orbitdata : OrbitData,
                       mission : Mission,
                       tasks : List[GenericObservationTask],
-                      observation_history : LatestObservationTracker,
+                      observation_history : TaskObservationTracker,
                     ) -> Plan:  
         """ Generate new plan according to consensus replanning model. """             
         try:
@@ -1162,7 +1162,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                               orbitdata : OrbitData,
                               mission : Mission,
                               tasks : List[GenericObservationTask],
-                              observation_history : LatestObservationTracker,
+                              observation_history : TaskObservationTracker,
                             ) -> tuple:
 
         # DEBUG PRINTOUTS----------------
@@ -1273,7 +1273,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                     current_plan : Plan,
                                     orbitdata : OrbitData,
                                     mission : Mission,
-                                    observation_history : LatestObservationTracker
+                                    observation_history : TaskObservationTracker
                                     ) -> tuple:    
         """ Build bundle from latest periodic preplan. """
 
@@ -1285,7 +1285,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         tasks : List[GenericObservationTask],
                         orbitdata : OrbitData,
                         mission : Mission,
-                        observation_history : LatestObservationTracker
+                        observation_history : TaskObservationTracker
                         ) -> tuple:        
         """ 
         Build bundle according to selected replanning model. 
@@ -1476,7 +1476,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                 specs : object,
                                 cross_track_fovs : Dict[str, float],
                                 path : List[ObservationAction],
-                                observation_history : LatestObservationTracker,
+                                observation_history : TaskObservationTracker,
                                 orbitdata : OrbitData,
                                 mission : Mission,
                                 n_obs : List[Dict[GenericObservationTask, int]],
@@ -1497,7 +1497,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                               specs : object,
                               cross_track_fovs : Dict[str, float],
                               path : List[ObservationAction],
-                              observation_history : LatestObservationTracker,
+                              observation_history : TaskObservationTracker,
                               orbitdata : OrbitData,
                               mission : Mission,
                               n_obs : List[Dict[GenericObservationTask, int]],
@@ -1514,7 +1514,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                               specs : object,
                               cross_track_fovs : Dict[str, float],
                               path : List[ObservationAction],
-                              observation_history : LatestObservationTracker,
+                              observation_history : TaskObservationTracker,
                               orbitdata : OrbitData,
                               mission : Mission,
                               n_obs : List[Dict[GenericObservationTask, int]],

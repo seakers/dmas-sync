@@ -15,7 +15,7 @@ from execsatm.utils import Interval
 
 from dmas.models.actions import ObservationAction
 from dmas.models.planning.centralized.dealer import DealerPlanner
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
 
@@ -78,7 +78,7 @@ class DealerMILPPlanner(DealerPlanner):
                                       state : SimulationAgentState,
                                       available_client_tasks : Dict[Mission, List[GenericObservationTask]],
                                       schedulable_client_tasks: Dict[str, List[ObservationOpportunity]], 
-                                      observation_history : LatestObservationTracker
+                                      observation_history : TaskObservationTracker
                                     ) -> Dict[str, List[ObservationAction]]:
         """ schedules observations for all clients """
         
@@ -215,7 +215,7 @@ class DealerMILPPlanner(DealerPlanner):
     def __extract_observation_sequence(self,
                               state : SimulationAgentState,
                               schedulable_tasks: Dict[str, List[ObservationAction]], 
-                              observation_history : LatestObservationTracker,
+                              observation_history : TaskObservationTracker,
                               indexed_clients : List[str],
                               task_indices : List[Tuple[int,int]],
                               d : np.ndarray,
@@ -294,7 +294,7 @@ class DealerMILPPlanner(DealerPlanner):
     def __static_milp_planner(self,
                               state : SimulationAgentState,
                               schedulable_tasks: Dict[str, List[ObservationAction]], 
-                              observation_history : LatestObservationTracker,
+                              observation_history : TaskObservationTracker,
                               indexed_clients : List[str],
                               task_indices : List[Tuple[int,int]],
                               A : List[Tuple[int,int,int]],
@@ -382,7 +382,7 @@ class DealerMILPPlanner(DealerPlanner):
                                        state : SimulationAgentState,
                                        indexed_clients: List[str], 
                                        schedulable_tasks: Dict[str, List[ObservationAction]], 
-                                       observation_history: LatestObservationTracker) -> list:
+                                       observation_history: TaskObservationTracker) -> list:
         """ Estimate static task rewards for each client and task based on parent tasks """
         
         return [[self.estimate_observation_opportunity_value(task, 
@@ -400,7 +400,7 @@ class DealerMILPPlanner(DealerPlanner):
     def __linear_milp_planner(self,
                               state : SimulationAgentState,
                               schedulable_tasks: Dict[str, List[ObservationAction]], 
-                              observation_history : LatestObservationTracker,
+                              observation_history : TaskObservationTracker,
                               indexed_clients : List[str],
                               task_indices : List[Tuple[int,int]],
                               A : List[Tuple[int,int,int]],
@@ -499,7 +499,7 @@ class DealerMILPPlanner(DealerPlanner):
                                        state : SimulationAgentState,
                                        indexed_clients: List[str], 
                                        schedulable_tasks: Dict[str, List[ObservationAction]], 
-                                       observation_history: LatestObservationTracker) -> List[List[List[float]]]:
+                                       observation_history: TaskObservationTracker) -> List[List[List[float]]]:
         """ Estimate linear task rewards for each client and task based on parent tasks """
 
         return [[[self.estimate_observation_opportunity_value(task, 

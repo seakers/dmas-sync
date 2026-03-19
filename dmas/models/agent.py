@@ -22,7 +22,7 @@ from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
-from dmas.models.trackers import DataSink, LatestObservationTracker
+from dmas.models.trackers import DataSink, TaskObservationTracker
 from dmas.models.science.processing import ObservationDataProcessor
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.science.requests import TaskRequest
@@ -99,12 +99,18 @@ class SimulationAgent(object):
         self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
         # initialize trackers and data sinks
-        self._observations_tracker : LatestObservationTracker = LatestObservationTracker.from_orbitdata(orbitdata, agent_name)
+        # self._observations_tracker : TaskObservationTracker = TaskObservationTracker.from_orbitdata(orbitdata, agent_name)
         self._observation_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="observation_history",flush_rows=1000)
         self._state_history = DataSink(out_dir=agent_results_path, owner_name=agent_name, data_name="state_history",flush_rows=1000) 
+        self._observations_tracker : TaskObservationTracker = TaskObservationTracker.create(agent_name)
+        
+        # add default mission tasks to observation tracker
+        for task in self._known_tasks.values(): 
+            self._observations_tracker.register_task(task)   
 
         # save initial state to history
         self.__update_state_history(initial_state)     
+
 
     @staticmethod
     def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> Dict[Tuple, GenericObservationTask]:
@@ -297,7 +303,7 @@ class SimulationAgent(object):
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
                 if True:
-                    # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
                     x = 1 # breakpoint
                 # -------------------------------------
 
@@ -461,6 +467,49 @@ class SimulationAgent(object):
         # return classified lists
         return completed_actions, aborted_actions, pending_actions
 
+    def __update_requests_and_tasks(self,
+                                    incoming_reqs : List[MeasurementRequestMessage] = []
+                                ) -> Tuple[List[TaskRequest], List[GenericObservationTask]]:
+        # ---- 1) Unique + new requests (dicts) ----
+        # find unique and new requests in incoming requests
+        unique_new_reqs = {key : msg.req
+                          for msg in incoming_reqs
+                          if (key := self._req_key(msg.req)) not in self._known_reqs}
+
+        # unpack unique new task requests
+        new_reqs = {key : TaskRequest.from_dict(req_dict) 
+                    for key,req_dict in unique_new_reqs.items()}
+        
+        # add new requests to known requests
+        self._known_reqs.update(new_reqs)
+
+        # ---- 2) Unique + new tasks ----
+        # find unique and new tasks in new requests
+        new_tasks = {key : req.task
+                        for req in new_reqs.values()
+                        if (key := self._task_key(req.task.to_dict())) not in self._known_tasks}
+        
+        # find unique and new tasks in incoming requests
+        new_task_dicts = {key : msg.req['task']
+                            for msg in incoming_reqs
+                            if (key := self._task_key(msg.req['task'])) not in self._known_tasks
+                            and key not in new_tasks
+                            }
+
+        # unpack unique bid tasks
+        new_tasks.update({key : GenericObservationTask.from_dict(d) 
+                            for key,d in new_task_dicts.items()})
+
+        # add tasks to task list
+        self._known_tasks.update(new_tasks)
+
+        # register new tasks with observation tracker
+        for task in new_tasks.values():
+            self._observations_tracker.register_task(task)
+
+        # return new_reqs.values(), new_tasks.values()
+        return list(new_reqs.values()), list(new_tasks.values())    
+
     def __update_plan_completion(self, 
                                 completed_actions : list, 
                                 aborted_actions : list, 
@@ -506,58 +555,40 @@ class SimulationAgent(object):
                                       my_observations : List[Tuple[str, List[Dict[str, Any]]]], 
                                       external_observations : List[Tuple[str, List[Dict[str, Any]]]]) -> None:
         """ Updates the observation history with the completed observations. """
-        # update observation history
         if my_observations:
-            self._observations_tracker.update_many(my_observations)
+            # Each element is (instrument_name, obs_list); pass the lists directly.
+            # The tracker resolves grid/gp coords to task_ids internally.
+            measurements = [obs_list for _, obs_list in my_observations]
+            self._observations_tracker.update_from_observations(measurements)
 
         if external_observations:
-            raise NotImplementedError("Updating observation history with external observations is not yet implemented.")
-            self._observations_tracker.update_many(external_observations)
-
-    def __update_requests_and_tasks(self,
-                                    incoming_reqs : List[MeasurementRequestMessage] = []
-                                ) -> Tuple[List[TaskRequest], List[GenericObservationTask]]:
-        # ---- 1) Unique + new requests (dicts) ----
-        # find unique and new requests in incoming requests
-        unique_new_reqs = {key : msg.req
-                          for msg in incoming_reqs
-                          if (key := self._req_key(msg.req)) not in self._known_reqs}
-
-        # unpack unique new task requests
-        new_reqs = {key : TaskRequest.from_dict(req_dict) 
-                    for key,req_dict in unique_new_reqs.items()}
+            for encoded in external_observations:
+                self._observations_tracker.update_from_peer(encoded)
         
-        # add new requests to known requests
-        self._known_reqs.update(new_reqs)
+        # update observation history
+        # if my_observations:
+        #     self._observations_tracker.update_many(my_observations)
 
-        # ---- 2) Unique + new tasks ----
-        # find unique and new tasks in new requests
-        new_tasks = {key : req.task
-                        for req in new_reqs.values()
-                        if (key := self._task_key(req.task.to_dict())) not in self._known_tasks}
-        
-        # find unique and new tasks in incoming requests
-        new_task_dicts = {key : msg.req['task']
-                            for msg in incoming_reqs
-                            if (key := self._task_key(msg.req['task'])) not in self._known_tasks
-                            and key not in new_tasks
-                            }
-
-        # unpack unique bid tasks
-        new_tasks.update({key : GenericObservationTask.from_dict(d) 
-                            for key,d in new_task_dicts.items()})
-
-        # add tasks to task list
-        self._known_tasks.update(new_tasks)
-
-        # return new_reqs.values(), new_tasks.values()
-        return list(new_reqs.values()), list(new_tasks.values())
+        # if external_observations:
+        #     raise NotImplementedError("Updating observation history with external observations is not yet implemented.")
+        #     self._observations_tracker.update_many(external_observations)
 
     def __update_tasks(self, state : SimulationAgentState) -> None:
         """ Updates the list of tasks to only include active tasks. """
-        # filter tasks to only include active tasks
-        self._known_tasks = {key : task for key,task in self._known_tasks.items() 
-                                if task.is_available(state.get_time())}
+        # collect expired tasks and remove them from observation tracker
+        expired_tasks = [
+            task for task in self._known_tasks.values()
+            if not task.is_available(state.get_time())
+        ]
+        for task in expired_tasks:
+            self._observations_tracker.remove_task(task)
+
+        # filter known tasks to only include active tasks
+        self._known_tasks = {
+            key: task for key, task in self._known_tasks.items()
+            if task.is_available(state.get_time())
+        }        
+
         
     def __update_requests(self, state : SimulationAgentState) -> None:
         """ Updates the known requests to only include active requests. """
@@ -789,8 +820,8 @@ class SimulationAgent(object):
 
     def _compile_reward_grid_broadcast(self, state : SimulationAgentState, t: float) -> List[SimulationMessage]:
         # TODO implement reward grid broadcasting
-        LatestObservationTracker
-        raise NotImplementedError("Reward grid broadcasting is not yet implemented.")
+        # TaskObservationTracker
+        # raise NotImplementedError("Reward grid broadcasting is not yet implemented.")
         return []
 
     def _merge_broadcast_actions_if_needed(self, 

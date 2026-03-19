@@ -13,7 +13,7 @@ from execsatm.utils import Interval
 from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.planner import AbstractPlanner
-from dmas.models.trackers import DataSink, LatestObservationTracker
+from dmas.models.trackers import DataSink, TaskObservationTracker
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
@@ -106,7 +106,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                         orbitdata : OrbitData,
                         mission : Mission,
                         tasks : list,
-                        observation_history : LatestObservationTracker,
+                        observation_history : TaskObservationTracker,
                     ) -> Plan:
         """ Generates a new plan for the agent """
         # compile instrument field of view specifications   
@@ -164,7 +164,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 and task.availability.overlaps(planning_horizon)]
     
     @abstractmethod
-    def _schedule_observations(self, state : SimulationAgentState, specs : object, orbitdata : OrbitData, observation_opportunities : list, mission : Mission, observation_history : LatestObservationTracker) -> list:
+    def _schedule_observations(self, state : SimulationAgentState, specs : object, orbitdata : OrbitData, observation_opportunities : list, mission : Mission, observation_history : TaskObservationTracker) -> list:
         """ Creates a list of observation actions to be performed by the agent """    
 
     @abstractmethod
