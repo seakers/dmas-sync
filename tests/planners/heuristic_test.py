@@ -13,8 +13,8 @@ class TestHeuristic(PlannerTester, unittest.TestCase):
 
         ## toy cases
         self.toy_1 = False  # single sat    default mission     single target, no events
-        self.toy_2 = True  # single sat    no default mission  one event
-        self.toy_3 = False  # two sats      no default mission  one event
+        self.toy_2 = False  # single sat    no default mission  one event
+        self.toy_3 = True  # two sats      no default mission  one event
     
     def planner_name(self) -> str:
         return "heuristic"
