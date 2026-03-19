@@ -151,176 +151,6 @@ class DataSink:
         """ Returns the number of times the sink has been flushed to disk."""
         return self._flush_count
 
-# @dataclass
-# class LatestObservationTracker:
-
-#     lut: np.ndarray          # shape (G, P), dtype int32, -1 => not tracked
-#     G: int
-#     P: int
-#     N: int
-#     t_last: np.ndarray
-#     n_obs: np.ndarray
-#     last_actor: np.ndarray
-#     actor_to_id: Dict[str, int]
-#     id_to_actor: List[str]
-
-#     @classmethod
-#     def from_orbitdata(
-#         cls,
-#         orbitdata: OrbitData,
-#         actor_name : str        
-#     ) -> "LatestObservationTracker":
-#         """
-#         Builds the target index mapping from OrbitData.grid_data.
-
-#         Expects:
-#           orbitdata.grid_data: iterable of pandas DataFrames containing columns:
-#             ["grid index", "GP index"] (and optionally lat/lon, but not required for tracking)
-#         """        
-
-#         # iterate through the unique grid points and populate the key_to_k and k_to_key mappings
-#         targets = [
-#             (grid_idx, gp_idx)
-#             for *_,grid_idx,gp_idx in orbitdata.grid_data
-#         ]
-
-#         # remove duplicate targets while preserving order
-#         targets_unique = list(set(targets))
-
-#         # build from targets
-#         return cls.from_targets(targets_unique, actor_name=actor_name)
-
-#     @classmethod
-#     def from_targets(cls,
-#                      targets: Iterable[Tuple[int, int]],
-#                      actor_name: str,
-#                      dtype_n_obs=np.uint16,
-#                      lut_dtype=np.int32,
-#                     ) -> "LatestObservationTracker":
-        
-#         # Build bounds
-#         gmax = -1
-#         pmax = -1
-#         pairs = []
-#         for g, p in targets:
-#             g = int(g); p = int(p)
-#             pairs.append((g, p))
-#             if g > gmax: gmax = g
-#             if p > pmax: pmax = p
-
-#         G = gmax + 1
-#         P = pmax + 1
-
-#         lut = np.full((G, P), -1, dtype=lut_dtype)
-
-#         # Assign dense k ids only to existing targets
-#         k = 0
-#         for g, p in pairs:
-#             if lut[g, p] == -1:
-#                 lut[g, p] = k
-#                 k += 1
-#         N = k
-
-#         t_last = np.full(N, -np.inf, dtype=np.float64)
-#         n_obs = np.zeros(N, dtype=dtype_n_obs)
-#         last_actor = np.full(N, -1, dtype=np.int16)
-
-#         actor_to_id = {actor_name: 0}
-#         id_to_actor = [actor_name]
-
-#         return cls(lut, G, P, N, t_last, n_obs, last_actor, actor_to_id, id_to_actor)
-
-#     def _get_actor_id(self, actor_name: Optional[str]) -> int:
-#         if actor_name is None:
-#             return -1
-#         aid = self.actor_to_id.get(actor_name)
-#         if aid is None:
-#             aid = len(self.actor_to_id)
-#             self.actor_to_id[actor_name] = aid
-#             self.id_to_actor.append(actor_name)  # <-- append, not index-assign
-#         return aid
-
-#     def _k(self, grid_idx: int, gp_idx: int) -> int:
-#         g = int(grid_idx); p = int(gp_idx)
-#         if g < 0 or p < 0 or g >= self.G or p >= self.P:
-#             return -1
-#         return int(self.lut[g, p])
-
-#     def __update_one(self, obs: Dict[str, Any]) -> None:
-#         k = self._k(obs["grid index"], obs["GP index"])
-#         if k < 0:
-#             return
-
-#         t_end = float(obs["t_end"])
-#         actor_id = self._get_actor_id(obs.get("agent name"))
-
-#         self.n_obs[k] = self.n_obs[k] + 1
-#         if t_end >= self.t_last[k]:
-#             self.t_last[k] = t_end
-#             self.last_actor[k] = actor_id
-
-#     def update_many(self, observations: Iterable[Tuple[str,List[Dict[str, Any]]]]) -> None:
-#         """
-#         Update arrays for many observation dicts.
-#         """
-#         # validate input
-#         if not isinstance(observations, Iterable):
-#             raise ValueError("observations must be an iterable of dicts")
-        
-#         # update each observation in the input iterable
-#         for _,obs_data in observations:
-#             # get the observation with the latest t_end
-#             obs = max(obs_data, key=lambda o: o.get("t_end", -np.inf), default=None)  
-            
-#             # `obs_data` is empty; skip 
-#             if obs is None:
-#                 continue
-            
-#             # update the tracker with this observation
-#             self.__update_one(obs)
-
-#     def lookup(self, grid_index : int, gp_index : int) :
-#         """
-#         Lookup the latest observation info for a given grid point.
-
-#         Returns a dict with keys:
-#           - "t_last": time of the latest observation (float)
-#           - "n_obs": total number of observations (int)
-#           - "last_actor": name of the last observing agent (str or None)
-#         """
-#         k = self._k(grid_index, gp_index)
-#         if k < 0:
-#             return {"t_last": -np.inf, "n_obs": -1, "last_actor": None}
-        
-#         actor_id = self.last_actor[k]
-#         actor_name = self.id_to_actor[actor_id] if actor_id >= 0 else None
-
-#         return {
-#             "t_last": float(self.t_last[k]),
-#             "n_obs": int(self.n_obs[k]),
-#             "last_actor": actor_name
-#         }
-
-
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-class UnknownTaskError(KeyError):
-    """
-    Raised when the tracker receives an update for a task_id it has never
-    seen.  The agent's ``__update_requests_and_tasks`` must register tasks
-    before either update path is called.
-    """
-    def __init__(self, task_id: str, source: str):
-        self.task_id = task_id
-        self.source  = source
-        super().__init__(
-            f"[TaskObservationTracker] Unknown task '{task_id}' in {source}. "
-            f"Ensure register_task() is called before {source}."
-        )
-
-
 # ---------------------------------------------------------------------------
 # Location key type alias
 # ---------------------------------------------------------------------------
@@ -844,3 +674,21 @@ class TaskObservationTracker:
             raise ValueError(f"Unsupported encoding_type: {encoding_type}. Supported types are dict and list.")
                 
         return payload
+    
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+class UnknownTaskError(KeyError):
+    """
+    Raised when the tracker receives an update for a task_id it has never
+    seen.  The agent's ``__update_requests_and_tasks`` must register tasks
+    before either update path is called.
+    """
+    def __init__(self, task_id: str, source: str):
+        self.task_id = task_id
+        self.source  = source
+        super().__init__(
+            f"[TaskObservationTracker] Unknown task '{task_id}' in {source}. "
+            f"Ensure register_task() is called before {source}."
+        )
