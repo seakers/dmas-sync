@@ -133,9 +133,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # -------------------------------
         # DEBUG PRINTOUTS
-        debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
-        if self._debug and incoming_bids:
+        # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
         # if debug_case and incoming_bids:
+        if self._debug and incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
             self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
@@ -155,8 +155,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS        
-        if (task_updates or results_updates or bundle_updates) and self._debug:
         # if (task_updates or results_updates or bundle_updates) and debug_case:
+        if (task_updates or results_updates or bundle_updates) and self._debug:
             self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
             print(f'`{state.agent_name}` - Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
             if any([
@@ -270,16 +270,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # update bundle and enforce constraints iteratively on results
         while True:
-            # ---------------------
-            if "imager_c_sat_40" in state.agent_name and self._bundle:
-                for _, obs_tasks in self._bundle:
-                    for task, n_obs in obs_tasks.items():
-                        if n_obs == 3:
-                            x = 1 # debug breakpoint
-                        if self._results[task][n_obs].winner != state.agent_name:
-                            x = 1 # debug breakpoint
-            # ---------------------
-
             # update bundle from results updates
             self._bundle, self._path, results_bundle_updates \
                 = self.__update_bundle_from_results(state)
@@ -596,12 +586,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # get current time 
         t_curr = state.get_time()          
-
-        # -----------------
-        if "imager_c_sat_40" in state.agent_name and t_curr > 83_000.00:
-            x= 1 # debug breakpoint
-
-        # -----------------
 
         # iterate through performed bundle to mark bids as performed
         for bundle_idx, obs_opp, obs_tasks in performed_bundle_tasks:     
@@ -1227,16 +1211,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 x = 1 # breakpoint
             # -------------------------------
 
-        # ---------------------
-        if "imager_c_sat_40" in state.agent_name and self._bundle:
-            for _, obs_tasks in self._bundle:
-                for task, n_obs in obs_tasks.items():
-                    if n_obs == 3:
-                        x = 1 # debug breakpoint
-                    if self._results[task][n_obs].winner != state.agent_name:
-                        x = 1 # debug breakpoint
-        # ---------------------
-
         # update bundle and path according to replanning model
         self._bundle, self._path, new_bids = \
             self._bundle_building_phase(state, specs, current_plan, tasks, 
@@ -1250,9 +1224,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
-        debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
-        if self._debug and new_bids:
+        # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
         # if debug_case and new_bids:
+        if self._debug and new_bids:
             self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
             self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
             print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
@@ -1626,16 +1600,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                                             path : List[ObservationAction]
                                                         ) -> Tuple[List[Dict[GenericObservationTask, int]],
                                                             List[Dict[GenericObservationTask, float]]]:
-        # ---------------------
-        if "imager_c_sat_40" in state.agent_name and self._bundle:
-            for _, obs_tasks in self._bundle:
-                for task, n_obs in obs_tasks.items():
-                    if n_obs == 3:
-                        x = 1 # debug breakpoint
-                    if self._results[task][n_obs].winner != state.agent_name:
-                        x = 1 # debug breakpoint
-        # ---------------------
-
         # get current time
         t_curr = state.get_time()
 
@@ -1711,16 +1675,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     #     if prev_bid is None or bid.t_img > prev_bid.t_img:
                     #         # assign if most recent previous bid
                     #         prev_bid = bid
-
-                # ---------------------
-                if "imager_c_sat_40" in state.agent_name and self._bundle:
-                    for _, obs_tasks in self._bundle:
-                        for task_i, i_obs in obs_tasks.items():
-                            if i_obs == 3:
-                                x = 1 # debug breakpoint
-                            if self._results[task_i][i_obs].winner != state.agent_name:
-                                x = 1 # debug breakpoint
-                # ---------------------
 
                 # ensure matching bid was found
                 assert matching_bid is not None, \

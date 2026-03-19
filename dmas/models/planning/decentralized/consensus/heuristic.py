@@ -443,15 +443,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         - path : List[ObservationAction]
             Updated observation path after bundle building.        
         """
-        # ---------------------
-        if "imager_c_sat_40" in state.agent_name and self._bundle:
-            for _, obs_tasks in self._bundle:
-                for task, n_obs in obs_tasks.items():
-                    if n_obs == 3:
-                        x = 1 # debug breakpoint
-                        if self._results[task][n_obs].winner != state.agent_name:
-                            x = 1 # debug breakpoint
-        # ---------------------
 
         # initialized bundle from current plan
         proposed_bundle : List[Tuple[ObservationOpportunity, 
@@ -516,8 +507,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             #     out += f'OBSERVATION OPPORTUNITY BEING CONSIDERED FOR BUNDLE ADDITION: \nt={proposed_observation.accessibility} (ParentID(s): [{req_id_short[:-1]}])\n'
             #     print(out)
 
-            if "imager_b_sat_9" in state.agent_name and state._t >= 4840.0:
-                x= 1 # debug breakpoint for specific agent and time
+            # if "imager_b_sat_9" in state.agent_name and state._t >= 4840.0:
+            #     x= 1 # debug breakpoint for specific agent and time
             # ------------------------------- 
 
             
@@ -639,12 +630,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # update list of proposed bids
             proposed_bids = updated_proposed_bids
 
-            for proposed_task_bids in proposed_bids.values():
-                if not proposed_task_bids: 
-                    x = 1 # debug breakpoint for empty proposed bids
-
             # -------------------------------
             # DEBUG PRINTOUTS
+            # for proposed_task_bids in proposed_bids.values():
+            #     if not proposed_task_bids: 
+            #         x = 1 # debug breakpoint for empty proposed bids
             # if self._debug:
             #     self._log_results('PROPOSED BIDS (DURING BUNDLE-BUILDING PHASE)', state, proposed_bids)
             #     self._log_path('CURRENT PATH (DURING BUNDLE-BUILDING PHASE)', state, proposed_path)
@@ -1273,9 +1263,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         # -------------------------------
         # DEBUG BREAKPOINT
-        debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
-        if self._debug or debug_case:
-            x = 1
+        # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
+        # if self._debug or debug_case:
+            # x = 1
         # -------------------------------
             
         # filter out observations from other agents in best sequences
