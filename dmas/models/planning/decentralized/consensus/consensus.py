@@ -1608,6 +1608,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         t_prev = [dict() for _ in path]
 
         # ---HISTORICAL DATA FROM BID RESULTS---
+        # initialize list to track tasks that have already been completed for a given observation opportunity based on bid results; used to ensure completed observations are not counted in observation numbers and revisit times for subsequent observation actions in the path
+        completed_tasks_from_obs = defaultdict(list)
+
         # iterate through path to populate observation numbers and previous observation times
         for obs_idx, obs_act in enumerate(path):
             # calculate start time for this observation action 
@@ -1619,8 +1622,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
             n_obs_i : dict = n_obs[obs_idx]
             t_prev_i : dict = t_prev[obs_idx]
 
-            # 
-            completed_tasks_from_obs = []
 
             # iterate through parent tasks
             for task, task_t_earliest in obs_act.obs_opp.get_earliest_starts(t_start).items():
@@ -1628,7 +1629,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 t_end = task_t_earliest + obs_act.obs_opp.task_min_duration[task.id]
                 # ignore if task observation would have already been completed for this observation opportunity
                 if t_end < t_curr:
-                    completed_tasks_from_obs.append(task)
+                    completed_tasks_from_obs[obs_act.obs_opp].append(task)
                     continue
                 
                 # get current bids for this task
@@ -1693,9 +1694,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # ensure every parent task in path has values for `n_obs` and `t_prev`
         assert all(
-            all(task in n_obs[obs_idx] and task in t_prev[obs_idx] or task in completed_tasks_from_obs
-                for task in obs_action.obs_opp.tasks)
-                for obs_idx,obs_action in enumerate(path)), \
+            all(task in n_obs[obs_idx] and task in t_prev[obs_idx] or task in completed_tasks_from_obs[obs_act.obs_opp]
+                for task in obs_act.obs_opp.tasks)
+                for obs_idx,obs_act in enumerate(path)), \
             "Not all observation opportunity tasks in path have an assigned observation number values."
         
         # return observation numbers and previous observation times

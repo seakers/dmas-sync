@@ -187,6 +187,58 @@ def generate_plots(trial_name : str,
     # --- Reward vs. Num of Tasks ---
     f, ax = plt.subplots(figsize=(8, 6))
     ax.set_xscale("log")
+    ax.set_yscale("log")
+
+    # Scatter plot
+    sns.scatterplot(
+        data=filtered_df,
+        y='Total Obtained Reward',
+        x='Task Arrival Rate',
+        hue='Num Sats',
+        palette=color_map,
+        ax=ax,
+    )
+
+    for num_sats, group in filtered_df.groupby('Num Sats'):
+        x = group['Task Arrival Rate'].values
+        y = group['Total Obtained Reward'].values
+
+        # Fit in log-log space → power law y = a * x^b
+        slope, intercept, r, _, _ = stats.linregress(np.log10(x), np.log10(y))
+
+        x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 100)
+        y_fit = 10**intercept * x_fit**slope
+
+        ax.plot(x_fit, y_fit, color=color_map[num_sats], linewidth=1.5,
+                linestyle='--', alpha=0.7, label='_nolegend_')
+
+        # Optional: annotate slope on the trendline
+        x_mid = 10**((np.log10(x.min()) + np.log10(x.max())) / 2)
+        y_mid = 10**intercept * x_mid**slope
+        ax.text(x_mid, y_mid * 1.15, f'b={slope:.1f}',
+                fontsize=7, color=color_map[num_sats], ha='center')
+        
+    ax.grid(True, which='both', linestyle='--', linewidth=0.4)
+    ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax.set_ylabel('Total Obtained Reward')
+    plt.tight_layout()
+
+    # define filename for plot
+    plot_filename = f'{str("Total Obtained Reward").replace(" ", "_").replace("(normalized)","normalized")}.png'
+    save_path = os.path.join(save_dir, plot_filename)
+    local_save_path = os.path.join(local_save_dir, plot_filename)
+    
+    # save plot 
+    plt.savefig(save_path)
+    if base_dir != local_base_dir:
+        plt.savefig(local_save_path)
+
+    # print completion message with paths to saved plots
+    print(f"Saved plot to: `{save_path}` and `{local_save_path}`")
+        
+    # --- Reward [NORM] vs. Num of Tasks ---
+    f, ax = plt.subplots(figsize=(8, 6))
+    ax.set_xscale("log")
     # ax.set_yscale("log")
 
     # Scatter plot
@@ -216,30 +268,6 @@ def generate_plots(trial_name : str,
         y_mid = intercept + slope * np.log10(x_mid)
         ax.text(x_mid, y_mid + 0.02, rf'$b={slope:.2f}$',
                 fontsize=7, color=color_map[num_sats], ha='center')
-
-    # for num_sats, group in filtered_df.groupby('Num Sats'):
-    #     x = group['Task Arrival Rate'].values
-    #     y = group['Total Obtained Reward [norm]'].values
-    #     log_x = np.log10(x)
-
-    #     slope, intercept, r, p, se = linregress(log_x, y)
-
-    #     x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 100)
-    #     log_x_fit = np.log10(x_fit)
-    #     y_fit = intercept + slope * log_x_fit
-
-    #     # 95% confidence interval
-    #     n = len(x)
-    #     t_val = stats.t.ppf(0.975, df=n - 2)
-    #     x_mean = log_x.mean()
-    #     se_line = se * np.sqrt(1/n + (log_x_fit - x_mean)**2 / np.sum((log_x - x_mean)**2))
-
-    #     ax.plot(x_fit, y_fit, color=color_map[num_sats], linewidth=1.5,
-    #             linestyle='--', alpha=0.8, label='_nolegend_')
-    #     ax.fill_between(x_fit,
-    #                     y_fit - t_val * se_line,
-    #                     y_fit + t_val * se_line,
-    #                     color=color_map[num_sats], alpha=0.12)
 
     ax.grid(True, which='both', linestyle='--', linewidth=0.4)
     ax.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
