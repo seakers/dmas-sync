@@ -145,7 +145,8 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            t = 24_000.0 # TODO remove after testing
+            t = 81_500.0 # TODO remove after testing
+            # fails at 83_087.578
 
             if t > 0.0 and self._printouts:
                 tqdm.write(f"WARNING: Starting simulation at t={t:.2f}s (skipping for testing/debugging purposes).")
@@ -275,6 +276,11 @@ class Simulation:
         except Exception as e:
             # mark simulation as false
             self.__executed = False 
+            
+            # add simulation time to error message for debugging purposes
+            e.args = [f"Simulation execution failed at t={t:.2f}s."] + list(e.args)
+            
+            # raise error with updated message
             raise e
 
         finally:            

@@ -386,7 +386,7 @@ class SimulationAgent(object):
         
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
         # if True:
-        if curr_state._t > 24_909.00 and not isinstance(next_action, WaitAction):
+        if curr_state._t > 83_000.00 and "imager_c_sat_40" in curr_state.agent_name and not isinstance(next_action, WaitAction):
             self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
             self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
             x = 1 # breakpoint

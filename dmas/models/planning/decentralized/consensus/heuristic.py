@@ -443,6 +443,15 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         - path : List[ObservationAction]
             Updated observation path after bundle building.        
         """
+        # ---------------------
+        if "imager_c_sat_40" in state.agent_name and self._bundle:
+            for _, obs_tasks in self._bundle:
+                for task, n_obs in obs_tasks.items():
+                    if n_obs == 3:
+                        x = 1 # debug breakpoint
+                        if self._results[task][n_obs].winner != state.agent_name:
+                            x = 1 # debug breakpoint
+        # ---------------------
 
         # initialized bundle from current plan
         proposed_bundle : List[Tuple[ObservationOpportunity, 
@@ -1304,6 +1313,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             for task in obs.obs_opp.tasks:
                 # get observation time for this task in this observation opportunity
                 t_start = obs_t_img[task]
+
+                # check if observation would have been performed before the current time step based on minimum task duration
+                if t_start + obs.obs_opp.task_min_duration[task.id] < state.get_time():
+                    # if so, skip assignment since it cannot be modified by path changes
+                    continue
 
                 # check if sequence was modified for this parent task
                 if task in n_obs_best:

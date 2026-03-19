@@ -270,6 +270,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # update bundle and enforce constraints iteratively on results
         while True:
+            # ---------------------
+            if "imager_c_sat_40" in state.agent_name and self._bundle:
+                for _, obs_tasks in self._bundle:
+                    for task, n_obs in obs_tasks.items():
+                        if n_obs == 3:
+                            x = 1 # debug breakpoint
+                        if self._results[task][n_obs].winner != state.agent_name:
+                            x = 1 # debug breakpoint
+            # ---------------------
+
             # update bundle from results updates
             self._bundle, self._path, results_bundle_updates \
                 = self.__update_bundle_from_results(state)
@@ -587,6 +597,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # get current time 
         t_curr = state.get_time()          
 
+        # -----------------
+        if "imager_c_sat_40" in state.agent_name and t_curr > 83_000.00:
+            x= 1 # debug breakpoint
+
+        # -----------------
+
         # iterate through performed bundle to mark bids as performed
         for bundle_idx, obs_opp, obs_tasks in performed_bundle_tasks:     
                        
@@ -600,14 +616,15 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # get bid from results
                 bid_to_perform : Bid = self._results[task][n_obs]
                 d_img = t_curr - bid_to_perform.t_img
+                d_min = obs_opp.task_min_duration[task.id]
 
                 # check if its observation time has passed
                 if bid_to_perform.t_img > t_curr:
                     # observation time has not yet passed;
                     #  do not mark as completed yet
                     continue 
-                if (d_img < obs_opp.task_min_duration[task.id]
-                    and obs_opp.task_min_duration[task.id] - d_img > self.EPS):
+                if (d_img < d_min
+                    and abs(d_min - d_img) > self.EPS):
                     # minimum observation duration has not yet passed; 
                     #  do not mark as completed yet
                     continue 
@@ -856,7 +873,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                      state : SimulationAgentState
                                     ) -> Tuple[list, List[List[Bid]]]:
         """ Update bundle according to latest results. """
-                
+
         # initialize list of bundle updates
         bundle_updates = []
 
@@ -1209,6 +1226,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
                 x = 1 # breakpoint
             # -------------------------------
+
+        # ---------------------
+        if "imager_c_sat_40" in state.agent_name and self._bundle:
+            for _, obs_tasks in self._bundle:
+                for task, n_obs in obs_tasks.items():
+                    if n_obs == 3:
+                        x = 1 # debug breakpoint
+                    if self._results[task][n_obs].winner != state.agent_name:
+                        x = 1 # debug breakpoint
+        # ---------------------
 
         # update bundle and path according to replanning model
         self._bundle, self._path, new_bids = \
@@ -1599,7 +1626,18 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                                             path : List[ObservationAction]
                                                         ) -> Tuple[List[Dict[GenericObservationTask, int]],
                                                             List[Dict[GenericObservationTask, float]]]:
-        
+        # ---------------------
+        if "imager_c_sat_40" in state.agent_name and self._bundle:
+            for _, obs_tasks in self._bundle:
+                for task, n_obs in obs_tasks.items():
+                    if n_obs == 3:
+                        x = 1 # debug breakpoint
+                    if self._results[task][n_obs].winner != state.agent_name:
+                        x = 1 # debug breakpoint
+        # ---------------------
+
+        # get current time
+        t_curr = state.get_time()
 
         # initialize observation counters and previous observation time trackers
         n_obs = [dict() for _ in path]
@@ -1608,12 +1646,27 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # ---HISTORICAL DATA FROM BID RESULTS---
         # iterate through path to populate observation numbers and previous observation times
         for obs_idx, obs_act in enumerate(path):
+            # calculate start time for this observation action 
+            # t_start = max(obs_act.t_start, t_curr)
+            t_start = obs_act.t_start
+            t_obs = max(obs_act.t_start, t_curr)
+
             # get trackers for this observation action
             n_obs_i : dict = n_obs[obs_idx]
             t_prev_i : dict = t_prev[obs_idx]
 
+            # 
+            completed_tasks_from_obs = []
+
             # iterate through parent tasks
-            for task, task_t_earliest in obs_act.obs_opp.get_earliest_starts(obs_act.t_start).items():
+            for task, task_t_earliest in obs_act.obs_opp.get_earliest_starts(t_start).items():
+                # calculate earliest possible end time for this observation task
+                t_end = task_t_earliest + obs_act.obs_opp.task_min_duration[task.id]
+                # ignore if task observation would have already been completed for this observation opportunity
+                if t_end < t_curr:
+                    completed_tasks_from_obs.append(task)
+                    continue
+                
                 # get current bids for this task
                 bids = self._results.get(task, None)
 
@@ -1639,7 +1692,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
                     # check if bid was performed during the current access window 
                     #  for this observation opportunity
-                    elif(bid.t_img < obs_act.t_start
+                    elif(
+                        #  bid.t_img < obs_act.t_start
+                         bid.t_img + obs_act.obs_opp.task_min_duration[task.id] < t_obs
                          and bid.t_img in obs_act.obs_opp.accessibility
                          and bid.winner == state.agent_name
                          and bid.performed
@@ -1656,6 +1711,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     #     if prev_bid is None or bid.t_img > prev_bid.t_img:
                     #         # assign if most recent previous bid
                     #         prev_bid = bid
+
+                # ---------------------
+                if "imager_c_sat_40" in state.agent_name and self._bundle:
+                    for _, obs_tasks in self._bundle:
+                        for task_i, i_obs in obs_tasks.items():
+                            if i_obs == 3:
+                                x = 1 # debug breakpoint
+                            if self._results[task_i][i_obs].winner != state.agent_name:
+                                x = 1 # debug breakpoint
+                # ---------------------
 
                 # ensure matching bid was found
                 assert matching_bid is not None, \
@@ -1674,7 +1739,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # ensure every parent task in path has values for `n_obs` and `t_prev`
         assert all(
-            all(task in n_obs[obs_idx] and task in t_prev[obs_idx]
+            all(task in n_obs[obs_idx] and task in t_prev[obs_idx] or task in completed_tasks_from_obs
                 for task in obs_action.obs_opp.tasks)
                 for obs_idx,obs_action in enumerate(path)), \
             "Not all observation opportunity tasks in path have an assigned observation number values."
