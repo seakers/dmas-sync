@@ -355,10 +355,10 @@ class SimulationAgent(object):
                 pending_actions = []
 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
-                # if True:
+                if True:
                 # if curr_state._t > 27_879.00 and ("imager_b_sat_29" in curr_state.agent_name or "imager_b_sat_62" in curr_state.agent_name):
                 # if "imager_c_sat_0" in curr_state.agent_name and curr_state._t > 48_648.0 and self._plan.actions:
-                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                    self.__log_plan(self._plan, "REPLAN", logging.WARNING)
                     # x = 1 # breakpoint
                 # -------------------------------------
 
@@ -514,6 +514,9 @@ class SimulationAgent(object):
             shareable = not isinstance(task, DefaultMissionTask) # default mission tasks are not shareable
             self._observations_tracker.register_task(task, shareable)
 
+        if new_tasks and not new_reqs:
+            x= 1
+
         # return new_reqs.values(), new_tasks.values()
         return list(new_reqs.values()), list(new_tasks.values())    
 
@@ -600,14 +603,17 @@ class SimulationAgent(object):
             key: task for key, task in self._known_tasks.items()
             if task.is_available(state.get_time())
         }        
-
         
     def __update_requests(self, state : SimulationAgentState) -> None:
         """ Updates the known requests to only include active requests. """
+        had_reqs = bool(self._known_reqs)
+        if had_reqs:
+            prev_reqs = self._known_reqs.copy()
+        
         # filter for request availability
         self._known_reqs = {key : req for key,req in self._known_reqs.items() 
                            if req.task.is_available(state.get_time())}
-
+        
     def get_next_planned_action(self, state : SatelliteAgentState) -> AgentAction:
         # get current time
         t_curr = state.get_time()
@@ -831,6 +837,9 @@ class SimulationAgent(object):
         return compiled_bid_msgs
 
     def _compile_reward_grid_broadcast(self, state : SimulationAgentState, t: float) -> List[SimulationMessage]:
+        # update active known tasks
+        self.__update_tasks(state)
+        
         # collect reward grid information from observations tracker
         payload = self._observations_tracker.encode()
 

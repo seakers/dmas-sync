@@ -460,10 +460,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
                                observation_opportunities : list,
                                mission : Mission,
                                observation_history : TaskObservationTracker
-                               ) -> list:
-        # TODO consider preplanned observations
-        if state.get_time() < self._preplan.t_next and self._preplan.actions:
-            raise NotImplementedError('Incorporating preplanned actions into reactive replanning not yet implemented.')
+                               ) -> list:        
 
         if not isinstance(state, SatelliteAgentState):
             raise NotImplementedError(f'Naive planner not yet implemented for agents of type `{type(state)}.`')
@@ -492,8 +489,23 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
         max_torque = float(adcs_specs['maxTorque']) if adcs_specs.get('maxTorque', None) is not None else None
         assert max_torque, 'ADCS `maxTorque` specification missing from agent specs object.'
 
-        # generate plan
-        plan_sequence : List[Tuple[ObservationOpportunity, ObservationAction]] = []
+        # initialize observation plan
+        t_curr = state.get_time()
+        if t_curr < self._preplan.t_next and self._preplan.actions:
+            # TODO consider preplanned observations
+            # raise NotImplementedError('Incorporating preplanned actions into reactive replanning not yet implemented.')
+            plan_sequence : List[Tuple[ObservationOpportunity, ObservationAction]] \
+                = [(action.obs_opp, action) for action in self._preplan.actions 
+                    if isinstance(action, ObservationAction) and t_curr < action.t_end]
+            
+            if plan_sequence:
+                x= 1
+            
+            # remove preplanned observations from sorted observation opportunities to avoid rescheduling them
+            scheduled_obs_opps = set(obs_opp for obs_opp,_ in plan_sequence)
+            sorted_observation_opportunities = [obs_opp for obs_opp in sorted_observation_opportunities if obs_opp not in scheduled_obs_opps]
+        else:
+            plan_sequence : List[Tuple[ObservationOpportunity, ObservationAction]] = []
 
         for obs_opp in tqdm(sorted_observation_opportunities,
                          desc=f'{state.agent_name}-PLANNER: Pre-Scheduling Observations', 

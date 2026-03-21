@@ -305,7 +305,7 @@
                 // "--force-postprocess",
                 "--force-summarize",
                 // "--reduced",
-                // "--quiet",
+                "--quiet",
                 "--exceptions",
             ]
         },
