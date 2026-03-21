@@ -336,8 +336,6 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             # create task observation opportunities from known tasks and future access opportunities
             observation_opportunities : list[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
            
-            # TODO remove observation opportunities for tasks that are already scheduled?
-        
             # schedule observation tasks
             observations : list = self._schedule_observations(state, specs, orbitdata, planning_horizon, observation_opportunities, mission, observation_history)
 
