@@ -341,10 +341,6 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             # schedule observation tasks
             observations : list = self._schedule_observations(state, specs, orbitdata, planning_horizon, observation_opportunities, mission, observation_history)
 
-            if not self.is_observation_path_valid(state, observations, max_slew_rate, max_torque, specs):
-                x = self.is_observation_path_valid(state, observations, max_slew_rate, max_torque, specs)
-                y = 1
-
             assert isinstance(observations, list) and all([isinstance(obs, ObservationAction) for obs in observations]), \
                 f'Observation actions not generated correctly. Is of type `{type(observations)}` with elements of type `{type(observations[0])}`.'
             assert self.is_observation_path_valid(state, observations, max_slew_rate, max_torque, specs), \
@@ -470,8 +466,8 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
         
         # ---------------------
         # DEBUGGING BREAKPOINTS
-        if "a_sat_1" in state.agent_name and state.get_time() > 38561.0:
-            x = 1
+        # if "a_sat_1" in state.agent_name and state.get_time() > 38561.0:
+        #     x = 1
         # ---------------------
 
         if not isinstance(state, SatelliteAgentState):
@@ -536,14 +532,28 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             prev_observations = [action for action in current_path
                                 if action.t_end <= new_obs.accessibility.left]
             prev_observation = max(prev_observations, key=lambda action: action.t_end) if prev_observations else None
+            
             ## get earliest observation after new observation opportunity accessibility
             next_observations = [action for action in current_path
                                 if action.t_start >= new_obs.accessibility.right]
-            next_observation = min(next_observations, key=lambda action: action.t_start) if next_observations else None
+            if next_observations:
+                next_observation = min(next_observations, key=lambda action: action.t_start) 
+            else:
+                # dummy observation action representing end state if no future observations exist and the agent performs this observation opportunity;
+                #  used to check feasibility of addind the new observation at the end of the current path
+                next_observation = ObservationAction(new_obs.instrument_name, th_img, np.Inf, 0.0) 
+
             ## find observations that are being performed during new observation opportunity accessibility
             observations_during_task_access = [action for action in current_path
                                             if action.t_start in new_obs.accessibility
-                                            or action.t_end in new_obs.accessibility]
+                                            or action.t_end in new_obs.accessibility
+                                            or (action.t_start <= new_obs.accessibility.left and action.t_end >= new_obs.accessibility.right)
+                                            ]            
+            # observations_during_task_access_alt = [action for action in current_path
+            #                                 if action.t_start in new_obs.accessibility
+            #                                 or action.t_end in new_obs.accessibility
+            #                                 or (action.t_start <= new_obs.accessibility.left and action.t_end >= new_obs.accessibility.right)
+            #                                 ]            
 
             # compile conflicting observations        
             conflicting_observations = {prev_observation, next_observation} if prev_observation else {next_observation} if next_observation else set()
@@ -593,18 +603,6 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
                 # else; update previous observation
                 obs_prev = obs_next
 
-            # no conflicting observations were found; compare against current state
-            if not conflicting_observations:
-                # calculate maneuver time from current state
-                m = abs(th_img - state.attitude[0]) / max_slew_rate
-                
-                # schedule at earliest maneuverable observation time
-                t_img = max(new_obs.accessibility.left, state._t + m)
-
-                # check observation time feasibility
-                if t_img not in new_obs.accessibility or t_img + new_obs.min_duration not in new_obs.accessibility:
-                    t_img = None # no feasible observation time found
-
             # check if observation time was found
             if t_img is None: 
                 # no time found; cannot insert new observation into path
@@ -618,6 +616,14 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             new_path = [action for action in current_path]
             new_path.append(new_observation)
             new_path = sorted(new_path, key=lambda action: action.t_start)
+
+            # --------------------
+            # DEBUG BREAKPOINTS
+            # if not self.is_observation_path_valid(state, new_path, max_slew_rate, max_torque, specs):
+            #     i_new = new_path.index(new_observation)
+            #     x = self.is_observation_path_valid(state, new_path, max_slew_rate, max_torque, specs)
+            #     continue
+            # --------------------
             
             # assign new path as current path
             current_path = new_path            
