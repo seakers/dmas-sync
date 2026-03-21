@@ -72,14 +72,15 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         sorted_observation_opportunities : List[ObservationOpportunity] = []
         for obs_action in preplan_path:
             # create new observation opportunity with restricted access and look angles
-            restricted_obs_opp = ObservationOpportunity(
-                obs_action.obs_opp.tasks,
-                obs_action.instrument_name,
-                Interval(obs_action.t_start, obs_action.t_end),
-                obs_action.t_end-obs_action.t_start,
-                Interval(obs_action.look_angle, obs_action.look_angle),
-                obs_action.obs_opp.id
-            )
+            # restricted_obs_opp = ObservationOpportunity(
+            #     obs_action.obs_opp.tasks,
+            #     obs_action.instrument_name,
+            #     Interval(obs_action.t_start, obs_action.t_end),
+            #     obs_action.t_end-obs_action.t_start,
+            #     Interval(obs_action.look_angle, obs_action.look_angle),
+            #     obs_action.obs_opp.id
+            # )
+            restricted_obs_opp = obs_action.obs_opp.copy()
 
             # add to sorted observation opportunities
             sorted_observation_opportunities.append(restricted_obs_opp)
