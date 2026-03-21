@@ -156,7 +156,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
             obs_i_reward = self.estimate_observation_opportunity_value(
                 obs_i, t_obs_i, d_obs_i, specs, cross_track_fovs, 
                 orbitdata, mission, observation_history, task_n_obs, task_t_prevs
-            ) if i > 0 else 0.0  # dummy observation has no reward
+            ) if i > 0 else self.EPS  # dummy observation has no reward
 
             # calculate cumulative reward for this observation opportunity
             current_value = dp_state_i['value'] + obs_i_reward
@@ -228,6 +228,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         sequence.pop(0)
         observation_opportunities.pop(0)
         observations.pop(0)
+        best_value -= self.EPS 
 
         # return final observation sequence
         return observations    

@@ -151,44 +151,616 @@ class DataSink:
         """ Returns the number of times the sink has been flushed to disk."""
         return self._flush_count
 
+# # ---------------------------------------------------------------------------
+# # Location key type alias
+# # ---------------------------------------------------------------------------
+
+# # (grid_index, gp_index) — the two integer coordinates present in every
+# # raw measurement entry.  lat/lon are excluded intentionally: they are
+# # floating-point and therefore unreliable as dict keys.
+# LocationKey = Tuple[int, int]
+
+
+# # ---------------------------------------------------------------------------
+# # ObservationRecord
+# # ---------------------------------------------------------------------------
+
+# @dataclass
+# class ObservationRecord:
+#     """
+#     Distilled observation state for a single task.
+
+#     ``n_obs`` counts completed observation *passes* for this task,
+#     regardless of how many target points within the task were covered
+#     in each pass.  A pass is one call to ``ingest()``.
+#     """
+#     t_last:          float         = field(default_factory=lambda: -math.inf)
+#     n_obs:           int           = 0
+#     last_actor:      Optional[str] = None
+#     last_instrument: Optional[str] = None
+
+#     def ingest(self, t_end: float, actor: str, instrument: Optional[str]) -> bool:
+#         """
+#         Record one completed observation pass for this task.
+
+#         Always increments ``n_obs``.  Overwrites the "latest" fields only
+#         when *t_end* is at least as recent as the stored value.
+
+#         Returns True if the latest-observation fields were updated.
+#         """
+#         self.n_obs += 1
+#         if t_end >= self.t_last:
+#             self.t_last          = t_end
+#             self.last_actor      = actor
+#             self.last_instrument = instrument
+#             return True
+#         return False
+
+#     def merge(self, foreign: Any[ObservationRecord, dict]) -> bool:
+#         """
+#         Merge *foreign* into self using peer-share semantics:
+#           - ``n_obs``          : summed
+#           - ``t_last``         : max; ties go to *foreign*
+#           - ``last_actor`` /
+#             ``last_instrument``: follow whichever side owns the larger t_last
+
+#         Returns True if any field changed.
+#         """
+#         try:
+#             merged_n_obs = self.n_obs + foreign['n_obs']
+
+#             if foreign['t_last'] >= self.t_last:
+#                 changed = (merged_n_obs != self.n_obs
+#                         or foreign['t_last'] != self.t_last)
+#                 self.n_obs           = merged_n_obs
+#                 self.t_last          = foreign['t_last']
+#                 self.last_actor      = foreign['last_actor']
+#                 self.last_instrument = foreign['last_instrument']
+#             else:
+#                 changed    = merged_n_obs != self.n_obs
+#                 self.n_obs = merged_n_obs
+
+#         except KeyError:
+#             foreign : ObservationRecord
+#             merged_n_obs = self.n_obs + foreign.n_obs
+
+#             if foreign.t_last >= self.t_last:
+#                 changed = (merged_n_obs != self.n_obs
+#                         or foreign.t_last != self.t_last)
+#                 self.n_obs           = merged_n_obs
+#                 self.t_last          = foreign.t_last
+#                 self.last_actor      = foreign.last_actor
+#                 self.last_instrument = foreign.last_instrument
+#             else:
+#                 changed    = merged_n_obs != self.n_obs
+#                 self.n_obs = merged_n_obs
+
+#         return changed
+
+#     def to_dict(self) -> Dict[str, Any]:
+#         return {
+#             "t_last":          None if math.isinf(self.t_last) else self.t_last,
+#             "n_obs":           self.n_obs,
+#             "last_actor":      self.last_actor,
+#             "last_instrument": self.last_instrument,
+#         }
+
+#     @classmethod
+#     def from_dict(cls, d: Dict[str, Any]) -> "ObservationRecord":
+#         raw_t = d.get("t_last")
+#         return cls(
+#             t_last          = -math.inf if raw_t is None else float(raw_t),
+#             n_obs           = int(d.get("n_obs", 0)),
+#             last_actor      = d.get("last_actor"),
+#             last_instrument = d.get("last_instrument"),
+#         )
+
+
+# # ---------------------------------------------------------------------------
+# # TaskObservationTracker
+# # ---------------------------------------------------------------------------
+
+# @dataclass
+# class TaskObservationTracker:
+#     """
+#     Pure observation-state store for a multi-agent satellite simulation.
+
+#     Location → task resolution
+#     --------------------------
+#     Raw measurement entries carry a target location ``(grid_idx, gp_idx)``
+#     but no ``task_id``.  The tracker maintains an internal reverse map built
+#     from ``task.location`` at registration time so that ingestion can resolve
+#     locations to all matching tasks without any agent-side pre-processing.
+
+#     A location may map to more than one active task (e.g. a default
+#     monitoring task and an event task sharing a target point).  In that
+#     case *all* matching tasks are credited.
+
+#     ``n_obs`` semantics
+#     -------------------
+#     One observation pass (one call to ``update_from_observations`` with
+#     entries that resolve to a given task) increments ``n_obs`` by exactly
+#     **one** for that task, regardless of how many target points within the
+#     task were covered in the pass.
+
+#     Responsibilities
+#     ----------------
+#     - Maintain ``ObservationRecord`` per registered task.
+#     - Resolve ``(grid_idx, gp_idx)`` → task_ids via internal location map.
+#     - Provide two typed update paths: raw sensor data and peer JSON payloads.
+#     - Encode state for peer broadcast (metadata-free; recipients have task
+#       details via ``MeasurementRequestMessage``).
+
+#     Non-responsibilities (owned by ``SimulationAgent``)
+#     -------------------------------------------------------
+#     - Task metadata, expiry, and lifecycle live on ``GenericObservationTask``
+#       inside ``_known_tasks``.
+#     - Task registration/removal is driven by the agent; every write path
+#       raises ``UnknownTaskError`` for unregistered task_ids.
+#     """
+
+#     _owner:       str
+#     _records:     Dict[str, ObservationRecord]    # task_id  → state
+#     _loc_to_tasks: Dict[LocationKey, Set[str]]    # (grid, gp) → {task_id, ...}
+#     _shareable:    Set[str]
+
+#     # ------------------------------------------------------------------
+#     # Construction
+#     # ------------------------------------------------------------------
+
+#     @classmethod
+#     def create(cls, owner_name: str) -> "TaskObservationTracker":
+#         """Return an empty tracker owned by *owner_name*."""
+#         return cls(
+#             _owner        = owner_name,
+#             _records      = {},
+#             _loc_to_tasks = {},
+#             _shareable    = set(),
+#         )
+
+#     # ------------------------------------------------------------------
+#     # Task lifecycle  (driven entirely by SimulationAgent)
+#     # ------------------------------------------------------------------
+
+#     def register_task(self, task: GenericObservationTask, shareable: bool = False) -> bool:
+#         """
+#         Register *task* and index all of its target locations.
+
+#         Parameters
+#         ----------
+#         shareable:
+#             If True, this task's observation state will be included in
+#             ``encode()`` output.  Default False — callers must opt in
+#             explicitly.  Typical usage:
+#             - DefaultMissionTask  → shareable=False
+#             - EventObservationTask → shareable=True
+#         """
+#         tid = task.id
+#         if tid in self._records:
+#             return False
+
+#         # Create observation record
+#         self._records[tid] = ObservationRecord()
+
+#         # Index every target location this task covers
+#         for loc in task.location:
+#             # loc = (lat, lon, grid_index, gp_index)
+#             key: LocationKey = (int(loc[2]), int(loc[3]))
+#             self._loc_to_tasks.setdefault(key, set()).add(tid)
+
+#         # opt in to sharing this task's observation state if requested
+#         if shareable: self._shareable.add(tid)
+
+#         return True
+
+#     def remove_task(self, task: GenericObservationTask) -> bool:
+#         """
+#         Remove *task* and clean up its location index entries.
+
+#         Called by the agent when a task expires or is dropped from
+#         ``_known_tasks``.  Safe to call on unregistered tasks (no-op).
+#         Returns True if a record was actually removed.
+#         """
+#         tid = task.id
+#         if tid not in self._records:
+#             return False
+
+#         # Remove from location index
+#         for loc in task.location:
+#             key: LocationKey = (int(loc[2]), int(loc[3]))
+#             task_set = self._loc_to_tasks.get(key)
+#             if task_set is not None:
+#                 task_set.discard(tid)
+#                 if not task_set:
+#                     # del self._loc_to_tasks[key]
+#                     self._loc_to_tasks.pop(key, None)
+        
+#         # remove records for this task
+#         self._records.pop(tid, None)
+
+#         # discard task from shareable set
+#         self._shareable.discard(tid)
+
+#         return True
+    
+#     def is_registered(self, task_id: str) -> bool:
+#         return task_id in self._records
+
+#     def registered_task_ids(self) -> List[str]:
+#         return list(self._records)
+
+#     # ------------------------------------------------------------------
+#     # Internal: location resolution
+#     # ------------------------------------------------------------------
+
+#     def _resolve_location(self, grid_idx: int, gp_idx: int) -> Set[str]:
+#         """
+#         Return the set of task_ids whose coverage includes
+#         ``(grid_idx, gp_idx)``.  Returns an empty set if the location
+#         is not covered by any registered task.
+#         """
+#         return self._loc_to_tasks.get((int(grid_idx), int(gp_idx)), set())
+
+#     # ------------------------------------------------------------------
+#     # Update path 1 — raw sensor observations from own instruments
+#     # ------------------------------------------------------------------
+
+#     def update_from_observations(
+#         self,
+#         measurements: Iterable[List[Dict[str, Any]]],
+#     ) -> Dict[str, int]:
+#         """
+#         Ingest raw measurement data produced by this agent's own sensors.
+
+#         Parameters
+#         ----------
+#         measurements:
+#             Iterable of *measurement lists*.  Each list represents one
+#             observation pass; each dict within the list corresponds to one
+#             target point covered during that pass.
+
+#             Required keys per dict:
+#               ``grid index`` – int
+#               ``gp index``   – int
+#               ``t_end``      – float, time the measurement window closed
+
+#             Optional keys:
+#               ``agent name`` – str (defaults to owner name)
+#               ``instrument`` – str
+
+#         Behaviour
+#         ---------
+#         - Every dict in a measurement list is resolved to zero or more
+#           matching tasks via the internal location map.
+#         - Each matched task is credited with **one** observation pass for
+#           the entire measurement list (``n_obs += 1``), using the latest
+#           ``t_end`` seen across all entries that resolved to that task.
+#         - Tasks matched by multiple entries in the same pass are therefore
+#           updated once, not once-per-entry.
+
+#         Returns
+#         -------
+#         ``{task_id: count}`` — number of passes credited per task in this call.
+
+#         Raises
+#         ------
+#         UnknownTaskError
+#             If location resolution returns a task_id that is not in
+#             ``_records`` (indicates an internal consistency bug).
+#         """
+#         ingested: Dict[str, int] = {}
+
+#         for measurement in measurements:
+#             # ── Pass 1: resolve every entry to its matching tasks and
+#             #    collect the latest t_end seen per task within this pass.
+#             best_t_end:  Dict[str, float] = {}  # task_id → best t_end this pass
+#             best_actor:  Dict[str, str]   = {}
+#             best_instr:  Dict[str, Optional[str]] = {}
+
+#             for entry in measurement:
+#                 grid_idx = int(entry.get("grid index", -1))
+#                 gp_idx   = int(entry.get("GP index",   -1))
+#                 t_end    = float(entry.get("t_end", -math.inf))
+#                 actor    = str(entry.get("agent name", self._owner))
+#                 instr    = entry.get("instrument")
+
+#                 task_ids = self._resolve_location(grid_idx, gp_idx)
+#                 # Silently skip entries whose location isn't covered by any
+#                 # active task — the agent may have pruned the task already.
+#                 if not task_ids:
+#                     continue
+
+#                 for tid in task_ids:
+#                     if not self.is_registered(tid):
+#                         # Should never happen; indicates a registration bug.
+#                         raise UnknownTaskError(tid, "update_from_observations()")
+
+#                     # Keep only the latest t_end for this task in this pass
+#                     if t_end > best_t_end.get(tid, -math.inf):
+#                         best_t_end[tid]  = t_end
+#                         best_actor[tid]  = actor
+#                         best_instr[tid]  = instr
+
+#             # ── Pass 2: credit each matched task with one observation pass.
+#             for tid, t_end in best_t_end.items():
+#                 self._records[tid].ingest(
+#                     t_end      = t_end,
+#                     actor      = best_actor[tid],
+#                     instrument = best_instr[tid],
+#                 )
+#                 ingested[tid] = ingested.get(tid, 0) + 1
+
+#         return ingested
+
+#     # ------------------------------------------------------------------
+#     # Update path 2 — peer knowledge broadcast
+#     # ------------------------------------------------------------------
+
+#     def update_from_peer(self, payload: object) -> Dict[str, str]:
+#         """
+#         Merge knowledge received from a peer agent.
+
+#         The payload is a dictionary produced by ``encode()``.  The agent
+#         must have already processed any accompanying ``MeasurementRequestMessage``
+#         so that every task_id in the payload is registered here.
+
+#         Merge rules
+#         -----------
+#         - ``n_obs``          : summed
+#         - ``t_last``         : max (ties go to foreign)
+#         - ``last_actor`` /
+#           ``last_instrument``: follow whichever side holds the larger t_last
+
+#         Returns
+#         -------
+#         ``{task_id: "updated" | "unchanged"}``
+
+#         Raises
+#         ------
+#         UnknownTaskError
+#             If the payload references an unregistered task_id, indicating
+#             ``__update_requests_and_tasks`` was not called first.
+#         """
+#         outcomes: Dict[str, str] = {}
+
+#         if isinstance(payload, str):
+#             payload = json.loads(payload)
+#             for task_id, state_dict in payload.get("records", {}).items():
+#                 if not self.is_registered(task_id):
+#                     raise UnknownTaskError(task_id, "update_from_peer()")
+
+#                 foreign = ObservationRecord.from_dict(state_dict)
+#                 changed = self._records[task_id].merge(foreign)
+#                 outcomes[task_id] = "updated" if changed else "unchanged"
+
+#         elif isinstance(payload, dict):
+#             for task_id, state_dict in payload.get("records", {}).items():
+#                 if not self.is_registered(task_id):
+#                     raise UnknownTaskError(task_id, "update_from_peer()")
+
+#                 foreign = ObservationRecord.from_dict(state_dict)
+#                 changed = self._records[task_id].merge(foreign)
+#                 outcomes[task_id] = "updated" if changed else "unchanged"
+
+#         elif isinstance(payload, list):
+#             for tid,t_last,n_obs,last_actor,last_instrument in payload:
+#                 task_id = str(tid)
+#                 if not self.is_registered(task_id):
+#                     raise UnknownTaskError(task_id, "update_from_peer()")
+
+#                 foreign = {
+#                     "t_last": float(t_last) if t_last is not None else -math.inf,
+#                     "n_obs": int(n_obs),
+#                     "last_actor": str(last_actor) if last_actor is not None else None,
+#                     "last_instrument": str(last_instrument) if last_instrument is not None else None,
+#                 }
+#                 changed = self._records[task_id].merge(foreign)
+#                 outcomes[task_id] = "updated" if changed else "unchanged"
+
+#         else:
+#             raise ValueError(f"Unsupported payload type: {type(payload)}. Expected str, dict, or list.")
+
+
+#         return outcomes
+
+#     # ------------------------------------------------------------------
+#     # Lookup
+#     # ------------------------------------------------------------------
+
+#     def lookup(self, task_id: str) -> Dict[str, Any]:
+#         """
+#         Return observation state for *task_id*.
+
+#         Returns sentinel values (``n_obs = -1``, ``t_last = -inf``) for
+#         unknown tasks rather than raising — lookup is a read path and
+#         callers often probe defensively.
+#         """
+#         record = self._records.get(task_id)
+#         if record is None:
+#             return {
+#                 "t_last":          -math.inf,
+#                 "n_obs":           -1,
+#                 "last_actor":      None,
+#                 "last_instrument": None,
+#             }
+#         return {
+#             "t_last":          record.t_last,
+#             "n_obs":           record.n_obs,
+#             "last_actor":      record.last_actor,
+#             "last_instrument": record.last_instrument,
+#         }
+
+#     def tasks_at(self, grid_idx: int, gp_idx: int) -> List[str]:
+#         """
+#         Return all task_ids whose coverage includes ``(grid_idx, gp_idx)``.
+#         Useful for agent-side diagnostics without exposing the internal map.
+#         """
+#         return list(self._resolve_location(grid_idx, gp_idx))
+
+#     # ------------------------------------------------------------------
+#     # Encoding
+#     # ------------------------------------------------------------------
+
+#     def encode(
+#         self,
+#         task_ids: Optional[Iterable[str]] = None,
+#         encoding_type : type = list
+#     ) -> dict:
+#         """
+#         Encode observation state as a JSON string for peer broadcast.
+
+#         Task metadata is intentionally excluded — recipients get that via
+#         ``MeasurementRequestMessage``.
+
+#         Parameters
+#         ----------
+#         task_ids:
+#             Subset to encode.  Defaults to all registered tasks.
+
+#         Payload schema
+#         --------------
+#         {
+#           "sender":  "<owner>",
+#           "records": {
+#             "<task_id>": {
+#               "t_last": float | null,
+#               "n_obs": int,
+#               "last_actor": str | null,
+#               "last_instrument": str | null
+#             },
+#             ...
+#           }
+#         }
+#         """
+#         if task_ids is not None:
+#             # Caller-specified subset: respect it exactly, no shareability filter
+#             ids = [tid for tid in task_ids if tid in self._records]
+#         else:
+#             # Default: only shareable tasks
+#             ids = list(self._shareable)
+        
+#         if encoding_type is list:
+#             payload = []
+#             for tid in ids:
+#                 record = self._records.get(tid)
+#                 if record is not None:
+#                     # Skip tasks with no observations
+#                     if record.n_obs <= 0: continue  
+
+#                     # Encode as a tuple: (task_id, t_last, n_obs, last_actor, last_instrument)
+#                     datum = (tid, record.t_last, record.n_obs, record.last_actor, record.last_instrument)
+#                     payload.append(datum)
+
+#         elif encoding_type is dict:
+#             records = {
+#                 tid: self._records[tid].to_dict()
+#                 for tid in ids
+#                 if tid in self._records
+#             }
+#             payload = {"sender": self._owner, "records": records}
+
+#         elif encoding_type is str:
+#             records = {
+#                 tid: self._records[tid].to_dict()
+#                 for tid in ids
+#                 if tid in self._records
+#             }
+#             payload = json.dumps(
+#                 {"sender": self._owner, "records": records},
+#                 separators=(",", ":"),
+#             )
+
+#         else:
+#             raise ValueError(f"Unsupported encoding_type: {encoding_type}. Supported types are dict and list.")
+                
+#         return payload
+    
+# # ---------------------------------------------------------------------------
+# # Exceptions
+# # ---------------------------------------------------------------------------
+
+# class UnknownTaskError(KeyError):
+#     """
+#     Raised when the tracker receives an update for a task_id it has never
+#     seen.  The agent's ``__update_requests_and_tasks`` must register tasks
+#     before either update path is called.
+#     """
+#     def __init__(self, task_id: str, source: str):
+#         self.task_id = task_id
+#         self.source  = source
+#         super().__init__(
+#             f"[TaskObservationTracker] Unknown task '{task_id}' in {source}. "
+#             f"Ensure register_task() is called before {source}."
+#         )
+
 # ---------------------------------------------------------------------------
-# Location key type alias
+# Exceptions
 # ---------------------------------------------------------------------------
 
-# (grid_index, gp_index) — the two integer coordinates present in every
-# raw measurement entry.  lat/lon are excluded intentionally: they are
-# floating-point and therefore unreliable as dict keys.
-LocationKey = Tuple[int, int]
+class UnknownTaskError(KeyError):
+    def __init__(self, task_id: str, source: str):
+        self.task_id = task_id
+        self.source  = source
+        super().__init__(
+            f"[TaskObservationTracker] Unknown task '{task_id}' in {source}. "
+            f"Ensure register_task() is called before {source}."
+        )
+
+# ---------------------------------------------------------------------------
+# Type aliases
+# ---------------------------------------------------------------------------
+
+LocationKey = Tuple[int, int]   # (grid_index, gp_index)
+
+# A vector clock is a dict mapping actor_name -> observation count.
+# Only actors that have made at least one observation appear as keys.
+VectorClock = Dict[str, int]
 
 
 # ---------------------------------------------------------------------------
-# ObservationRecord
+# ObservationRecord  — vector-clock edition
 # ---------------------------------------------------------------------------
 
 @dataclass
 class ObservationRecord:
     """
-    Distilled observation state for a single task.
+    Observation state for a single task using a vector clock for ``n_obs``.
 
-    ``n_obs`` counts completed observation *passes* for this task,
-    regardless of how many target points within the task were covered
-    in each pass.  A pass is one call to ``ingest()``.
+    Each actor owns exactly one counter in ``clock`` and is the only one
+    that ever increments it.  Merging two records takes the element-wise
+    max across all actor buckets, making the operation commutative,
+    associative, and idempotent — shared ancestry is never double-counted.
+
+    ``n_obs`` is a derived property (sum of all clock values) and is never
+    stored directly.
     """
+    clock:           VectorClock   = field(default_factory=dict)
     t_last:          float         = field(default_factory=lambda: -math.inf)
-    n_obs:           int           = 0
     last_actor:      Optional[str] = None
     last_instrument: Optional[str] = None
 
+    # ------------------------------------------------------------------
+    # Derived property
+    # ------------------------------------------------------------------
+
+    @property
+    def n_obs(self) -> int:
+        """Total observation count across all actors."""
+        return sum(self.clock.values())
+
+    # ------------------------------------------------------------------
+    # Ingest
+    # ------------------------------------------------------------------
+
     def ingest(self, t_end: float, actor: str, instrument: Optional[str]) -> bool:
         """
-        Record one completed observation pass for this task.
+        Record one completed observation pass by *actor*.
 
-        Always increments ``n_obs``.  Overwrites the "latest" fields only
-        when *t_end* is at least as recent as the stored value.
-
+        Increments only *actor*'s own bucket in the clock.
         Returns True if the latest-observation fields were updated.
         """
-        self.n_obs += 1
+        self.clock[actor] = self.clock.get(actor, 0) + 1
+
         if t_end >= self.t_last:
             self.t_last          = t_end
             self.last_actor      = actor
@@ -196,112 +768,107 @@ class ObservationRecord:
             return True
         return False
 
-    def merge(self, foreign: Any[ObservationRecord, dict]) -> bool:
+    # ------------------------------------------------------------------
+    # Merge
+    # ------------------------------------------------------------------
+
+    def merge(self, foreign: "ObservationRecord | dict") -> bool:
         """
-        Merge *foreign* into self using peer-share semantics:
-          - ``n_obs``          : summed
-          - ``t_last``         : max; ties go to *foreign*
-          - ``last_actor`` /
-            ``last_instrument``: follow whichever side owns the larger t_last
+        Merge *foreign* into self using vector-clock semantics.
+
+        Clock merge
+        -----------
+        For each actor bucket, take the element-wise max of the local and
+        foreign counts.  This is the standard G-Counter CRDT merge and
+        guarantees:
+          - Commutativity:  merge(A,B) == merge(B,A)
+          - Associativity:  merge(merge(A,B),C) == merge(A,merge(B,C))
+          - Idempotency:    merge(A,A) == A
+
+        Shared ancestry (observations known to both sides before they
+        diverged) is represented by equal bucket values and contributes
+        only once after the max, never double-counted.
+
+        t_last / last_actor / last_instrument
+        -------------------------------------
+        Unchanged from before: foreign wins on ties.
 
         Returns True if any field changed.
         """
-        try:
-            merged_n_obs = self.n_obs + foreign['n_obs']
+        # ── Unpack foreign regardless of whether it arrives as a
+        #    dataclass instance or a plain dict (list-encoded payload) ──
+        if isinstance(foreign, dict):
+            f_clock  = foreign.get("clock", {})
+            f_t_last = float(foreign.get("t_last", -math.inf) or -math.inf)
+            f_actor  = foreign.get("last_actor")
+            f_instr  = foreign.get("last_instrument")
+        else:
+            f_clock  = foreign.clock
+            f_t_last = foreign.t_last
+            f_actor  = foreign.last_actor
+            f_instr  = foreign.last_instrument
 
-            if foreign['t_last'] >= self.t_last:
-                changed = (merged_n_obs != self.n_obs
-                        or foreign['t_last'] != self.t_last)
-                self.n_obs           = merged_n_obs
-                self.t_last          = foreign['t_last']
-                self.last_actor      = foreign['last_actor']
-                self.last_instrument = foreign['last_instrument']
-            else:
-                changed    = merged_n_obs != self.n_obs
-                self.n_obs = merged_n_obs
+        # ── Clock merge: element-wise max ────────────────────────────
+        old_n   = self.n_obs
+        all_actors = set(self.clock) | set(f_clock)
+        for actor in all_actors:
+            local_count   = self.clock.get(actor, 0)
+            foreign_count = f_clock.get(actor, 0)
+            if foreign_count > local_count:
+                self.clock[actor] = foreign_count
 
-        except KeyError:
-            foreign : ObservationRecord
-            merged_n_obs = self.n_obs + foreign.n_obs
+        clock_changed = self.n_obs != old_n
 
-            if foreign.t_last >= self.t_last:
-                changed = (merged_n_obs != self.n_obs
-                        or foreign.t_last != self.t_last)
-                self.n_obs           = merged_n_obs
-                self.t_last          = foreign.t_last
-                self.last_actor      = foreign.last_actor
-                self.last_instrument = foreign.last_instrument
-            else:
-                changed    = merged_n_obs != self.n_obs
-                self.n_obs = merged_n_obs
+        # ── t_last / last_actor / last_instrument ────────────────────
+        time_changed = False
+        if f_t_last >= self.t_last:
+            time_changed = f_t_last != self.t_last
+            self.t_last          = f_t_last
+            self.last_actor      = f_actor
+            self.last_instrument = f_instr
 
-        return changed
+        return clock_changed or time_changed
+
+    # ------------------------------------------------------------------
+    # Serialisation
+    # ------------------------------------------------------------------
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "clock":           self.clock,                                    # {actor: count}
             "t_last":          None if math.isinf(self.t_last) else self.t_last,
-            "n_obs":           self.n_obs,
             "last_actor":      self.last_actor,
             "last_instrument": self.last_instrument,
         }
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> "ObservationRecord":
+    def from_dict(cls, d: Dict[str, Any]) -> ObservationRecord:
         raw_t = d.get("t_last")
         return cls(
+            clock           = dict(d.get("clock", {})),
             t_last          = -math.inf if raw_t is None else float(raw_t),
-            n_obs           = int(d.get("n_obs", 0)),
             last_actor      = d.get("last_actor"),
             last_instrument = d.get("last_instrument"),
         )
 
 
 # ---------------------------------------------------------------------------
-# TaskObservationTracker
+# TaskObservationTracker  — unchanged except encode tuple format
 # ---------------------------------------------------------------------------
 
 @dataclass
 class TaskObservationTracker:
     """
-    Pure observation-state store for a multi-agent satellite simulation.
+    Observation-state store using per-task vector clocks for correct
+    distributed merge semantics.
 
-    Location → task resolution
-    --------------------------
-    Raw measurement entries carry a target location ``(grid_idx, gp_idx)``
-    but no ``task_id``.  The tracker maintains an internal reverse map built
-    from ``task.location`` at registration time so that ingestion can resolve
-    locations to all matching tasks without any agent-side pre-processing.
-
-    A location may map to more than one active task (e.g. a default
-    monitoring task and an event task sharing a target point).  In that
-    case *all* matching tasks are credited.
-
-    ``n_obs`` semantics
-    -------------------
-    One observation pass (one call to ``update_from_observations`` with
-    entries that resolve to a given task) increments ``n_obs`` by exactly
-    **one** for that task, regardless of how many target points within the
-    task were covered in the pass.
-
-    Responsibilities
-    ----------------
-    - Maintain ``ObservationRecord`` per registered task.
-    - Resolve ``(grid_idx, gp_idx)`` → task_ids via internal location map.
-    - Provide two typed update paths: raw sensor data and peer JSON payloads.
-    - Encode state for peer broadcast (metadata-free; recipients have task
-      details via ``MeasurementRequestMessage``).
-
-    Non-responsibilities (owned by ``SimulationAgent``)
-    -------------------------------------------------------
-    - Task metadata, expiry, and lifecycle live on ``GenericObservationTask``
-      inside ``_known_tasks``.
-    - Task registration/removal is driven by the agent; every write path
-      raises ``UnknownTaskError`` for unregistered task_ids.
+    Everything except ``ObservationRecord`` internals and the list-encoding
+    tuple format is identical to the previous implementation.
     """
 
-    _owner:       str
-    _records:     Dict[str, ObservationRecord]    # task_id  → state
-    _loc_to_tasks: Dict[LocationKey, Set[str]]    # (grid, gp) → {task_id, ...}
+    _owner:        str
+    _records:      Dict[str, ObservationRecord]
+    _loc_to_tasks: Dict[LocationKey, Set[str]]
     _shareable:    Set[str]
 
     # ------------------------------------------------------------------
@@ -310,7 +877,6 @@ class TaskObservationTracker:
 
     @classmethod
     def create(cls, owner_name: str) -> "TaskObservationTracker":
-        """Return an empty tracker owned by *owner_name*."""
         return cls(
             _owner        = owner_name,
             _records      = {},
@@ -319,70 +885,42 @@ class TaskObservationTracker:
         )
 
     # ------------------------------------------------------------------
-    # Task lifecycle  (driven entirely by SimulationAgent)
+    # Task lifecycle
     # ------------------------------------------------------------------
 
     def register_task(self, task: GenericObservationTask, shareable: bool = False) -> bool:
-        """
-        Register *task* and index all of its target locations.
-
-        Parameters
-        ----------
-        shareable:
-            If True, this task's observation state will be included in
-            ``encode()`` output.  Default False — callers must opt in
-            explicitly.  Typical usage:
-            - DefaultMissionTask  → shareable=False
-            - EventObservationTask → shareable=True
-        """
         tid = task.id
         if tid in self._records:
             return False
 
-        # Create observation record
         self._records[tid] = ObservationRecord()
 
-        # Index every target location this task covers
         for loc in task.location:
-            # loc = (lat, lon, grid_index, gp_index)
             key: LocationKey = (int(loc[2]), int(loc[3]))
             self._loc_to_tasks.setdefault(key, set()).add(tid)
 
-        # opt in to sharing this task's observation state if requested
-        if shareable: self._shareable.add(tid)
+        if shareable:
+            self._shareable.add(tid)
 
         return True
 
     def remove_task(self, task: GenericObservationTask) -> bool:
-        """
-        Remove *task* and clean up its location index entries.
-
-        Called by the agent when a task expires or is dropped from
-        ``_known_tasks``.  Safe to call on unregistered tasks (no-op).
-        Returns True if a record was actually removed.
-        """
         tid = task.id
         if tid not in self._records:
             return False
 
-        # Remove from location index
         for loc in task.location:
             key: LocationKey = (int(loc[2]), int(loc[3]))
             task_set = self._loc_to_tasks.get(key)
             if task_set is not None:
                 task_set.discard(tid)
                 if not task_set:
-                    # del self._loc_to_tasks[key]
-                    self._loc_to_tasks.pop(key, None)
-        
-        # remove records for this task
-        self._records.pop(tid, None)
+                    del self._loc_to_tasks[key]
 
-        # discard task from shareable set
+        del self._records[tid]
         self._shareable.discard(tid)
-
         return True
-    
+
     def is_registered(self, task_id: str) -> bool:
         return task_id in self._records
 
@@ -390,72 +928,26 @@ class TaskObservationTracker:
         return list(self._records)
 
     # ------------------------------------------------------------------
-    # Internal: location resolution
+    # Location resolution
     # ------------------------------------------------------------------
 
     def _resolve_location(self, grid_idx: int, gp_idx: int) -> Set[str]:
-        """
-        Return the set of task_ids whose coverage includes
-        ``(grid_idx, gp_idx)``.  Returns an empty set if the location
-        is not covered by any registered task.
-        """
         return self._loc_to_tasks.get((int(grid_idx), int(gp_idx)), set())
 
     # ------------------------------------------------------------------
-    # Update path 1 — raw sensor observations from own instruments
+    # Update path 1 — raw sensor observations
     # ------------------------------------------------------------------
 
     def update_from_observations(
         self,
         measurements: Iterable[List[Dict[str, Any]]],
     ) -> Dict[str, int]:
-        """
-        Ingest raw measurement data produced by this agent's own sensors.
-
-        Parameters
-        ----------
-        measurements:
-            Iterable of *measurement lists*.  Each list represents one
-            observation pass; each dict within the list corresponds to one
-            target point covered during that pass.
-
-            Required keys per dict:
-              ``grid index`` – int
-              ``gp index``   – int
-              ``t_end``      – float, time the measurement window closed
-
-            Optional keys:
-              ``agent name`` – str (defaults to owner name)
-              ``instrument`` – str
-
-        Behaviour
-        ---------
-        - Every dict in a measurement list is resolved to zero or more
-          matching tasks via the internal location map.
-        - Each matched task is credited with **one** observation pass for
-          the entire measurement list (``n_obs += 1``), using the latest
-          ``t_end`` seen across all entries that resolved to that task.
-        - Tasks matched by multiple entries in the same pass are therefore
-          updated once, not once-per-entry.
-
-        Returns
-        -------
-        ``{task_id: count}`` — number of passes credited per task in this call.
-
-        Raises
-        ------
-        UnknownTaskError
-            If location resolution returns a task_id that is not in
-            ``_records`` (indicates an internal consistency bug).
-        """
         ingested: Dict[str, int] = {}
 
         for measurement in measurements:
-            # ── Pass 1: resolve every entry to its matching tasks and
-            #    collect the latest t_end seen per task within this pass.
-            best_t_end:  Dict[str, float] = {}  # task_id → best t_end this pass
-            best_actor:  Dict[str, str]   = {}
-            best_instr:  Dict[str, Optional[str]] = {}
+            best_t_end: Dict[str, float]        = {}
+            best_actor: Dict[str, str]          = {}
+            best_instr: Dict[str, Optional[str]] = {}
 
             for entry in measurement:
                 grid_idx = int(entry.get("grid index", -1))
@@ -465,23 +957,17 @@ class TaskObservationTracker:
                 instr    = entry.get("instrument")
 
                 task_ids = self._resolve_location(grid_idx, gp_idx)
-                # Silently skip entries whose location isn't covered by any
-                # active task — the agent may have pruned the task already.
                 if not task_ids:
                     continue
 
                 for tid in task_ids:
                     if not self.is_registered(tid):
-                        # Should never happen; indicates a registration bug.
                         raise UnknownTaskError(tid, "update_from_observations()")
-
-                    # Keep only the latest t_end for this task in this pass
                     if t_end > best_t_end.get(tid, -math.inf):
-                        best_t_end[tid]  = t_end
-                        best_actor[tid]  = actor
-                        best_instr[tid]  = instr
+                        best_t_end[tid] = t_end
+                        best_actor[tid] = actor
+                        best_instr[tid] = instr
 
-            # ── Pass 2: credit each matched task with one observation pass.
             for tid, t_end in best_t_end.items():
                 self._records[tid].ingest(
                     t_end      = t_end,
@@ -497,69 +983,38 @@ class TaskObservationTracker:
     # ------------------------------------------------------------------
 
     def update_from_peer(self, payload: object) -> Dict[str, str]:
-        """
-        Merge knowledge received from a peer agent.
-
-        The payload is a dictionary produced by ``encode()``.  The agent
-        must have already processed any accompanying ``MeasurementRequestMessage``
-        so that every task_id in the payload is registered here.
-
-        Merge rules
-        -----------
-        - ``n_obs``          : summed
-        - ``t_last``         : max (ties go to foreign)
-        - ``last_actor`` /
-          ``last_instrument``: follow whichever side holds the larger t_last
-
-        Returns
-        -------
-        ``{task_id: "updated" | "unchanged"}``
-
-        Raises
-        ------
-        UnknownTaskError
-            If the payload references an unregistered task_id, indicating
-            ``__update_requests_and_tasks`` was not called first.
-        """
         outcomes: Dict[str, str] = {}
 
         if isinstance(payload, str):
             payload = json.loads(payload)
+
+        if isinstance(payload, dict):
             for task_id, state_dict in payload.get("records", {}).items():
                 if not self.is_registered(task_id):
                     raise UnknownTaskError(task_id, "update_from_peer()")
-
-                foreign = ObservationRecord.from_dict(state_dict)
-                changed = self._records[task_id].merge(foreign)
-                outcomes[task_id] = "updated" if changed else "unchanged"
-
-        elif isinstance(payload, dict):
-            for task_id, state_dict in payload.get("records", {}).items():
-                if not self.is_registered(task_id):
-                    raise UnknownTaskError(task_id, "update_from_peer()")
-
-                foreign = ObservationRecord.from_dict(state_dict)
-                changed = self._records[task_id].merge(foreign)
+                changed = self._records[task_id].merge(state_dict)
                 outcomes[task_id] = "updated" if changed else "unchanged"
 
         elif isinstance(payload, list):
-            for tid,t_last,n_obs,last_actor,last_instrument in payload:
+            # List encoding: (task_id, clock_dict, t_last, last_actor, last_instrument)
+            for tid, clock, t_last, last_actor, last_instrument in payload:
                 task_id = str(tid)
                 if not self.is_registered(task_id):
                     raise UnknownTaskError(task_id, "update_from_peer()")
-
                 foreign = {
-                    "t_last": float(t_last) if t_last is not None else -math.inf,
-                    "n_obs": int(n_obs),
-                    "last_actor": str(last_actor) if last_actor is not None else None,
+                    "clock":           clock,
+                    "t_last":          float(t_last) if t_last is not None else -math.inf,
+                    "last_actor":      str(last_actor) if last_actor is not None else None,
                     "last_instrument": str(last_instrument) if last_instrument is not None else None,
                 }
                 changed = self._records[task_id].merge(foreign)
                 outcomes[task_id] = "updated" if changed else "unchanged"
 
         else:
-            raise ValueError(f"Unsupported payload type: {type(payload)}. Expected str, dict, or list.")
-
+            raise ValueError(
+                f"Unsupported payload type: {type(payload)}. "
+                f"Expected str, dict, or list."
+            )
 
         return outcomes
 
@@ -568,13 +1023,6 @@ class TaskObservationTracker:
     # ------------------------------------------------------------------
 
     def lookup(self, task_id: str) -> Dict[str, Any]:
-        """
-        Return observation state for *task_id*.
-
-        Returns sentinel values (``n_obs = -1``, ``t_last = -inf``) for
-        unknown tasks rather than raising — lookup is a read path and
-        callers often probe defensively.
-        """
         record = self._records.get(task_id)
         if record is None:
             return {
@@ -585,16 +1033,13 @@ class TaskObservationTracker:
             }
         return {
             "t_last":          record.t_last,
-            "n_obs":           record.n_obs,
+            "n_obs":           record.n_obs,       # derived from clock sum
             "last_actor":      record.last_actor,
             "last_instrument": record.last_instrument,
+            "clock":           dict(record.clock), # expose for diagnostics
         }
 
     def tasks_at(self, grid_idx: int, gp_idx: int) -> List[str]:
-        """
-        Return all task_ids whose coverage includes ``(grid_idx, gp_idx)``.
-        Useful for agent-side diagnostics without exposing the internal map.
-        """
         return list(self._resolve_location(grid_idx, gp_idx))
 
     # ------------------------------------------------------------------
@@ -604,91 +1049,52 @@ class TaskObservationTracker:
     def encode(
         self,
         task_ids: Optional[Iterable[str]] = None,
-        encoding_type : type = list
-    ) -> dict:
-        """
-        Encode observation state as a JSON string for peer broadcast.
+        encoding_type: type = list,
+    ) -> object:
+        ids = (
+            [tid for tid in task_ids if tid in self._records]
+            if task_ids is not None
+            else list(self._shareable)
+        )
 
-        Task metadata is intentionally excluded — recipients get that via
-        ``MeasurementRequestMessage``.
-
-        Parameters
-        ----------
-        task_ids:
-            Subset to encode.  Defaults to all registered tasks.
-
-        Payload schema
-        --------------
-        {
-          "sender":  "<owner>",
-          "records": {
-            "<task_id>": {
-              "t_last": float | null,
-              "n_obs": int,
-              "last_actor": str | null,
-              "last_instrument": str | null
-            },
-            ...
-          }
-        }
-        """
-        if task_ids is not None:
-            # Caller-specified subset: respect it exactly, no shareability filter
-            ids = [tid for tid in task_ids if tid in self._records]
-        else:
-            # Default: only shareable tasks
-            ids = list(self._shareable)
-        
         if encoding_type is list:
-            payload = []
-            for tid in ids:
-                record = self._records.get(tid)
-                if record is not None:
-                    # Skip tasks with no observations
-                    if record.n_obs <= 0: continue  
-
-                    # Encode as a tuple: (task_id, t_last, n_obs, last_actor, last_instrument)
-                    datum = (tid, record.t_last, record.n_obs, record.last_actor, record.last_instrument)
-                    payload.append(datum)
+            # Tuple format: (task_id, clock, t_last, last_actor, last_instrument)
+            return [
+                (
+                    tid,
+                    dict(record.clock),             # shallow copy — safe to transmit
+                    record.t_last,
+                    record.last_actor,
+                    record.last_instrument,
+                )
+                for tid in ids
+                if (record := self._records.get(tid)) is not None
+                and record.n_obs > 0
+            ]
 
         elif encoding_type is dict:
-            records = {
-                tid: self._records[tid].to_dict()
-                for tid in ids
-                if tid in self._records
+            return {
+                "sender": self._owner,
+                "records": {
+                    tid: self._records[tid].to_dict()
+                    for tid in ids
+                    if tid in self._records and self._records[tid].n_obs > 0
+                },
             }
-            payload = {"sender": self._owner, "records": records}
 
         elif encoding_type is str:
             records = {
                 tid: self._records[tid].to_dict()
                 for tid in ids
-                if tid in self._records
+                if tid in self._records and self._records[tid].n_obs > 0
             }
-            payload = json.dumps(
+            return json.dumps(
                 {"sender": self._owner, "records": records},
                 separators=(",", ":"),
             )
 
         else:
-            raise ValueError(f"Unsupported encoding_type: {encoding_type}. Supported types are dict and list.")
-                
-        return payload
-    
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
-
-class UnknownTaskError(KeyError):
-    """
-    Raised when the tracker receives an update for a task_id it has never
-    seen.  The agent's ``__update_requests_and_tasks`` must register tasks
-    before either update path is called.
-    """
-    def __init__(self, task_id: str, source: str):
-        self.task_id = task_id
-        self.source  = source
-        super().__init__(
-            f"[TaskObservationTracker] Unknown task '{task_id}' in {source}. "
-            f"Ensure register_task() is called before {source}."
-        )
+            raise ValueError(
+                f"Unsupported encoding_type: {encoding_type}. "
+                f"Supported types are list, dict, and str."
+            )

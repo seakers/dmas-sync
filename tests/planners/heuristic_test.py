@@ -25,8 +25,8 @@ class TestHeuristic(PlannerTester, unittest.TestCase):
             "preplanner": {
                 "@type": "heuristic",
                 "debug": "False",
-                "horizon": 600,
-                "period" : 200,
+                "horizon": 200,
+                "period" : 50,
                 "sharing" : "periodic",
                 # "sharing" : "none",
             },

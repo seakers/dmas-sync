@@ -121,12 +121,18 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         # get only available tasks
         available_tasks : list[GenericObservationTask] = self.get_available_tasks(tasks, planning_horizon)
         
+        if available_tasks:
+            x= 1
+
         # calculate coverage opportunities for tasks
         access_opportunities : dict[tuple] = self.calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
 
         # create task observation opportunities from known tasks and future access opportunities
         observation_opportunities : list[ObservationOpportunity] \
             = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
+
+        if observation_opportunities:
+            x= 1
 
         # schedule observation tasks
         observations : list = self._schedule_observations(state, specs, orbitdata, observation_opportunities, mission, observation_history)

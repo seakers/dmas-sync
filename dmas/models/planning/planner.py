@@ -427,7 +427,11 @@ class AbstractPlanner(ABC):
                 bins[bin_key].append(task)
 
             # populate adjacency list
-            with tqdm(total=len(observation_opportunities), desc="Checking task clusterability", leave=False, disable=not self._printouts) as pbar:
+            with tqdm(total=len(observation_opportunities), 
+                      desc="Checking task clusterability", 
+                      leave=False, 
+                      disable=not self._printouts
+                    ) as pbar:
                 for b in bins:
                     candidates : list[ObservationOpportunity] \
                           = bins[b] + bins.get(b + 1, []) + bins.get(b - 1, [])

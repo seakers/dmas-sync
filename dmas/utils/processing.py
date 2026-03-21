@@ -3362,7 +3362,8 @@ class ResultsProcessor:
         assert isinstance(t_img, (int,float)), "Image time must be a numeric value."
         assert t_img >= 0, "Image time must be non-negative."
         assert isinstance(d_img, (int,float)), "Image duration must be a numeric value."
-        assert d_img >= 0, "Image duration must be non-negative."
+        assert d_img >= 0, \
+            "Image duration must be non-negative."
         assert all(isinstance(instr, str) for instr in cross_track_fovs.keys()), "Cross-track FOV instrument names must be strings."
         assert all(isinstance(fov, (int,float)) for fov in cross_track_fovs.values()), "Cross-track FOVs must be numeric values."
         assert all(fov >= 0 for fov in cross_track_fovs.values()), "Cross-track FOVs must be non-negative."
