@@ -1181,7 +1181,7 @@ class AbstractPlanner(ABC):
         observations : list[ObservationAction] = observations
 
         if isinstance(state, SatelliteAgentState):
-            
+
             # get pointing agility specifications                
             if max_slew_rate is None or max_torque is None:
                 if specs is None: raise ValueError('Either `specs` or both `max_slew_rate` and `max_torque` must be provided.')
@@ -1223,9 +1223,9 @@ class AbstractPlanner(ABC):
                         for params in observation_parameters]):
                 # ---------------------
                 # DEBUGGING BREAKPOINTS
-                # for idx, params in enumerate(observation_parameters):
-                #     if not self.is_observation_pair_valid(*params):
-                #         x = 1   
+                for idx, params in enumerate(observation_parameters):
+                    if not self.is_observation_pair_valid(*params):
+                        x = 1   
                 # ---------------------
                 return False
 

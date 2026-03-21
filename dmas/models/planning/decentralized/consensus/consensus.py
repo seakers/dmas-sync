@@ -1641,7 +1641,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
                 # find matching bid and most recent previous bid for this observation task
                 matching_bid : Bid = None
-                prev_bid : Bid = None
+
+                # Attempt 1: look for perfect match
                 for bid in bids:
                     # check if a matching bid was found
                     if (abs(bid.t_img - task_t_earliest) <= self.EPS
@@ -1654,28 +1655,54 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         
                         # assign matching bid
                         matching_bid = bid
+                
+                # Attempt 2: if no perfect match was found, look for any bid performed during this observation opportunity
+                if not matching_bid:
+                    for bid in bids:
+                        # check if bid was performed during the current access window 
+                        #  for this observation opportunity
+                        if(
+                            #  bid.t_img < obs_act.t_start
+                                bid.t_img + obs_act.obs_opp.task_min_duration[task.id] < t_obs
+                                and bid.t_img in obs_act.obs_opp.accessibility
+                                and bid.winner == state.agent_name
+                                and bid.performed
+                            ):
+                            # ensure only one matching bid exists
+                            assert matching_bid is None, \
+                                "There should only be one matching bid for the current time step."                        
+                            
+                            # assign matching bid
+                            matching_bid = bid
 
-                    # check if bid was performed during the current access window 
-                    #  for this observation opportunity
-                    elif(
-                        #  bid.t_img < obs_act.t_start
-                         bid.t_img + obs_act.obs_opp.task_min_duration[task.id] < t_obs
-                         and bid.t_img in obs_act.obs_opp.accessibility
-                         and bid.winner == state.agent_name
-                         and bid.performed
-                        ):
-                        # ensure only one matching bid exists
-                        assert matching_bid is None, \
-                            "There should only be one matching bid for the current time step."                        
+                # for bid in bids:
+                #     # check if a matching bid was found
+                #     if (abs(bid.t_img - task_t_earliest) <= self.EPS
+                #         and bid.winner == state.agent_name
+                #         # and not bid.performed
+                #         ):
+                #         # ensure only one matching bid exists
+                #         assert matching_bid is None, \
+                #             "There should only be one matching bid for the current time step."
                         
-                        # assign matching bid
-                        matching_bid = bid
+                #         # assign matching bid
+                #         matching_bid = bid
 
-                    # # check if a previous bid was found
-                    # elif bid.t_img < obs_act.t_start:
-                    #     if prev_bid is None or bid.t_img > prev_bid.t_img:
-                    #         # assign if most recent previous bid
-                    #         prev_bid = bid
+                #     # check if bid was performed during the current access window 
+                #     #  for this observation opportunity
+                #     elif(
+                #         #  bid.t_img < obs_act.t_start
+                #          bid.t_img + obs_act.obs_opp.task_min_duration[task.id] < t_obs
+                #          and bid.t_img in obs_act.obs_opp.accessibility
+                #          and bid.winner == state.agent_name
+                #          and bid.performed
+                #         ):
+                #         # ensure only one matching bid exists
+                #         assert matching_bid is None, \
+                #             "There should only be one matching bid for the current time step."                        
+                        
+                #         # assign matching bid
+                #         matching_bid = bid
 
                 # ensure matching bid was found
                 assert matching_bid is not None, \
