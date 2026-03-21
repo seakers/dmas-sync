@@ -125,7 +125,8 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         access_opportunities : dict[tuple] = self.calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
 
         # create task observation opportunities from known tasks and future access opportunities
-        observation_opportunities : list[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
+        observation_opportunities : list[ObservationOpportunity] \
+            = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
 
         # schedule observation tasks
         observations : list = self._schedule_observations(state, specs, orbitdata, observation_opportunities, mission, observation_history)

@@ -1026,8 +1026,7 @@ class Simulation:
             return NadirPointingPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["dynamic", "dp"]:
-            model = preplanner_dict.get('model', 'earliest').lower()
-            return DynamicProgrammingPlanner(horizon, period, model, sharing, debug, logger, printouts)
+            return DynamicProgrammingPlanner(horizon, period, sharing, debug, logger, printouts)
         
         elif preplanner_type.lower() in ["eventannouncer", "announcer"]:
             events_path = preplanner_dict.get('eventsPath', None)

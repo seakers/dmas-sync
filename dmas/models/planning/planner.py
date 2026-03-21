@@ -1171,72 +1171,70 @@ class AbstractPlanner(ABC):
                                   specs : object = None,
                                   ) -> bool:
         """ Checks if a given sequence of observations can be performed by a given agent """
-        try:
-            # Validate inputs
-            assert isinstance(observations, list), "Observations must be a list."
-            assert all(isinstance(obs, ObservationAction) for obs in observations), "All elements in observations must be of type ObservationAction."
-            observations : list[ObservationAction] = observations
+        # Validate inputs
+        assert isinstance(observations, list), "Observations must be a list."
+        assert all(isinstance(obs, ObservationAction) for obs in observations), "All elements in observations must be of type ObservationAction."
+        observations : list[ObservationAction] = observations
 
-            if isinstance(state, SatelliteAgentState) :
-                # get pointing agility specifications                
-                if max_slew_rate is None or max_torque is None:
-                    if specs is None: raise ValueError('Either `specs` or both `max_slew_rate` and `max_torque` must be provided.')
-                    max_slew_rate, max_torque = self._collect_agility_specs(specs)
+        if isinstance(state, SatelliteAgentState) :
+            # get pointing agility specifications                
+            if max_slew_rate is None or max_torque is None:
+                if specs is None: raise ValueError('Either `specs` or both `max_slew_rate` and `max_torque` must be provided.')
+                max_slew_rate, max_torque = self._collect_agility_specs(specs)
 
-                # validate agility specifications
-                if max_slew_rate is None: raise ValueError('ADCS `maxRate` specification missing from agent specs object.')
-                if max_torque is None: raise ValueError('ADCS `maxTorque` specification missing from agent specs object.')
-                assert max_slew_rate > 0.0
-                # assert max_torque > 0.0
+            # validate agility specifications
+            if max_slew_rate is None: raise ValueError('ADCS `maxRate` specification missing from agent specs object.')
+            if max_torque is None: raise ValueError('ADCS `maxTorque` specification missing from agent specs object.')
+            assert max_slew_rate > 0.0
+            # assert max_torque > 0.0
 
-                # construct observation sequence parameter list
-                observation_parameters = []
-                for j,observation_j in enumerate(observations):
-                    # estimate the state of the agent at the given measurement
-                    observation_j : ObservationAction
-                    th_j = observation_j.look_angle
-                    t_j = observation_j.t_start
-                    d_j = observation_j.t_end - t_j
+            # construct observation sequence parameter list
+            observation_parameters = []
+            for j,observation_j in enumerate(observations):
+                # estimate the state of the agent at the given measurement
+                observation_j : ObservationAction
+                th_j = observation_j.look_angle
+                t_j = observation_j.t_start
+                d_j = observation_j.t_end - t_j
 
-                    # compare to prior measurements
-                    if j > 0: # there was a prior observation performed
-                        # estimate the state of the agent at the prior mesurement
-                        observation_i : ObservationAction = observations[j-1]
-                        th_i = observation_i.look_angle
-                        t_i = observation_i.t_start
-                        d_i = observation_i.t_end - t_i
+                # compare to prior measurements
+                if j > 0: # there was a prior observation performed
+                    # estimate the state of the agent at the prior mesurement
+                    observation_i : ObservationAction = observations[j-1]
+                    th_i = observation_i.look_angle
+                    t_i = observation_i.t_start
+                    d_i = observation_i.t_end - t_i
 
-                    else: # there was no prior measurement
-                        # use agent's current state as previous state
-                        th_i = state.attitude[0]
-                        t_i = state._t
-                        d_i = 0.0
+                else: # there was no prior measurement
+                    # use agent's current state as previous state
+                    th_i = state.attitude[0]
+                    t_i = state._t
+                    d_i = 0.0
 
-                    observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate, j == 0))
+                observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate, j == 0))
 
-                # check if observations sequence is valid
-                if any([not self.is_observation_pair_valid(*params) 
-                            for params in observation_parameters]):
-                    for idx, params in enumerate(observation_parameters):
-                        if not self.is_observation_pair_valid(*params):
-                            x = 1   
-                    return False
+            # check if observations sequence is valid
+            if any([not self.is_observation_pair_valid(*params) 
+                        for params in observation_parameters]):
+                # ---------------------
+                # DEBUGGING BREAKPOINTS
+                # for idx, params in enumerate(observation_parameters):
+                #     if not self.is_observation_pair_valid(*params):
+                #         x = 1   
+                # ---------------------
+                return False
 
-                # ensure no mutually exclusive tasks are present in observation sequence
-                return all(
-                    not obs_i.obs_opp.is_mutually_exclusive(obs_j.obs_opp)
-                    for i, obs_i in enumerate(observations)
-                    for j, obs_j in enumerate(observations)
-                    if i < j
-                )
-            else:
-                raise NotImplementedError(f'Observation path validity check for agents with state type {type(state)} not yet implemented.')
-        finally:
-            # DEBUG SECTION
-            pass
-            # for pair_idx,(t_i,d_i,th_i,t_j,d_j,th_j,max_slew_rate) in enumerate(observation_parameters):
-            #     if not self.is_observation_pair_valid(t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate):
-            #         x = 1
+            return True
+            # # ensure no mutually exclusive tasks are present in observation sequence
+            # return all(
+            #     not obs_i.obs_opp.is_mutually_exclusive(obs_j.obs_opp)
+            #     for i, obs_i in enumerate(observations)
+            #     for j, obs_j in enumerate(observations)
+            #     if i < j
+            # )
+        else:
+            raise NotImplementedError(f'Observation path validity check for agents with state type {type(state)} not yet implemented.')
+        
 
     def is_observation_pair_valid(self, 
                                   t_i, d_i, th_i, 
