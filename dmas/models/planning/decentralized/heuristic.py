@@ -504,17 +504,16 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
         # initialize observation plan
         t_curr = state.get_time()
         if t_curr < self._preplan.t_next and self._preplan.actions:
-            # TODO consider preplanned observations
-            # raise NotImplementedError('Incorporating preplanned actions into reactive replanning not yet implemented.')
+            # consider preplanned observations            
             plan_sequence : List[Tuple[ObservationOpportunity, ObservationAction]] \
                 = [(action.obs_opp, action) for action in self._preplan.actions 
                     if isinstance(action, ObservationAction) and t_curr < action.t_end]
                         
             scheduled_obs_opps = set(obs_opp for obs_opp,_ in plan_sequence)
             current_path = [action for _,action in plan_sequence]
-            # sorted_observation_opportunities = [obs_opp for obs_opp in sorted_observation_opportunities 
-            #                                     if obs_opp not in scheduled_obs_opps]
+
         else:
+            # initialize empty plan sequence; no preplanned observations to consider
             scheduled_obs_opps = set()
             current_path = []
 
@@ -621,49 +620,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             new_path = sorted(new_path, key=lambda action: action.t_start)
             
             # assign new path as current path
-            current_path = new_path
-            # if self.is_observation_path_valid(state, new_path, max_slew_rate, max_torque, specs):
-            #     current_path = new_path
-                # plan_sequence.append((new_obs, new_observation))
-
-            # # return new path if valid
-            # return (new_path, [new_observation], []) if self.is_observation_path_valid(state, new_path, max_slew_rate, max_torque, specs) else (None, None, None)
-
-
-            # # get previous and future observation actions' info
-            # th_prev,t_prev,d_prev,th_next,t_next,d_next \
-            #     = self._get_previous_and_future_observation_info(state, obs_opp, plan_sequence, max_slew_rate)
-            
-            # # set task observation angle
-            # th_img = np.average((obs_opp.slew_angles.left, obs_opp.slew_angles.right))
-
-            # # calculate maneuver times
-            # m_prev = abs(th_prev - th_img) / max_slew_rate if max_slew_rate else 0.0
-            # m_next = abs(th_img - th_next) / max_slew_rate if max_slew_rate else 0.0
-            
-            # # select task imaging time and duration # TODO room for improvement? Currently aims for earliest and shortest observation possible
-            # t_img = max(t_prev + d_prev + m_prev, obs_opp.accessibility.left)
-            # d_img = obs_opp.min_duration
-            
-            # # check if the observation fits within the task's accessibility window
-            # if t_img + d_img not in obs_opp.accessibility: continue
-
-            # # check if the observation is feasible
-            # prev_action_feasible : bool = (t_prev + d_prev + m_prev <= t_img - 1e-6)
-            # next_action_feasible : bool = (t_img + d_img + m_next   <= t_next - 1e-6)
-            # if prev_action_feasible and next_action_feasible:
-            #     # # check if observation is mutually exclusive with any already scheduled observations
-            #     # if any(obs_opp.is_mutually_exclusive(obs_j) for obs_j,_ in plan_sequence): continue
-                
-            #     # create observation action
-            #     action = ObservationAction(obs_opp.instrument_name, 
-            #                                th_img, 
-            #                                t_img, 
-            #                                d_img,
-            #                                obs_opp)
-
-            #     # add to plan sequence
-            #     plan_sequence.append((obs_opp, action))
+            current_path = new_path            
 
         # return new path
         return current_path 
