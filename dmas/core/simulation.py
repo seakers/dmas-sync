@@ -1017,22 +1017,22 @@ class Simulation:
 
         # initialize preplanner
         if preplanner_type.lower() in ["heuristic"]:
-            return HeuristicInsertionPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
+            return HeuristicInsertionPeriodicPlanner(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["naive", "fifo", "earliest"]:
-            return EarliestAccessPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
+            return EarliestAccessPeriodicPlanner(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'nadir':
-            return NadirPointingPeriodicPlanner(horizon, period, sharing, debug, logger, printouts)
+            return NadirPointingPeriodicPlanner(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
 
         elif preplanner_type.lower() in ["dynamic", "dp"]:
-            return DynamicProgrammingPlanner(horizon, period, sharing, debug, logger, printouts)
+            return DynamicProgrammingPlanner(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
         
         elif preplanner_type.lower() in ["eventannouncer", "announcer"]:
             events_path = preplanner_dict.get('eventsPath', None)
             if events_path is None: raise ValueError(f'predefined events path not specified in input file.')
             
-            return EventAnnouncerPlanner(events_path, agent_mission, debug, logger, printouts)
+            return EventAnnouncerPlanner(agent_results_dir, events_path, agent_mission, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'dealer':
             # unpack preplanner parameters
@@ -1067,7 +1067,7 @@ class Simulation:
                         client_missions.pop(client, None)
             
             if mode == 'test':                   
-                return TestingDealer(client_orbitdata, client_specs, horizon, period, printouts)
+                return TestingDealer(agent_results_dir, client_orbitdata, client_specs, horizon, period, printouts)
 
             elif mode in ['milp', 'mixed-integer-linear-programming']:
                 model = preplanner_dict.get('model', DealerMILPPlanner.STATIC).lower()
@@ -1075,7 +1075,8 @@ class Simulation:
                 max_tasks = preplanner_dict.get('maxTasks', np.Inf)
                 max_observations = preplanner_dict.get('maxObservations', 10)
 
-                return DealerMILPPlanner(client_orbitdata, 
+                return DealerMILPPlanner(agent_results_dir, 
+                                         client_orbitdata, 
                                          client_specs, 
                                          client_missions, 
                                          model, 
@@ -1091,10 +1092,10 @@ class Simulation:
 
         elif preplanner_type.lower() == 'worker':
             dealer_name = preplanner_dict.get('dealerName', None)
-            return WorkerPlanner(dealer_name, debug, logger, printouts)
+            return WorkerPlanner(agent_results_dir, dealer_name, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'blank':
-            return BlankPlanner(horizon, period, sharing, debug, logger, printouts)
+            return BlankPlanner(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
 
         # elif... # add more preplanners here
 

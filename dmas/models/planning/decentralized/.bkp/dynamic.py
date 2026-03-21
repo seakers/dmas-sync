@@ -28,6 +28,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
     MODELS = [DISCRETE, CONTINUOUS, EARLIEST]
 
     def __init__(self, 
+                 agent_results_dir : str,
                  horizon: float, 
                  period : float, 
                  model : str = EARLIEST,
@@ -36,7 +37,8 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                  logger: Logger = None,
                  printouts : bool = True
                 ) -> None:
-        super().__init__(horizon, 
+        super().__init__(agent_results_dir,
+                         horizon, 
                          period, 
                          sharing,
                          debug, 

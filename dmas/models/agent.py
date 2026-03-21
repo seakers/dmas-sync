@@ -301,9 +301,9 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
-                if True:
-                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                    x = 1 # breakpoint
+                # if True:
+                #     self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                #     x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
@@ -1136,6 +1136,9 @@ class SimulationAgent(object):
                 self._preplanner.print_results()
             if self._replanner is not None:
                 self._replanner.print_results()
+
+            # clear observation trackers
+            self._observations_tracker.teardown()
 
         except Exception as e:
             raise e        

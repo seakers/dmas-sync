@@ -31,6 +31,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
     OPPORTUNISTIC = 'opportunistic' # opportunistic information sharing based on access opportunities
 
     def __init__(   self, 
+                    agent_results_dir : str,
                     horizon : float = np.Inf,
                     period : float = np.Inf,
                     sharing : str = PERIODIC,
@@ -64,10 +65,14 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         self._plan = PeriodicPlan(t=-1,horizon=horizon,t_next=0.0)   # initialized empty plan
                 
         # initialize attributes
-        self.pending_reqs_to_broadcast : set[TaskRequest] = set()            # set of observation requests that have not been broadcasted
+        self.pending_reqs_to_broadcast : set[TaskRequest] = set() 
+        self._observation_rewards = DataSink(out_dir=agent_results_dir, owner_name='PeriodicPlanner', data_name='rewards')           # set of observation requests that have not been broadcasted
 
     def print_results(self):
-        return super().print_results()
+        super().print_results()
+
+        # print observation rewards
+        self._observation_rewards.close()
 
     def update_percepts(self, 
                         state : SimulationAgentState,
@@ -121,18 +126,12 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         # get only available tasks
         available_tasks : list[GenericObservationTask] = self.get_available_tasks(tasks, planning_horizon)
         
-        if available_tasks:
-            x= 1
-
         # calculate coverage opportunities for tasks
         access_opportunities : dict[tuple] = self.calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
 
         # create task observation opportunities from known tasks and future access opportunities
         observation_opportunities : list[ObservationOpportunity] \
             = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
-
-        if observation_opportunities:
-            x= 1
 
         # schedule observation tasks
         observations : list = self._schedule_observations(state, specs, orbitdata, observation_opportunities, mission, observation_history)

@@ -156,7 +156,7 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
             obs_i_reward = self.estimate_observation_opportunity_value(
                 obs_i, t_obs_i, d_obs_i, specs, cross_track_fovs, 
                 orbitdata, mission, observation_history, task_n_obs, task_t_prevs
-            ) if i > 0 else self.EPS  # dummy observation has no reward
+            ) if i > 0 else 1  # dummy observation has no reward but intrinsic value of 1 to ensure that reachable observations are selected as starting points for paths
 
             # calculate cumulative reward for this observation opportunity
             current_value = dp_state_i['value'] + obs_i_reward
@@ -192,16 +192,25 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                     dp_state_j['predecessor']   = (obs_i, t_obs_i, d_obs_i, th_obs[i])
                     dp_state_j['is_reachable']  = True
 
-        # Step 5: Reconstruct best sequence
+        # remove dummy task from best value
+        best_value -= 1 
+
+        if best_value < 0:
+            x= 1
+
+        # Reconstruct best sequence
         sequence : List[Tuple[ObservationOpportunity, ...]]= []
         current = best_terminal_obs
         while current is not None:
             # add current observation to sequence
-            sequence.append(current)
+            sequence.append(current)            
 
-            # move to predecessor
+            # unpack current observation
             current_obs = current[0]
-            current = dp_states[current_obs]['predecessor']
+            dp_state = dp_states[current_obs]            
+            
+            # move to predecessor
+            current = dp_state['predecessor']
         
         # ensure at least one observation was selected
         assert sequence, "No feasible observation sequence found."
@@ -223,15 +232,47 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
 
             # add to observations list
             observations.append(obs_action)
+
+            # add to rewards sink for every observation in sequence
+            for task in obs_k.tasks:
+                n_obs_prev,t_prev = dp_state['task_states'].get(task.id)
+                reward_dict = {
+                    'task_id' : task.id,
+                    'n_obs' : n_obs_prev+1,
+                    't_obs' : t_obs_k,
+                    't_prev' : t_prev,
+                    'agent_name' : state.agent_name,
+                    # distribute reward evenly across observations and tasks in sequence (excluding dummy observation)
+                    # TODO refine logging of reward for each task observation in sequence
+                    'planned reward' : best_value / (len(sequence)-1) / len(obs_k.tasks) if len(sequence) > 1 else best_value,  
+                }
+                self._observation_rewards.append(reward_dict)
         
         # remove dummy observation from sequence
         sequence.pop(0)
         observation_opportunities.pop(0)
         observations.pop(0)
-        best_value -= self.EPS 
 
         # return final observation sequence
         return observations    
+    
+        for performed_bid in performed_bids:
+            performed_bid : Bid
+            # calculate reward for this bid
+
+            # compile reward information for this bid 
+            reward_dict = {
+                'task_id' : performed_bid.task.id,
+                'n_obs' : performed_bid.n_obs,
+                't_img' : performed_bid.t_img,
+                't_bid' : performed_bid.t_bid,
+                'agent_name' : performed_bid.owner,
+                'planned reward' : performed_bid.owner_bid,
+                # 'performed reward' : performed_bid.winning_bid
+            }
+
+            # add to rewards sink
+            self._observation_rewards.append(reward_dict)
 
     def __create_adjacency_dict(self, 
                                 state : SatelliteAgentState, 

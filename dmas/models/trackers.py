@@ -1098,3 +1098,15 @@ class TaskObservationTracker:
                 f"Unsupported encoding_type: {encoding_type}. "
                 f"Supported types are list, dict, and str."
             )
+        
+    def teardown(self) -> None:
+        """
+        Release all internal state held by this tracker.
+
+        Intended to be called once at the end of the simulation, after all
+        planning and broadcasting is complete.  After this call the tracker
+        is empty and should not be used further.
+        """
+        self._records.clear()
+        self._loc_to_tasks.clear()
+        self._shareable.clear()

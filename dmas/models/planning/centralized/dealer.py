@@ -29,6 +29,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
     Generates plans for other agents at a fixed interval.
     """
     def __init__(self, 
+                 agent_results_dir : str,
                  client_orbitdata : Dict[str, OrbitData], 
                  client_specs : Dict[str, object],
                  client_missions : Dict[str, Mission],
@@ -38,7 +39,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                  debug = False, 
                  logger = None,
                  printouts : bool = True):
-        super().__init__(horizon, period, sharing, debug, logger, printouts)
+        super().__init__(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
 
         # check parameters
         assert isinstance(client_orbitdata, dict), "Clients must be a dictionary mapping agent names to OrbitData instances."

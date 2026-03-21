@@ -10,6 +10,12 @@
             "debug": "False",
             "period" : 500,
             "sharing" : "periodic"
+        },
+        "dp": {
+            "@type": "dp",
+            "debug": "False",
+            "period" : 500,
+            "sharing" : "periodic"
         }
     },
     "replanners" : {
