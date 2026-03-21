@@ -546,15 +546,11 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
                                             if action.t_start in new_obs.accessibility
                                             or action.t_end in new_obs.accessibility
                                             or (action.t_start <= new_obs.accessibility.left and action.t_end >= new_obs.accessibility.right)
-                                            ]            
-            # observations_during_task_access_alt = [action for action in current_path
-            #                                 if action.t_start in new_obs.accessibility
-            #                                 or action.t_end in new_obs.accessibility
-            #                                 or (action.t_start <= new_obs.accessibility.left and action.t_end >= new_obs.accessibility.right)
-            #                                 ]            
+                                            ]               
 
             # compile conflicting observations        
-            conflicting_observations = {prev_observation, next_observation} if prev_observation else {next_observation} if next_observation else set()
+            conflicting_observations = {prev_observation, next_observation} 
+            conflicting_observations.discard(None)
             ## get unique observations during new observation opportunity access
             conflicting_observations.update(observations_during_task_access)
             ## sort conflicting observations by start time

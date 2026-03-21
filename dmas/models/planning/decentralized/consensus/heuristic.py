@@ -739,10 +739,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         t_img, th_img = None, np.average([new_obs.slew_angles.left, new_obs.slew_angles.right])
 
         # find possible conflicts in current path
-        ## find observations that are being performed during new observation opportunity accessibility
-        observations_during_task_access = [action for action in current_path
-                                           if action.t_start in new_obs.accessibility
-                                           or action.t_end in new_obs.accessibility]
         ## get latest observation before new observation opportunity accessibility
         prev_observations = [action for action in current_path
                              if action.t_end <= new_obs.accessibility.left]
@@ -750,7 +746,18 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         ## get earliest observation after new observation opportunity accessibility
         next_observations = [action for action in current_path
                              if action.t_start >= new_obs.accessibility.right]
-        next_observation = min(next_observations, key=lambda action: action.t_start) if next_observations else None
+        if next_observations:
+            next_observation = min(next_observations, key=lambda action: action.t_start) 
+        else:
+            # dummy observation action representing end state if no future observations exist and the agent performs this observation opportunity;
+            #  used to check feasibility of addind the new observation at the end of the current path
+            next_observation = ObservationAction(new_obs.instrument_name, th_img, np.Inf, 0.0) 
+        ## find observations that are being performed during new observation opportunity accessibility
+        observations_during_task_access = [action for action in current_path
+                                           if action.t_start in new_obs.accessibility
+                                           or action.t_end in new_obs.accessibility
+                                           or (action.t_start <= new_obs.accessibility.left and action.t_end >= new_obs.accessibility.right)
+                                        ]
 
         # compile conflicting observations        
         conflicting_observations = {prev_observation, next_observation} if prev_observation else {next_observation} if next_observation else set()
