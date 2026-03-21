@@ -605,11 +605,7 @@ class SimulationAgent(object):
         }        
         
     def __update_requests(self, state : SimulationAgentState) -> None:
-        """ Updates the known requests to only include active requests. """
-        had_reqs = bool(self._known_reqs)
-        if had_reqs:
-            prev_reqs = self._known_reqs.copy()
-        
+        """ Updates the known requests to only include active requests. """        
         # filter for request availability
         self._known_reqs = {key : req for key,req in self._known_reqs.items() 
                            if req.task.is_available(state.get_time())}

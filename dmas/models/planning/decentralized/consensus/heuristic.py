@@ -61,7 +61,23 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     mission : Mission,
                                     observation_history : TaskObservationTracker
                                     ) -> tuple:    
-        """ Build bundle from latest periodic preplan. """
+        """ Build bundle from latest periodic preplan. """        
+        # release all bids in bundle to prepare for new bundle building phase
+        for _,obs_tasks in self._bundle:
+            for task,n_obs in obs_tasks.items():
+                # get bid to reset
+                bid_to_reset : Bid = self._results[task][n_obs]
+
+                # reset bid
+                bid_to_reset.reset(state.get_time())
+
+                # update results
+                self._results[task][n_obs] = bid_to_reset
+        
+        # reset bundle and path to prepare for new bundle building phase
+        self._bundle = []
+        self._path = []
+        
         # compile instrument field of view specifications   
         cross_track_fovs : dict = self._collect_fov_specs(specs)
 
@@ -72,15 +88,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         sorted_observation_opportunities : List[ObservationOpportunity] = []
         for obs_action in preplan_path:
             # create new observation opportunity with restricted access and look angles
-            # restricted_obs_opp = ObservationOpportunity(
-            #     obs_action.obs_opp.tasks,
-            #     obs_action.instrument_name,
-            #     Interval(obs_action.t_start, obs_action.t_end),
-            #     obs_action.t_end-obs_action.t_start,
-            #     Interval(obs_action.look_angle, obs_action.look_angle),
-            #     obs_action.obs_opp.id
-            # )
             restricted_obs_opp = obs_action.obs_opp.copy()
+            restricted_obs_opp.accessibility = Interval(obs_action.t_start, obs_action.t_end)
+            restricted_obs_opp.availability = Interval(obs_action.t_start, obs_action.t_end)
+            restricted_obs_opp.slew_angles = Interval(obs_action.look_angle, obs_action.look_angle)
 
             # add to sorted observation opportunities
             sorted_observation_opportunities.append(restricted_obs_opp)
@@ -89,8 +100,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         proposed_bundle, proposed_path, proposed_bids = \
               self.__heuristic_insertion_bundle_builder(state, specs, cross_track_fovs, sorted_observation_opportunities, orbitdata, mission, observation_history)
         
-        if len(preplan_path) != len(proposed_path):
-            raise NotImplementedError("Testing for cases where not all observations from preplan are added to bundle not yet performed.")
+        # if len(preplan_path) != len(proposed_path):
+        #     # TODO ensure that the reason why the paths don't match is because the agent was unable to outbid for some of the observations 
+        #     # in the preplan and not because of an error in the bundle building process
+        #     raise NotImplementedError("Testing for cases where not all observations from preplan are added to bundle not yet performed.")
 
         # ensure that proposed bundle and path are of same length
         assert len(proposed_bundle) == len(proposed_path), \
