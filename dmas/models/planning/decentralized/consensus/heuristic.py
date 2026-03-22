@@ -760,7 +760,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                         ]
 
         # compile conflicting observations        
-        conflicting_observations = {prev_observation, next_observation} if prev_observation else {next_observation} if next_observation else set()
+        conflicting_observations = {prev_observation, next_observation} # if prev_observation else {next_observation} if next_observation else set()
+        conflicting_observations.discard(None)
         ## get unique observations during new observation opportunity access
         conflicting_observations.update(observations_during_task_access)
         ## sort conflicting observations by start time

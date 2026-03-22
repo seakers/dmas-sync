@@ -1,5 +1,5 @@
 import copy
-from typing import List, Tuple
+from typing import List, Set, Tuple
 from orbitpy.util import Spacecraft
 
 from tqdm import tqdm
@@ -457,7 +457,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
                                specs : object, 
                                orbitdata : OrbitData, 
                                planning_horizon : Interval,
-                               observation_opportunities : list,
+                               observation_opportunities : List[ObservationOpportunity],
                                mission : Mission,
                                observation_history : TaskObservationTracker
                                ) -> list:        
@@ -549,7 +549,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
                                             ]               
 
             # compile conflicting observations        
-            conflicting_observations = {prev_observation, next_observation} 
+            conflicting_observations : Set[ObservationAction] = {prev_observation, next_observation} 
             conflicting_observations.discard(None)
             ## get unique observations during new observation opportunity access
             conflicting_observations.update(observations_during_task_access)

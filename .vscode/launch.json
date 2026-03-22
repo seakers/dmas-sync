@@ -415,7 +415,7 @@
                 // "--only-precompute",
                 // "--only-simulate",
                 // "--only-postprocess",
-                "--force-simulate",
+                // "--force-simulate",
                 // "--force-postprocess",
                 "--force-summarize",
                 "--quiet",
