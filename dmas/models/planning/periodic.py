@@ -13,7 +13,7 @@ from execsatm.utils import Interval
 from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.planner import AbstractPlanner
-from dmas.models.trackers import DataSink, LatestObservationTracker
+from dmas.models.trackers import DataSink, TaskObservationTracker
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
@@ -31,6 +31,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
     OPPORTUNISTIC = 'opportunistic' # opportunistic information sharing based on access opportunities
 
     def __init__(   self, 
+                    agent_results_dir : str,
                     horizon : float = np.Inf,
                     period : float = np.Inf,
                     sharing : str = PERIODIC,
@@ -64,10 +65,14 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         self._plan = PeriodicPlan(t=-1,horizon=horizon,t_next=0.0)   # initialized empty plan
                 
         # initialize attributes
-        self.pending_reqs_to_broadcast : set[TaskRequest] = set()            # set of observation requests that have not been broadcasted
+        self.pending_reqs_to_broadcast : set[TaskRequest] = set() 
+        self._observation_rewards = DataSink(out_dir=agent_results_dir, owner_name='PeriodicPlanner', data_name='rewards')           # set of observation requests that have not been broadcasted
 
     def print_results(self):
-        return super().print_results()
+        super().print_results()
+
+        # print observation rewards
+        self._observation_rewards.close()
 
     def update_percepts(self, 
                         state : SimulationAgentState,
@@ -106,7 +111,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                         orbitdata : OrbitData,
                         mission : Mission,
                         tasks : list,
-                        observation_history : LatestObservationTracker,
+                        observation_history : TaskObservationTracker,
                     ) -> Plan:
         """ Generates a new plan for the agent """
         # compile instrument field of view specifications   
@@ -125,7 +130,8 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         access_opportunities : dict[tuple] = self.calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
 
         # create task observation opportunities from known tasks and future access opportunities
-        observation_opportunities : list[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
+        observation_opportunities : list[ObservationOpportunity] \
+            = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
 
         # schedule observation tasks
         observations : list = self._schedule_observations(state, specs, orbitdata, observation_opportunities, mission, observation_history)
@@ -164,7 +170,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                 and task.availability.overlaps(planning_horizon)]
     
     @abstractmethod
-    def _schedule_observations(self, state : SimulationAgentState, specs : object, orbitdata : OrbitData, observation_opportunities : list, mission : Mission, observation_history : LatestObservationTracker) -> list:
+    def _schedule_observations(self, state : SimulationAgentState, specs : object, orbitdata : OrbitData, observation_opportunities : list, mission : Mission, observation_history : TaskObservationTracker) -> list:
         """ Creates a list of observation actions to be performed by the agent """    
 
     @abstractmethod
@@ -258,14 +264,14 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         reward_grid_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REWARD_GRID, t_broadcast)
 
         # generate plan message to share any task requests generated
-        task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
+        task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast, only_own_info=False)
 
         # compile and return broadcast list
         return [
                 # state_msg, 
                 # observations_msg, 
+                task_requests_msg,
                 reward_grid_msg,
-                task_requests_msg
             ]
     
     def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:

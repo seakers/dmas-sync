@@ -9,7 +9,7 @@ from execsatm.mission import Mission
 
 from dmas.models.states import SimulationAgentState, SatelliteAgentState
 from dmas.models.planning.decentralized.earliest import EarliestAccessPeriodicPlanner, EarliestAccessReactivePlanner
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.actions import ObservationAction
 from dmas.utils.orbitdata import OrbitData
 
@@ -42,7 +42,7 @@ class NadirPointingPeriodicPlanner(EarliestAccessPeriodicPlanner):
                                orbitdata : OrbitData, 
                                observation_opportunities : List[ObservationOpportunity],
                                mission : Mission,
-                               observation_history : LatestObservationTracker
+                               observation_history : TaskObservationTracker
                                ) -> list:
         if not isinstance(state, SatelliteAgentState):
             raise NotImplementedError(f'Naive planner not yet implemented for agents of type `{type(state)}.`')
@@ -223,7 +223,7 @@ class NadirPointingReactivePlanner(EarliestAccessReactivePlanner):
                                planning_horizon : Interval,
                                observation_opportunities : List[ObservationOpportunity],
                                mission : Mission,
-                               observation_history : LatestObservationTracker
+                               observation_history : TaskObservationTracker
                                ) -> list:
         if not isinstance(state, SatelliteAgentState):
             raise NotImplementedError(f'Naive planner not yet implemented for agents of type `{type(state)}.`')

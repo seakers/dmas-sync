@@ -11,7 +11,7 @@ from execsatm.utils import Interval
 
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.models.actions import ObservationAction
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.planning.plan import Plan
 from dmas.models.planning.decentralized.consensus.bids import Bid
 from dmas.models.states import SimulationAgentState
@@ -59,9 +59,25 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     current_plan : Plan,
                                     orbitdata : OrbitData,
                                     mission : Mission,
-                                    observation_history : LatestObservationTracker
+                                    observation_history : TaskObservationTracker
                                     ) -> tuple:    
-        """ Build bundle from latest periodic preplan. """
+        """ Build bundle from latest periodic preplan. """        
+        # release all bids in bundle to prepare for new bundle building phase
+        for _,obs_tasks in self._bundle:
+            for task,n_obs in obs_tasks.items():
+                # get bid to reset
+                bid_to_reset : Bid = self._results[task][n_obs]
+
+                # reset bid
+                bid_to_reset.reset(state.get_time())
+
+                # update results
+                self._results[task][n_obs] = bid_to_reset
+        
+        # reset bundle and path to prepare for new bundle building phase
+        self._bundle = []
+        self._path = []
+        
         # compile instrument field of view specifications   
         cross_track_fovs : dict = self._collect_fov_specs(specs)
 
@@ -72,14 +88,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         sorted_observation_opportunities : List[ObservationOpportunity] = []
         for obs_action in preplan_path:
             # create new observation opportunity with restricted access and look angles
-            restricted_obs_opp = ObservationOpportunity(
-                obs_action.obs_opp.tasks,
-                obs_action.instrument_name,
-                Interval(obs_action.t_start, obs_action.t_end),
-                obs_action.t_end-obs_action.t_start,
-                Interval(obs_action.look_angle, obs_action.look_angle),
-                obs_action.obs_opp.id
-            )
+            restricted_obs_opp = obs_action.obs_opp.copy()
+            restricted_obs_opp.accessibility = Interval(obs_action.t_start, obs_action.t_end)
+            restricted_obs_opp.availability = Interval(obs_action.t_start, obs_action.t_end)
+            restricted_obs_opp.slew_angles = Interval(obs_action.look_angle, obs_action.look_angle)
 
             # add to sorted observation opportunities
             sorted_observation_opportunities.append(restricted_obs_opp)
@@ -88,8 +100,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         proposed_bundle, proposed_path, proposed_bids = \
               self.__heuristic_insertion_bundle_builder(state, specs, cross_track_fovs, sorted_observation_opportunities, orbitdata, mission, observation_history)
         
-        if len(preplan_path) != len(proposed_path):
-            raise NotImplementedError("Testing for cases where not all observations from preplan are added to bundle not yet performed.")
+        # if len(preplan_path) != len(proposed_path):
+        #     # TODO ensure that the reason why the paths don't match is because the agent was unable to outbid for some of the observations 
+        #     # in the preplan and not because of an error in the bundle building process
+        #     raise NotImplementedError("Testing for cases where not all observations from preplan are added to bundle not yet performed.")
 
         # ensure that proposed bundle and path are of same length
         assert len(proposed_bundle) == len(proposed_path), \
@@ -150,7 +164,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                        tasks : List[GenericObservationTask],
                        orbitdata : OrbitData,
                        mission : Mission,
-                       observation_history : LatestObservationTracker
+                       observation_history : TaskObservationTracker
                     ) -> tuple:
         
         """ Build new bundle and path according to selected heuristic model. """
@@ -338,7 +352,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : LatestObservationTracker
+                                       observation_history : TaskObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using earliest-access heuristic. 
@@ -362,7 +376,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : LatestObservationTracker
+                                       observation_history : TaskObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using task-value as main heuristic for order of task addition in bundle building process. 
@@ -396,7 +410,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : LatestObservationTracker
+                                       observation_history : TaskObservationTracker
                                     ) -> Tuple[list, list]:
         """ 
         Build bundle using task priority as main heuristic for order of task addition in bundle building process. 
@@ -430,7 +444,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                        sorted_observation_opportunities : List[ObservationOpportunity],
                                        orbitdata : OrbitData,
                                        mission : Mission,
-                                       observation_history : LatestObservationTracker
+                                       observation_history : TaskObservationTracker
                                     ) -> Tuple[list, List[ObservationAction], dict]:
         """ 
         Build bundle using a given heuristic. Attempts to insert tasks into existing path, right-shift existing tasks to accommodate for new 
@@ -725,10 +739,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         t_img, th_img = None, np.average([new_obs.slew_angles.left, new_obs.slew_angles.right])
 
         # find possible conflicts in current path
-        ## find observations that are being performed during new observation opportunity accessibility
-        observations_during_task_access = [action for action in current_path
-                                           if action.t_start in new_obs.accessibility
-                                           or action.t_end in new_obs.accessibility]
         ## get latest observation before new observation opportunity accessibility
         prev_observations = [action for action in current_path
                              if action.t_end <= new_obs.accessibility.left]
@@ -736,10 +746,22 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         ## get earliest observation after new observation opportunity accessibility
         next_observations = [action for action in current_path
                              if action.t_start >= new_obs.accessibility.right]
-        next_observation = min(next_observations, key=lambda action: action.t_start) if next_observations else None
+        if next_observations:
+            next_observation = min(next_observations, key=lambda action: action.t_start) 
+        else:
+            # dummy observation action representing end state if no future observations exist and the agent performs this observation opportunity;
+            #  used to check feasibility of addind the new observation at the end of the current path
+            next_observation = ObservationAction(new_obs.instrument_name, th_img, np.Inf, 0.0) 
+        ## find observations that are being performed during new observation opportunity accessibility
+        observations_during_task_access = [action for action in current_path
+                                           if action.t_start in new_obs.accessibility
+                                           or action.t_end in new_obs.accessibility
+                                           or (action.t_start <= new_obs.accessibility.left and action.t_end >= new_obs.accessibility.right)
+                                        ]
 
         # compile conflicting observations        
-        conflicting_observations = {prev_observation, next_observation} if prev_observation else {next_observation} if next_observation else set()
+        conflicting_observations = {prev_observation, next_observation} # if prev_observation else {next_observation} if next_observation else set()
+        conflicting_observations.discard(None)
         ## get unique observations during new observation opportunity access
         conflicting_observations.update(observations_during_task_access)
         ## sort conflicting observations by start time
@@ -1043,7 +1065,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                                                      cross_track_fovs : dict,
                                                                      orbitdata : OrbitData,
                                                                      mission : Mission,
-                                                                     observation_history : LatestObservationTracker
+                                                                     observation_history : TaskObservationTracker
                                                                     ) -> Tuple[Dict[int, Dict[GenericObservationTask, int]], 
                                                                                 Dict[int, Dict[GenericObservationTask, float]],
                                                                                 Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]]]:

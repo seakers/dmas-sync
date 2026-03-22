@@ -18,7 +18,7 @@ from execsatm.utils import Interval
 from dmas.models.actions import AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
-from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import SatelliteAgentState, SimulationAgentState
 from dmas.core.messages import  AgentStateMessage, PlanMessage
 from dmas.utils.orbitdata import OrbitData
@@ -29,6 +29,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
     Generates plans for other agents at a fixed interval.
     """
     def __init__(self, 
+                 agent_results_dir : str,
                  client_orbitdata : Dict[str, OrbitData], 
                  client_specs : Dict[str, object],
                  client_missions : Dict[str, Mission],
@@ -38,7 +39,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                  debug = False, 
                  logger = None,
                  printouts : bool = True):
-        super().__init__(horizon, period, sharing, debug, logger, printouts)
+        super().__init__(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
 
         # check parameters
         assert isinstance(client_orbitdata, dict), "Clients must be a dictionary mapping agent names to OrbitData instances."
@@ -177,7 +178,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                         orbitdata : OrbitData,
                         mission : Mission,
                         tasks : List[GenericObservationTask],
-                        observation_history : LatestObservationTracker,
+                        observation_history : TaskObservationTracker,
                     ) -> Plan:
         # update plans for all client agents
         self.client_plans : Dict[str, PeriodicPlan] = self._generate_client_plans(state, specs, orbitdata, mission, tasks, observation_history)
@@ -203,7 +204,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                orbitdata : OrbitData, 
                                mission : Mission, 
                                tasks : List[GenericObservationTask], 
-                               observation_history : LatestObservationTracker):
+                               observation_history : TaskObservationTracker):
         """
         Generates plans for each agent based on the provided parameters.
         """
@@ -451,7 +452,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                       state : SimulationAgentState, 
                                       available_client_tasks : Dict[Mission, List[GenericObservationTask]],
                                       schedulable_client_tasks: Dict[str, List[ObservationOpportunity]], 
-                                      observation_history : LatestObservationTracker
+                                      observation_history : TaskObservationTracker
                                     ) -> Dict[str, List[ObservationAction]]:
         """ schedules observations for all clients """        
     

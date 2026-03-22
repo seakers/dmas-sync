@@ -22,7 +22,8 @@ from execsatm.utils import Interval
 
 from dmas.models.actions import ObservationAction
 from dmas.models.planning.plan import Plan
-from dmas.models.trackers import LatestObservationTracker
+# from dmas.models.trackers import LatestObservationTracker
+from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import *
 from dmas.models.science.requests import *
 from dmas.core.messages import *
@@ -426,7 +427,11 @@ class AbstractPlanner(ABC):
                 bins[bin_key].append(task)
 
             # populate adjacency list
-            with tqdm(total=len(observation_opportunities), desc="Checking task clusterability", leave=False, disable=not self._printouts) as pbar:
+            with tqdm(total=len(observation_opportunities), 
+                      desc="Checking task clusterability", 
+                      leave=False, 
+                      disable=not self._printouts
+                    ) as pbar:
                 for b in bins:
                     candidates : list[ObservationOpportunity] \
                           = bins[b] + bins.get(b + 1, []) + bins.get(b - 1, [])
@@ -623,7 +628,7 @@ class AbstractPlanner(ABC):
                                      cross_track_fovs : Dict[str, float],
                                      orbitdata : OrbitData,
                                      mission : Mission,
-                                     observation_history : LatestObservationTracker,
+                                     observation_history : TaskObservationTracker,
                                      task_n_obs : Dict[GenericObservationTask,int] = None,
                                      task_t_prevs : Dict[GenericObservationTask,int] = None
                                 ) -> float:
@@ -687,38 +692,32 @@ class AbstractPlanner(ABC):
     def _count_previous_observations_from_history(self,
                                                    obs : ObservationOpportunity,
                                                    t_img : float,
-                                                   observation_history : LatestObservationTracker,
+                                                   observation_history : TaskObservationTracker,
                                                 ) -> Tuple[Dict[GenericObservationTask,int], Dict[GenericObservationTask,float]]:
         """ Counts the number of previous observations for each task in the observation opportunity. """
         # initialize observation counts and previous observation times
         task_n_obs : Dict[GenericObservationTask,int] = {task : 0 for task in obs.tasks} 
-        task_t_prev : Dict[GenericObservationTask,int] = {task : np.NINF for task in obs.tasks} 
+        task_t_prev : Dict[GenericObservationTask,float] = {task : np.NINF for task in obs.tasks} 
 
         # Find tergets per task
         for task in obs.tasks:
-            # iterate through task targets
-            for *_,grid_index,gp_index in task.location:
-                # unpack grid and gp indices
-                grid_index,gp_index = int(grid_index), int(gp_index)
+            # get latest observation info for this task
+            task_history = observation_history.lookup(task.id)
 
-                # get past observations for this target before current image time
-                # target_observation : ObservationTracker = observation_history.get_observation_history(grid_index, gp_index)
-                target_history = observation_history.lookup(grid_index, gp_index)
-                t_prev,n_obs,_ = list(target_history.values())
+            # unpack observation history for this task
+            n_obs = task_history['n_obs']
+            t_prev = task_history['t_last']
 
-                # check if there are no previous observations for this target
-                # if target_observation is None: continue  
-                if n_obs == -1: continue
+            # check if there are no previous observations for this task
+            if n_obs == -1: continue
 
-                # count number of previous observations and observation time for this task
-                # task_n_obs[task] += target_observation.n_obs
-                # task_t_prev[task] = max(task_t_prev[task], target_observation.t_last) if target_observation.t_last <= t_img else task_t_prev[task]
-                task_n_obs[task] += n_obs
-                task_t_prev[task] = max(task_t_prev[task], t_prev) if t_prev <= t_img else task_t_prev[task]
+            # count number of previous observations and observation time for this task
+            task_n_obs[task] = max(n_obs, task_n_obs[task])
+            task_t_prev[task] = max(task_t_prev[task], t_prev) if t_prev <= t_img else task_t_prev[task]
 
-                # validate previous observation time
-                if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, \
-                    "Previous observation time must be non-negative."
+            # validate previous observation time
+            if task_n_obs[task] > 0: assert task_t_prev[task] >= 0.0, \
+                "Previous observation time must be non-negative."            
                     
         # return observation counts and previous observation times
         return task_n_obs, task_t_prev
@@ -1176,72 +1175,65 @@ class AbstractPlanner(ABC):
                                   specs : object = None,
                                   ) -> bool:
         """ Checks if a given sequence of observations can be performed by a given agent """
-        try:
-            # Validate inputs
-            assert isinstance(observations, list), "Observations must be a list."
-            assert all(isinstance(obs, ObservationAction) for obs in observations), "All elements in observations must be of type ObservationAction."
-            observations : list[ObservationAction] = observations
+        # Validate inputs
+        assert isinstance(observations, list), "Observations must be a list."
+        assert all(isinstance(obs, ObservationAction) for obs in observations), "All elements in observations must be of type ObservationAction."
+        observations : list[ObservationAction] = observations
 
-            if isinstance(state, SatelliteAgentState) :
-                # get pointing agility specifications                
-                if max_slew_rate is None or max_torque is None:
-                    if specs is None: raise ValueError('Either `specs` or both `max_slew_rate` and `max_torque` must be provided.')
-                    max_slew_rate, max_torque = self._collect_agility_specs(specs)
+        if isinstance(state, SatelliteAgentState):
 
-                # validate agility specifications
-                if max_slew_rate is None: raise ValueError('ADCS `maxRate` specification missing from agent specs object.')
-                if max_torque is None: raise ValueError('ADCS `maxTorque` specification missing from agent specs object.')
-                assert max_slew_rate > 0.0
-                # assert max_torque > 0.0
+            # get pointing agility specifications                
+            if max_slew_rate is None or max_torque is None:
+                if specs is None: raise ValueError('Either `specs` or both `max_slew_rate` and `max_torque` must be provided.')
+                max_slew_rate, max_torque = self._collect_agility_specs(specs)
 
-                # construct observation sequence parameter list
-                observation_parameters = []
-                for j,observation_j in enumerate(observations):
-                    # estimate the state of the agent at the given measurement
-                    observation_j : ObservationAction
-                    th_j = observation_j.look_angle
-                    t_j = observation_j.t_start
-                    d_j = observation_j.t_end - t_j
+            # validate agility specifications
+            if max_slew_rate is None: raise ValueError('ADCS `maxRate` specification missing from agent specs object.')
+            if max_torque is None: raise ValueError('ADCS `maxTorque` specification missing from agent specs object.')
+            assert max_slew_rate > 0.0
+            # assert max_torque > 0.0
 
-                    # compare to prior measurements
-                    if j > 0: # there was a prior observation performed
-                        # estimate the state of the agent at the prior mesurement
-                        observation_i : ObservationAction = observations[j-1]
-                        th_i = observation_i.look_angle
-                        t_i = observation_i.t_start
-                        d_i = observation_i.t_end - t_i
+            # construct observation sequence parameter list
+            observation_parameters = []
+            for j,observation_j in enumerate(observations):
+                # estimate the state of the agent at the given measurement
+                observation_j : ObservationAction
+                th_j = observation_j.look_angle
+                t_j = observation_j.t_start
+                d_j = observation_j.t_end - t_j
 
-                    else: # there was no prior measurement
-                        # use agent's current state as previous state
-                        th_i = state.attitude[0]
-                        t_i = state._t
-                        d_i = 0.0
+                # compare to prior measurements
+                if j > 0: # there was a prior observation performed
+                    # estimate the state of the agent at the prior mesurement
+                    observation_i : ObservationAction = observations[j-1]
+                    th_i = observation_i.look_angle
+                    t_i = observation_i.t_start
+                    d_i = observation_i.t_end - t_i
 
-                    observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate, j == 0))
+                else: # there was no prior measurement
+                    # use agent's current state as previous state
+                    th_i = state.attitude[0]
+                    t_i = state._t
+                    d_i = 0.0
 
-                # check if observations sequence is valid
-                if any([not self.is_observation_pair_valid(*params) 
-                            for params in observation_parameters]):
-                    for idx, params in enumerate(observation_parameters):
-                        if not self.is_observation_pair_valid(*params):
-                            x = 1   
-                    return False
+                observation_parameters.append((t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate, j == 0))
 
-                # ensure no mutually exclusive tasks are present in observation sequence
-                return all(
-                    not obs_i.obs_opp.is_mutually_exclusive(obs_j.obs_opp)
-                    for i, obs_i in enumerate(observations)
-                    for j, obs_j in enumerate(observations)
-                    if i < j
-                )
-            else:
-                raise NotImplementedError(f'Observation path validity check for agents with state type {type(state)} not yet implemented.')
-        finally:
-            # DEBUG SECTION
-            pass
-            # for pair_idx,(t_i,d_i,th_i,t_j,d_j,th_j,max_slew_rate) in enumerate(observation_parameters):
-            #     if not self.is_observation_pair_valid(t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate):
-            #         x = 1
+            # check if observations sequence is valid
+            if any([not self.is_observation_pair_valid(*params) 
+                        for params in observation_parameters]):
+                # ---------------------
+                # DEBUGGING BREAKPOINTS
+                for idx, params in enumerate(observation_parameters):
+                    if not self.is_observation_pair_valid(*params):
+                        x = 1   
+                # ---------------------
+                return False
+
+            return True
+        
+        else:
+            raise NotImplementedError(f'Observation path validity check for agents with state type {type(state)} not yet implemented.')
+        
 
     def is_observation_pair_valid(self, 
                                   t_i, d_i, th_i, 

@@ -12,8 +12,8 @@ class WorkerPlanner(AbstractPeriodicPlanner):
     Worker planner class that handles replanning tasks for agents.
     It processes the replanning requests and updates the agent's plan accordingly.
     """
-    def __init__(self, dealer_name : str, debug = False, logger = None, printouts : bool = True) -> None:
-        super().__init__(debug=debug, logger=logger, sharing=AbstractPeriodicPlanner.NONE, printouts=printouts)
+    def __init__(self, agent_results_dir : str, dealer_name : str, debug = False, logger = None, printouts : bool = True) -> None:
+        super().__init__(agent_results_dir, debug=debug, logger=logger, sharing=AbstractPeriodicPlanner.NONE, printouts=printouts)
         
         # validate inputs
         assert isinstance(dealer_name, str), "dealer_name must of type `str`"

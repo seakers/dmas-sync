@@ -24,6 +24,7 @@ from dmas.utils.orbitdata import OrbitData
 
 class EventAnnouncerPlanner(AbstractPeriodicPlanner):
     def __init__(self, 
+                 agent_results_dir : str,
                  events_path : str,
                  mission : Mission,
                  debug = False, 
@@ -37,7 +38,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         TODO : expand to announce events at different times, not just when they become available.
         """
 
-        super().__init__(np.Inf, np.Inf, AbstractPeriodicPlanner.OPPORTUNISTIC, debug, logger, printouts)
+        super().__init__(agent_results_dir, np.Inf, np.Inf, AbstractPeriodicPlanner.OPPORTUNISTIC, debug, logger, printouts)
 
         # validate inputs
         if not os.path.isfile(events_path):

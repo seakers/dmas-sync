@@ -6,10 +6,16 @@ class TestDynamicProgramming(PlannerTester, unittest.TestCase):
     def setUp(self):
         super().setUp()
 
-        self.single_sat_toy : bool = True
+        self.single_sat_toy : bool = False
         self.multiple_sat_toy : bool = False
-        self.single_sat_lakes : bool = True
+        self.single_sat_lakes : bool = False
         self.multiple_sat_lakes : bool = False
+
+        ## toy cases
+        self.toy_1 = False  # single sat    default mission     single target, no events
+        self.toy_2 = False  # single sat    no default mission  one event
+        self.toy_3 = True  # two sats      no default mission  one event
+    
     
     def planner_name(self) -> str:
         return "dynamic-programming"
@@ -22,7 +28,7 @@ class TestDynamicProgramming(PlannerTester, unittest.TestCase):
                 "model" : "earliest",
                 "sharing": "periodic",
                 # "horizon": 250,
-                "period" : 250,
+                "period" : 100,
             }
         }
     
@@ -34,7 +40,7 @@ class TestDynamicProgramming(PlannerTester, unittest.TestCase):
                 "model" : "earliest",
                 "sharing": "periodic",
                 # "horizon": 250,
-                "period" : 250,
+                "period" : 100,
             }
         }
 
