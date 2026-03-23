@@ -28,7 +28,7 @@ ulimit -n 65535
 
 # --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
 i=$SLURM_ARRAY_TASK_ID
-start=$((i * 5))
+start=$((i * 20))
 end=$((start + 5))
 
 # --- Run ---
