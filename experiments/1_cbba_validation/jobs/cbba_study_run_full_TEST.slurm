@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --array=69-74
+#SBATCH --array=0-0
 
 set -euo pipefail
 
@@ -28,13 +28,13 @@ ulimit -n 65535
 
 # --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
 i=$SLURM_ARRAY_TASK_ID
-start=$((i))
-end=$((1+i))
+start=$((i * 5))
+end=$((start + 5))
 
 # --- Run ---
 python ./experiments/1_cbba_validation/study.py \
-  -t full_factorial_trials_2026-03-16 \
+  -t full_factorial_trials_2026-03-23 \
   --trial-range "${start}:${end}" \
   --single-thread --quiet --exceptions \
-  --only-simulate --force-simulate # --force-postprocess # --force-summarize \
-  # --profile-cpu --profile-mem 
+  --only-simulate --force-simulate --force-postprocess --force-summarize # \
+  # --profile-cpu --profile-mem
