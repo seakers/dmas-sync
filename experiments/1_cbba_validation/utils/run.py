@@ -274,12 +274,20 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             # ensure any open resources are closed
             mission.close()  
 
+        status = sim_status
+        if "skipped" in status:
+            status = post_status
+        if "skipped" in status:
+            status = sum_status
+        if "skipped" in status:
+            status = "skipped_all_existing"
+
         # ------------------------------------------------------------
         # Return summary
         # ------------------------------------------------------------
         return {
             "scenario_id": trial_id,
-            "status": sim_status,
+            "status": status,
             "postprocess_status": post_status,
             "summarize_status": sum_status,
             "results_dir": results_dir,
