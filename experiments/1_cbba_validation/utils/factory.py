@@ -36,10 +36,9 @@ def load_trials(base_path : str, trial_filename : str, lower_bound : int, upper_
 
     # check if bounds are valid
     assert 0 <= lower_bound < n_trials, f"Lower bound {lower_bound} is out of range [0, {n_trials})"
-    assert 0 < upper_bound <= n_trials or upper_bound == np.Inf, f"Upper bound {upper_bound} is out of range (0, {n_trials}]"
     assert lower_bound < upper_bound, f"Lower bound {lower_bound} must be less than upper bound {upper_bound}"
     
-    # clip upper bound in case it is set to infinity
+    # clip upper bound in case it is set to infinity or over n_trials
     upper_bound = min(upper_bound, n_trials)
 
     # apply bounds
