@@ -1,5 +1,6 @@
 from datetime import datetime
 import itertools
+import math
 import os
 from typing import Callable, Dict, List
 import pandas as pd
@@ -58,7 +59,10 @@ if __name__ == "__main__":
     print_scenario_banner('Experiment generator for Preplanner Parametric Study')
 
     # define the number of scenarios to generate per combination of parameters
-    n_scenarios = 1
+    n_scenarios = 3
+
+    # define number of trials per batch job (for better distribution across experiment)
+    batch_size = 20
 
     # define experiment parameters
     stress_test_params = {
@@ -142,21 +146,91 @@ if __name__ == "__main__":
         [0, 1, 2],
         default=3,   # should be rare / indicates "belongs to none"
     )
+    # proxy for scenario complexity
+    degree = all_trials['Num Sats'] * all_trials['Task Arrival Rate']  
 
     all_trials = all_trials.copy()
     all_trials["phase"] = phase
+    all_trials["degree"] = degree
+
+    # Fit-derived coefficients from observed runtime data
+    # Model: log(runtime) = intercept + coefs * features
+    INTERCEPT = -5.8645
+    COEF_LOG_NUM_SATS  =  1.3212
+    COEF_LOG_TASK_RATE =  0.7461
+    COEF_CBBA          =  0.8475
+    COEF_GREEDY        =  0.1327
+    COEF_LATENCY_HIGH  =  0.4689
+    COEF_LATENCY_MED   =  0.3878
+    # (Preplanner DP ~= 0, skip it)
+
+    def estimate_runtime(row):
+        log_rt = (
+            INTERCEPT
+            + COEF_LOG_NUM_SATS  * np.log(row['Num Sats'])
+            + COEF_LOG_TASK_RATE * np.log(row['Task Arrival Rate'])
+            + COEF_CBBA          * (row['Replanner'] == 'CBBA')
+            + COEF_GREEDY        * (row['Replanner'] == 'Greedy')
+            + COEF_LATENCY_HIGH  * (row['Latency'] == 'High')
+            + COEF_LATENCY_MED   * (row['Latency'] == 'Medium')
+        )
+        return np.exp(log_rt)
 
     # 2) Sort by phase, then small-to-large sims
+    all_trials['est_runtime'] = all_trials.apply(estimate_runtime, axis=1)
+
+    # Sort by estimated runtime, then stripe across tasks
+    n = len(all_trials)
+    num_tasks = int(np.ceil(n / batch_size))
+
+    all_trials = all_trials.sort_values('est_runtime', ascending=True).reset_index(drop=True)
+    all_trials['task_id'] = all_trials.index % num_tasks
+    all_trials['within_task_rank'] = all_trials.index // num_tasks
+
     all_trials = (
         all_trials
-        .sort_values(
-            by=["phase", "Num Sats", "Task Arrival Rate"],
-            ascending=[True, True, True],
-            kind="mergesort",   # stable / reproducible
-        )
+        .sort_values(['task_id', 'within_task_rank'])
         .reset_index(drop=True)
-        .drop(columns=["phase"])
+        .drop(columns=['est_runtime', 'within_task_rank', 'phase', 'degree'])  # drop auxiliary columns used for sorting
     )
+
+    # all_trials = (
+    #     all_trials
+    #     .sort_values(
+    #         # by=["phase", "Num Sats", "Task Arrival Rate"],
+    #         # by=["Scenario", "Num Sats", "Latency"],
+    #         by=['degree', 'Scenario'],
+    #         ascending=[True, True],
+    #         kind="mergesort",   # stable / reproducible
+    #     )
+    #     .reset_index(drop=True)
+    #     .drop(columns=["phase", "degree"])
+    # )
+    
+    # # Assign stripe and rank
+    # all_trials['batch_id'] = all_trials.index % batch_size
+    # all_trials['within_batch_rank'] = all_trials.index // batch_size
+
+    # # Diagnostic BEFORE resorting
+    # print(all_trials.groupby('batch_id')['degree'].agg(['sum', 'mean', 'max']))
+
+    # n = len(all_trials)
+    # num_tasks = math.ceil(n / batch_size)  # 113 tasks
+
+    # # Assign each trial to a task such that task 0 gets ranks 0, 113, 226...
+    # # i.e. the first of each complexity decile, task 1 gets ranks 1, 114, 227...
+    # all_trials['task_id'] = all_trials.index % num_tasks
+    # all_trials['within_task_rank'] = all_trials.index // num_tasks
+
+    # all_trials = (
+    #     all_trials
+    #     .sort_values(['task_id', 'within_task_rank'])
+    #     .reset_index(drop=True)
+    # )
+
+    # # Diagnostic AFTER resorting
+    # all_trials['batch_id'] = all_trials.index // batch_size  # after final sort
+    # print(all_trials.groupby('batch_id')['degree'].agg(['sum', 'mean', 'max']))
 
     # 3) Trial IDs after ordering
     all_trials.insert(0, "Trial ID", all_trials.index)
