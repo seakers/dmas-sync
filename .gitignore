@@ -239,3 +239,6 @@ swifa/
 *.out
 
 logs/
+
+# AI model files
+.claude

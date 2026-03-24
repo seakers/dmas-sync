@@ -7,6 +7,7 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 from scipy import stats
+
 # ==================================================================
 #  ALTERNATE SCATTER + TRENDLINE VERSIONS
 # ==================================================================
@@ -84,12 +85,13 @@ def generate_plots(trial_name : str,
     # define save directory and filename for plot
     # name the output file with the current date
     date_str = datetime.now().strftime("%Y-%m-%d")
-    filename = f"{trial_name}_P{date_str}.csv"
-    save_dir = os.path.join(base_dir, 'plots', 'rq1', filename)
+    dirname = f"{trial_name}_P{date_str}"
+
+    save_dir = os.path.join(base_dir, 'plots', 'rq1', dirname)
     os.makedirs(save_dir, exist_ok=True)
 
     # if saving to external directory, also save a copy to the local analysis directory 
-    local_save_dir = os.path.join(local_base_dir, 'plots', 'rq1')
+    local_save_dir = os.path.join(local_base_dir, 'plots', 'rq1', dirname)
     os.makedirs(local_save_dir, exist_ok=True)
 
     # ------------------------------------------------------------------
