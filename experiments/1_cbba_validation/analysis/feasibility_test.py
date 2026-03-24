@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import seaborn as sns
 
 def label_condition(row):
@@ -215,7 +216,8 @@ def generate_plots(trial_name: str,
     # ------------------------------------------------------------------
     #  PLOT F2 — Scheduling Failure Rate by Latency
     # ------------------------------------------------------------------
-    latency_palette  = {'Low': '#009E73', 'Medium': '#E69F00', 'High': '#D55E00'}
+    # latency_palette  = {'Low': '#009E73', 'Medium': '#E69F00', 'High': '#D55E00'}    
+    latency_palette  = {'Low': '#009E73', 'Medium': '#56B4E9', 'High': '#CC79A7'}
     latency_order    = ['Low', 'Medium', 'High']
     latency_dashes   = {'Low': '', 'Medium': (4, 2), 'High': (1, 2)}
     num_sats         = sorted(df['Num Sats'].unique())
@@ -251,10 +253,15 @@ def generate_plots(trial_name: str,
                             color=latency_palette[latency], alpha=0.15)
 
         ax.set_title(algo)
-        ax.set_xlabel(r'Number of Satellites $N_{sat}$')
+        # ax.set_xlabel(r'Number of Satellites $N_{sat}$')
+        ax.set_xlabel(r'Number of Satellites')
         if is_first: ax.set_ylabel(r'$P(\mathrm{ \neg Task Observed \ | \ Task Observable})$')
         ax.set_ylim(0, 1.02)
+        ax.set_xscale("log")
         ax.set_xticks(num_sats)
+        ax.xaxis.set_major_formatter(ticker.ScalarFormatter())
+        ax.xaxis.set_minor_locator(ticker.NullLocator())
+        ax.set_xlim(min(num_sats), max(num_sats))
         ax.legend(title='Latency')
         ax.grid(True, linestyle='--', linewidth=0.4)
 
