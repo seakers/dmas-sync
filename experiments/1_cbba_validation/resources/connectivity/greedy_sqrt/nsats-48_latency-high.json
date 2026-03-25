@@ -1,0 +1,84 @@
+{
+    "default": "deny",
+    "groups": {
+        "instruments": [
+            "imager_a_sat_0",
+            "imager_b_sat_0",
+            "imager_c_sat_0",
+            "imager_a_sat_1",
+            "imager_b_sat_1",
+            "imager_c_sat_1",
+            "imager_a_sat_2",
+            "imager_b_sat_2",
+            "imager_c_sat_2",
+            "imager_a_sat_3",
+            "imager_b_sat_3",
+            "imager_c_sat_3",
+            "imager_a_sat_4",
+            "imager_b_sat_4",
+            "imager_c_sat_4",
+            "imager_a_sat_5",
+            "imager_b_sat_5",
+            "imager_c_sat_5",
+            "imager_a_sat_6",
+            "imager_b_sat_6",
+            "imager_c_sat_6",
+            "imager_a_sat_7",
+            "imager_b_sat_7",
+            "imager_c_sat_7",
+            "imager_a_sat_8",
+            "imager_b_sat_8",
+            "imager_c_sat_8",
+            "imager_a_sat_9",
+            "imager_b_sat_9",
+            "imager_c_sat_9",
+            "imager_a_sat_10",
+            "imager_b_sat_10",
+            "imager_c_sat_10",
+            "imager_a_sat_11",
+            "imager_b_sat_11",
+            "imager_c_sat_11",
+            "imager_a_sat_12",
+            "imager_b_sat_12",
+            "imager_c_sat_12",
+            "imager_a_sat_13",
+            "imager_b_sat_13",
+            "imager_c_sat_13",
+            "imager_a_sat_14",
+            "imager_b_sat_14",
+            "imager_c_sat_14",
+            "imager_a_sat_15",
+            "imager_b_sat_15",
+            "imager_c_sat_15"
+        ],
+        "relays": [
+            "tdrss_sat_0",
+            "tdrss_sat_1",
+            "tdrss_sat_2"
+        ],
+        "groundStations": [
+            "NEN"
+        ]
+    },
+    "rules": [
+        {
+            "action": "allow",
+            "scope": "between",
+            "targets": [
+                "instruments",
+                "groundStations"
+            ]
+        },
+        {
+            "action": "deny",
+            "scope": "within",
+            "targets": "instruments"
+        },
+        {
+            "action": "deny",
+            "scope": "within",
+            "targets": "relays"
+        }
+    ],
+    "overrides": []
+}

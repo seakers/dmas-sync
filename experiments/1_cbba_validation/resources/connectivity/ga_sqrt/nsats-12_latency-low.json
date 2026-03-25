@@ -1,0 +1,49 @@
+{
+    "default": "deny",
+    "groups": {
+        "instruments": [
+            "imager_a_sat_0",
+            "imager_b_sat_0",
+            "imager_c_sat_0",
+            "imager_a_sat_1",
+            "imager_b_sat_1",
+            "imager_c_sat_1",
+            "imager_a_sat_2",
+            "imager_b_sat_2",
+            "imager_c_sat_2",
+            "imager_a_sat_3",
+            "imager_b_sat_3",
+            "imager_c_sat_3"
+        ],
+        "relays": [
+            "tdrss_sat_0",
+            "tdrss_sat_1",
+            "tdrss_sat_2"
+        ],
+        "groundStations": [
+            "NEN"
+        ]
+    },
+    "rules": [
+        {
+            "action": "allow",
+            "scope": "between",
+            "targets": [
+                "instruments",
+                "relays",
+                "groundStations"
+            ]
+        },
+        {
+            "action": "allow",
+            "scope": "within",
+            "targets": "instruments"
+        },
+        {
+            "action": "allow",
+            "scope": "within",
+            "targets": "relays"
+        }
+    ],
+    "overrides": []
+}

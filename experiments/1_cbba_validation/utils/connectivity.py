@@ -136,9 +136,11 @@ def generate_medium_latency_connectivity_spec(
     # ----------------------------
     # 0) Targets derived from high/low
     # ----------------------------
-    target_p95 = 0.5 * (low_latency_values["latency_95th"] + high_latency_values["latency_95th"])
+    # target_p95 = 0.5 * (low_latency_values["latency_95th"] + high_latency_values["latency_95th"])
+    target_p95 = np.sqrt( max(low_latency_values["latency_95th"], high_latency_values["latency_95th"]) )
     target_p_on_time = 0.5 * (low_latency_values["p_on_time"] + high_latency_values["p_on_time"])
     p_success_min = min(low_latency_values["p_success"], high_latency_values["p_success"])
+    # p_success_min = np.sqrt( min(low_latency_values["p_success"], high_latency_values["p_success"]) )
 
     # Tolerances for "medium" (tune these)
     # e.g., within ±10% of target p95 and ±0.05 on p_on_time
@@ -364,11 +366,13 @@ def generate_medium_latency_connectivity_spec_GA(imaging_sats : list,
     # ----------------------------
     # Expect these keys exist in your metrics dict:
     #   "p_success", "p_on_time", "latency_mean", "latency_50th", "latency_95th", "latency_99th"
-    target_p95 = 0.5 * (low_latency_values["latency_95th"] + high_latency_values["latency_95th"])
+    # target_p95 = 0.5 * (low_latency_values["latency_95th"] + high_latency_values["latency_95th"])
+    target_p95 = np.sqrt( max(low_latency_values["latency_95th"], high_latency_values["latency_95th"]) )
     target_p_on_time = 0.5 * (low_latency_values["p_on_time"] + high_latency_values["p_on_time"])
 
     # set successful delivery requirement 
-    p_success_min = min(low_latency_values["p_success"], high_latency_values["p_success"]) 
+    # p_success_min = min(low_latency_values["p_success"], high_latency_values["p_success"]) 
+    p_success_min = np.sqrt( min(low_latency_values["p_success"], high_latency_values["p_success"]) )
     # p_success_min = 0.95 # Or set explicitly, e.g. 0.95
 
     # ----------------------------
@@ -401,24 +405,24 @@ def generate_medium_latency_connectivity_spec_GA(imaging_sats : list,
         return True  
     
 
-        # Typical "medium latency" design space:
-        # - allow imaging<->relay
-        # - allow relay<->relay
-        # - allow relay<->ground
-        # - disallow imaging<->imaging (optional)
-        # - disallow imaging<->ground direct (optional)
-        if (u_is_img and v_is_rel) or (u_is_rel and v_is_img):
-            return True
-        if u_is_rel and v_is_rel:
-            return True
-        if (u_is_rel and v_is_gs) or (u_is_gs and v_is_rel):
-            return True
-
-        # Optional: allow imaging->ground direct links
-        # if (u_is_img and v_is_gs) or (u_is_gs and v_is_img):
+        # # Typical "medium latency" design space:
+        # # - allow imaging<->relay
+        # # - allow relay<->relay
+        # # - allow relay<->ground
+        # # - disallow imaging<->imaging (optional)
+        # # - disallow imaging<->ground direct (optional)
+        # if (u_is_img and v_is_rel) or (u_is_rel and v_is_img):
+        #     return True
+        # if u_is_rel and v_is_rel:
+        #     return True
+        # if (u_is_rel and v_is_gs) or (u_is_gs and v_is_rel):
         #     return True
 
-        return False
+        # # Optional: allow imaging->ground direct links
+        # # if (u_is_img and v_is_gs) or (u_is_gs and v_is_img):
+        # #     return True
+
+        # return False
 
     # Enumerate undirected candidate edges as (i,j) with i<j
     edge_list: List[Tuple[int, int]] = []
@@ -1016,16 +1020,7 @@ if __name__ == "__main__":
         low_latency_values = evaluate_scenario_latency(low_latency_mission_specs, messages)
 
         # 3) Medium Latency Scenario: 
-        # medium_latency_connectivity_spec = generate_medium_latency_connectivity_spec(imaging_sats, relay_sats, ground_stations, 
-        #                                                                              high_latency_values, low_latency_values, messages, medium_latency_filename,
-        #                                                                              mission_specs_template, duration, step_size,
-        #                                                                              base_path, trials_filename, trial_id, 
-        #                                                                              preplanner, replanner, num_sats, 'medium', 
-        #                                                                              task_arrival_rate, target_distribution, scenario_idx, 
-        #                                                                              spacecraft_specs_template, instrument_specs, planner_specs, 
-        #                                                                              ground_operator_specs_template, reduced
-        #                                                                             )
-        medium_latency_connectivity_spec = generate_medium_latency_connectivity_spec_GA(imaging_sats, relay_sats, ground_stations, 
+        medium_latency_connectivity_spec = generate_medium_latency_connectivity_spec(imaging_sats, relay_sats, ground_stations, 
                                                                                      high_latency_values, low_latency_values, messages, medium_latency_filename,
                                                                                      mission_specs_template, duration, step_size,
                                                                                      base_path, trials_filename, trial_id, 
@@ -1034,6 +1029,15 @@ if __name__ == "__main__":
                                                                                      spacecraft_specs_template, instrument_specs, planner_specs, 
                                                                                      ground_operator_specs_template, reduced
                                                                                     )
+        # medium_latency_connectivity_spec = generate_medium_latency_connectivity_spec_GA(imaging_sats, relay_sats, ground_stations, 
+        #                                                                              high_latency_values, low_latency_values, messages, medium_latency_filename,
+        #                                                                              mission_specs_template, duration, step_size,
+        #                                                                              base_path, trials_filename, trial_id, 
+        #                                                                              preplanner, replanner, num_sats, 'medium', 
+        #                                                                              task_arrival_rate, target_distribution, scenario_idx, 
+        #                                                                              spacecraft_specs_template, instrument_specs, planner_specs, 
+        #                                                                              ground_operator_specs_template, reduced
+        #                                                                             )
 
         # save medium latency scenario connectivity spec to file
         with open(medium_latency_filename, 'w') as f:
