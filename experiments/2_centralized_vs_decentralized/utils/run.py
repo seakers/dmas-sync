@@ -83,8 +83,8 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     t0 = time.time()
 
     # Unpack trial row
-    # Trial ID,Preplanner,Replanner,Num Sats,Latency,Task Arrival Rate,Target Distribution,Scenario,in_stress,in_connectivity,in_validation
-    trial_id, preplanner, replanner, num_sats, latency, task_arrival_rate, target_distribution, scenario_idx, *_ = trial_row
+    #   Schema -> `Trial ID,Strategy,Preplanner,Replanner,Latency,Scenario,Data Processing,Date,in_centralization`
+    trial_id,strategy,preplanner,replanner,latency,scenario,data_processing,date, *_ = trial_row
     
     # normalize `nan` values to None
     preplanner = "none" if not isinstance(preplanner, str) and pd.isna(preplanner) else preplanner.lower()
@@ -128,8 +128,8 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         mission_specs : dict = generate_scenario_mission_specs(
             run_cfg.mission_specs_template, run_cfg.duration, run_cfg.step_size,
             run_cfg.base_path, trial_stem, trial_id,
-            preplanner, replanner, num_sats, latency, task_arrival_rate, 
-            target_distribution, scenario_idx, 
+            strategy, preplanner, replanner, latency, scenario, 
+            data_processing, date, 
             run_cfg.spacecraft_specs_template, run_cfg.instrument_specs,
             run_cfg.planner_specs, run_cfg.ground_operator_specs_template, 
             sim_cfg.reduced,

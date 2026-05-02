@@ -22,6 +22,7 @@ from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import SatelliteAgentState, SimulationAgentState
 from dmas.core.messages import  AgentStateMessage, PlanMessage
 from dmas.utils.orbitdata import OrbitData
+from dmas.utils.series import TargetGridTable
 
 
 class DealerPlanner(AbstractPeriodicPlanner):
@@ -30,6 +31,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
     """
     def __init__(self, 
                  agent_results_dir : str,
+                 client_ids : Dict[str, str],
                  client_orbitdata : Dict[str, OrbitData], 
                  client_specs : Dict[str, object],
                  client_missions : Dict[str, Mission],
@@ -71,7 +73,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
         self.client_specs : Dict[str, object] = {client.lower(): client_specs[client] for client in client_specs}
         self.client_missions : Dict[str, Mission] = {client.lower(): client_missions[client] for client in client_missions}
         self.cross_track_fovs : Dict[str, Dict[str, float]] = self._collect_client_cross_track_fovs(client_specs)
-        self.client_states : Dict[str, SatelliteAgentState] = self.__initiate_client_states(client_orbitdata, client_specs)
+        self.client_states : Dict[str, SatelliteAgentState] = self.__initiate_client_states(client_ids, client_orbitdata, client_specs)
         self.client_plans : Dict[str, PeriodicPlan] = {client : PeriodicPlan([], t=0.0, horizon=self._horizon, t_next=np.Inf) 
                                            for client in self.client_orbitdata}
         self.client_tasks : Dict[Mission, List[GenericObservationTask]] = self.__generate_default_client_tasks(client_missions, client_orbitdata)
@@ -95,11 +97,13 @@ class DealerPlanner(AbstractPeriodicPlanner):
                  for client in self.client_specs})
 
     def __initiate_client_states(self, 
+                                 client_ids : Dict[str, str],
                                  client_orbitdata : Dict[str, OrbitData], 
                                  client_specs : Dict[str, Spacecraft]
                                  ) -> Dict[str, SatelliteAgentState]:
         """ initiate client agent states at the start of the simulation """
         states: Dict[str, SatelliteAgentState] = {client_name : SatelliteAgentState(client_name, 
+                                                                                    client_ids[client_name], 
                                                                                     client_specs[client_name].orbitState.to_dict(), 
                                                                                     client_orbitdata[client_name].time_step)
                                                    for client_name in client_orbitdata
@@ -117,16 +121,26 @@ class DealerPlanner(AbstractPeriodicPlanner):
         return states
     
     def update_percepts(self, 
-                        state, 
-                        current_plan, 
-                        tasks,
-                        incoming_reqs, 
-                        relay_messages, 
-                        misc_messages, 
-                        completed_actions, 
-                        aborted_actions, 
-                        pending_actions):
-        super().update_percepts(state, current_plan, tasks, incoming_reqs, relay_messages, misc_messages, completed_actions, aborted_actions, pending_actions)
+                        state : SimulationAgentState,
+                        current_plan : Plan,
+                        tasks : Dict[Tuple,GenericObservationTask],
+                        incoming_reqs: Dict[Tuple,Dict], 
+                        misc_messages : list,
+                        completed_actions: list,
+                        aborted_actions : list,
+                        pending_actions : list
+                        # state, 
+                        # current_plan, 
+                        # tasks,
+                        # incoming_reqs, 
+                        # relay_messages, 
+                        # misc_messages, 
+                        # completed_actions, 
+                        # aborted_actions, 
+                        # pending_actions
+                    ):
+        # update parent class percepts
+        super().update_percepts(state, current_plan, tasks, incoming_reqs, misc_messages, completed_actions, aborted_actions, pending_actions)
 
         # check if any client broadcasted their state or plan
         agent_state_messages : list[AgentStateMessage] = [msg for msg in misc_messages 
@@ -212,11 +226,20 @@ class DealerPlanner(AbstractPeriodicPlanner):
         # Outline planning horizon interval
         planning_horizons : Dict[str,Interval] = self._calculate_horizons(state, orbitdata, self._horizon)
 
+        # Calculate next access to each client within the replanning period
+        t_curr = state.get_time()
+        next_accesses : Dict[str, Interval] = dict()
+
+        # calculate planning horizon for each client
+        for client in self.client_orbitdata:            
+            # Try to find the next access after the desired horizon `dt`
+            next_access,*_ = orbitdata.get_next_agent_access(t_curr, target=client, t_max=t_curr+self._period, include_current=True)
+
+            # set planning horizon interval for this client
+            next_accesses[client] = next_access
+
         # check if there are clients reachable in the planning horizon
-        if all([orbitdata.get_next_agent_access(state._t, target=client, 
-                                                t_max=state._t+self._period, 
-                                                include_current=True) is None 
-                for client in self.client_orbitdata.keys()]):
+        if all(next_access is None for next_access in next_accesses.values()):
             return {client: PeriodicPlan([], 
                                          t=state._t, 
                                          horizon=planning_horizons[client].right, 
@@ -288,20 +311,26 @@ class DealerPlanner(AbstractPeriodicPlanner):
     def _calculate_horizons(self, state : SimulationAgentState, orbitdata : OrbitData, dt : float) -> Dict[str, Interval]:
         """ calculate planning horizon intervals for each client """
 
+        # get current simulation time
+        t_curr = state.get_time()
+
         # initialize dictionary to hold planning horizons for each client
-        horizons : Dict[str, Interval] = dict()
+        horizons : Dict[str, Interval] = {
+            client : Interval(t_curr, t_curr + dt)
+            for client in self.client_orbitdata
+        }
         
-        # calculate planning horizon for each client
-        for client in self.client_orbitdata:
-            # Try to find the next access after the desired horizon `dt`
-            next_access : Interval = orbitdata.get_next_agent_access(client, state._t + dt)
+        # # calculate planning horizon for each client
+        # for client in self.client_orbitdata:            
+        #     # Try to find the next access after the desired horizon `dt`
+        #     next_access,*_ = orbitdata.get_next_agent_access(t_curr, target=client, t_max=t_curr+dt, include_current=True)
 
-            # If access exists after the planning horizon, plan up to that start time
-            # Otherwise, this agent wont be accessible again, so just plan up to the desired horizon
-            horizon_end = max(next_access.left, state._t+dt) if next_access else state._t + dt
+        #     # If access exists after the planning horizon, plan up to that start time
+        #     # Otherwise, this agent wont be accessible again, so just plan up to the desired horizon
+        #     horizon_end = max(next_access.left, t_curr+dt) if next_access else t_curr + dt
 
-            # set planning horizon interval for this client
-            horizons[client] = Interval(state._t, horizon_end)
+        #     # set planning horizon interval for this client
+        #     horizons[client] = Interval(t_curr, horizon_end)
             
         return horizons
 
@@ -315,7 +344,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                                      for mission in client_missions.values()}
 
         # collect coverage grids for each client
-        client_coverage_grids : Dict[str, list[pd.DataFrame]] = {client : orbitdata.grid_data 
+        client_coverage_grids : Dict[str, TargetGridTable] = {client : orbitdata.grid_data 
                                                                  for client,orbitdata in client_orbitdata.items()}
         
         # validate that all clients with the same mission have the same coverage grids in their orbitdata
@@ -327,7 +356,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
                 # check same grid values
                 for i,grid_i in enumerate(client_coverage_grids[clients[0]]):
-                    assert all([grid_i.equals(client_coverage_grids[client][i]) for client in clients]), \
+                    assert all([grid_i == (client_coverage_grids[client][i]) for client in clients]), \
                         f"All clients with the same mission must have the same coverage grids in their orbitdata. Clients {clients} do not."
                     
                 # check same mission duration for clients with the same mission
@@ -339,7 +368,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                                     for mission,clients in mission_clients.items()}
 
         # map missions to grids
-        mission_grids : Dict[Mission, list[pd.DataFrame]] = {mission : client_coverage_grids[clients[0]] if len(clients) > 0 else []
+        mission_grids : Dict[Mission, TargetGridTable] = {mission : client_coverage_grids[clients[0]] if len(clients) > 0 else []
                                                              for mission,clients in mission_clients.items()}
 
         # initialize list of tasks
@@ -392,8 +421,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     #   collect all targets from all grids known to this agent
                     req_targets = list({
                         (lat, lon, int(grid_index), int(gp_index))
-                        for grid in grids
-                        for lat,lon,grid_index,gp_index in grid.values
+                        for lat,lon,grid_index,gp_index in grids
                     })
                     targets.extend(req_targets)
             

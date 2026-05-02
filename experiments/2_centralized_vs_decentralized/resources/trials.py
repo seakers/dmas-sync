@@ -56,143 +56,140 @@ def apply_rules(df: pd.DataFrame, rules: List[Callable[[pd.DataFrame], pd.Series
 
 if __name__ == "__main__":
     # print welcome
-    print_scenario_banner('Experiment generator for Preplanner Parametric Study')
-
-    # define the number of scenarios to generate per combination of parameters
-    n_scenarios = 3
-
-    # define number of trials per batch job (for better distribution across experiment)
-    batch_size = 20
-
+    print_scenario_banner('Experiment generator for Planner Comparative Study')
+    
     # define experiment parameters
-    stress_test_params = {
-        "Preplanner" : ["None"],
-        "Replanner": [
-                        # "Greedy", 
-                        "CBBA", 
-                        # "Oracle"
-                    ],
-        "Num Sats": [12, 24, 48, 96, 192],
-        "Latency": ["Low"],
-        "Task Arrival Rate": [10, 50, 100, 500, 1000],
-        "Target Distribution": [60.0],
-        "Scenario" : range(n_scenarios), 
-    }
-    connectivity_test_params = {
-        "Preplanner" : ["None"],
-        "Replanner": [  
-                        # "Greedy", 
-                        "CBBA", 
-                        # "Oracle"
-                    ],
-        "Num Sats": [12, 24, 48, 96, 192],
-        "Latency": ["High", "Medium", "Low"],
-        "Task Arrival Rate": [10, 50, 100, 500, 1000],
-        "Target Distribution": [60.0],
-        "Scenario" : range(n_scenarios),
-    }
-    validation_test_params = {
+    test_params = {
+        "Strategy": [
+            "Centralized", 
+            "Decentralized"
+        ],
         "Preplanner" : [
-                        "None", 
-                        "DP"
-                    ],
+            "None",
+            "DP",
+            "MILP",
+            "Metaheuristic"
+        ],
         "Replanner": [
-                        "None", 
-                        "Greedy",
-                        "CBBA",
-                    ],
-        "Num Sats": [12, 24, 48, 96, 192],
-        "Latency": ["High", "Medium", "Low"],
-        "Task Arrival Rate": [10, 50, 100, 500, 1000],
-        "Target Distribution": [60.0],
-        "Scenario" : range(n_scenarios),
-    }
+            "Greedy", 
+            "CBBA", 
+            "None",
+        ],
+        "Latency": [
+            "Low", 
+            "Medium", 
+            "High"
+        ],
+        "Scenario": [
+            "water_quality",
+            # "Comprehensive"
+        ],
+        "Data Processing" : [
+            "Onboard", 
+            "Oracle", 
+            # "Ground" #TODO 
+        ],
+        "Date" : [
+            "2018-02-15",   # Winter NH
+            "2018-05-15",   # Spring NH
+            "2018-08-10",   # Summer NH / peak fire season
+            "2018-11-10",   # Fall NH
+            "2019-02-15",   # Winter NH
+            "2019-05-15",   # Spring NH
+            "2019-08-10",   # Summer NH / peak fire season
+            "2019-11-10"    # Fall NH
+        ], 
+        # "Sats per Mission" : [
+        #     10,
+        #     25,
+        # ]
+    }    
 
     # define experiment parameter rules
     rules = [
-        # Oracle replanner only allowed with no preplanner
-        lambda d: (d["Replanner"] != "Oracle") | (d["Preplanner"] == "None"),
-        # None replanne not allowed with `None` preplanner (i.e. if no preplanner, must have a replanner)
-        lambda d: (d["Replanner"] != "None") | (d["Preplanner"] != "None") 
+        # Centralized only with MILP or Metaheuristic preplanner (i.e. no point in centralized replanning if preplanner is already optimal)
+        lambda d: (d["Strategy"] != "Centralized") | (d["Preplanner"] == "MILP") | (d["Preplanner"] == "Metaheuristic"),
+        # Centralized must not have a replanner (i.e. replanning is only relevant for decentralized strategies)
+        lambda d: (d["Strategy"] != "Centralized") | (d["Replanner"] == "None"),
+        # None replanner not allowed with `None` preplanner (i.e. if no preplanner, must have a replanner)
+        lambda d: (d["Replanner"] != "None") | (d["Preplanner"] != "None"),
+        # Decentralized must not have "MILP" preplanner (i.e. MILP is too slow to be practical for decentralized strategies, which need fast replanning)
+        lambda d: (d["Strategy"] != "Decentralized") | (d["Preplanner"] != "MILP")
     ]
 
     # generate full enumeration of trials per experiment
-    stress_test_trials = generate_full_tactorial_trials(stress_test_params)
-    connectivity_test_trials = generate_full_tactorial_trials(connectivity_test_params)
-    validation_test_trials = generate_full_tactorial_trials(validation_test_params)
+    test_trials = generate_full_tactorial_trials(test_params)
 
     trial_dfs = {
-        "stress": stress_test_trials,
-        "connectivity": connectivity_test_trials,
-        "validation": validation_test_trials,
+        "centralization": test_trials
     }
 
     # merge trials, tagging which experiment(s) they belong to
-    param_cols = list(stress_test_params.keys())  
+    param_cols = list(test_params.keys())  
     all_trials = tag_and_merge(trial_dfs, param_cols)
 
     # apply rules to filter out invalid scenarios
     all_trials = apply_rules(all_trials, rules)
 
-    # sort trials by experiment membership and then by parameters
-    # 1) Assign each trial to the earliest experiment it belongs to
-    #    (stress first, then connectivity, then validation)
-    phase = np.select(
-        [
-            all_trials["in_stress"],
-            all_trials["in_connectivity"],
-            all_trials["in_validation"],
-        ],
-        [0, 1, 2],
-        default=3,   # should be rare / indicates "belongs to none"
-    )
-    # proxy for scenario complexity
-    degree = all_trials['Num Sats'] * all_trials['Task Arrival Rate']  
+    # # sort trials by experiment membership and then by parameters
+    # # 1) Assign each trial to the earliest experiment it belongs to
+    # #    (stress first, then connectivity, then validation)
+    # phase = np.select(
+    #     [
+    #         all_trials["in_stress"],
+    #         all_trials["in_connectivity"],
+    #         all_trials["in_validation"],
+    #     ],
+    #     [0, 1, 2],
+    #     default=3,   # should be rare / indicates "belongs to none"
+    # )
+    # # proxy for scenario complexity
+    # degree = all_trials['Num Sats'] * all_trials['Task Arrival Rate']  
 
-    all_trials = all_trials.copy()
-    all_trials["phase"] = phase
-    all_trials["degree"] = degree
+    # all_trials = all_trials.copy()
+    # all_trials["phase"] = phase
+    # all_trials["degree"] = degree
 
-    # Fit-derived coefficients from observed runtime data
-    # Model: log(runtime) = intercept + coefs * features
-    INTERCEPT = -5.8645
-    COEF_LOG_NUM_SATS  =  1.3212
-    COEF_LOG_TASK_RATE =  0.7461
-    COEF_CBBA          =  0.8475
-    COEF_GREEDY        =  0.1327
-    COEF_LATENCY_HIGH  =  0.4689
-    COEF_LATENCY_MED   =  0.3878
-    # (Preplanner DP ~= 0, skip it)
+    # # Fit-derived coefficients from observed runtime data
+    # # Model: log(runtime) = intercept + coefs * features
+    # INTERCEPT = -5.8645
+    # COEF_LOG_NUM_SATS  =  1.3212
+    # COEF_LOG_TASK_RATE =  0.7461
+    # COEF_CBBA          =  0.8475
+    # COEF_GREEDY        =  0.1327
+    # COEF_LATENCY_HIGH  =  0.4689
+    # COEF_LATENCY_MED   =  0.3878
+    # # (Preplanner DP ~= 0, skip it)
 
-    def estimate_runtime(row):
-        log_rt = (
-            INTERCEPT
-            + COEF_LOG_NUM_SATS  * np.log(row['Num Sats'])
-            + COEF_LOG_TASK_RATE * np.log(row['Task Arrival Rate'])
-            + COEF_CBBA          * (row['Replanner'] == 'CBBA')
-            + COEF_GREEDY        * (row['Replanner'] == 'Greedy')
-            + COEF_LATENCY_HIGH  * (row['Latency'] == 'High')
-            + COEF_LATENCY_MED   * (row['Latency'] == 'Medium')
-        )
-        return np.exp(log_rt)
+    # def estimate_runtime(row):
+    #     log_rt = (
+    #         INTERCEPT
+    #         + COEF_LOG_NUM_SATS  * np.log(row['Num Sats'])
+    #         + COEF_LOG_TASK_RATE * np.log(row['Task Arrival Rate'])
+    #         + COEF_CBBA          * (row['Replanner'] == 'CBBA')
+    #         + COEF_GREEDY        * (row['Replanner'] == 'Greedy')
+    #         + COEF_LATENCY_HIGH  * (row['Latency'] == 'High')
+    #         + COEF_LATENCY_MED   * (row['Latency'] == 'Medium')
+    #     )
+    #     return np.exp(log_rt)
 
-    # 2) Sort by phase, then small-to-large sims
-    all_trials['est_runtime'] = all_trials.apply(estimate_runtime, axis=1)
+    # # 2) Sort by phase, then small-to-large sims
+    # all_trials['est_runtime'] = all_trials.apply(estimate_runtime, axis=1)
 
-    # Sort by estimated runtime, then stripe across tasks
-    n = len(all_trials)
-    num_tasks = int(np.ceil(n / batch_size))
+    # # Sort by estimated runtime, then stripe across tasks
+    # n = len(all_trials)
+    # num_tasks = int(np.ceil(n / batch_size))
 
-    all_trials = all_trials.sort_values('est_runtime', ascending=True).reset_index(drop=True)
-    all_trials['task_id'] = all_trials.index % num_tasks
-    all_trials['within_task_rank'] = all_trials.index // num_tasks
+    # all_trials = all_trials.sort_values('est_runtime', ascending=True).reset_index(drop=True)
+    # all_trials['task_id'] = all_trials.index % num_tasks
+    # all_trials['within_task_rank'] = all_trials.index // num_tasks
 
-    all_trials = (
-        all_trials
-        .sort_values(['task_id', 'within_task_rank'])
-        .reset_index(drop=True)
-        .drop(columns=['est_runtime', 'within_task_rank', 'phase', 'degree'])  # drop auxiliary columns used for sorting
-    )
+    # all_trials = (
+    #     all_trials
+    #     .sort_values(['task_id', 'within_task_rank'])
+    #     .reset_index(drop=True)
+    #     .drop(columns=['est_runtime', 'within_task_rank', 'phase', 'degree'])  # drop auxiliary columns used for sorting
+    # )
 
     # all_trials = (
     #     all_trials
@@ -237,7 +234,7 @@ if __name__ == "__main__":
     print(f" - Total number of trials: {len(all_trials)}")
 
     # generate results directory
-    out_dir = os.path.join('.', 'experiments','1_cbba_validation', 'resources', 'trials')
+    out_dir = os.path.join('.', 'experiments','2_centralized_vs_decentralized', 'resources', 'trials')
     os.makedirs(out_dir, exist_ok=True)
 
     # name the output file with the current date

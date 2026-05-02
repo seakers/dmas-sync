@@ -286,13 +286,14 @@ class SimulationAgent(object):
                 self.__update_tasks(curr_state)
                 
                 # initialize plan      
-                self._plan : Plan = self._preplanner.generate_plan(curr_state, 
+                self._plan : Plan = self._preplanner.generate_plan(
+                                                            curr_state, 
                                                             self._specs,
                                                             self._orbitdata,
                                                             self._mission,
                                                             self._known_tasks.values(),
                                                             self._observations_tracker
-                                                            )
+                                                        )
 
                 # save copy of plan for post-processing
                 plan_copy = [action for action in self._plan]
@@ -301,9 +302,9 @@ class SimulationAgent(object):
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
-                # if True:
-                #     self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                #     x = 1 # breakpoint
+                if True:
+                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---

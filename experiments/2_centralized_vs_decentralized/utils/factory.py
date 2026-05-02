@@ -83,7 +83,6 @@ def load_templates(base_path : str) -> Tuple[dict, dict, dict, dict]:
 def create_scenario_specifications(base_path : str, 
                                    results_dir : str, 
                                    events_path : str, 
-                                   num_sats : int, 
                                    latency : str
                                 ) -> dict:
     return {
@@ -96,7 +95,7 @@ def create_scenario_specifications(base_path : str,
             },
             "connectivity" : {
                 "@type" : "PREDEF",
-                "rulesPath" : f"./experiments/1_cbba_validation/resources/connectivity/nsats-{int(num_sats)}_latency-{latency.lower()}.json",
+                "rulesPath" : f"./experiments/2_centralized_vs_decentralized/resources/connectivity/latency-{latency.lower()}.json",
                 "relaysEnabled" : True
             },
             "scenarioPath" : base_path,
@@ -104,23 +103,40 @@ def create_scenario_specifications(base_path : str,
             "missionsPath" : os.path.join(base_path, 'resources','missions',f'missions.json')
         }
 
-def create_grid_specifications(base_path : str, target_distribution : int) -> dict:
+def create_grid_specifications(base_path : str, scenario : str, date : str) -> dict:
     # construct grid file path
-    grid_name = f'random_uniform_inland_grid_5000_latbounds--{target_distribution}to{target_distribution}_seed-1000.csv'
-    grid_path = os.path.join(base_path, 'resources','grids', grid_name)
+    lakes_grid_name = f'lakes.csv'
+    rivers_grid_name = f"rivers.csv"    
+    wildifres_grid_name = f'wildfires_{date}.csv'
+
+    # grid_path = os.path.join(base_path, 'resources','grids', grid_name)
     
     # return grid specifications
-    return [{
-        "@type": "customGrid",
-        "covGridFilePath": grid_path
-    }]
+    grids = [
+        {
+            "@type": "customGrid",
+            "covGridFilePath": os.path.join(base_path, 'resources','grids', lakes_grid_name)
+        },
+        {
+            "@type": "customGrid",
+            "covGridFilePath": os.path.join(base_path, 'resources','grids', rivers_grid_name)
+        }
+    ]
+
+    if scenario.lower() == "comprehensive":
+        grids.append({
+            "@type": "customGrid",
+            "covGridFilePath": os.path.join(base_path, 'resources','grids', wildifres_grid_name)
+        })
+
+    return grids
 
 def create_propagator_settings_specifications(base_path : str, 
-                                              num_sats : float, 
-                                              target_distribution : float,
+                                              scenario : str,
+                                              date : str,
                                               reduced : bool) -> dict:
     # define out_dir name
-    scenario_name = f"nsats-{num_sats}_tgtdist-{int(target_distribution)}"
+    scenario_name = f"{scenario}_{date}"
     if reduced: scenario_name += "_reduced"
     
     # make out_dir if it does not exist
@@ -134,12 +150,16 @@ def create_propagator_settings_specifications(base_path : str,
             "saveUnprocessedCoverage" : "False"
         }
     
-def create_spacecraft_specifications(num_sats : int,  
+def create_spacecraft_specifications(
+                                     strategy : str,
                                      preplanner : str, 
                                      replanner : str, 
+                                     data_processing : str,
+                                     scenario : str,
+                                     date : str,
                                      spacecraft_specs_template : dict, 
                                      instrument_specs : dict, 
-                                     planner_specs : dict
+                                     planner_specs : dict,
                                     ) -> List[dict]:
     # get altitude and inclination from template
     alt = spacecraft_specs_template['orbitState']['state']['sma'] - Constellation.EARTH_RADIUS_KM  # [km]
@@ -147,6 +167,7 @@ def create_spacecraft_specifications(num_sats : int,
     
     # create a walker-delta constellation for given number of satellites;
     #   choose number of planes and satellites per plane to approximate a square-ish constellation
+    num_sats = 100 
     num_planes = min([p for p in range(1, num_sats+1)], 
                     key=lambda p: abs(num_sats/p - np.sqrt(num_sats)))
     # choose a fixed phasing factor
@@ -163,6 +184,11 @@ def create_spacecraft_specifications(num_sats : int,
     for sat_idx,orbit_state in enumerate(orbital_elements):
         # create satellite specification from template
         satellite_spec = copy.deepcopy(spacecraft_specs_template)
+
+        # check if centralized preplanner was assigned 
+        if strategy.lower() == 'centralized':
+            preplanner = 'worker'
+            replanner = 'none'
 
         # planner settings
         if preplanner.lower() != 'none':
@@ -282,12 +308,19 @@ def create_ground_operator_specifications(ground_operator_specs_template : dict,
     return [ground_operator_specs]
 
 
-def generate_scenario_mission_specs(mission_specs_template : dict, duration : float, step_size : float, 
-                                    base_path : str, trials_filename : str,
-                                    trial_id : int, preplanner : str, replanner : str, 
-                                    num_sats : int, latency : str, 
-                                    task_arrival_rate : float, target_distribution : int,
-                                    scenario_idx : int,
+def generate_scenario_mission_specs(mission_specs_template : dict, 
+                                    duration : float, 
+                                    step_size : float, 
+                                    base_path : str, 
+                                    trials_filename : str,
+                                    trial_id : int, 
+                                    strategy : str, 
+                                    preplanner : str, 
+                                    replanner : str, 
+                                    latency : str, 
+                                    scenario : int, 
+                                    data_processing : str, 
+                                    date : str,
                                     spacecraft_specs_template : dict, instrument_specs : dict,
                                     planner_specs : dict,
                                     ground_operator_specs_template : dict, reduced : bool) -> dict:
@@ -301,7 +334,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
     if reduced: results_dir += "_reduced"
     
     # define event file path based on scenario parameters
-    events_file = f'events_arrivalrate-{task_arrival_rate}_targetdist-{target_distribution}_scenario-{scenario_idx}.csv'
+    events_file = f'{scenario}_{date}_.csv'
     events_path = os.path.join(base_path, 'resources', 'events', events_file)
 
     # set simulation duration and propagator step size
@@ -309,18 +342,18 @@ def generate_scenario_mission_specs(mission_specs_template : dict, duration : fl
     mission_specs['propagator']['stepSize'] = step_size
 
     # set scenario specifications
-    mission_specs['scenario'] = create_scenario_specifications(base_path, results_dir, events_path, num_sats, latency)
+    mission_specs['scenario'] = create_scenario_specifications(base_path, results_dir, events_path, latency)
 
     # set target distribution type
-    mission_specs['grid'] = create_grid_specifications(base_path, target_distribution)
+    mission_specs['grid'] = create_grid_specifications(base_path, scenario, date)
 
     # set propagator settings
     mission_specs['settings'] \
-        = create_propagator_settings_specifications(base_path, num_sats, target_distribution, reduced)
+        = create_propagator_settings_specifications(base_path, scenario, date, reduced)
     
     # create satellite specifications
     mission_specs['spacecraft'] \
-        = create_spacecraft_specifications(num_sats, preplanner, replanner, 
+        = create_spacecraft_specifications(strategy, preplanner, replanner, data_processing, scenario, date,
                                            spacecraft_specs_template, instrument_specs, planner_specs)
     
     # set network name from ground segment type

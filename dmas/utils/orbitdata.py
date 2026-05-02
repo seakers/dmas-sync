@@ -95,6 +95,9 @@ class OrbitData:
     def __del__(self):
         # ensure memmaps are closed when instance is deleted
         self.close()
+
+    def __repr__(self):
+        return f"OrbitData(agent_name={self.agent_name}, time_step={self.time_step}, epoch_type={self.epoch_type}, epoch={self.epoch}, duration={self.duration})"
     
     """
     LOAD FROM PRE-COMPUTED DATA
@@ -684,15 +687,32 @@ class OrbitData:
 
         # check if a target is specified
         if target is None: 
-            # if no target specified, consider all future access intervals
-            target_intervals = future_intervals
+            # if no target specified, consider all future access intervals with any agent that shares component with this agent
+            
+            # get column index of this agent in the comms links table
+            u_idx = self.comms_target_indices[self.agent_name]
+
+            # filter for intervals where this agent and the target are in the same component (i.e. have access to each other) and compile list of target access intervals
+            target_intervals = [
+                (interval,self.agent_name,target) for interval, *component_indices in future_intervals
+                if any(int(component_indices[u_idx]) == int(component_indices[v_idx]) for v_idx in range(len(component_indices)) if v_idx != u_idx)
+            ]
+
         else:
             # otherwise, filter for target of interest
-            target_intervals = [ interval for interval,interval_target in future_intervals
-                                if interval_target == target]
+
+            # get column index of this agent and the target in the comms links table
+            u_idx = self.comms_target_indices[self.agent_name]
+            v_idx = self.comms_target_indices[target]
+
+            # filter for intervals where this agent and the target are in the same component (i.e. have access to each other) and compile list of target access intervals
+            target_intervals = [
+                (interval,self.agent_name,target) for interval, *component_indices in future_intervals
+                if int(component_indices[u_idx]) == int(component_indices[v_idx])
+            ]
         
         # get next access interval (if any)
-        next_interval = min(target_intervals, key=lambda x: x.left) if target_intervals else None
+        next_interval = min(target_intervals, key=lambda x: x[0].left) if target_intervals else (None,None)
 
         # return next access interval
         return next_interval
@@ -734,7 +754,7 @@ class OrbitData:
             return out
 
         # else if a target is specified, filter for target of interest
-
+    
         # initialize compiled list of access intervals
         out = []
 

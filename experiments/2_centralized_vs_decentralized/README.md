@@ -1,7 +1,7 @@
-# CBBA Internal Validation Stress Test
-*GOAL: showcase the reactivity capabilities of the sequence-constrained CBBA to incoming event requests and test edge cases*
+# Centralized vs Decentralized Planning Comparative Study
+*GOAL: compare the performance of different planning strategies in a realistic 3D-CHESS scenario*
 
-## Experiment Formulation
+<!-- ## Experiment Formulation
 ### Research questions
 1. How many requests can this CBBA handle?
     1. See runtime issues
@@ -213,4 +213,4 @@ seff <jobid>
 Cancel a job with `<jobid>`
 ```
 scancel <jobid>
-```
+``` -->

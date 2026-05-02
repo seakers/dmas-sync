@@ -40,6 +40,8 @@ class DealerMILPPlanner(DealerPlanner):
     MODELS = [STATIC, LINEAR, REOBS, REVISIT]
 
     def __init__(self, 
+                 agent_results_dir : str,
+                 client_ids : Dict[str, str],
                  client_orbitdata : Dict[str, OrbitData],
                  client_specs : Dict[str, object],
                  client_missions : Dict[str, Mission],
@@ -55,7 +57,8 @@ class DealerMILPPlanner(DealerPlanner):
                  printouts : bool = True,
                 ):
         
-        super().__init__(client_orbitdata, client_specs, client_missions, horizon, period, sharing, debug, logger, printouts)
+        # super().__init__(client_orbitdata, client_specs, client_missions, horizon, period, sharing, debug, logger, printouts)
+        super().__init__(agent_results_dir, client_ids, client_orbitdata, client_specs, client_missions, horizon, period, sharing, debug, logger, printouts)
 
         if not debug or licence_path is not None:
             # Check for Gurobi license

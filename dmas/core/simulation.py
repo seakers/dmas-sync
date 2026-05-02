@@ -1039,10 +1039,17 @@ class Simulation:
             mode = preplanner_dict.get('@mode', 'test').lower()
             clients = preplanner_dict.get('clients', None)
 
-            # load client specs for all agents (except self)
+            # load mission specs
             client_specs_path = os.path.join(orbitdata_dir, 'MissionSpecs.json')
             with open(client_specs_path, 'r') as clients_file:
                 mission_specs : dict = json.load(clients_file)
+
+            # load client ids for all agents (except self)
+            client_ids : Dict[str, str] = { d['name'] : d['@id'] 
+                                            for d in mission_specs.get('spacecraft', [])
+                                            if d['name'] != agent_name}
+
+            # load client specs for all agents (except self)            
             client_specs : Dict[str, Spacecraft] = {d['name']: Spacecraft.from_dict(d) 
                                                     for d in mission_specs.get('spacecraft', [])
                                                     if d['name'] != agent_name}
@@ -1075,7 +1082,8 @@ class Simulation:
                 max_tasks = preplanner_dict.get('maxTasks', np.Inf)
                 max_observations = preplanner_dict.get('maxObservations', 10)
 
-                return DealerMILPPlanner(agent_results_dir, 
+                return DealerMILPPlanner(agent_results_dir,
+                                         client_ids, 
                                          client_orbitdata, 
                                          client_specs, 
                                          client_missions, 

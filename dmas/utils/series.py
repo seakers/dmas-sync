@@ -162,6 +162,12 @@ class TargetGridTable(AbstractTable):
     def __len__(self):
         return len(self._lat)
 
+    def __getitem__(self, item : int) -> Tuple[float, float, int, int]:
+        assert isinstance(item, int), "TargetGridTable indices must be integers"
+        assert 0 <= item < len(self._lat), f"TargetGridTable index {item} out of bounds for length {len(self._lat)}"
+
+        return (float(self._lat[item]), float(self._lon[item]), int(self._grid_idx[item]), int(self._gp_idx[item]))
+
 @dataclass
 class StateTable(AbstractTable):
     """
@@ -301,6 +307,7 @@ class IntervalTable(AbstractTable):
 
     _extras_in_order: List[Tuple[str, np.ndarray]]
     _extras_cols_in_order: np.ndarray  # shape (E,), dtype=int64
+    _vocab_arr: Dict[str, np.ndarray]
 
     @classmethod
     def from_schema(cls, schema: Dict[str, Any], mmap_mode: str = "r") -> "IntervalTable":
@@ -345,7 +352,22 @@ class IntervalTable(AbstractTable):
                 extras[name] = arr
                 extras_in_order.append((name, arr))
                 extras_cols.append(col[name])
-
+            # build vocab arrays for extras (fast decode at row time)
+            vocab_arr: Dict[str, np.ndarray] = {}
+            columns_meta = schema.get("columns", {})
+            for safe, _ in extras.items():
+                col_meta = columns_meta.get(safe, {})
+                vocab = col_meta.get("vocab", None)
+                if not vocab:
+                    continue
+                # build object array such that arr[code] -> label
+                codes = [int(k) for k in vocab.keys()]
+                max_code = max(codes) if codes else -1
+                va = np.empty((max_code + 1,), dtype=object)
+                va[:] = None
+                for k_str, label in vocab.items():
+                    va[int(k_str)] = label
+                vocab_arr[safe] = va
             return cls(
                 _buf=buf,
                 _start=start,
@@ -356,6 +378,7 @@ class IntervalTable(AbstractTable):
                 _col=col,
                 _extras_in_order=extras_in_order,
                 _extras_cols_in_order=np.array(extras_cols, dtype=np.int64),
+                _vocab_arr=vocab_arr,
             )
 
         # Load packed data (memmap)
@@ -385,7 +408,21 @@ class IntervalTable(AbstractTable):
             extras[name] = arr
             extras_in_order.append((name, arr))
             extras_cols.append(col[name])
-
+        # build vocab arrays for extras (fast decode at row time)
+        vocab_arr: Dict[str, np.ndarray] = {}
+        columns_meta = schema.get("columns", {})
+        for safe, _ in extras.items():
+            col_meta = columns_meta.get(safe, {})
+            vocab = col_meta.get("vocab", None)
+            if not vocab:
+                continue
+            codes = [int(k) for k in vocab.keys()]
+            max_code = max(codes) if codes else -1
+            va = np.empty((max_code + 1,), dtype=object)
+            va[:] = None
+            for k_str, label in vocab.items():
+                va[int(k_str)] = label
+            vocab_arr[safe] = va
         return cls(
             _buf=buf,
             _start=start,
@@ -396,6 +433,7 @@ class IntervalTable(AbstractTable):
             _col=col,
             _extras_in_order=extras_in_order,
             _extras_cols_in_order=np.array(extras_cols, dtype=np.int64),
+            _vocab_arr=vocab_arr,
         )
     
     def __len__(self) -> int:
@@ -417,13 +455,18 @@ class IntervalTable(AbstractTable):
         columns_meta = self._meta.get("columns", {})
         for safe, arr in self._extras_in_order:
             col_meta = columns_meta.get(safe, {})
-            
             if "vocab" in col_meta:
-                # if column has vocab, decode integer value to string
-                vocab = col_meta["vocab"]
-                row.append(vocab.get(str(int(arr[i])), None))
+                # prefer fast prebuilt vocab array when available
+                va = self._vocab_arr.get(safe, None)
+                code = int(arr[i])
+                if va is not None:
+                    row.append(va[code] if 0 <= code < len(va) else None)
+                else:
+                    # fallback to mapping in schema (keys may be strings)
+                    vocab = col_meta["vocab"]
+                    row.append(vocab.get(str(code), vocab.get(code, None)))
             else:
-                # otherwise, just append the raw value 
+                # otherwise, just append the raw value
                 row.append(float(arr[i]))
 
         # return row as tuple
