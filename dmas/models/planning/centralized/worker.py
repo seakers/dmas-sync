@@ -1,5 +1,8 @@
-from dmas.models.actions import AgentAction
+from typing import Dict, Tuple
 
+from execsatm.tasks import GenericObservationTask
+
+from dmas.models.actions import AgentAction
 from dmas.models.actions import ObservationAction, action_from_dict
 from dmas.models.planning.plan import PeriodicPlan, Plan
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
@@ -21,8 +24,18 @@ class WorkerPlanner(AbstractPeriodicPlanner):
         self.dealer_name = dealer_name
         self.plan_message : PlanMessage = None
 
-    def update_percepts(self, state, current_plan, tasks, incoming_reqs, relay_messages, misc_messages, completed_actions, aborted_actions, pending_actions):       
-        super().update_percepts(state, current_plan, tasks, incoming_reqs, relay_messages, misc_messages, completed_actions, aborted_actions, pending_actions)
+    def update_percepts(self, 
+                        state : SimulationAgentState,
+                        current_plan : Plan,
+                        tasks : Dict[Tuple,GenericObservationTask],
+                        incoming_reqs: Dict[Tuple,Dict], 
+                        misc_messages : list,
+                        completed_actions: list,
+                        aborted_actions : list,
+                        pending_actions : list
+                    ) -> None:
+        # update percepts using parent method
+        super().update_percepts(state, current_plan, tasks, incoming_reqs, misc_messages, completed_actions, aborted_actions, pending_actions)
 
         # check if there are any plan messages for this agent
         plan_messages = {msg for msg in misc_messages 

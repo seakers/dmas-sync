@@ -127,6 +127,28 @@ class PlannerTester(ABC):
                                 },
                                 "spectral_resolution" : "Hyperspectral"
                             },
+                            "VNIR hyper" : {
+                                "name": "VNIR hyper",
+                                "@id" : "vnir_hyp_imager",
+                                "@type" : "VNIR",
+                                "detectorWidth": 6.6e-6,
+                                "focalLength": 3.6,  
+                                "orientation": {
+                                    "referenceFrame": "NADIR_POINTING",
+                                    "convention": "REF_FRAME_ALIGNED"
+                                },
+                                "fieldOfViewGeometry": { 
+                                    "shape": "RECTANGULAR", 
+                                    "angleHeight": 0.5, 
+                                    "angleWidth": 0.5
+                                },
+                                "maneuver" : {
+                                    "maneuverType":"SINGLE_ROLL_ONLY",
+                                    "A_rollMin": -50,
+                                    "A_rollMax": 50
+                                },
+                                "spectral_resolution" : "Hyperspectral"
+                            },
                             "VNIR multi" : {
                                 "name": "VNIR multi",
                                 "@id" : "vnir_multi_imager",

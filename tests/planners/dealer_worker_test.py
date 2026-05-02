@@ -87,7 +87,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
             "dealerName": "dealer-sat"
         }
         worker_spacecraft_1['orbitState']['state']['inc'] = 0.0         # equatorial
-        worker_spacecraft_1['instrument'] = self.instruments['TIR']  # thermal infrared instrument
+        worker_spacecraft_1['instrument'] = self.instruments['VNIR hyper']  # thermal infrared instrument
 
         worker_spacecraft_2 : dict = copy.deepcopy(self.spacecraft_template)
         worker_spacecraft_2['name'] = 'worker_sat_2'
@@ -99,7 +99,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         }
         worker_spacecraft_2['orbitState']['state']['inc'] = 0.0     # equatorial
         worker_spacecraft_2['orbitState']['state']['ta'] = 90.0     # 5 deg before worker 1
-        worker_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # hyperspectral imager instrument
+        worker_spacecraft_2['instrument'] = self.instruments['VNIR hyper'] # hyperspectral imager instrument
         
         # terminal welcome message
         print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
@@ -155,7 +155,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         worker_spacecraft_1['planner'] = {}
         worker_spacecraft_1['planner']['preplanner'] = {"@type": "worker", "dealerName": "dealer-sat"}
         worker_spacecraft_1['orbitState']['state']['ta'] = 95.0     
-        worker_spacecraft_1['instrument'] = self.instruments['TIR']  # thermal infrared instrument
+        worker_spacecraft_1['instrument'] = self.instruments['VNIR hyper']  # thermal infrared instrument
         
         worker_spacecraft_2 : dict = copy.deepcopy(self.spacecraft_template)
         worker_spacecraft_2['name'] = 'worker_sat_2'
@@ -163,7 +163,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         worker_spacecraft_2['planner'] = {}
         worker_spacecraft_2['planner']['preplanner'] = {"@type": "worker", "dealerName": "dealer-sat"}
         worker_spacecraft_2['orbitState']['state']['ta'] = 93.0     # 3 [deg] before worker 1
-        worker_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # hyperspectral imager instrument
+        worker_spacecraft_2['instrument'] = self.instruments['VNIR hyper'] # hyperspectral imager instrument
         
         # terminal welcome message
         print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
