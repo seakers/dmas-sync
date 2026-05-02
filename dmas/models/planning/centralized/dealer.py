@@ -192,26 +192,25 @@ class DealerPlanner(AbstractPeriodicPlanner):
                         tasks : List[GenericObservationTask],
                         observation_history : TaskObservationTracker,
                     ) -> Plan:
+        # get current time and next replanning time
+        t_curr = state.get_time()
+        t_next = t_curr + self._period
+        horizon = self._horizon if self._horizon != np.Inf else self._period        
+        
         # update plans for all client agents
         self.client_plans : Dict[str, PeriodicPlan] = self._generate_client_plans(state, specs, orbitdata, mission, tasks, observation_history)
 
         # schedule plan broadcasts to be performed
         plan_broadcasts : list[BroadcastMessageAction] = self._schedule_broadcasts(state, orbitdata)
-        
-        # generate plan from actions
-        t_curr = state.get_time()
-        t_next = t_curr + self._period
-        horizon = self._horizon if self._horizon != np.Inf else self._period
-        self.plan : PeriodicPlan = PeriodicPlan(plan_broadcasts, t=t_curr, horizon=horizon, t_next=t_next)    
 
         # schedule wait for next planning period to start
         replan_waits : list[WaitAction] = self._schedule_periodic_replan(state, t_next)
 
-        # add waits to plan
-        self.plan.add_all(replan_waits, t=t_curr)
+        # generate plan from actions
+        self._plan : PeriodicPlan = PeriodicPlan(plan_broadcasts, replan_waits, t=t_curr, horizon=horizon, t_next=t_next)    
 
         # return plan and save local copy
-        return self.plan.copy()
+        return self._plan.copy()
         
     def _generate_client_plans(self, 
                                state : SimulationAgentState, 
@@ -563,7 +562,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
 
                     # add to client broadcast list
-                    client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
+                    # client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
+                    client_broadcasts[client].extend([task_requests_msg])
 
             elif self._sharing == self.PERIODIC:
                 # determine current time        
