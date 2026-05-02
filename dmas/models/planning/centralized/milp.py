@@ -45,7 +45,7 @@ class DealerMILPPlanner(DealerPlanner):
                  client_orbitdata : Dict[str, OrbitData],
                  client_specs : Dict[str, object],
                  client_missions : Dict[str, Mission],
-                 model : str, 
+                 model : str = STATIC, 
                  licence_path : str = None, 
                  horizon : float = np.Inf,
                  period : float = np.Inf,
@@ -268,7 +268,7 @@ class DealerMILPPlanner(DealerPlanner):
                 model.computeIIS()
 
                 # print results to file
-                filepath = f"./chess3d/agents/planning/preplanners/decentralized/{model.ModelName}.ilp"
+                filepath = f"./dmas/models/planning/centralized/{model.ModelName}.ilp"
                 model.write(filepath)
                 model.write(f"{filepath}.json")
                 print(f"IIS written to `{filepath}`")

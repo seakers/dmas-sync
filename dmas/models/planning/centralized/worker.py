@@ -7,7 +7,7 @@ from dmas.models.actions import ObservationAction, action_from_dict
 from dmas.models.planning.plan import PeriodicPlan, Plan
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.states import SimulationAgentState
-from dmas.core.messages import PlanMessage
+from dmas.core.messages import PlanMessage, message_from_dict
 
 
 class WorkerPlanner(AbstractPeriodicPlanner):
@@ -38,11 +38,22 @@ class WorkerPlanner(AbstractPeriodicPlanner):
         super().update_percepts(state, current_plan, tasks, incoming_reqs, misc_messages, completed_actions, aborted_actions, pending_actions)
 
         # check if there are any plan messages for this agent
-        plan_messages = {msg for msg in misc_messages 
-                         if isinstance(msg, PlanMessage) # filter by message type
-                         and msg.agent_name == state.agent_name # filter by agent name                         
-                        #  and msg.src == self.dealer_name # TODO filter by dealer name
-                         }
+        plan_messages = []
+        for msg in misc_messages:
+            if isinstance(msg,PlanMessage):
+                if (msg.agent_name == state.agent_name
+                    and msg.src == self.dealer_name):
+                    plan_messages.append(msg)
+            elif isinstance(msg, dict) and msg.get('msg_type', None) == 'PLAN':
+                if (msg.get('agent_name', None) == state.agent_name
+                    and msg.get('src', None) == self.dealer_name):
+                    plan_msg = message_from_dict(**msg)
+                    plan_messages.append(plan_msg)
+        # plan_messages = {msg for msg in misc_messages 
+        #                  if (isinstance(msg, PlanMessage) or msg['msg_type'] == 'PLAN') # filter by message type
+        #                  and msg.agent_name == state.agent_name # filter by agent name                         
+        #                 #  and msg.src == self.dealer_name # TODO filter by dealer name
+        #                  }
         
         # update the latest plan message
         for plan_message in plan_messages:

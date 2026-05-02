@@ -12,9 +12,9 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         super().setUp()
 
         self.single_sat_toy : bool = False
-        self.multiple_sat_toy : bool = True
+        self.multiple_sat_toy : bool = False
         self.single_sat_lakes : bool = False
-        self.multiple_sat_lakes : bool = False
+        self.multiple_sat_lakes : bool = True
 
     def planner_name(self) -> str:
         return "dealer-worker"
@@ -41,7 +41,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
                 "model": "static",
                 "licensePath": "./gurobi.lic",
                 # "horizon": 500,
-                "period" : 100,
+                "period" : 300,
                 "maxTasks": 100,
                 "debug" : "False"
             }
@@ -153,7 +153,8 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         worker_spacecraft_1['name'] = 'worker_sat_1'
         worker_spacecraft_1['@id'] = 'worker-sat_1'
         worker_spacecraft_1['planner'] = {}
-        worker_spacecraft_1['planner']['preplanner'] = {"@type": "worker", "dealerName": "dealer-sat"}
+        worker_spacecraft_1['planner']['preplanner'] = \
+            {"@type": "worker", "dealerName": "dealer-sat"}
         worker_spacecraft_1['orbitState']['state']['ta'] = 95.0     
         worker_spacecraft_1['instrument'] = self.instruments['VNIR hyper']  # thermal infrared instrument
         
@@ -161,7 +162,8 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         worker_spacecraft_2['name'] = 'worker_sat_2'
         worker_spacecraft_2['@id'] = 'worker-sat_2'
         worker_spacecraft_2['planner'] = {}
-        worker_spacecraft_2['planner']['preplanner'] = {"@type": "worker", "dealerName": "dealer-sat"}
+        worker_spacecraft_2['planner']['preplanner'] = \
+            {"@type": "worker", "dealerName": "dealer-sat"}
         worker_spacecraft_2['orbitState']['state']['ta'] = 93.0     # 3 [deg] before worker 1
         worker_spacecraft_2['instrument'] = self.instruments['VNIR hyper'] # hyperspectral imager instrument
         
@@ -187,8 +189,13 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         # execute mission
         self.simulation.execute()
 
-        # print results
-        self.simulation.process_results()
+        # process results
+        self.simulation.process_results(force_process=True)
+
+        # print results summary
+        self.simulation.summarize_results(force_summarize=True)
+
+        print(f"{scenario_name}: DONE")
 
 
 if __name__ == '__main__':

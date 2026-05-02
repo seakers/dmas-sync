@@ -70,11 +70,11 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
         # store client information
         self.client_orbitdata : Dict[str, OrbitData] = \
-            {client.lower(): client_orbitdata[client] for client in client_orbitdata}
+            {client.lower(): client_orbitdata for client, client_orbitdata in client_orbitdata.items()}
         self.client_specs : Dict[str, object] = \
-            {client.lower(): client_specs[client] for client in client_specs}
+            {client.lower(): client_specs for client, client_specs in client_specs.items()}
         self.client_missions : Dict[str, Mission] = \
-            {client.lower(): client_missions[client] for client in client_missions}
+            {client.lower(): client_mission for client, client_mission in client_missions.items()}
         self.cross_track_fovs : Dict[str, Dict[str, float]] = \
             self._collect_client_cross_track_fovs(client_specs)
         self.client_states : Dict[str, SatelliteAgentState] = \
@@ -609,6 +609,9 @@ class DealerPlanner(AbstractPeriodicPlanner):
         t_access_starts = set()    
 
         for client,client_plan in self.client_plans.items():
+            if client_plan.is_empty():
+                continue # no actions scheduled for this client; skip broadcast scheduling
+
             if self._sharing == self.OPPORTUNISTIC:
                 # get next access interval
                 next_access,*_ = orbitdata.get_next_agent_access(t_curr, target=client, t_max=t_next, include_current=True)
