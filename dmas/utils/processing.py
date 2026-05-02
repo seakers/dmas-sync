@@ -1433,7 +1433,8 @@ class ResultsProcessor:
                           observations_per_event : Dict[GeophysicalEvent, List[Dict]],
                           observations_per_task : Dict[GenericObservationTask, list],
                           precision : int = 5,
-                          printouts : bool = True
+                          printouts : bool = True,
+                          calc_dual : bool = True,
                         ) -> pd.DataFrame:      
 
         # classify re-observations
@@ -1532,18 +1533,20 @@ class ResultsProcessor:
 
         total_obtained_reward = np.round(obtained_rewards_df['reward'].sum(), precision) if obtained_rewards_df is not None else 0.0
         total_obtained_utility = np.round(obtained_rewards_df['reward'].sum() - execution_costs_df['cost'].sum(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0
-
-        reward_primal_bound, reward_dual_bound \
-            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
         
         total_task_priority, total_observable_task_priority \
             = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
 
-        # validate reward values
-        assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-6, \
-            "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
-        assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
-            "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
+        if calc_dual:
+            reward_primal_bound, reward_dual_bound \
+                = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
+            # validate reward values
+            assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-6, \
+                "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
+            assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
+                "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
+        else:
+            reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
 
         # Generate summary
         summary_headers = ['Metric', 'Value']

@@ -59,7 +59,8 @@ class Simulation:
                  agents : List[SimulationAgent],
                  level : int,
                  time_step : float = None,
-                 printouts : bool = True
+                 printouts : bool = True,
+                 calc_dual : bool = True
             ) -> None:
         """ 
         Initializes simulation instance 
@@ -115,6 +116,7 @@ class Simulation:
         self._agents : list[SimulationAgent] = agents
         self._level = level
         self._printouts : bool = printouts
+        self._calc_dual : bool = calc_dual
 
         # initialize simulation runtime trackers
         self._t_0 = np.NAN
@@ -443,7 +445,8 @@ class Simulation:
                                                         agent_missions,
                                                         *processed_results, 
                                                         precision=precision, 
-                                                        printouts=printouts)
+                                                        printouts=printouts,
+                                                        calc_dual=self._calc_dual)
         else:                        
             # process results and generate summary
             processed_results = self.process_results(printouts=printouts)
@@ -456,7 +459,8 @@ class Simulation:
                                                      agent_missions,
                                                      *processed_results, 
                                                      precision=precision, 
-                                                     printouts=printouts
+                                                     printouts=printouts,
+                                                     calc_dual=self._calc_dual
                                                     )
             
             
@@ -530,7 +534,12 @@ class Simulation:
         gstation_dict   : List[dict] = d.get('groundStation', None)
         gops_dict       : List[dict] = d.get('groundOperator', None)
         gsensor_dict    : List[dict] = d.get('groundSensor', None)
-        scenario_dict   : dict = d.get('scenario', None)
+        scenario_dict   : dict = d.get('scenario', None)        
+        settings_dict   : dict = d.get('settings', None)
+        
+        calc_dual       : bool = settings_dict.get('calculateDual', True)
+        if not isinstance(calc_dual, bool):
+            calc_dual = str(calc_dual).lower() == 'true' # convert string to bool if needed
 
         if gops_dict is not None: assert gstation_dict is not None, \
             "Both `groundStation` and `groundOperator` must be defined in the input file."
@@ -646,7 +655,8 @@ class Simulation:
                           environment,
                           agents,
                           level,
-                          printouts=printouts)
+                          printouts=printouts,
+                          calc_dual=calc_dual)
 
     @staticmethod
     def __setup_results_directory(scenario_path : str, scenario_name : str, agent_names : List[str], overwrite : bool = True) -> str:
