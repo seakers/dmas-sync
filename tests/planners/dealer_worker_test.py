@@ -41,7 +41,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
                 "model": "static",
                 "licensePath": "./gurobi.lic",
                 # "horizon": 500,
-                "period" : 300,
+                "period" : 100,
                 "maxTasks": 100,
                 "debug" : "False"
             }

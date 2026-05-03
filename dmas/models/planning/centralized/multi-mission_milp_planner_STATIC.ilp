@@ -1,0 +1,8 @@
+\ Model multi-mission_milp_planner_STATIC_copy
+\ LP format - for model browsing. Use MPS format to capture full model detail.
+Maximize
+ 
+Subject To
+ static_time_assignment_client0_task1: t[0,1] = -0.038181676460681
+Bounds
+End

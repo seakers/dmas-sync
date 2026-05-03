@@ -1,0 +1,816 @@
+lat [deg],lon [deg],event_type,start time [s],duration [s],severity,measurements,uuid
+47.9646,134.5687,high_flow_river,0,86400,67.0,"['VNIR', 'Altimeter']",8fd56ed2-164d-41b3-9dc4-3295675014c0
+7.9771,-73.8646,high_flow_river,0,86400,62.2,"['VNIR', 'Altimeter']",4d7b0be8-b3cf-444d-8de3-1c15405d5266
+35.9687,115.9646,high_flow_river,0,72536,100.0,"['VNIR', 'Altimeter']",d08a9d0a-61d6-4fa3-b7f4-3e582c6a2240
+-6.6688,-51.9896,high_flow_river,0,1172,2.0,"['VNIR', 'Altimeter']",fbf88836-4b4b-4ad2-9c92-70cee526775e
+-4.0104,25.9771,high_flow_river,0,86400,3.8,"['VNIR', 'Altimeter']",fc4159a3-af1d-4b69-8e5c-c341eb7e7380
+49.9979,136.7896,high_flow_river,0,65322,82.5,"['VNIR', 'Altimeter']",0db45868-9222-45cb-9e4c-7a66f10e96b1
+53.4687,10.0479,high_flow_river,0,86400,31.3,"['VNIR', 'Altimeter']",ef2fc7ab-4606-47e6-ae2f-c28640182c68
+61.6062,90.0521,high_flow_river,0,86400,100.0,"['VNIR', 'Altimeter']",bda3c0d0-f68a-4a8a-837e-7fb32df6f22a
+57.9854,102.6812,high_flow_river,0,86400,100.0,"['VNIR', 'Altimeter']",681613bc-290e-4685-945b-a54b7ccf1024
+18.7604,11.7312,high_flow_river,0,31541,100.0,"['VNIR', 'Altimeter']",8f02077a-fae3-4868-a7b7-6cc0ca1bdaad
+35.9729,116.0437,high_flow_river,32,56197,24.2,"['VNIR', 'Altimeter']",c3c63ba5-7813-4975-a0ac-0f57b41e957f
+-22.0,-51.5,wildfire,40,1500,46.4,"['TIR', 'MIR', 'VNIR', 'SAR']",cf64d9dc-9bf5-47fe-bf29-8dad0db15c86
+52.0,-98.5,wildfire,40,2400,46.8,"['TIR', 'MIR', 'VNIR', 'SAR']",493bd3ac-f1c6-4e93-bae4-84f42cea9746
+-17.5,-61.0,wildfire,40,23100,46.4,"['TIR', 'MIR', 'VNIR', 'SAR']",dd5c5189-4dfd-48d8-a4aa-0164f16ce5ca
+48.5,-99.0,wildfire,40,600,52.7,"['TIR', 'MIR', 'VNIR', 'SAR']",783a9412-b693-4165-9b55-9b0ad5f542f1
+25.0,-107.0,wildfire,40,1500,45.8,"['TIR', 'MIR', 'VNIR', 'SAR']",ae74006a-c38f-44bc-888c-3102ce15dd3d
+51.5,-100.0,wildfire,40,1500,61.8,"['TIR', 'MIR', 'VNIR', 'SAR']",25b615a3-2dc4-4ede-8ad7-9fb9731a9c41
+-20.0,-59.0,wildfire,40,71700,48.5,"['TIR', 'MIR', 'VNIR', 'SAR']",12f2377e-634b-4b9c-9a26-eee924e16391
+-17.0,-62.0,wildfire,40,21300,49.4,"['TIR', 'MIR', 'VNIR', 'SAR']",ec40fcdb-7403-415f-9920-08e8882f2413
+-5.5,-45.0,wildfire,40,6900,37.2,"['TIR', 'MIR', 'VNIR', 'SAR']",1281ee4e-f39b-45ba-874d-d4d43c1aee14
+28.0,-109.5,wildfire,40,4200,50.1,"['TIR', 'MIR', 'VNIR', 'SAR']",8c96a3f6-97ba-428f-93fb-f7e05e698d69
+-17.5,-62.0,wildfire,40,86100,58.2,"['TIR', 'MIR', 'VNIR', 'SAR']",7911e68e-920c-45c3-bdc9-dbf0095e0c18
+29.0,-111.0,wildfire,40,3300,50.0,"['TIR', 'MIR', 'VNIR', 'SAR']",ef615b0b-0894-457b-8a4f-1c78af217a38
+-18.0,-62.0,wildfire,40,14100,45.5,"['TIR', 'MIR', 'VNIR', 'SAR']",92562630-261b-44b8-8fb1-b7971b26ea22
+46.0,-118.5,wildfire,40,600,69.9,"['TIR', 'MIR', 'VNIR', 'SAR']",ab64c410-475e-474e-92e0-a49c658ea47e
+-11.0,-53.0,wildfire,40,26701,42.2,"['TIR', 'MIR', 'VNIR', 'SAR']",74a237ac-888f-44ca-8015-e087e56f8d7c
+-15.5,-57.5,wildfire,40,3300,37.6,"['TIR', 'MIR', 'VNIR', 'SAR']",6141b404-491e-4e44-8e4d-c18143db93c9
+24.5,-106.5,wildfire,40,12300,47.4,"['TIR', 'MIR', 'VNIR', 'SAR']",d7f1d9e0-ae34-4dca-920e-a088cfefa035
+11.5,-70.0,wildfire,40,39300,44.1,"['TIR', 'MIR', 'VNIR', 'SAR']",e6d43ba0-4931-4489-8ab8-22a400378c82
+22.5,-105.0,wildfire,40,19500,48.8,"['TIR', 'MIR', 'VNIR', 'SAR']",0c93a256-9c68-4843-b7a8-558d503cd3db
+-11.5,-55.5,wildfire,40,16800,47.8,"['TIR', 'MIR', 'VNIR', 'SAR']",30d00ff0-eb37-4e8e-ad1f-9c7f88090c84
+19.5,-105.0,wildfire,40,2400,46.5,"['TIR', 'MIR', 'VNIR', 'SAR']",a592c37c-63b7-4d7f-bfe6-f865482e102f
+61.0146,76.1979,high_flow_river,725,85675,100.0,"['VNIR', 'Altimeter']",f59969eb-df20-425c-bb94-b4c8d0195cae
+-21.5,-49.0,wildfire,940,600,59.0,"['TIR', 'MIR', 'VNIR', 'SAR']",605800ec-fe69-4861-9396-01bb733fa862
+25.0,-111.5,wildfire,940,600,50.3,"['TIR', 'MIR', 'VNIR', 'SAR']",2772c1cf-febd-4416-bccb-4b8291d93b17
+52.0,-116.0,wildfire,940,4200,66.9,"['TIR', 'MIR', 'VNIR', 'SAR']",d10ce904-3c5b-4d40-8ab8-6f4fdfd0e9e2
+18.0,-96.0,wildfire,940,600,52.5,"['TIR', 'MIR', 'VNIR', 'SAR']",3652eb56-58fc-41ff-99a0-956677ee6f82
+43.0,-121.0,wildfire,940,600,50.4,"['TIR', 'MIR', 'VNIR', 'SAR']",fa330a9c-61c8-432a-8957-0b7140fc5f7a
+18.0,-93.0,wildfire,940,85200,57.2,"['TIR', 'MIR', 'VNIR', 'SAR']",c7fcd1ac-31ef-45b7-9ca0-8f9b7b5c7605
+47.5,-113.5,wildfire,940,600,50.4,"['TIR', 'MIR', 'VNIR', 'SAR']",53bc0ebf-47b9-4eb0-9698-621de589b713
+17.0,-95.5,wildfire,940,9600,42.2,"['TIR', 'MIR', 'VNIR', 'SAR']",7bd1e219-dd9f-4100-a9de-13181f69d5b8
+-23.0,-60.5,wildfire,940,5100,37.8,"['TIR', 'MIR', 'VNIR', 'SAR']",80d2f2a2-4b6e-4ab3-acdf-3b0bdecc808f
+29.0,-108.5,wildfire,940,85200,52.1,"['TIR', 'MIR', 'VNIR', 'SAR']",dc6c7cf6-3d7d-4b36-82bc-9135f7c40d0d
+47.0,-114.5,wildfire,940,1500,49.6,"['TIR', 'MIR', 'VNIR', 'SAR']",a5632e80-a541-484a-80ae-470db991c82f
+46.3771,74.5812,high_flow_river,1400,85000,100.0,"['VNIR', 'Altimeter']",7a7e2c7c-c02f-4bbb-b79a-200e40d08066
+-6.996931457519281,141.5053249782286,algal_bloom,1570,84830,50.3,"['VNIR', 'TIR', 'Altimeter']",b21c6748-9379-407d-a443-a0d734efd3a5
+54.0146,-101.4813,high_flow_river,1967,84433,4.9,"['VNIR', 'Altimeter']",03e04ffb-9a9c-40ac-8a70-c94689900935
+13.1396,13.9812,high_flow_river,2257,29892,5.4,"['VNIR', 'Altimeter']",83d239f5-6091-4ee3-b626-d72d87ce8e7c
+16.5,-95.0,wildfire,2740,6900,43.4,"['TIR', 'MIR', 'VNIR', 'SAR']",0a8c686d-04ce-47e4-992d-34126b8d2e43
+27.5,-106.5,wildfire,2740,9600,48.3,"['TIR', 'MIR', 'VNIR', 'SAR']",e36cfb5f-afa7-490f-bcfe-382aa26d47a0
+44.0,-113.5,wildfire,3640,600,50.9,"['TIR', 'MIR', 'VNIR', 'SAR']",c59688f7-0ad5-4d03-92c7-7c23dfa11134
+48.0,-120.5,wildfire,3640,600,51.2,"['TIR', 'MIR', 'VNIR', 'SAR']",602c3f66-c475-463f-8080-0f40f94967c0
+47.5,-113.0,wildfire,3640,600,50.8,"['TIR', 'MIR', 'VNIR', 'SAR']",aa7b0052-9837-4152-8c52-8e27e966aea8
+40.0,-123.5,wildfire,3640,600,51.6,"['TIR', 'MIR', 'VNIR', 'SAR']",36acce38-d738-4e51-b44c-691187d62751
+48.5,-113.0,wildfire,4540,600,51.0,"['TIR', 'MIR', 'VNIR', 'SAR']",bf989c0d-5cd1-43ba-b649-05f450f1c987
+46.5,-122.0,wildfire,4540,600,52.7,"['TIR', 'MIR', 'VNIR', 'SAR']",fce1ba64-e354-4bee-94d1-3e2a5723ab13
+49.0,-114.5,wildfire,4540,600,50.8,"['TIR', 'MIR', 'VNIR', 'SAR']",acf30e7b-b007-4973-8749-a962dbfad760
+21.0,-104.5,wildfire,5440,600,55.9,"['TIR', 'MIR', 'VNIR', 'SAR']",1d433d10-dd73-4816-bcef-ca33ca72743e
+37.5,-101.0,wildfire,5440,3300,49.0,"['TIR', 'MIR', 'VNIR', 'SAR']",962be1bf-4d69-45d2-b98c-1b28147cbbe7
+28.5,-108.5,wildfire,5440,8700,46.3,"['TIR', 'MIR', 'VNIR', 'SAR']",512537ed-0d80-421b-a94b-ad78b947f3bb
+-1.0063,8.9187,high_flow_river,5780,40317,34.4,"['VNIR', 'Altimeter']",42b698e5-316f-426b-a0f8-49a6f9ee01f2
+58.5937,109.9854,high_flow_river,5917,38419,100.0,"['VNIR', 'Altimeter']",2c3c09bd-b162-457c-974a-5c5b5281383b
+47.5,-98.5,wildfire,6340,1500,45.5,"['TIR', 'MIR', 'VNIR', 'SAR']",f4ed2f78-bb37-44dc-a3a3-d57e0dd92540
+29.25829898410481,116.00872661264415,algal_bloom,7103,79297,70.0,"['VNIR', 'TIR', 'Altimeter']",9b56ff80-778e-47d7-92b2-7b4ee3027e57
+30.032926161024307,116.3540311325925,algal_bloom,7103,79297,43.6,"['VNIR', 'TIR', 'Altimeter']",3d098d66-fac6-41e9-8ce1-1405bc29156f
+31.57292778862859,117.4488972621556,algal_bloom,7103,79297,48.8,"['VNIR', 'TIR', 'Altimeter']",5114f0e9-a581-404f-8f68-bf519525e425
+29.971745334201643,116.22036866553084,algal_bloom,7103,79297,63.8,"['VNIR', 'TIR', 'Altimeter']",e95a965b-f906-4362-9a56-611866ab4c86
+29.596112467448734,118.9621673823438,algal_bloom,7103,79297,70.0,"['VNIR', 'TIR', 'Altimeter']",7561ea5f-c5da-43fb-a627-1052fce3b17e
+31.23819444444422,120.14124036982784,algal_bloom,7103,79297,70.0,"['VNIR', 'TIR', 'Altimeter']",64047c96-7ba2-497d-8d1d-4eca9fa7d8fe
+-35.9188,-66.6271,high_flow_river,7347,4708,9.6,"['VNIR', 'Altimeter']",7d53eb14-73bd-4f9f-9d97-4a514eee744d
+-16.0,168.0,wildfire,7560,3600,50.9,"['TIR', 'MIR', 'VNIR', 'SAR']",6b35e996-83b3-4a5d-a03c-88e66696a5a6
+46.5,-97.5,wildfire,8140,7800,49.1,"['TIR', 'MIR', 'VNIR', 'SAR']",d3e61a9b-65f8-4b04-a5bf-7c0bacdd67b4
+18.0,-92.5,wildfire,9040,3300,37.9,"['TIR', 'MIR', 'VNIR', 'SAR']",fb7eadb9-2fd9-4b88-8888-400baaa6c5c9
+-21.5,-50.0,wildfire,9040,1500,47.6,"['TIR', 'MIR', 'VNIR', 'SAR']",8c945d7b-b803-4db9-af17-e10fd6dc604f
+51.7062,139.9896,high_flow_river,9674,76726,9.2,"['VNIR', 'Altimeter']",c2bc706c-799a-49ef-8d65-13d2fce93a80
+29.85572914123557,113.30271835256951,algal_bloom,9754,76646,67.9,"['VNIR', 'TIR', 'Altimeter']",dc5cc634-c073-4c88-b8d6-53336953bb29
+30.232626139323145,114.489175492933,algal_bloom,9754,76646,70.0,"['VNIR', 'TIR', 'Altimeter']",f445b2e5-5386-4d04-a5e2-d12b8ceed74e
+48.0,-111.5,wildfire,9940,600,53.8,"['TIR', 'MIR', 'VNIR', 'SAR']",713e2808-a583-46c9-ab62-5ee70b4e37e7
+-34.0,149.5,wildfire,10320,49260,66.1,"['TIR', 'MIR', 'VNIR', 'SAR']",a823b6b3-51d4-4912-8e6b-39414ce56f65
+-33.5,149.5,wildfire,10320,49260,54.0,"['TIR', 'MIR', 'VNIR', 'SAR']",20b5963c-66ff-4c0d-98eb-126df468ece1
+-26.5,147.0,wildfire,10440,49260,43.4,"['TIR', 'MIR', 'VNIR', 'SAR']",e23daf46-ed97-4bd5-a3cc-90fe35fb5af8
+3.9771,31.6812,high_flow_river,10723,75677,100.0,"['VNIR', 'Altimeter']",7e132b28-68ea-49a1-a005-566421d1d3f9
+40.0187,48.7687,high_flow_river,11312,75088,100.0,"['VNIR', 'Altimeter']",a7c06ba1-a8b6-4ace-9614-8e83fbc744dd
+58.9479,102.0062,high_flow_river,11432,74968,100.0,"['VNIR', 'Altimeter']",53132c36-6da6-4900-ac32-91249c2f4d21
+-22.5,-51.0,wildfire,11740,2400,46.1,"['TIR', 'MIR', 'VNIR', 'SAR']",89d0b0c5-ff2b-4a68-a4e5-76e9ce6e0f10
+49.0,136.5,wildfire,11760,46140,49.7,"['TIR', 'MIR', 'VNIR', 'SAR']",c07332cd-9306-4b0b-91ee-49024d79015f
+-30.0,-62.5,wildfire,12640,1500,52.0,"['TIR', 'MIR', 'VNIR', 'SAR']",5718a477-19af-41d6-8558-4245deacf27e
+53.663134697808175,108.18842264096403,algal_bloom,12816,73584,41.2,"['VNIR', 'TIR', 'Altimeter']",9f41c57b-b38b-45b0-80a0-0f2698c20a27
+45.59475897895015,99.0960488064857,algal_bloom,12816,73584,21.9,"['VNIR', 'TIR', 'Altimeter']",95f4e5e2-419e-411c-b09f-644d247176e6
+49.14888610839847,93.37025689708628,algal_bloom,12816,73584,23.5,"['VNIR', 'TIR', 'Altimeter']",112ea95b-79c9-4e8d-9c52-f7ef665e2b1d
+48.09344672309018,93.19912628869066,algal_bloom,12816,73584,53.3,"['VNIR', 'TIR', 'Altimeter']",5e71cf1c-fff7-4519-a571-f823a9b56267
+47.77790188259547,93.37295135789591,algal_bloom,12816,73584,23.5,"['VNIR', 'TIR', 'Altimeter']",bd5ce0ae-c802-4e3b-afdc-dd46c877a1aa
+37.4229,66.0771,high_flow_river,13085,73315,97.9,"['VNIR', 'Altimeter']",5b93e538-b035-4a69-a4eb-05530320790f
+-41.0,146.0,wildfire,13200,49200,47.3,"['TIR', 'MIR', 'VNIR', 'SAR']",ee5eae9d-794d-46a7-abf5-00d0fb1503aa
+-36.5,146.0,wildfire,13260,3600,52.6,"['TIR', 'MIR', 'VNIR', 'SAR']",f29b7350-8d2d-464f-96e1-a6dfee9b2a3f
+-32.5,147.0,wildfire,13320,46260,51.9,"['TIR', 'MIR', 'VNIR', 'SAR']",3b9e8a74-93fb-42d9-98bf-fa8850e6574f
+48.0062,124.3354,high_flow_river,13332,73068,100.0,"['VNIR', 'Altimeter']",089e7398-e1fa-4b93-8f44-0efe998a83f3
+18.5,-92.0,wildfire,13540,25800,42.9,"['TIR', 'MIR', 'VNIR', 'SAR']",0f4a6036-16f2-413b-a733-8cb791c4c13e
+-17.5,138.5,wildfire,13620,46260,56.9,"['TIR', 'MIR', 'VNIR', 'SAR']",f0f4ce01-9ae9-422b-a53f-1a4f1e4ac07c
+-13.5,133.0,wildfire,13680,49200,49.1,"['TIR', 'MIR', 'VNIR', 'SAR']",0b3e33ce-f5ba-4b9b-8c33-9321803885db
+-13.0,134.0,wildfire,13680,49260,49.4,"['TIR', 'MIR', 'VNIR', 'SAR']",30c4c029-2f9b-4d4c-bca0-90a6299bf5a3
+-13.5,133.5,wildfire,13680,49200,51.6,"['TIR', 'MIR', 'VNIR', 'SAR']",86c3370a-8c8c-440d-b780-0b15b7b1f9fc
+-12.5,133.5,wildfire,13680,49260,48.1,"['TIR', 'MIR', 'VNIR', 'SAR']",5231ba57-a86f-455a-a769-a2515f1b0c8b
+-12.5,132.0,wildfire,13680,49260,56.9,"['TIR', 'MIR', 'VNIR', 'SAR']",342727b0-9f2c-49c7-80cb-317c67bb978a
+-13.5,132.0,wildfire,13680,49200,47.1,"['TIR', 'MIR', 'VNIR', 'SAR']",c09c5401-7611-4104-b60a-579ebe6fb339
+-13.0,133.5,wildfire,13680,49260,45.0,"['TIR', 'MIR', 'VNIR', 'SAR']",5dfb610a-a41e-4bd7-83cb-11eeee5f685e
+-13.0,132.0,wildfire,13680,49260,60.3,"['TIR', 'MIR', 'VNIR', 'SAR']",c6bc615f-deda-4b9f-b91f-2e7e73d80036
+30.67520751953097,81.48481892677057,algal_bloom,15813,70587,23.5,"['VNIR', 'TIR', 'Altimeter']",c6e4c18c-683b-45c3-b95a-ea41ed8d54e5
+-23.5,121.5,wildfire,16560,49260,61.4,"['TIR', 'MIR', 'VNIR', 'SAR']",6c24fe84-57b0-4313-b622-e7f2c804c85f
+-21.5,131.0,wildfire,16620,46140,51.6,"['TIR', 'MIR', 'VNIR', 'SAR']",5a8cd769-c01b-49fb-852d-25172d75d7dd
+-23.5,121.0,wildfire,16620,49200,51.3,"['TIR', 'MIR', 'VNIR', 'SAR']",92b0ca70-21a8-4ed2-8da7-fa8be02425ed
+-23.0,121.5,wildfire,16620,49200,45.8,"['TIR', 'MIR', 'VNIR', 'SAR']",fdc24e12-fee6-48b9-846d-5ef8694588f8
+-22.0,123.5,wildfire,16620,49200,51.0,"['TIR', 'MIR', 'VNIR', 'SAR']",95e33abc-9c69-4cad-a335-fa838ebdc7f1
+-14.5,131.0,wildfire,16740,3600,52.1,"['TIR', 'MIR', 'VNIR', 'SAR']",bdb4eac0-da1b-4428-8690-7d6d91716456
+-14.5,129.5,wildfire,16740,46140,48.2,"['TIR', 'MIR', 'VNIR', 'SAR']",66e5f956-aa20-4824-88eb-bbc2717e1e84
+-14.5,131.5,wildfire,16740,46140,44.3,"['TIR', 'MIR', 'VNIR', 'SAR']",e59bd742-2a3e-4657-8fa4-e428ac509bec
+-15.5,128.5,wildfire,16740,46140,54.9,"['TIR', 'MIR', 'VNIR', 'SAR']",124a9240-10a1-4370-b61d-b36b50eded0c
+-14.0,134.0,wildfire,16740,46140,48.0,"['TIR', 'MIR', 'VNIR', 'SAR']",0173fe86-82da-4483-af60-3360f0d482e2
+-14.0,129.5,wildfire,16740,46140,55.5,"['TIR', 'MIR', 'VNIR', 'SAR']",2b9664fc-3d23-40ff-ab1d-cafe7faeed13
+-15.0,128.5,wildfire,16740,69660,48.5,"['TIR', 'MIR', 'VNIR', 'SAR']",9ee31677-8f17-4534-8497-716cb49fca68
+-14.0,130.0,wildfire,16740,46140,48.4,"['TIR', 'MIR', 'VNIR', 'SAR']",886f2d1e-de9e-4d55-9365-0ded17138ec2
+-14.5,127.5,wildfire,16740,46200,46.0,"['TIR', 'MIR', 'VNIR', 'SAR']",1436c692-e94c-44b8-8a71-e536723d9e91
+17.5,-88.5,wildfire,17140,69000,61.8,"['TIR', 'MIR', 'VNIR', 'SAR']",646216fb-ad95-4656-84e3-c71128d6c18c
+63.3854,106.1479,high_flow_river,17273,17378,2.1,"['VNIR', 'Altimeter']",69fabdd3-73d7-49a0-af19-a00409256263
+45.1812,19.9771,high_flow_river,18563,67837,0.7,"['VNIR', 'Altimeter']",f233869a-a595-4f75-a1c0-99073b57e512
+41.11663058810797,68.20184220701307,algal_bloom,19070,67330,51.8,"['VNIR', 'TIR', 'Altimeter']",2b84a99b-eafc-4e81-9fda-f34c54644f99
+40.31992078993062,70.17973192099039,algal_bloom,19070,67330,23.5,"['VNIR', 'TIR', 'Altimeter']",9596c34f-b9e2-4369-b39a-f8cbb5ba03d7
+26.0104,68.2021,high_flow_river,19108,50086,10.2,"['VNIR', 'Altimeter']",8591a40c-d044-439e-a985-c863bd7d59ee
+-32.0,117.0,wildfire,19440,49200,48.0,"['TIR', 'MIR', 'VNIR', 'SAR']",35974713-f967-45c7-8c43-53f863e80c11
+-32.0,116.5,wildfire,19440,46260,48.4,"['TIR', 'MIR', 'VNIR', 'SAR']",bc718962-3a7a-41c4-a583-29bc8c6ddcc1
+-30.5,115.5,wildfire,19500,46200,48.8,"['TIR', 'MIR', 'VNIR', 'SAR']",6f9f60b2-6f48-4b5a-806b-4cf5c90aa92e
+-29.5,115.5,wildfire,19500,49200,49.5,"['TIR', 'MIR', 'VNIR', 'SAR']",ade93cdc-0155-4a26-80dd-610f03698332
+-22.0,123.0,wildfire,19620,46200,55.3,"['TIR', 'MIR', 'VNIR', 'SAR']",6d947fae-1edf-481b-8158-a3f4116190e7
+9.5,-63.5,wildfire,19840,59100,53.1,"['TIR', 'MIR', 'VNIR', 'SAR']",e0d3b9b9-78a8-4e25-b9c9-85e36935784b
+43.9854,-76.5771,high_flow_river,19991,66409,55.7,"['VNIR', 'Altimeter']",402ce6c3-f343-4a60-b5a3-6dd93e7a2802
+15.0,108.5,wildfire,20220,46260,45.4,"['TIR', 'MIR', 'VNIR', 'SAR']",0e79f330-8851-48c8-9352-7dec841af83c
+15.5,108.0,wildfire,20280,46200,46.9,"['TIR', 'MIR', 'VNIR', 'SAR']",e8ed708d-8e9a-4836-970d-0d0e3e74e89c
+21.0,101.5,wildfire,20340,49260,51.6,"['TIR', 'MIR', 'VNIR', 'SAR']",6f8e9f79-2244-494b-8727-0fb42db85442
+19.5,109.0,wildfire,20340,46200,52.7,"['TIR', 'MIR', 'VNIR', 'SAR']",28467f6d-c553-4481-99fe-23d02043f1d7
+18.5,104.0,wildfire,20340,46200,49.3,"['TIR', 'MIR', 'VNIR', 'SAR']",806f818b-9a14-4e04-960c-6f9a9280681d
+18.0,102.0,wildfire,20340,46200,48.1,"['TIR', 'MIR', 'VNIR', 'SAR']",21519b39-a17b-4c8d-98cf-d4df85a5a1b9
+18.5,101.5,wildfire,20340,46200,48.0,"['TIR', 'MIR', 'VNIR', 'SAR']",51dc41b2-4cd6-4105-b831-771e518e3979
+21.0,102.5,wildfire,20340,49260,50.0,"['TIR', 'MIR', 'VNIR', 'SAR']",e25b14bb-9608-4c9d-bacc-4fc788eac405
+27.5,117.5,wildfire,20400,3600,51.1,"['TIR', 'MIR', 'VNIR', 'SAR']",0d69e228-1cf5-408a-8a8a-ddcd76303b18
+16.5,-94.0,wildfire,20740,3300,49.2,"['TIR', 'MIR', 'VNIR', 'SAR']",22dadd6f-bf16-4678-8257-87fcbbf3d02f
+45.192375217013705,59.84277437065908,algal_bloom,21513,64887,16.3,"['VNIR', 'TIR', 'Altimeter']",2742d00c-e6d0-4ac8-9e0a-54589cd10d52
+50.44597222222254,68.89417441505185,algal_bloom,21513,64887,60.1,"['VNIR', 'TIR', 'Altimeter']",78184c2a-beda-47ba-a158-4a0e7f48fc61
+58.5187,96.0479,high_flow_river,22347,64053,100.0,"['VNIR', 'Altimeter']",c65e1f76-304d-4db8-9464-f765be794eee
+-29.0,115.0,wildfire,22560,46140,55.1,"['TIR', 'MIR', 'VNIR', 'SAR']",9bce6644-c102-4190-8799-429d9554ccba
+-24.0,121.0,wildfire,22620,3600,53.0,"['TIR', 'MIR', 'VNIR', 'SAR']",1fdc461e-9de7-4f99-8927-cfcb2c3a2ae8
+-20.9396,25.9521,high_flow_river,23096,63304,40.2,"['VNIR', 'Altimeter']",4732633f-8736-4e93-8405-8ad0da73bfa8
+21.0,102.0,wildfire,23400,46200,60.8,"['TIR', 'MIR', 'VNIR', 'SAR']",cf49558d-70c7-4763-afc6-969da94fda20
+20.5,101.5,wildfire,23400,46200,57.7,"['TIR', 'MIR', 'VNIR', 'SAR']",237838d3-272a-45fc-90d0-3be2868fad29
+54.0,64.5,wildfire,24060,62340,43.9,"['TIR', 'MIR', 'VNIR', 'SAR']",9f6f22d4-16b7-4c17-bbd7-bb22cbd58002
+54.5,70.0,wildfire,24060,52200,47.2,"['TIR', 'MIR', 'VNIR', 'SAR']",90087222-28e0-46ab-ba72-15fce62e4e96
+53.5,65.0,wildfire,24060,52200,43.7,"['TIR', 'MIR', 'VNIR', 'SAR']",74df93f3-d22c-4ff0-b2cc-030a244096c4
+53.5,66.5,wildfire,24060,49200,44.7,"['TIR', 'MIR', 'VNIR', 'SAR']",b0dc3309-ef78-4a42-9700-7643cd2b2d49
+52.2812,117.9896,high_flow_river,24563,35638,52.1,"['VNIR', 'Altimeter']",e8e4c0e8-0f5d-4121-b5ea-19cd3e040599
+54.59763617621627,48.65978364875703,algal_bloom,24783,61617,63.8,"['VNIR', 'TIR', 'Altimeter']",4d011c7b-c1b8-45a7-9e51-8838fa8a89fa
+57.16361111111175,55.006217685275445,algal_bloom,24783,61617,44.8,"['VNIR', 'TIR', 'Altimeter']",180b8857-5c64-4306-9af3-1b6c865b0638
+55.86065999348983,53.254611494417226,algal_bloom,24783,61617,41.2,"['VNIR', 'TIR', 'Altimeter']",eb7e10ed-0411-43fe-9dab-5a006d03a376
+58.61104031033068,55.80870977555281,algal_bloom,24783,61617,53.3,"['VNIR', 'TIR', 'Altimeter']",bdc4d6e3-9773-4cc3-933d-98aa79496990
+56.23213053385464,46.77491244377456,algal_bloom,24783,61617,67.9,"['VNIR', 'TIR', 'Altimeter']",09f9dd96-6b60-4e33-8fb1-f1ab9d0397fc
+52.59279012044354,48.22222930994478,algal_bloom,24783,61617,61.9,"['VNIR', 'TIR', 'Altimeter']",999bf2c7-7d7d-4692-811f-bcedfe42149b
+3.5521,9.6604,high_flow_river,25110,11631,0.7,"['VNIR', 'Altimeter']",518b5bd7-49f3-4808-adf9-430bd07e867e
+-14.0104,-43.6563,high_flow_river,25472,45893,46.3,"['VNIR', 'Altimeter']",b595549f-b835-4f84-984f-a3dbcb438ea0
+11.179537896050562,41.79218199201475,algal_bloom,25503,60897,25.1,"['VNIR', 'TIR', 'Altimeter']",08eebef4-5402-4bd2-a16a-111465d0afe3
+11.938454725477982,37.4164257981175,algal_bloom,25503,60897,21.9,"['VNIR', 'TIR', 'Altimeter']",a2a865ad-f57d-476f-aac1-657a8a2452e8
+45.7729,123.9979,high_flow_river,26029,41739,6.6,"['VNIR', 'Altimeter']",b0b39bc0-cf59-4f67-908c-ea3a018b4260
+-26.9891639539929,28.18294933930958,algal_bloom,26223,60177,50.3,"['VNIR', 'TIR', 'Altimeter']",21f2a57f-36db-4d1e-aeab-b374bd1ed2c1
+-30.63274525960246,25.81930323948881,algal_bloom,26223,60177,40.1,"['VNIR', 'TIR', 'Altimeter']",20820357-dcdb-4bb9-8bcf-e5197d371f1c
+-28.073518202039963,32.47866865222434,algal_bloom,26223,60177,70.0,"['VNIR', 'TIR', 'Altimeter']",b12fa601-d50d-41f5-82fc-e0e8e1f704b4
+38.6771,58.0062,high_flow_river,26224,60176,100.0,"['VNIR', 'Altimeter']",caab11d3-0dbd-4f60-8c61-deef80f867c4
+17.0,81.5,wildfire,26400,3600,50.1,"['TIR', 'MIR', 'VNIR', 'SAR']",007b1314-397a-4058-95a9-ea0dff782f0f
+35.9896,100.7146,high_flow_river,26426,59974,30.4,"['VNIR', 'Altimeter']",8fdee636-2838-461b-addb-0c0219dc9fe3
+62.3521,92.0229,high_flow_river,26606,59794,6.1,"['VNIR', 'Altimeter']",8adb860e-ea58-40cf-ad73-5c5e34b08b42
+51.5,69.5,wildfire,27000,49200,50.9,"['TIR', 'MIR', 'VNIR', 'SAR']",7625600a-bb78-4c24-a021-99b889d80ed2
+53.5,67.5,wildfire,27000,49260,49.3,"['TIR', 'MIR', 'VNIR', 'SAR']",723c9c39-764b-419e-b231-d166b76ce685
+54.0,68.0,wildfire,27000,49260,68.8,"['TIR', 'MIR', 'VNIR', 'SAR']",e4fd85e0-3742-4a20-af56-6551d94a027f
+48.0,57.5,wildfire,27000,59400,37.5,"['TIR', 'MIR', 'VNIR', 'SAR']",0ff1a8ab-7c8d-4edd-ae0a-f9c283d5a30b
+53.0,62.5,wildfire,27000,49260,49.8,"['TIR', 'MIR', 'VNIR', 'SAR']",35814d24-7d17-4418-a244-1f15560f7fd9
+55.0,62.0,wildfire,27060,52320,58.1,"['TIR', 'MIR', 'VNIR', 'SAR']",b4368730-6e93-4b0a-bfd6-d9802895596c
+54.0,55.5,wildfire,27060,52260,49.5,"['TIR', 'MIR', 'VNIR', 'SAR']",58ffecab-615b-435c-a9a3-d12c11433e3d
+55.5,67.0,wildfire,27060,49200,57.3,"['TIR', 'MIR', 'VNIR', 'SAR']",6e2fc519-cfa2-49bd-8208-14e8226b0ea9
+53.5,55.0,wildfire,27060,52260,51.3,"['TIR', 'MIR', 'VNIR', 'SAR']",4dedc4ba-71aa-4b07-bb63-df0e1c29394a
+54.0,55.0,wildfire,27060,49200,66.5,"['TIR', 'MIR', 'VNIR', 'SAR']",da6dc253-e4cb-4960-8ecc-805d0922477e
+55.0,60.5,wildfire,27060,52320,52.1,"['TIR', 'MIR', 'VNIR', 'SAR']",1429ad8c-6db5-4d67-94fc-04f889c5c658
+55.0,61.0,wildfire,27060,52260,42.9,"['TIR', 'MIR', 'VNIR', 'SAR']",93fa2f2b-49a6-4084-ad75-a7972671588a
+54.0,59.5,wildfire,27060,52260,38.3,"['TIR', 'MIR', 'VNIR', 'SAR']",00e8ed4b-659f-4aa1-a650-d8b91bec50d3
+53.5,56.0,wildfire,27060,52260,46.9,"['TIR', 'MIR', 'VNIR', 'SAR']",adec2529-7e2c-410e-b504-5e6b504b8e8f
+54.0,65.0,wildfire,27060,49200,47.0,"['TIR', 'MIR', 'VNIR', 'SAR']",d527429d-7da1-4b71-a496-7902a94fae12
+38.88656829834051,39.035478804053255,algal_bloom,27752,58648,70.0,"['VNIR', 'TIR', 'Altimeter']",38eee69e-8997-4364-b83b-0872665661a0
+36.07824273003519,38.06964193114515,algal_bloom,27752,58648,21.9,"['VNIR', 'TIR', 'Altimeter']",4959af77-d134-4b04-9bb8-cc2624c602f1
+34.29715777927021,42.203377449122975,algal_bloom,27752,58648,21.9,"['VNIR', 'TIR', 'Altimeter']",e22ba912-af9a-45d4-859c-9b30d00a4f86
+34.04932376437762,43.20085087344391,algal_bloom,27752,58648,43.6,"['VNIR', 'TIR', 'Altimeter']",04c82acb-4e03-48a5-8ad1-f4ed038afb9d
+39.9729,90.4229,high_flow_river,27803,12397,26.1,"['VNIR', 'Altimeter']",474b45b9-90d6-45ef-baf7-6fcb70caa635
+34.6354,109.9937,high_flow_river,28045,28417,90.1,"['VNIR', 'Altimeter']",2411630a-1969-4915-b5ec-9d3ef228c92f
+46.0854,-84.0188,high_flow_river,28352,36338,27.2,"['VNIR', 'Altimeter']",f7eb2e0f-d694-4e89-a4f6-a7565663b67f
+54.0146,-102.6146,high_flow_river,28461,57939,79.0,"['VNIR', 'Altimeter']",8b900177-f1ba-4bc4-8233-d77255cc5051
+-8.270723198784623,26.49901834652132,algal_bloom,28472,57928,70.0,"['VNIR', 'TIR', 'Altimeter']",c3d3a9a5-6e2a-4b55-9985-4fb2787162a1
+-6.078322347004757,29.469514970697347,algal_bloom,28472,57928,70.0,"['VNIR', 'TIR', 'Altimeter']",76f2b095-a3e9-460d-b65a-5d9cd4becb12
+-8.722684326171816,29.683824661950013,algal_bloom,28472,57928,67.9,"['VNIR', 'TIR', 'Altimeter']",30e217e6-59b5-41a1-8a9a-06c6b589296e
+-8.642020534939036,26.37511018827171,algal_bloom,28472,57928,70.0,"['VNIR', 'TIR', 'Altimeter']",19f78014-7627-4d7d-931e-9d51a225fcc5
+-7.954772135416505,32.15273170915001,algal_bloom,28472,57928,47.4,"['VNIR', 'TIR', 'Altimeter']",525d0d3d-c546-4d7b-b1b3-89a2cae51327
+-10.887964138454066,27.07140629684248,algal_bloom,28472,57928,65.8,"['VNIR', 'TIR', 'Altimeter']",388a78c8-c029-4ba1-9581-aefd1e76b4fe
+-11.147794053818645,29.7844024249982,algal_bloom,28472,57928,67.9,"['VNIR', 'TIR', 'Altimeter']",92defe90-57d5-4c70-bf72-22b264d42797
+-9.029444444444325,28.69060812473054,algal_bloom,28472,57928,54.9,"['VNIR', 'TIR', 'Altimeter']",472ef1b2-8e1a-4df7-8297-4c42b4c7e932
+63.6812,128.0396,high_flow_river,29450,56950,7.0,"['VNIR', 'Altimeter']",b562b1e8-4182-4a59-b27d-68b8ee045c3e
+52.5,68.5,wildfire,30060,46200,53.4,"['TIR', 'MIR', 'VNIR', 'SAR']",1f37c390-4619-43ff-aa8c-e67d81bc3729
+52.5,61.5,wildfire,30060,49260,41.4,"['TIR', 'MIR', 'VNIR', 'SAR']",de88343d-21f1-4b8d-bad5-f7ef8ed2a4e6
+53.5,52.0,wildfire,30120,49200,52.5,"['TIR', 'MIR', 'VNIR', 'SAR']",760e19a6-e94c-4eff-9bd9-f6423643978f
+55.5,61.5,wildfire,30120,49260,51.0,"['TIR', 'MIR', 'VNIR', 'SAR']",8ec31f7e-78cb-4b50-a9e0-9c33deed3e41
+10.0,-65.0,wildfire,30641,48299,46.5,"['TIR', 'MIR', 'VNIR', 'SAR']",f2cd350c-9a68-4c35-8626-fec403952071
+61.88541666650022,34.9114385270163,algal_bloom,30856,55544,67.9,"['VNIR', 'TIR', 'Altimeter']",101e0f1c-26d0-4b3d-9c26-eceea45e58ee
+56.68996310763944,36.6895233832473,algal_bloom,30856,55544,65.8,"['VNIR', 'TIR', 'Altimeter']",144cb954-a1f5-43ac-bd1f-d14b0d33dcec
+59.66258478800012,38.54621477694472,algal_bloom,30856,55544,67.9,"['VNIR', 'TIR', 'Altimeter']",4a1073cd-0707-4511-afe7-0547d7dab16c
+58.27319715711826,31.300414228912075,algal_bloom,30856,55544,70.0,"['VNIR', 'TIR', 'Altimeter']",7c5616c9-0ef4-47af-93a5-5f0e5eed92ba
+57.32513888888912,43.17580678764465,algal_bloom,30856,55544,70.0,"['VNIR', 'TIR', 'Altimeter']",429431b6-f265-436f-b7b0-6987b3bb1206
+58.427916666667215,27.483550619707355,algal_bloom,30856,55544,70.0,"['VNIR', 'TIR', 'Altimeter']",d8363c4e-bc0d-4e01-b342-80248e036b30
+62.68427150000019,28.70326367688501,algal_bloom,30856,55544,54.9,"['VNIR', 'TIR', 'Altimeter']",897065fc-679d-4396-a017-84d4828c9cf8
+58.252017822266254,26.05195178974899,algal_bloom,30856,55544,56.5,"['VNIR', 'TIR', 'Altimeter']",3389a1a6-a8d1-4188-ad2f-f1ff5cb0d7e9
+61.94791531033008,33.18325069053212,algal_bloom,30856,55544,63.8,"['VNIR', 'TIR', 'Altimeter']",ec3a754a-62a4-4d3e-9f3c-5dc590942bd1
+59.6588468763571,39.42197205157727,algal_bloom,30856,55544,63.8,"['VNIR', 'TIR', 'Altimeter']",1d905ae0-a780-4ccd-add2-44e723765235
+60.84168769000004,31.71463134180712,algal_bloom,30856,55544,63.8,"['VNIR', 'TIR', 'Altimeter']",230dee77-5c03-4035-b8d7-349c4a602317
+62.01145833300009,30.95416620976394,algal_bloom,30856,55544,61.9,"['VNIR', 'TIR', 'Altimeter']",e1220dae-9f2b-409e-ae77-66d12aad0d5e
+62.76487175000011,27.800619057191952,algal_bloom,30856,55544,50.3,"['VNIR', 'TIR', 'Altimeter']",0256159e-d407-43c4-95a3-114b4dc1e038
+61.83331675000005,29.49833558729732,algal_bloom,30856,55544,63.8,"['VNIR', 'TIR', 'Altimeter']",92862d85-c3c7-43b3-9ba8-f54a413de9f5
+60.18017849392382,37.62362248847912,algal_bloom,30856,55544,60.1,"['VNIR', 'TIR', 'Altimeter']",4b3d918a-603e-46f4-a0bc-c72e3690fb40
+61.8875000000001,30.04162371126195,algal_bloom,30856,55544,58.3,"['VNIR', 'TIR', 'Altimeter']",e887b93c-23ba-4a42-af3b-11164cc32a27
+58.37944173177149,38.36683736032006,algal_bloom,30856,55544,70.0,"['VNIR', 'TIR', 'Altimeter']",c53bee91-4e8b-4383-a544-7c5ff0333d8e
+60.57313028971373,39.10183859358894,algal_bloom,30856,55544,70.0,"['VNIR', 'TIR', 'Altimeter']",bddabdb6-b3f0-47aa-ba14-c82add184e22
+-0.791655951605378,18.019976098477173,algal_bloom,31756,54644,70.0,"['VNIR', 'TIR', 'Altimeter']",c2a68d7e-9d8b-433d-ab1b-8354219c829b
+-4.0021,17.0729,high_flow_river,31768,54632,3.3,"['VNIR', 'Altimeter']",fe7e9d6f-7402-4b67-b6e3-1ad1a85018c4
+51.3187,-80.4854,high_flow_river,32466,53934,100.0,"['VNIR', 'Altimeter']",a1e59151-175f-4516-b1b3-87bda769ce67
+28.5,49.5,wildfire,32700,53700,47.9,"['TIR', 'MIR', 'VNIR', 'SAR']",e4b5998c-a367-48c9-a446-4d6738bf9a99
+30.5,47.5,wildfire,32700,53700,49.9,"['TIR', 'MIR', 'VNIR', 'SAR']",d44701b6-6cf3-49c2-bf14-8437f1adac6b
+31.0,48.0,wildfire,32700,53700,48.1,"['TIR', 'MIR', 'VNIR', 'SAR']",3a064dd4-39d4-4aca-ae87-1998720fc57d
+32.5,47.5,wildfire,32760,53640,40.8,"['TIR', 'MIR', 'VNIR', 'SAR']",c62afbac-35a7-46d6-bcc6-fa5049c921b6
+31.5,48.0,wildfire,32760,53640,40.0,"['TIR', 'MIR', 'VNIR', 'SAR']",a43c7783-3c87-4008-b098-d9fa5ac1d8f1
+46.0,48.5,wildfire,32940,46260,48.0,"['TIR', 'MIR', 'VNIR', 'SAR']",9f89bd9c-091b-4d63-934e-563482b95c55
+53.5,60.5,wildfire,33060,53340,47.0,"['TIR', 'MIR', 'VNIR', 'SAR']",d383fa5f-8a5c-4258-a25c-c7f81105d01a
+57.5,57.0,wildfire,33120,46260,53.5,"['TIR', 'MIR', 'VNIR', 'SAR']",a77f1ed7-497f-4441-843b-02f8283f39e4
+9.8562,105.9979,high_flow_river,33160,13830,9.4,"['VNIR', 'Altimeter']",363d6050-9428-4cc3-9df0-ed309cdaeb17
+28.0,-16.0,wildfire,33341,600,55.9,"['TIR', 'MIR', 'VNIR', 'SAR']",bfcd188a-5590-4004-90c6-7189004c12e0
+46.0146,127.6812,high_flow_river,33835,25535,5.9,"['VNIR', 'Altimeter']",afea98e0-0df0-4a4f-b516-7c7cbe023304
+35.4979,39.9979,high_flow_river,34195,52205,64.4,"['VNIR', 'Altimeter']",5f7ce38e-9a8a-4859-9950-dde6992d2a68
+61.5562,68.0562,high_flow_river,34212,12718,4.6,"['VNIR', 'Altimeter']",b7d50aa5-967b-49a1-aab7-da2d4e9f481f
+28.0,-16.5,wildfire,34241,600,55.3,"['TIR', 'MIR', 'VNIR', 'SAR']",a1f846ac-1322-4c78-a06a-14dfd836cd18
+6.521752522786613,3.4793096852536607,algal_bloom,34351,52049,61.9,"['VNIR', 'TIR', 'Altimeter']",939b4152-5146-4c40-a7c7-8ed429f340b5
+-1.523878784179459,9.215628787842244,algal_bloom,34351,52049,56.5,"['VNIR', 'TIR', 'Altimeter']",99b1b801-eca0-49f3-9ab6-655e1c4894ff
+-21.5,55.5,wildfire,34860,51540,44.3,"['TIR', 'MIR', 'VNIR', 'SAR']",d9a1749c-092a-4b1f-b5d3-0daf129fd12c
+-20.5,45.0,wildfire,34920,49200,49.1,"['TIR', 'MIR', 'VNIR', 'SAR']",be3ece9f-295d-4f47-b096-4a13256fbf38
+31.5,47.5,wildfire,35760,50640,48.1,"['TIR', 'MIR', 'VNIR', 'SAR']",bf131558-c65b-4925-b4e2-f0f13237257d
+32.0,49.0,wildfire,35760,50640,40.2,"['TIR', 'MIR', 'VNIR', 'SAR']",640cc076-903f-4791-a8ca-ecb732024da2
+31.0,48.5,wildfire,35760,50640,65.0,"['TIR', 'MIR', 'VNIR', 'SAR']",de563ce6-6baa-4b95-9725-d66e86b8a99c
+31.0,47.5,wildfire,35760,50640,47.9,"['TIR', 'MIR', 'VNIR', 'SAR']",9f51ed58-d4ea-4379-b133-dac6484a2599
+45.7896,-84.0104,high_flow_river,35945,50455,19.6,"['VNIR', 'Altimeter']",7d15fc91-492a-42c0-990a-c6c459f1f86a
+55.5,53.5,wildfire,36180,3600,52.7,"['TIR', 'MIR', 'VNIR', 'SAR']",d16f20d4-033f-417a-a3b4-1f840e3b8593
+6.0021,6.7187,high_flow_river,36903,49497,100.0,"['VNIR', 'Altimeter']",3a1dd141-4d4c-4e33-9160-340243025cf8
+59.49487075000008,16.785461843199514,algal_bloom,36930,49470,65.8,"['VNIR', 'TIR', 'Altimeter']",a0071a9a-06c1-4757-b0d5-a8223bd4e375
+58.33265875000004,14.489714998967909,algal_bloom,36930,49470,63.8,"['VNIR', 'TIR', 'Altimeter']",9ce1747e-2926-43d1-b5d7-b282be911afb
+51.56340296167804,3.963155625540777,algal_bloom,36930,49470,46.1,"['VNIR', 'TIR', 'Altimeter']",5277f252-a68f-4b2b-8451-0af248694470
+58.88345075000007,13.551276525456412,algal_bloom,36930,49470,65.8,"['VNIR', 'TIR', 'Altimeter']",1782bd1c-bcd7-4491-b258-5df279f466b0
+52.659580230712976,5.4196877754651815,algal_bloom,36930,49470,70.0,"['VNIR', 'TIR', 'Altimeter']",fb95c2dc-ee87-4664-811c-c59440f55f70
+60.86092750000015,14.767668073248124,algal_bloom,36930,49470,54.9,"['VNIR', 'TIR', 'Altimeter']",1f85eebc-79bd-4979-a655-de5236f6f6dd
+55.98021226671045,8.211928826898848,algal_bloom,36930,49470,56.5,"['VNIR', 'TIR', 'Altimeter']",920f22d4-00f2-4054-a3a6-311032626b43
+30.8437,-87.9479,high_flow_river,37498,48902,100.0,"['VNIR', 'Altimeter']",099d1228-5f0c-429a-9fc6-fcf608b16053
+5.27336534288213,-4.352780110418694,algal_bloom,37830,48570,70.0,"['VNIR', 'TIR', 'Altimeter']",54b43d5d-3b8c-45ff-bbc4-fb95ccca9f77
+45.6229,47.7187,high_flow_river,38080,48320,18.1,"['VNIR', 'Altimeter']",b45df099-3051-4c28-9387-c730c4409f7a
+10.0,-63.0,wildfire,38740,2400,40.2,"['TIR', 'MIR', 'VNIR', 'SAR']",96f4ac3c-7973-4d6e-ac22-ba5e85ce955d
+14.5,-13.0,wildfire,38740,16800,57.6,"['TIR', 'MIR', 'VNIR', 'SAR']",602dcd0f-111a-4f45-a5de-8717d8a4db6c
+30.5,48.5,wildfire,38760,3600,57.1,"['TIR', 'MIR', 'VNIR', 'SAR']",1575324a-d951-4de9-8e0e-f2eaff15fb0d
+-19.9646,23.4562,high_flow_river,38804,35719,64.8,"['VNIR', 'Altimeter']",c49022d4-d3a6-45a7-8640-8a3a53f8352c
+-26.0,-54.5,wildfire,39640,3300,39.6,"['TIR', 'MIR', 'VNIR', 'SAR']",4df9c9ca-b2ec-484d-8342-3898bd605663
+14.0,-4.5,wildfire,40540,600,67.1,"['TIR', 'MIR', 'VNIR', 'SAR']",f4529be9-de60-40c7-8df3-9b103b0793ec
+15.0,-4.5,wildfire,40540,1500,65.9,"['TIR', 'MIR', 'VNIR', 'SAR']",e6a35a36-5fec-4dfb-9d0f-59d034fdd1ec
+19.5,-155.0,wildfire,40980,45420,47.0,"['TIR', 'MIR', 'VNIR', 'SAR']",e178c924-4317-4b37-9a04-6f7aee2a879c
+-8.5,24.0,wildfire,41220,45180,54.9,"['TIR', 'MIR', 'VNIR', 'SAR']",d8f39e57-60a8-43e9-aeec-eaa76be07f31
+16.5,33.0,wildfire,41580,3600,53.5,"['TIR', 'MIR', 'VNIR', 'SAR']",177d0148-c9b9-487b-8529-839acf8cbe44
+36.5,2.5,wildfire,42000,44400,45.1,"['TIR', 'MIR', 'VNIR', 'SAR']",d60544a1-5012-4aab-a8c4-cc745c8d6238
+-3.3854,18.0187,high_flow_river,42877,43523,97.2,"['VNIR', 'Altimeter']",18713202-fa08-43a2-8d82-7eeb100aebaa
+61.9937,92.4646,high_flow_river,43213,43187,12.3,"['VNIR', 'Altimeter']",ab9383cd-8b80-487d-8117-f4f5a542dd21
+-17.0,-62.0,wildfire,43240,17700,57.1,"['TIR', 'MIR', 'VNIR', 'SAR']",7eae1ff9-190b-46c2-9297-3782172f2d64
+-8.0,-46.5,wildfire,43240,15900,48.0,"['TIR', 'MIR', 'VNIR', 'SAR']",9a987b20-5a87-4df5-a7e3-7c821a249ef7
+-21.007626512315127,-46.00762139978042,algal_bloom,44443,41957,47.4,"['VNIR', 'TIR', 'Altimeter']",e83e0b55-9d00-4d78-a9b0-a13c42871980
+-22.88421793619821,-42.22147066218484,algal_bloom,44443,41957,70.0,"['VNIR', 'TIR', 'Altimeter']",82e31138-8aaa-4cde-b1b4-94cfc3373edf
+39.9729,90.4229,high_flow_river,44883,41517,53.8,"['VNIR', 'Altimeter']",6645b046-dde4-4d15-b2fa-7bc84ad9762f
+-9.0,-46.5,wildfire,45040,29400,44.7,"['TIR', 'MIR', 'VNIR', 'SAR']",90b06eb6-1d72-4e4a-8c8a-86d25f1f4abf
+16.5604,97.6562,high_flow_river,45373,21146,55.2,"['VNIR', 'Altimeter']",4ddb8a6f-aa53-4764-92d6-d61e88464d49
+-18.0,-46.0,wildfire,45940,2400,70.0,"['TIR', 'MIR', 'VNIR', 'SAR']",4f670b13-76e6-4cb2-bfb7-0f254dae5ff9
+62.0146,91.4854,high_flow_river,46762,39638,2.5,"['VNIR', 'Altimeter']",d75af0a7-d1a7-466a-80f6-03a4d4b2912a
+31.0,-95.0,wildfire,46840,32100,62.5,"['TIR', 'MIR', 'VNIR', 'SAR']",79d70750-cd26-407d-942e-afb8d9c048bd
+-32.880694444444714,-52.83885954500656,algal_bloom,47190,39210,48.8,"['VNIR', 'TIR', 'Altimeter']",9f879117-68b0-4b32-8dce-32ef6bc15402
+-33.14645589192736,-52.79907163610467,algal_bloom,47190,39210,23.5,"['VNIR', 'TIR', 'Altimeter']",0578f7b4-2dac-435f-b7d8-583322222067
+-32.75454006618901,-56.336416871976425,algal_bloom,47190,39210,70.0,"['VNIR', 'TIR', 'Altimeter']",0a066b9d-a5f9-4ddb-97bb-4c403fd24a41
+-33.08240098741301,-57.32434099648109,algal_bloom,47190,39210,58.3,"['VNIR', 'TIR', 'Altimeter']",43f28af1-4ff9-41e9-9fd2-5df64e3ce139
+-34.33410576714414,-62.24761334925167,algal_bloom,47190,39210,58.3,"['VNIR', 'TIR', 'Altimeter']",73bb5220-f947-4932-b43c-0e53847fab37
+14.5,-5.0,wildfire,47640,38760,43.3,"['TIR', 'MIR', 'VNIR', 'SAR']",28bd29b3-3a56-4c6d-82e9-edcf0b8d1541
+48.5,-99.0,wildfire,47740,12300,58.4,"['TIR', 'MIR', 'VNIR', 'SAR']",a490e3af-75af-42d6-9cce-18660e88e573
+10.5,-64.0,wildfire,47740,26700,51.1,"['TIR', 'MIR', 'VNIR', 'SAR']",4d47b1b5-bacd-42eb-bc49-5ffcf168613f
+-13.0,-49.5,wildfire,47740,8700,38.1,"['TIR', 'MIR', 'VNIR', 'SAR']",26361633-ad2e-4eeb-aeaa-01616b803c0f
+10.5,-63.5,wildfire,47740,29400,55.0,"['TIR', 'MIR', 'VNIR', 'SAR']",f59e5808-f028-4045-9ef1-1dd0ecd5ddb2
+18.0,-90.5,wildfire,48640,31200,54.9,"['TIR', 'MIR', 'VNIR', 'SAR']",68a1e37e-8b6a-4f0d-acf5-591a000dd894
+22.5,-104.5,wildfire,48640,12300,48.4,"['TIR', 'MIR', 'VNIR', 'SAR']",e8ba0673-0a86-4f8d-99ae-81397f98b9b7
+-10.0479,-48.3479,high_flow_river,48975,37425,53.4,"['VNIR', 'Altimeter']",0faad863-5c4c-47f7-ba95-0bfd4a82cf65
+-12.5,-54.5,wildfire,49540,5100,37.1,"['TIR', 'MIR', 'VNIR', 'SAR']",b63ecd14-dcdd-46d2-8135-b566ec999891
+-12.0,-58.5,wildfire,49540,12300,40.2,"['TIR', 'MIR', 'VNIR', 'SAR']",b9dfa2cb-24c6-4daf-a9e2-2cde59c24e11
+-21.0,-59.5,wildfire,49540,11400,37.5,"['TIR', 'MIR', 'VNIR', 'SAR']",1d9b6ad0-a486-470b-8c7a-7775457762b5
+-7.0,-44.0,wildfire,49540,22200,42.4,"['TIR', 'MIR', 'VNIR', 'SAR']",2108d89b-1224-4400-92b9-482fbdcc7398
+12.0,-13.5,wildfire,49540,10500,78.5,"['TIR', 'MIR', 'VNIR', 'SAR']",08fd1128-7b0b-4e8d-925f-bc9096c974dd
+-23.0,-50.0,wildfire,49540,2400,41.0,"['TIR', 'MIR', 'VNIR', 'SAR']",64b45b95-58c8-4928-a37f-1ae356b2e82d
+14.5,-90.5,wildfire,49540,7800,42.9,"['TIR', 'MIR', 'VNIR', 'SAR']",791f7661-02a7-4fbb-b540-3f1c8154d26b
+13.5,-14.0,wildfire,49540,3300,52.2,"['TIR', 'MIR', 'VNIR', 'SAR']",3f6fc292-af49-4685-b07c-ab5b099ff2ff
+13.5,-14.5,wildfire,49540,2400,53.3,"['TIR', 'MIR', 'VNIR', 'SAR']",98ac0c51-22df-4ee0-82ae-fe062eb4a3e2
+11.5,-14.0,wildfire,49540,9600,76.6,"['TIR', 'MIR', 'VNIR', 'SAR']",20efd4fa-21f8-42e0-84da-b95f847c94e3
+60.1021,133.9729,high_flow_river,49774,36626,16.3,"['VNIR', 'Altimeter']",16a88b61-f819-4fad-ae1e-4de68e41c5dd
+65.6646,-149.9979,high_flow_river,49896,36504,6.2,"['VNIR', 'Altimeter']",9b35aca1-f9ec-4626-9f69-1d96eccaf289
+-4.269234754774203,-63.056482511049424,algal_bloom,50156,36244,70.0,"['VNIR', 'TIR', 'Altimeter']",d3246ebc-7a97-482d-9b86-267e5aa7e325
+-5.085756106905762,-62.51128036731673,algal_bloom,50156,36244,60.1,"['VNIR', 'TIR', 'Altimeter']",db1080dd-5db2-477d-8517-a403bba4a27f
+-3.538875325520649,-63.25342423759479,algal_bloom,50156,36244,65.8,"['VNIR', 'TIR', 'Altimeter']",8e059ab4-71c8-4099-a549-f39a010762db
+-3.437484944661037,-64.89492761949444,algal_bloom,50156,36244,63.8,"['VNIR', 'TIR', 'Altimeter']",20b54137-1431-424a-89e9-79c9600e26b1
+-4.234041341145598,-63.36386742726295,algal_bloom,50156,36244,70.0,"['VNIR', 'TIR', 'Altimeter']",80ba2e06-464d-482c-abf0-22cd99c13d9b
+-16.0,-58.5,wildfire,50440,18600,56.4,"['TIR', 'MIR', 'VNIR', 'SAR']",5be99e29-4f0d-42e7-a1c4-a6e7d3698690
+-14.5,-58.5,wildfire,50440,10500,51.3,"['TIR', 'MIR', 'VNIR', 'SAR']",ff67d259-38b6-4bba-8b53-bf87b6f221d8
+12.0,-14.0,wildfire,50440,7800,54.3,"['TIR', 'MIR', 'VNIR', 'SAR']",12388f10-7121-492c-b5a4-582521d61fbb
+-14.0,-58.5,wildfire,50440,17700,65.5,"['TIR', 'MIR', 'VNIR', 'SAR']",72cbf03b-94c6-479d-a3cc-33d40f25d04b
+-18.0,-53.5,wildfire,50440,6000,45.5,"['TIR', 'MIR', 'VNIR', 'SAR']",5356c3e0-9880-4779-91ab-e4286c368ff9
+11.0,-16.0,wildfire,50640,3600,51.4,"['TIR', 'MIR', 'VNIR', 'SAR']",dfeebd68-7421-4a0a-b423-8ba7d18923bb
+11.5,-16.5,wildfire,50640,3600,56.5,"['TIR', 'MIR', 'VNIR', 'SAR']",497ef8cb-d2c5-4de8-badf-b495521ba36f
+11.5,-15.5,wildfire,50640,3600,55.2,"['TIR', 'MIR', 'VNIR', 'SAR']",42aa23fd-19de-4482-af01-9bca13730dfb
+-46.591963975694256,-71.29028478646538,algal_bloom,50876,35524,70.0,"['VNIR', 'TIR', 'Altimeter']",48571dd0-5bda-4bcb-9fa3-e65d0eb61bda
+-48.77513427734371,-72.81655651599354,algal_bloom,50876,35524,53.3,"['VNIR', 'TIR', 'Altimeter']",29ba94ae-1ced-4310-8399-e2bd2b3be963
+14.0,-12.0,wildfire,51340,1500,45.4,"['TIR', 'MIR', 'VNIR', 'SAR']",81cf5f65-384c-4213-9123-37fe1ac95e35
+46.5,-96.5,wildfire,51340,7800,75.3,"['TIR', 'MIR', 'VNIR', 'SAR']",81d48dbe-9b5f-4932-aff1-7c7289a1b886
+11.5,-13.5,wildfire,51340,24000,68.3,"['TIR', 'MIR', 'VNIR', 'SAR']",eb8041ec-9bc9-4d49-a86a-9be59906f6ca
+-15.5,-48.5,wildfire,51340,20400,45.9,"['TIR', 'MIR', 'VNIR', 'SAR']",bc9beec0-fed1-45d2-be0a-a07f1e08b79a
+15.5,-89.0,wildfire,51340,25800,42.0,"['TIR', 'MIR', 'VNIR', 'SAR']",f7b9c274-1c00-48da-b982-2843ed278ca6
+12.0,-12.0,wildfire,51340,6900,58.7,"['TIR', 'MIR', 'VNIR', 'SAR']",edcb3e8b-b445-49ee-8d82-b530f4f12305
+10.0,-68.0,wildfire,51340,3300,43.9,"['TIR', 'MIR', 'VNIR', 'SAR']",04217fbb-9cac-4d56-8cf2-90d7c13e517b
+-18.7646,36.2521,high_flow_river,51603,4727,0.5,"['VNIR', 'Altimeter']",d9c59365-137c-4c0f-82f8-1bebde66b1a0
+46.5,-99.0,wildfire,52240,20400,68.6,"['TIR', 'MIR', 'VNIR', 'SAR']",53b715b9-76dc-44ce-afc3-2f526213c38a
+17.0,-90.0,wildfire,52240,27600,63.7,"['TIR', 'MIR', 'VNIR', 'SAR']",108a9b50-ae98-4ec3-8d31-0912b2badcee
+-23.0,-43.5,wildfire,52240,24900,39.8,"['TIR', 'MIR', 'VNIR', 'SAR']",0eecab6d-1b63-461f-b0dd-4947d7815775
+-15.914981625856342,-69.29412508333391,algal_bloom,52889,33511,67.9,"['VNIR', 'TIR', 'Altimeter']",7a9e2a42-3573-4328-a16b-ff0f78f888fc
+49.9854,119.0771,high_flow_river,52913,33487,13.1,"['VNIR', 'Altimeter']",ddcacfa4-efcd-424d-a836-bf83267230d1
+-5.5,-45.0,wildfire,53140,6000,40.0,"['TIR', 'MIR', 'VNIR', 'SAR']",f8eb8461-fab0-435b-bb71-3ee0fe5bd29a
+18.5,-91.0,wildfire,53140,33000,59.1,"['TIR', 'MIR', 'VNIR', 'SAR']",1a7d2d49-0c2d-4812-9de9-a3fb7fb0704d
+10.0,-67.5,wildfire,53140,1500,47.1,"['TIR', 'MIR', 'VNIR', 'SAR']",e3224533-799f-441d-86ec-280d656431bc
+17.0,-99.5,wildfire,53140,28500,44.9,"['TIR', 'MIR', 'VNIR', 'SAR']",8d7656d0-38c5-4727-a2cc-3fa5c3a51731
+43.9979,26.2354,high_flow_river,53256,33144,18.5,"['VNIR', 'Altimeter']",ef65cc97-63cf-4027-a80a-8aa0cb7b6d42
+52.8687,12.0229,high_flow_river,53995,32405,100.0,"['VNIR', 'Altimeter']",f39d7469-a4c4-4543-9b9f-9692d6742e92
+18.7604,11.7312,high_flow_river,54000,32400,100.0,"['VNIR', 'Altimeter']",c77e77a6-72ba-4c74-86ea-d2654ecee3d7
+11.0,-14.5,wildfire,54040,4200,64.2,"['TIR', 'MIR', 'VNIR', 'SAR']",ddb5d0e7-a410-4427-8c47-b716f9b26d3b
+-13.5,-56.5,wildfire,54040,4200,40.7,"['TIR', 'MIR', 'VNIR', 'SAR']",1d25bf18-e8a6-4216-92f5-fed239831c0c
+19.5,-105.0,wildfire,54040,31200,62.9,"['TIR', 'MIR', 'VNIR', 'SAR']",e4cca6a8-1597-4f3b-bde4-e0fa1bde98b5
+-7.5,-44.0,wildfire,54040,7800,38.1,"['TIR', 'MIR', 'VNIR', 'SAR']",5cdd66fa-186b-4705-a45b-b5eea768f10f
+17.5,-101.0,wildfire,54040,28500,54.0,"['TIR', 'MIR', 'VNIR', 'SAR']",059f9f38-3c9e-4dc8-9278-c07075c8d14c
+-12.5,-55.0,wildfire,54040,32100,47.1,"['TIR', 'MIR', 'VNIR', 'SAR']",b27ffebb-1d23-487b-8ade-50a3db510d3b
+-23.5,-57.5,wildfire,54040,4200,52.7,"['TIR', 'MIR', 'VNIR', 'SAR']",e2232ede-0fbc-4fb8-9a7d-454325622e3a
+11.0,-14.0,wildfire,54040,6000,72.3,"['TIR', 'MIR', 'VNIR', 'SAR']",e7314ca3-3d1b-4471-956e-c9b2d0d21ba1
+11.5,-14.5,wildfire,54040,28500,64.8,"['TIR', 'MIR', 'VNIR', 'SAR']",30b4dc61-e9d7-4b29-9830-0b1936108c31
+11.5,-12.5,wildfire,54040,4200,49.1,"['TIR', 'MIR', 'VNIR', 'SAR']",8cd349e3-a557-4e97-afe7-1a13f71f7df0
+-3.7229,-64.0313,high_flow_river,54286,32114,100.0,"['VNIR', 'Altimeter']",18fa64ad-f1d0-4152-bedf-117ffea13869
+10.0,-13.5,wildfire,54940,5100,55.7,"['TIR', 'MIR', 'VNIR', 'SAR']",e4dd88b8-b61a-4734-8896-2061a4ffbf47
+10.0,-14.0,wildfire,54940,600,56.4,"['TIR', 'MIR', 'VNIR', 'SAR']",919fc516-3b6d-4bde-a871-7fbf58d44457
+18.0,-102.5,wildfire,54940,30300,47.6,"['TIR', 'MIR', 'VNIR', 'SAR']",e86a34df-f7e0-4db3-804d-3241787ddd72
+20.5,-104.0,wildfire,54940,5100,43.2,"['TIR', 'MIR', 'VNIR', 'SAR']",bd718279-7add-40fe-a401-454ecad9ab11
+-2.4813,-66.0146,high_flow_river,55414,30986,70.8,"['VNIR', 'Altimeter']",24564258-a365-4713-8bdc-235bb0c4d71e
+24.6687,87.9937,high_flow_river,55437,30963,100.0,"['VNIR', 'Altimeter']",ec886301-5a9c-4a6c-aeb8-25220253e4d4
+26.94756320529487,-80.8021098737023,algal_bloom,55690,30710,70.0,"['VNIR', 'TIR', 'Altimeter']",f2b72173-47b1-44e8-92e3-ded817ea5669
+29.294801500108434,-81.58982802037735,algal_bloom,55690,30710,50.3,"['VNIR', 'TIR', 'Altimeter']",bb054eb9-fd5b-4230-bd81-3c67f5bac1f3
+-28.8729,22.0396,high_flow_river,55740,30660,40.9,"['VNIR', 'Altimeter']",221a1cdd-d684-483c-a356-6fc0fa48655a
+1.9229,20.0521,high_flow_river,55756,30644,100.0,"['VNIR', 'Altimeter']",e0baa7e9-dd85-43e8-8aa2-1808f7396aa5
+19.5,-90.5,wildfire,55840,24900,64.1,"['TIR', 'MIR', 'VNIR', 'SAR']",82334a92-bdd4-498e-b417-1be379dd9ba4
+17.5,-89.0,wildfire,55840,30300,61.3,"['TIR', 'MIR', 'VNIR', 'SAR']",81b31637-46f3-4591-a2cd-54e3ed6e97f7
+21.5,-105.0,wildfire,55840,22200,58.1,"['TIR', 'MIR', 'VNIR', 'SAR']",2dccef41-8a98-44ea-84cc-81caf0867a68
+16.5,-94.0,wildfire,55840,20400,55.2,"['TIR', 'MIR', 'VNIR', 'SAR']",3e0e6875-13f3-4bcb-bb05-6790ef824fcb
+12.0,-15.0,wildfire,55840,6000,67.9,"['TIR', 'MIR', 'VNIR', 'SAR']",59ce0e29-a670-4aeb-a392-3d9cfbdfab73
+46.0,-98.0,wildfire,55840,6900,50.7,"['TIR', 'MIR', 'VNIR', 'SAR']",7ea1690d-2540-44ae-a56f-4b34ff7f43a3
+17.5,-90.5,wildfire,55840,23100,50.8,"['TIR', 'MIR', 'VNIR', 'SAR']",a515c91a-be38-4dc0-94ec-4f1c958f0c43
+-23.5,-50.0,wildfire,55840,5100,52.9,"['TIR', 'MIR', 'VNIR', 'SAR']",f83965ee-62cf-4b25-b835-1c4c54692416
+15.5,-85.5,wildfire,55840,5100,53.0,"['TIR', 'MIR', 'VNIR', 'SAR']",2c5c8d35-25ea-42e6-8245-5d1b92990be3
+18.0,-91.0,wildfire,55840,26700,47.8,"['TIR', 'MIR', 'VNIR', 'SAR']",974795ba-0f1d-46ba-85ce-3b9d11f8e799
+21.0,-89.5,wildfire,55840,4200,41.2,"['TIR', 'MIR', 'VNIR', 'SAR']",d899faff-ce40-4a1a-a777-87fcabaf5cc7
+47.7604,115.7812,high_flow_river,56400,30000,100.0,"['VNIR', 'Altimeter']",617f45a7-d345-411f-b204-1754df75d955
+-13.5,-66.5,wildfire,56740,8700,39.5,"['TIR', 'MIR', 'VNIR', 'SAR']",5ec265b2-9f11-4419-bad9-5eadfbc26b0f
+-23.0,-52.5,wildfire,56740,1500,59.8,"['TIR', 'MIR', 'VNIR', 'SAR']",dc01b9d1-c5f6-4b3c-bb0f-71f30a24a6ae
+2.0,-74.0,wildfire,56740,7800,50.0,"['TIR', 'MIR', 'VNIR', 'SAR']",d1a95884-a8fb-4109-984e-8ac6fe5e2ee5
+16.5,-93.0,wildfire,56740,14100,47.6,"['TIR', 'MIR', 'VNIR', 'SAR']",02c39c84-bc38-4a97-821e-d9d8926bc45b
+18.5,-90.5,wildfire,56740,15900,47.3,"['TIR', 'MIR', 'VNIR', 'SAR']",94f2eeb3-23e3-4a07-8b52-91bd41982e82
+17.5,-92.5,wildfire,56740,28500,43.1,"['TIR', 'MIR', 'VNIR', 'SAR']",74b9c281-95f7-44cd-88a3-d1f5b61ba237
+15.5,-88.0,wildfire,56740,12300,51.6,"['TIR', 'MIR', 'VNIR', 'SAR']",c9a536de-b3d7-4bf1-8fcf-a3e2ac111c10
+16.0,-92.0,wildfire,56740,13200,56.5,"['TIR', 'MIR', 'VNIR', 'SAR']",92ebf3f4-79f7-4635-bffe-bb1a44f13ddb
+19.0,-103.5,wildfire,56740,3300,41.8,"['TIR', 'MIR', 'VNIR', 'SAR']",c486a723-71e6-4fad-b706-d6091abd3200
+15.5,-88.5,wildfire,56740,24000,45.4,"['TIR', 'MIR', 'VNIR', 'SAR']",63b43396-84c0-48ed-ae2e-44b5326bb76c
+19.5,-104.5,wildfire,57640,24000,46.7,"['TIR', 'MIR', 'VNIR', 'SAR']",021b870c-348c-482b-9c90-3ed6e5a246b3
+47.0,-95.5,wildfire,57640,600,57.5,"['TIR', 'MIR', 'VNIR', 'SAR']",d3bd8b03-815b-41ed-b9e3-7bc8a0ff528f
+-17.0,-47.5,wildfire,57640,17700,45.2,"['TIR', 'MIR', 'VNIR', 'SAR']",c37d905b-246a-46af-b5e7-551517c3f77a
+13.0,-14.5,wildfire,57640,1500,51.9,"['TIR', 'MIR', 'VNIR', 'SAR']",055b5b98-e5d3-42fb-adf0-5a2c6d7530a9
+36.5,-78.0,wildfire,57640,1500,50.4,"['TIR', 'MIR', 'VNIR', 'SAR']",2c4f9a3d-ddf2-4811-8396-41952573a02b
+31.0,-94.0,wildfire,57640,19500,56.2,"['TIR', 'MIR', 'VNIR', 'SAR']",03ef3837-ff30-453f-abe7-4f4ea4b90782
+10.5,-13.5,wildfire,57640,2400,65.7,"['TIR', 'MIR', 'VNIR', 'SAR']",e3e5d785-9418-4e29-a76f-a003b26d9bc7
+16.5,-89.0,wildfire,57640,3300,44.5,"['TIR', 'MIR', 'VNIR', 'SAR']",98034e53-6ee3-4436-888d-61ff1ce8df2b
+31.5,-91.0,wildfire,57640,3300,37.9,"['TIR', 'MIR', 'VNIR', 'SAR']",aa5cd7c8-1d92-4144-95cd-e8e781aa8493
+15.0,-88.0,wildfire,57640,13200,45.5,"['TIR', 'MIR', 'VNIR', 'SAR']",5424cdb6-6873-4e88-b4b2-e13b91e8cfbd
+18.5,-103.0,wildfire,57640,19500,53.2,"['TIR', 'MIR', 'VNIR', 'SAR']",7723d7b1-b425-40bf-8e38-b6d280fe64ff
+-14.0,-65.5,wildfire,57640,3300,38.9,"['TIR', 'MIR', 'VNIR', 'SAR']",df5ed1bd-998e-4b29-ba6d-83e87c58f6ba
+-7.0,-47.5,wildfire,57640,1500,46.6,"['TIR', 'MIR', 'VNIR', 'SAR']",ffcdf850-70ff-4fdb-8b40-d87befc84d8a
+18.0,-101.5,wildfire,57640,15000,48.1,"['TIR', 'MIR', 'VNIR', 'SAR']",a9f5a397-0721-4e45-b14a-1b64b762d73e
+47.72001431700005,-78.16036655441701,algal_bloom,57868,28532,70.0,"['VNIR', 'TIR', 'Altimeter']",570425dc-bd6e-49ab-b663-3d777c09af31
+47.58204371550008,-78.60537410547623,algal_bloom,57868,28532,70.0,"['VNIR', 'TIR', 'Altimeter']",5cd8021e-74fd-4cd2-bf1d-c5ecbf18c30e
+46.98964440950013,-79.1660435639072,algal_bloom,57868,28532,36.0,"['VNIR', 'TIR', 'Altimeter']",8fbaf6a8-9197-49cc-9ca3-88159886eb5b
+47.43749551550008,-79.52661274616864,algal_bloom,57868,28532,58.3,"['VNIR', 'TIR', 'Altimeter']",19dc26ba-501b-4935-8532-d1c1a458516a
+44.77434417200007,-82.30938302086903,algal_bloom,57868,28532,70.0,"['VNIR', 'TIR', 'Altimeter']",441ba3f9-b33d-4310-8d2f-7ada16be177e
+47.00052776300009,-79.94626561678525,algal_bloom,57868,28532,70.0,"['VNIR', 'TIR', 'Altimeter']",ba2d4a91-fd33-4de4-bd5a-4cd0afc6a990
+49.89293788300012,-77.69758471406666,algal_bloom,57868,28532,70.0,"['VNIR', 'TIR', 'Altimeter']",7a681d3d-e66b-4876-a31a-511c5763e08d
+43.86172657750012,-87.08464544458951,algal_bloom,57868,28532,67.9,"['VNIR', 'TIR', 'Altimeter']",56b1971e-4bbe-455e-9510-1a29703c3aad
+46.237913953993655,-93.66004063068335,algal_bloom,57868,28532,54.9,"['VNIR', 'TIR', 'Altimeter']",cd804cc0-3aaf-4a3a-90ce-80fab34a626f
+52.24489101600011,-87.91823356675448,algal_bloom,57868,28532,58.3,"['VNIR', 'TIR', 'Altimeter']",ab8396d6-fe44-4b93-8803-5f60362796b0
+46.24391937450008,-79.65010751325562,algal_bloom,57868,28532,46.1,"['VNIR', 'TIR', 'Altimeter']",5b2b04d5-16ef-46e7-a0d1-0f227674b456
+48.75791082600006,-79.58974058592753,algal_bloom,57868,28532,65.8,"['VNIR', 'TIR', 'Altimeter']",12d10932-ee2a-4e4c-9bad-906b8f05c38b
+47.71438102850004,-88.21213036666634,algal_bloom,57868,28532,60.1,"['VNIR', 'TIR', 'Altimeter']",7fc74721-3679-4823-8003-bb0b72d36a73
+55.7312,52.0312,high_flow_river,58217,28183,10.0,"['VNIR', 'Altimeter']",958a07ab-b58b-4afc-9f91-930080cbb0cf
+14.5,-85.5,wildfire,58540,27600,57.6,"['TIR', 'MIR', 'VNIR', 'SAR']",a6998634-01ca-4241-807e-e1595cd02425
+54.5,-108.5,wildfire,58540,22200,74.4,"['TIR', 'MIR', 'VNIR', 'SAR']",459a50a5-899d-4b61-b03b-13625cfb20fa
+53.5,-106.5,wildfire,58540,27600,90.9,"['TIR', 'MIR', 'VNIR', 'SAR']",212b90c1-3513-47be-92df-fbab7e7b623e
+-21.0,-55.0,wildfire,58540,23100,45.9,"['TIR', 'MIR', 'VNIR', 'SAR']",0e8d6ec9-f850-4245-a541-228a96e66e35
+51.0,-99.5,wildfire,58540,6000,54.3,"['TIR', 'MIR', 'VNIR', 'SAR']",6f6bba9b-0b4f-47e3-8c1c-f54fa5adf5af
+17.5,-91.5,wildfire,58540,23100,48.9,"['TIR', 'MIR', 'VNIR', 'SAR']",93c55468-50b0-4d95-89b7-7e67feb900e3
+22.0,-99.5,wildfire,58540,17700,50.2,"['TIR', 'MIR', 'VNIR', 'SAR']",a2aa6bbe-f3e7-4e68-9306-0a846846d5a1
+14.0,-87.5,wildfire,58540,1500,45.9,"['TIR', 'MIR', 'VNIR', 'SAR']",6bf5a021-075e-4fb2-a646-52289968baf2
+18.0,-102.0,wildfire,58540,22200,44.7,"['TIR', 'MIR', 'VNIR', 'SAR']",f39153fa-4ad9-42e8-bc0d-39c1410f5e67
+15.5,-86.5,wildfire,58540,11400,42.7,"['TIR', 'MIR', 'VNIR', 'SAR']",a3e14eab-bedb-40bf-bb31-fa0af92fd8ba
+19.0,-96.5,wildfire,58540,3300,42.5,"['TIR', 'MIR', 'VNIR', 'SAR']",9080a0d9-316c-4040-9539-06347b0a8d47
+11.5,-15.0,wildfire,58540,600,53.6,"['TIR', 'MIR', 'VNIR', 'SAR']",32554d42-d371-41b3-87f9-35eabcd66b32
+-6.5,-51.0,wildfire,58540,3300,48.4,"['TIR', 'MIR', 'VNIR', 'SAR']",86c15ab5-6763-41c2-83c7-9433877f5510
+-21.0,-50.0,wildfire,58540,13200,58.9,"['TIR', 'MIR', 'VNIR', 'SAR']",1b060dde-63f4-4970-9bf0-b83aa61d1f3b
+58.1187,94.0021,high_flow_river,58877,27523,49.8,"['VNIR', 'Altimeter']",e881917b-f5b7-4a61-9ebd-437b7ba90a9c
+22.0,-104.5,wildfire,59440,6000,44.8,"['TIR', 'MIR', 'VNIR', 'SAR']",dc12eee2-cdbc-45b3-9ff6-ddcdd1c30f7e
+20.5,-105.0,wildfire,59440,17700,52.9,"['TIR', 'MIR', 'VNIR', 'SAR']",850aa40e-d7a0-4f38-91c8-d3ff69f825b0
+1.5,-75.5,wildfire,59440,15900,40.7,"['TIR', 'MIR', 'VNIR', 'SAR']",33588e95-3f0e-4f23-a549-91a33031c727
+30.5,-89.5,wildfire,59440,1500,47.5,"['TIR', 'MIR', 'VNIR', 'SAR']",764c0bee-4419-4c2e-b603-81e6b3bdeecf
+18.5,-102.5,wildfire,59440,6000,56.7,"['TIR', 'MIR', 'VNIR', 'SAR']",eced41c8-3b1d-47ab-a468-bbfc829c3fe8
+5.7979,0.6479,high_flow_river,59638,11393,5.3,"['VNIR', 'Altimeter']",87f862b7-5dce-43e3-9e97-d7a2a826d136
+29.5104,72.0229,high_flow_river,59680,26720,1.3,"['VNIR', 'Altimeter']",879aaa13-57e3-46cb-8bda-d40eca53374f
+21.0,-104.0,wildfire,60340,22200,59.3,"['TIR', 'MIR', 'VNIR', 'SAR']",27608dee-ac1a-4026-9123-8f22ff5bb896
+21.0,-104.5,wildfire,60340,5100,50.3,"['TIR', 'MIR', 'VNIR', 'SAR']",5ff6b5a1-467c-4378-a9f4-a17cd6ba1f43
+19.0,-102.5,wildfire,60340,16800,43.9,"['TIR', 'MIR', 'VNIR', 'SAR']",0b0d0786-2dbd-4d03-93a1-3cc345d72bc1
+25.5,-107.5,wildfire,60340,23100,54.7,"['TIR', 'MIR', 'VNIR', 'SAR']",bc6bffa7-a639-4c34-bc49-257952c5ae44
+18.5,-102.0,wildfire,60340,5100,55.7,"['TIR', 'MIR', 'VNIR', 'SAR']",61604856-76fe-42dc-9df8-b12133d7ff8e
+45.5,-96.5,wildfire,60340,23100,76.6,"['TIR', 'MIR', 'VNIR', 'SAR']",395514fd-66c9-4fce-964c-031c2da335a8
+12.0,-14.5,wildfire,60340,600,52.6,"['TIR', 'MIR', 'VNIR', 'SAR']",9027b49a-faf1-4ca8-9738-ca3b1508e4af
+20.0,-104.5,wildfire,60340,22200,51.6,"['TIR', 'MIR', 'VNIR', 'SAR']",f0be956e-a731-4f4e-adb1-7261c53c2377
+-14.0,-45.5,wildfire,60340,1500,47.8,"['TIR', 'MIR', 'VNIR', 'SAR']",08cd2ba9-27b8-42f9-93df-5ff2c2653468
+21.0,-105.0,wildfire,60340,5100,56.5,"['TIR', 'MIR', 'VNIR', 'SAR']",55ba527c-74d2-4b83-9e6c-ad3ce31d038b
+26.5,-107.5,wildfire,60340,24900,47.4,"['TIR', 'MIR', 'VNIR', 'SAR']",fa96a8d6-8488-442c-9948-dcb53a7d6aec
+37.0,-87.0,wildfire,60340,20400,47.3,"['TIR', 'MIR', 'VNIR', 'SAR']",5cfcd702-628e-41dd-99c5-8cd5e7773119
+-9.0,-47.0,wildfire,60340,600,52.8,"['TIR', 'MIR', 'VNIR', 'SAR']",f4513f2c-bea8-4c92-b83a-50ec89013cc8
+58.0062,67.9937,high_flow_river,60771,25629,53.0,"['VNIR', 'Altimeter']",be258226-a242-470c-82d9-31bc2a8c2ac6
+45.2979,-74.0688,high_flow_river,61014,25386,75.3,"['VNIR', 'Altimeter']",c1f85528-54d8-465b-963f-a4f6b3a865a6
+39.0,-83.0,wildfire,61240,1500,46.3,"['TIR', 'MIR', 'VNIR', 'SAR']",3d18c1ec-f9f7-4363-8954-91c70da61305
+-13.5,-58.0,wildfire,61240,10500,53.9,"['TIR', 'MIR', 'VNIR', 'SAR']",68cfb0e6-8002-4c0d-b285-64316dfd436a
+9.5,-66.5,wildfire,61240,4200,45.3,"['TIR', 'MIR', 'VNIR', 'SAR']",a0e183c0-820d-42b2-a350-49009c23cf70
+-8.0,-46.0,wildfire,61240,14100,41.7,"['TIR', 'MIR', 'VNIR', 'SAR']",c3a18cda-0e59-499f-b0ec-36c935a18f7c
+-12.0,-47.5,wildfire,61240,10500,50.5,"['TIR', 'MIR', 'VNIR', 'SAR']",7a5a6716-d319-421d-af00-525f926ab3d4
+-13.5,-64.5,wildfire,61240,9600,51.3,"['TIR', 'MIR', 'VNIR', 'SAR']",cf467790-f6e1-40d4-86f1-00e0221f3ba3
+-17.5,-61.0,wildfire,61240,24900,59.6,"['TIR', 'MIR', 'VNIR', 'SAR']",fc7424fc-79f4-4f2c-83bc-ba11b55ec6d7
+19.0,-101.0,wildfire,61240,24900,50.5,"['TIR', 'MIR', 'VNIR', 'SAR']",8dfcc871-20c0-4192-9413-ee76f95128b3
+17.0,-99.0,wildfire,61240,22200,58.0,"['TIR', 'MIR', 'VNIR', 'SAR']",ffb22964-dd4a-4a6f-a8e7-ab41560dc1a7
+45.5,-97.0,wildfire,61240,600,51.1,"['TIR', 'MIR', 'VNIR', 'SAR']",50c57926-9766-43e5-879f-38835eff2d25
+18.5,-101.0,wildfire,61240,24000,51.3,"['TIR', 'MIR', 'VNIR', 'SAR']",daf7c94c-cc17-4ad1-a5cb-497dc2e0ecd9
+23.5,-105.5,wildfire,61240,13200,47.7,"['TIR', 'MIR', 'VNIR', 'SAR']",b6eca7c6-58a5-4813-8d21-e775769eb0cc
+50.0,-98.5,wildfire,61240,17700,57.9,"['TIR', 'MIR', 'VNIR', 'SAR']",e03c691b-1352-4676-818f-d57462cf9630
+10.5,-63.0,wildfire,61240,9600,45.9,"['TIR', 'MIR', 'VNIR', 'SAR']",0248bef4-4c2c-4413-b01d-a1812c2f6fa1
+-7.5,-45.5,wildfire,61240,21300,48.9,"['TIR', 'MIR', 'VNIR', 'SAR']",f6a76e1a-0b1a-44dd-9d9c-41be90f97f23
+50.95254326500012,-106.90762246334212,algal_bloom,61403,24997,63.8,"['VNIR', 'TIR', 'Altimeter']",aea5cb64-22e4-4fa2-a84c-7a192224a67c
+51.07574338900005,-105.25597195863186,algal_bloom,61403,24997,56.5,"['VNIR', 'TIR', 'Altimeter']",0a065234-5ad2-4d76-aaab-18bc6ca5877f
+51.881529665000045,-104.3614131280028,algal_bloom,61403,24997,47.4,"['VNIR', 'TIR', 'Altimeter']",02a74dd6-2107-4a73-91fd-fb44640fd1a4
+50.086200280500094,-105.9507640430376,algal_bloom,61403,24997,25.1,"['VNIR', 'TIR', 'Altimeter']",08279dd5-170d-4580-86b3-bb7b0b05aa75
+46.2604,-123.4563,high_flow_river,61635,24765,21.3,"['VNIR', 'Altimeter']",1a2c053a-d83e-4534-a354-343b2e740684
+-13.0,-43.5,wildfire,62140,2400,44.4,"['TIR', 'MIR', 'VNIR', 'SAR']",52f7da8e-ab6d-400d-9c8f-d5fd4935aa48
+-7.0,-47.0,wildfire,62140,6000,50.1,"['TIR', 'MIR', 'VNIR', 'SAR']",05ee9472-a1b3-436f-8b69-40ec07a3896e
+25.0,-107.0,wildfire,62140,23100,55.4,"['TIR', 'MIR', 'VNIR', 'SAR']",012d8a3f-2862-4d1f-8444-aa03ed0036ae
+19.0,-96.0,wildfire,62140,1500,55.6,"['TIR', 'MIR', 'VNIR', 'SAR']",93dcc536-5c51-4dd6-a009-8a962176ef8b
+-19.0,-57.0,wildfire,62140,9600,41.7,"['TIR', 'MIR', 'VNIR', 'SAR']",13cf768d-aee6-4082-a132-8e90099ccaa0
+-13.0,-49.0,wildfire,62140,7800,39.2,"['TIR', 'MIR', 'VNIR', 'SAR']",3469a3f5-89e5-4882-bc78-7cb177f4af30
+29.0,-111.0,wildfire,62140,2400,43.0,"['TIR', 'MIR', 'VNIR', 'SAR']",5503dd7a-38f8-4ab5-801d-7fce029bd74c
+18.5,-103.5,wildfire,63040,16800,47.4,"['TIR', 'MIR', 'VNIR', 'SAR']",4c304b6a-f0a9-4519-b332-92fd559ef8c0
+-13.0,-52.0,wildfire,63040,4200,38.4,"['TIR', 'MIR', 'VNIR', 'SAR']",fe9ea736-30f0-4447-8c0c-87e70a8f0ef4
+18.5,-101.5,wildfire,63040,18600,46.5,"['TIR', 'MIR', 'VNIR', 'SAR']",a6edc86b-7291-4920-b4a0-b4cbd12b8e93
+-12.5,-41.0,wildfire,63040,2400,51.3,"['TIR', 'MIR', 'VNIR', 'SAR']",ec0db9dd-5a60-458d-a217-ceed35148796
+9.5,-65.5,wildfire,63040,2400,45.4,"['TIR', 'MIR', 'VNIR', 'SAR']",28bdc584-6991-42b9-89b9-f0fd46376b0e
+54.53806804450005,-110.07226954114168,algal_bloom,63747,22653,63.8,"['VNIR', 'TIR', 'Altimeter']",ebefe7c3-0f7f-46e0-968d-cc18d1a767b7
+55.97592039050008,-108.33299381173114,algal_bloom,63747,22653,61.9,"['VNIR', 'TIR', 'Altimeter']",1c7e4c94-eec2-46de-a470-6a851671fabd
+54.76761020400008,-107.28945528075508,algal_bloom,63747,22653,63.8,"['VNIR', 'TIR', 'Altimeter']",bf9661ae-9d94-4701-abd8-a24d7959232c
+55.177710846500105,-108.26045830676668,algal_bloom,63747,22653,46.1,"['VNIR', 'TIR', 'Altimeter']",0ddc74f7-0a28-4d0f-834e-c0764ccff4df
+56.37633190550008,-108.0749001457931,algal_bloom,63747,22653,65.8,"['VNIR', 'TIR', 'Altimeter']",96c21181-e0e2-45b0-a97d-651c0019a06f
+54.90246037900013,-109.7358463606615,algal_bloom,63747,22653,60.1,"['VNIR', 'TIR', 'Altimeter']",d488ba02-e02e-47d7-bb9b-7c1045269ec5
+55.11387197250008,-104.85211182089871,algal_bloom,63747,22653,58.3,"['VNIR', 'TIR', 'Altimeter']",56135f70-9a55-43fd-aaa3-4694773f1908
+54.29418255600007,-105.7097756722834,algal_bloom,63747,22653,50.3,"['VNIR', 'TIR', 'Altimeter']",e9ada82a-2070-4288-a2fc-26dce96c6f7f
+59.11606266200008,-109.87703321263734,algal_bloom,63747,22653,65.8,"['VNIR', 'TIR', 'Altimeter']",e99e6760-79d0-4947-9c7a-2eec39b91489
+52.37569719200013,-100.06356227395864,algal_bloom,63747,22653,65.8,"['VNIR', 'TIR', 'Altimeter']",2b90313d-8e5e-437e-8278-2fc3f29765df
+55.86472568650012,-115.45520310119208,algal_bloom,63747,22653,60.1,"['VNIR', 'TIR', 'Altimeter']",146de281-738b-49b0-8a5b-c8ca7dfbf8d3
+54.11846183250009,-102.27807459355049,algal_bloom,63747,22653,61.9,"['VNIR', 'TIR', 'Altimeter']",9587052b-a476-4026-a165-328e1cf9d42b
+54.90967319950005,-104.66364790123332,algal_bloom,63747,22653,43.6,"['VNIR', 'TIR', 'Altimeter']",2c5b18d1-0344-402b-92d0-7134819eee57
+55.55274522000008,-106.54475108264784,algal_bloom,63747,22653,60.1,"['VNIR', 'TIR', 'Altimeter']",44b84a07-86c5-4b1d-a621-e978465471e9
+54.65797458500006,-106.83862030230377,algal_bloom,63747,22653,60.1,"['VNIR', 'TIR', 'Altimeter']",4c78d48f-b250-46f6-ac53-b37368de6341
+55.55584954550005,-107.7505496672205,algal_bloom,63747,22653,60.1,"['VNIR', 'TIR', 'Altimeter']",e335ba8f-5466-4717-bea2-56b81d1b7acb
+55.84178929050009,-108.5561536562052,algal_bloom,63747,22653,65.8,"['VNIR', 'TIR', 'Altimeter']",95a592b2-002e-4b53-9d50-423f082e6088
+53.340980085500064,-100.36268004582944,algal_bloom,63747,22653,43.6,"['VNIR', 'TIR', 'Altimeter']",2142e803-57ea-4c48-8fc0-b5c473481780
+55.67052524800005,-105.21989837897638,algal_bloom,63747,22653,61.9,"['VNIR', 'TIR', 'Altimeter']",ed9d9c4e-ee0a-4469-8051-41d52942dd0a
+55.11674739200009,-107.28269683821492,algal_bloom,63747,22653,63.8,"['VNIR', 'TIR', 'Altimeter']",412a2722-de4a-43f0-bfb9-bb4e17f66740
+61.82015065650012,-108.92793534449646,algal_bloom,63747,22653,47.4,"['VNIR', 'TIR', 'Altimeter']",415cba9c-4ce3-428d-8a0c-6139b6435a7c
+61.09062077500008,-110.55839428054364,algal_bloom,63747,22653,56.5,"['VNIR', 'TIR', 'Altimeter']",e5a3834b-0e4d-433e-bb58-1f25d1e3b83b
+57.45771574900007,-106.24206990311777,algal_bloom,63747,22653,70.0,"['VNIR', 'TIR', 'Altimeter']",6551bf62-cf7d-4f08-8495-0e12a908c712
+54.78622501100008,-103.50467214795648,algal_bloom,63747,22653,53.3,"['VNIR', 'TIR', 'Altimeter']",61b8d0d5-153c-49bb-a999-89a54f9a275a
+61.88364627100012,-113.68835674293736,algal_bloom,63747,22653,70.0,"['VNIR', 'TIR', 'Altimeter']",c918f2ec-5562-46b7-b732-bdfda0896881
+52.95084325150006,-101.34878565838986,algal_bloom,63747,22653,51.8,"['VNIR', 'TIR', 'Altimeter']",27a63593-b270-4fec-9cb0-cf2caab6267a
+58.57238141400009,-112.07093242326468,algal_bloom,63747,22653,56.5,"['VNIR', 'TIR', 'Altimeter']",fd3536fb-dcf0-4ab7-b8bb-01aafb34dcb0
+56.46146452850013,-109.4820317554322,algal_bloom,63747,22653,56.5,"['VNIR', 'TIR', 'Altimeter']",33925640-2b9a-4751-8853-819f8603c6f8
+60.22597047600013,-115.51251739249662,algal_bloom,63747,22653,43.6,"['VNIR', 'TIR', 'Altimeter']",0993401a-5105-4c1c-b8b0-f647adc9eef1
+54.864741396000085,-112.10811346085866,algal_bloom,63747,22653,65.8,"['VNIR', 'TIR', 'Altimeter']",6fc75982-dcbd-416c-b903-46b2c9497380
+55.41564545500006,-115.72519086189637,algal_bloom,63747,22653,53.3,"['VNIR', 'TIR', 'Altimeter']",2d404ed1-b823-4c99-b436-da0164453a1e
+21.5,-104.0,wildfire,63940,1500,48.1,"['TIR', 'MIR', 'VNIR', 'SAR']",08b69673-144d-4f17-8ebd-cdb56b3e4136
+19.5,-103.0,wildfire,63940,1500,47.4,"['TIR', 'MIR', 'VNIR', 'SAR']",a24becd2-fe88-4f3a-873d-f9f29fcfe9db
+22.5,-105.0,wildfire,63940,22200,47.7,"['TIR', 'MIR', 'VNIR', 'SAR']",69622eda-7c48-457a-9237-03baa11ae039
+-11.5,-55.5,wildfire,63940,6900,53.7,"['TIR', 'MIR', 'VNIR', 'SAR']",4385aa12-8131-401f-974c-bd605e1d6b5d
+-14.5,-45.5,wildfire,63940,11400,49.9,"['TIR', 'MIR', 'VNIR', 'SAR']",3fc2dfb1-b189-4832-8430-6e8b108ebaa9
+48.5,-98.5,wildfire,63940,600,56.9,"['TIR', 'MIR', 'VNIR', 'SAR']",6a481e71-e96b-439e-8f3d-b965072ef289
+1.9812,32.3354,high_flow_river,64686,21714,7.4,"['VNIR', 'Altimeter']",7c057010-926b-404e-bbab-ef1866033693
+9.5,-65.0,wildfire,64840,5100,52.8,"['TIR', 'MIR', 'VNIR', 'SAR']",9551d525-6f1f-4bac-843d-b26a672f38a4
+27.5,-97.5,wildfire,64840,20400,43.6,"['TIR', 'MIR', 'VNIR', 'SAR']",7cd5f489-cd62-4a71-b969-56d9d8059c1b
+51.5,-99.5,wildfire,64840,1500,50.7,"['TIR', 'MIR', 'VNIR', 'SAR']",ffdc091c-f3f0-4f77-bab9-8b0a689eb763
+63.3854,106.1479,high_flow_river,65023,21377,12.1,"['VNIR', 'Altimeter']",f7402f35-6b67-4d7c-9c36-0a4013a7c6eb
+48.2729,133.9937,high_flow_river,65103,21297,100.0,"['VNIR', 'Altimeter']",248b1eb6-a977-4c4d-8d25-338d16b17aaf
+39.3687,49.3354,high_flow_river,65246,21154,2.3,"['VNIR', 'Altimeter']",ba8eebe3-5e7d-4cfb-85aa-57209016194a
+51.4729,29.9979,high_flow_river,65620,20780,100.0,"['VNIR', 'Altimeter']",5d44c18d-89fc-449d-80c9-cd0a0f646331
+49.0,-108.0,wildfire,65740,3300,50.6,"['TIR', 'MIR', 'VNIR', 'SAR']",427b50af-d378-4eff-95b2-9b739507faed
+-16.0,-59.5,wildfire,65740,6000,50.1,"['TIR', 'MIR', 'VNIR', 'SAR']",70a7cc7e-aa0e-4864-b31a-28549c630c82
+26.5,-108.5,wildfire,65740,1500,48.5,"['TIR', 'MIR', 'VNIR', 'SAR']",854449b1-feee-4622-a556-6811fecbcdc7
+50.0,-100.0,wildfire,65740,600,52.3,"['TIR', 'MIR', 'VNIR', 'SAR']",ec914026-2d6a-4a2a-b156-7cb0a6f241b3
+-14.5,-52.0,wildfire,65740,18600,51.2,"['TIR', 'MIR', 'VNIR', 'SAR']",8706b109-e1b2-471a-9783-208bbf2b8c3a
+43.0,-90.0,wildfire,65740,1500,45.6,"['TIR', 'MIR', 'VNIR', 'SAR']",d8a78adf-93ef-4b8b-9b5b-9dd7aee7fa96
+32.5,-115.5,wildfire,65740,600,59.7,"['TIR', 'MIR', 'VNIR', 'SAR']",7b9589c2-13d6-4900-aeab-3f589d2964fb
+55.9854,65.6979,high_flow_river,66042,20358,51.8,"['VNIR', 'Altimeter']",7a9fe6b7-840c-4ffd-916d-cf0ebc224155
+65.9771,-144.1938,high_flow_river,66361,20039,100.0,"['VNIR', 'Altimeter']",005138e9-2d4b-4455-8581-ca9ed9b78b64
+8.0146,6.7771,high_flow_river,66399,20001,100.0,"['VNIR', 'Altimeter']",55ff47c0-cddc-4dc0-809e-00098e1a265b
+49.0,-97.0,wildfire,66540,19860,56.3,"['TIR', 'MIR', 'VNIR', 'SAR']",f0006492-e530-4ec9-a829-00009d43d4b3
+48.0,-96.5,wildfire,66540,3600,53.3,"['TIR', 'MIR', 'VNIR', 'SAR']",b7364c08-3a1b-493c-b1e0-edde299d6322
+51.0,-101.0,wildfire,66600,3600,54.4,"['TIR', 'MIR', 'VNIR', 'SAR']",bd103aaf-510d-476c-80e9-00ffb5fc6860
+29.0,-99.0,wildfire,66640,5100,43.4,"['TIR', 'MIR', 'VNIR', 'SAR']",9d1820fd-3ff1-4ac9-82d8-07c00721d39a
+-12.0,-55.0,wildfire,66640,19500,51.5,"['TIR', 'MIR', 'VNIR', 'SAR']",c8101abf-ccc1-470d-aa29-674e42cc781f
+47.0,-96.0,wildfire,66640,3300,66.2,"['TIR', 'MIR', 'VNIR', 'SAR']",bc27ad22-e235-476f-ab1a-ea6d0e8b26db
+15.0,-88.5,wildfire,66640,6000,45.1,"['TIR', 'MIR', 'VNIR', 'SAR']",5f4ae82f-e69c-4022-ae63-648c82d8112e
+53.0,-111.0,wildfire,66640,12300,68.7,"['TIR', 'MIR', 'VNIR', 'SAR']",ac70f0c5-7d5c-4e0f-8d13-1010815976b1
+46.0,-116.5,wildfire,66640,600,67.4,"['TIR', 'MIR', 'VNIR', 'SAR']",12d4a970-dee5-4351-9638-478af81cb0f5
+28.5,-108.5,wildfire,66640,19500,56.2,"['TIR', 'MIR', 'VNIR', 'SAR']",1c924829-ddce-45a0-a3bf-282513aca886
+14.0,-89.5,wildfire,66640,6000,38.3,"['TIR', 'MIR', 'VNIR', 'SAR']",95b5a5f9-e141-4d03-99e8-bc9d28c39dfe
+28.5,-109.0,wildfire,66640,19500,52.2,"['TIR', 'MIR', 'VNIR', 'SAR']",353bcd6a-2e6f-4d03-b6d1-c722c77a9bc8
+35.0,-113.5,wildfire,66640,13200,48.5,"['TIR', 'MIR', 'VNIR', 'SAR']",7dfa223d-c7fb-4dee-8554-6ce385599e07
+15.5,-85.0,wildfire,66640,10500,61.1,"['TIR', 'MIR', 'VNIR', 'SAR']",1ff192f7-df93-4289-b8aa-6bfa1bf60136
+14.0,-86.0,wildfire,66640,4200,48.4,"['TIR', 'MIR', 'VNIR', 'SAR']",7174d960-03dd-4e35-a605-10809d6ad3d7
+15.5,-87.0,wildfire,66640,3300,50.3,"['TIR', 'MIR', 'VNIR', 'SAR']",522f734c-e812-4c5b-be40-623779f298d2
+28.0,-80.5,wildfire,66640,600,57.6,"['TIR', 'MIR', 'VNIR', 'SAR']",cb219c67-3e16-4708-8ed8-b4cf039854a9
+14.5,-86.5,wildfire,66640,6000,45.0,"['TIR', 'MIR', 'VNIR', 'SAR']",d64f04dc-ad0e-43d5-8308-11d3dab5daf9
+-20.5,-51.5,wildfire,66640,8700,70.9,"['TIR', 'MIR', 'VNIR', 'SAR']",afe07a34-c994-4ecb-8566-9674044e8f69
+27.5,-80.5,wildfire,66640,600,63.4,"['TIR', 'MIR', 'VNIR', 'SAR']",85f4174c-fced-4f45-8ebf-0db738d7d76b
+-4.0021,-66.4438,high_flow_river,67284,19116,26.9,"['VNIR', 'Altimeter']",ed977a7b-6817-4c09-8a7e-861792831d31
+15.5,-92.0,wildfire,67540,10500,60.1,"['TIR', 'MIR', 'VNIR', 'SAR']",35835442-fff2-4076-bb1a-725c2c44d760
+14.0,-90.5,wildfire,67540,3300,40.6,"['TIR', 'MIR', 'VNIR', 'SAR']",c377f751-5867-4405-9d15-c6dc6232712a
+18.0,-91.5,wildfire,67540,5100,46.2,"['TIR', 'MIR', 'VNIR', 'SAR']",7182aa01-5f63-4312-8680-22995911ee81
+-17.0,-63.5,wildfire,67540,6000,42.5,"['TIR', 'MIR', 'VNIR', 'SAR']",ea9b49bf-5f4e-476e-a270-d20bb8ece783
+20.0,-90.0,wildfire,67540,4200,48.7,"['TIR', 'MIR', 'VNIR', 'SAR']",1eea142f-c916-485c-b4db-003966e0c396
+18.0,-89.0,wildfire,67540,10500,49.7,"['TIR', 'MIR', 'VNIR', 'SAR']",fabec97c-84a7-4fb7-b4e6-f074cd4f92e7
+18.0,-88.5,wildfire,67540,17700,61.9,"['TIR', 'MIR', 'VNIR', 'SAR']",b5136d7c-7e14-46d5-a5c6-3df192e18428
+-7.0,-44.5,wildfire,67540,7800,59.3,"['TIR', 'MIR', 'VNIR', 'SAR']",7dec1547-1355-4890-a935-2b8a17a0df1b
+15.0,-86.5,wildfire,67540,4200,42.3,"['TIR', 'MIR', 'VNIR', 'SAR']",f3b5244c-8b95-42df-9673-2868501f2a72
+17.0,-89.0,wildfire,67540,18600,57.5,"['TIR', 'MIR', 'VNIR', 'SAR']",d5ea7f67-8ff8-4007-94b9-daee12d740d0
+18.5,-89.0,wildfire,67540,7800,57.7,"['TIR', 'MIR', 'VNIR', 'SAR']",a1743a7e-da35-4edd-a911-6a6d3cd5881e
+16.0,-90.5,wildfire,67540,17700,41.1,"['TIR', 'MIR', 'VNIR', 'SAR']",709d06e7-5245-4cef-8874-0f781c747734
+14.0,-87.0,wildfire,67540,3300,45.1,"['TIR', 'MIR', 'VNIR', 'SAR']",3bf469b4-cd49-46fc-9541-35d42fc27a59
+15.0,-92.5,wildfire,67540,10500,48.0,"['TIR', 'MIR', 'VNIR', 'SAR']",111a12a8-672f-4887-a6d2-274115b580e2
+17.0,-91.0,wildfire,67540,9600,44.3,"['TIR', 'MIR', 'VNIR', 'SAR']",06995ac4-7f97-4b4b-b245-11b18336301d
+16.5,-91.5,wildfire,67540,6900,41.6,"['TIR', 'MIR', 'VNIR', 'SAR']",08460e56-af27-4726-bce1-9a6bbe3690c4
+15.5,-89.5,wildfire,67540,16800,42.2,"['TIR', 'MIR', 'VNIR', 'SAR']",00346083-a4c4-4ea4-9970-004dc1fdf46b
+15.0,-85.5,wildfire,67540,7800,42.5,"['TIR', 'MIR', 'VNIR', 'SAR']",51eeb60e-b8fb-4381-8e43-a848f201e733
+17.0,-90.5,wildfire,67540,15900,52.7,"['TIR', 'MIR', 'VNIR', 'SAR']",c4ec1fae-e012-4766-b8c3-fea059d0915e
+48.0,-114.5,wildfire,67540,16800,52.7,"['TIR', 'MIR', 'VNIR', 'SAR']",9e407a25-dc37-4d65-8675-a07562e3a3af
+29.7437,-90.0063,high_flow_river,67653,18747,40.8,"['VNIR', 'Altimeter']",ff7bf090-135a-470e-a25a-77ba8a1c0a13
+49.5896,127.9979,high_flow_river,68091,18309,56.3,"['VNIR', 'Altimeter']",5b438dff-a0d8-4088-b6c8-ea3437a93636
+53.0,-106.0,wildfire,68440,13200,82.3,"['TIR', 'MIR', 'VNIR', 'SAR']",3f15cf10-b072-42e7-bfeb-6eea32c12996
+50.5,-99.0,wildfire,68440,1500,45.5,"['TIR', 'MIR', 'VNIR', 'SAR']",58672b48-2894-4b6a-bfca-2d58e36438e7
+18.5,-91.5,wildfire,68440,17700,45.2,"['TIR', 'MIR', 'VNIR', 'SAR']",4f07600d-d2cc-49ff-ac9d-f1877c16e785
+-14.0,-47.0,wildfire,68440,9600,44.5,"['TIR', 'MIR', 'VNIR', 'SAR']",c8eb4ce4-2942-48f9-b854-8ffe4343ed53
+16.0,-89.5,wildfire,68440,10500,44.8,"['TIR', 'MIR', 'VNIR', 'SAR']",63f3f6cc-327e-4a42-ad6d-c49cf12ef450
+17.5,-94.0,wildfire,68440,6000,44.2,"['TIR', 'MIR', 'VNIR', 'SAR']",cc446320-207d-4bdf-b292-35c363490f75
+16.0,-90.0,wildfire,68440,17700,47.6,"['TIR', 'MIR', 'VNIR', 'SAR']",b67da9ae-bcf8-4171-9565-944b8f221af7
+20.0,-88.5,wildfire,68440,2400,47.3,"['TIR', 'MIR', 'VNIR', 'SAR']",3097bc52-d455-47d1-86f6-e81cd7ba62d9
+16.5,-91.0,wildfire,68440,7800,52.5,"['TIR', 'MIR', 'VNIR', 'SAR']",948a3e8b-a0e0-4a1a-8c99-020e61ea8868
+51.5,-99.0,wildfire,68440,600,52.7,"['TIR', 'MIR', 'VNIR', 'SAR']",0c2c04d5-2add-47a9-bcac-fd4835c486c5
+16.0,-93.0,wildfire,68440,6000,42.1,"['TIR', 'MIR', 'VNIR', 'SAR']",857ab7af-4421-4264-8000-6014bad83415
+17.0,-95.5,wildfire,68440,9600,56.5,"['TIR', 'MIR', 'VNIR', 'SAR']",9d5f4e3b-49c1-4f72-93ec-ddc4158ea992
+21.0,-88.0,wildfire,68440,1500,50.6,"['TIR', 'MIR', 'VNIR', 'SAR']",34294254-108e-419f-b206-4ef340bf3162
+21.5,-88.0,wildfire,68440,4200,43.2,"['TIR', 'MIR', 'VNIR', 'SAR']",2d1ab9d9-23bf-452e-932b-c458904b1be8
+17.0,-93.5,wildfire,68440,16800,49.7,"['TIR', 'MIR', 'VNIR', 'SAR']",af234faa-0aa1-4e27-8339-7486cc4cf65a
+19.5,-88.5,wildfire,68440,13200,49.7,"['TIR', 'MIR', 'VNIR', 'SAR']",63fc1e02-a317-4ec3-80e3-d4ee52daca13
+17.5,-95.5,wildfire,68440,15900,54.0,"['TIR', 'MIR', 'VNIR', 'SAR']",028409d7-5123-44b4-9575-466e75f9c43d
+19.0,-91.0,wildfire,68440,17700,56.7,"['TIR', 'MIR', 'VNIR', 'SAR']",dc1cb667-73f1-4200-9ff1-a0a5f17bd9a6
+18.0,-88.0,wildfire,68440,16800,57.0,"['TIR', 'MIR', 'VNIR', 'SAR']",ae86863d-42e2-49b8-81a7-5810b5b28fc0
+18.5,-88.5,wildfire,68440,14100,58.3,"['TIR', 'MIR', 'VNIR', 'SAR']",ff09839a-742b-4761-a3b4-87a58689b41a
+14.5,-88.0,wildfire,68440,3300,41.4,"['TIR', 'MIR', 'VNIR', 'SAR']",bf4e46b0-5f3a-42e1-8489-27397add4cd2
+21.5,-87.5,wildfire,68440,2400,41.2,"['TIR', 'MIR', 'VNIR', 'SAR']",2dd136f4-6303-43a1-9a20-04a363ff7cf1
+15.0,-89.5,wildfire,68440,2400,41.1,"['TIR', 'MIR', 'VNIR', 'SAR']",7cf614e2-cfec-4f86-ae13-823b26ccaa85
+-12.0,-49.0,wildfire,68440,17700,57.5,"['TIR', 'MIR', 'VNIR', 'SAR']",5280b078-507c-4aa5-a53e-de2c58c52f03
+-6.5,-44.5,wildfire,68440,8700,63.5,"['TIR', 'MIR', 'VNIR', 'SAR']",13b1b650-5d0d-4d48-adcb-434fba36e49d
+-4.8896,-60.0104,high_flow_river,68606,17794,0.3,"['VNIR', 'Altimeter']",b85dc8e8-2e1e-44fe-b5c6-c4da15b00523
+16.0,-97.5,wildfire,69340,3300,45.2,"['TIR', 'MIR', 'VNIR', 'SAR']",633631b5-480a-41dc-b83b-b04e9826d449
+14.0,-85.5,wildfire,69340,7800,46.7,"['TIR', 'MIR', 'VNIR', 'SAR']",c8199051-ec2a-46a9-a64d-20d30c52b56f
+20.0,-98.0,wildfire,69340,11400,53.6,"['TIR', 'MIR', 'VNIR', 'SAR']",bf4cfdd7-78a1-4a90-bf39-3ca3826039d0
+30.5,-109.5,wildfire,69340,2400,44.4,"['TIR', 'MIR', 'VNIR', 'SAR']",27162d10-25dd-4463-b88b-e8feae55fc25
+20.5,-98.5,wildfire,69340,2400,48.8,"['TIR', 'MIR', 'VNIR', 'SAR']",7c7692c8-1abc-4929-921a-5862be587480
+21.5,-98.0,wildfire,69340,8700,43.0,"['TIR', 'MIR', 'VNIR', 'SAR']",649e99a2-1850-4b1c-a261-4481b1eecca8
+19.5,-90.0,wildfire,69340,16800,50.3,"['TIR', 'MIR', 'VNIR', 'SAR']",edec080e-d006-4336-a12a-b09151b61f5a
+21.5,-99.5,wildfire,69340,10500,43.7,"['TIR', 'MIR', 'VNIR', 'SAR']",509308e2-0ffe-4c79-9efc-593792d7ffb4
+10.0,-65.5,wildfire,69340,5100,51.8,"['TIR', 'MIR', 'VNIR', 'SAR']",d81a924c-cd7c-4c27-af41-42a7d5f2ea4b
+31.5,-94.5,wildfire,69340,6900,38.4,"['TIR', 'MIR', 'VNIR', 'SAR']",056a82c8-6aaf-4e82-bbfd-20ce5c7572fa
+17.5,-95.0,wildfire,69340,16800,53.7,"['TIR', 'MIR', 'VNIR', 'SAR']",51ee9d23-383c-41d1-80fb-8e73b651abb4
+-16.0,-63.0,wildfire,69340,8700,45.2,"['TIR', 'MIR', 'VNIR', 'SAR']",9fd6ba3c-0aaf-441c-9980-186f38785136
+10.5,-14.5,wildfire,69340,600,57.9,"['TIR', 'MIR', 'VNIR', 'SAR']",ea6d8f8c-41cc-4774-a94a-42975a208f9f
+-23.0,-52.0,wildfire,69340,600,65.2,"['TIR', 'MIR', 'VNIR', 'SAR']",9ddfdee5-efeb-4334-a277-68d9ac08de4e
+-20.5,-59.0,wildfire,69340,9600,58.6,"['TIR', 'MIR', 'VNIR', 'SAR']",e126ec09-748e-4b4c-9fe6-25c905ba9acb
+17.5,-91.0,wildfire,69340,13200,41.6,"['TIR', 'MIR', 'VNIR', 'SAR']",6b0f65bc-5202-464f-99f6-c064bd9b794b
+11.0,-85.5,wildfire,69340,5100,44.7,"['TIR', 'MIR', 'VNIR', 'SAR']",5c546254-e9b4-432e-b4cb-f78561036743
+21.5,-98.5,wildfire,69340,9600,44.6,"['TIR', 'MIR', 'VNIR', 'SAR']",3b698fa9-ff50-4186-af85-c6e30befe9d0
+22.0,-98.5,wildfire,69340,11400,45.9,"['TIR', 'MIR', 'VNIR', 'SAR']",3a6977ac-2e23-4bbc-ac11-be2e5fe8bbca
+16.0,-97.0,wildfire,69340,1500,45.8,"['TIR', 'MIR', 'VNIR', 'SAR']",6794febd-2257-471a-a908-13fc7e4b3ca1
+47.5,-116.0,wildfire,69340,14100,76.1,"['TIR', 'MIR', 'VNIR', 'SAR']",88b22a6e-6e89-42fe-82e6-a5572a6f079e
+46.5,-100.5,wildfire,69480,3600,53.2,"['TIR', 'MIR', 'VNIR', 'SAR']",364ec011-6776-4dbc-a639-c4d935ae3d21
+52.5,-108.0,wildfire,69600,16800,53.7,"['TIR', 'MIR', 'VNIR', 'SAR']",6e6d9759-5011-42f2-8f76-3746c11f37e2
+43.6104,-78.0021,high_flow_river,70155,16245,0.3,"['VNIR', 'Altimeter']",01d2da67-bdc8-49b8-8978-1bf3b319122e
+29.0,-102.5,wildfire,70240,2400,46.4,"['TIR', 'MIR', 'VNIR', 'SAR']",213c6a68-3d1b-4ae8-98d6-440740d48ac1
+17.5,-96.0,wildfire,70240,11400,45.4,"['TIR', 'MIR', 'VNIR', 'SAR']",152945cf-12b0-4eea-bfdf-c0f01f9d5ec4
+17.5,-100.5,wildfire,70240,7800,47.4,"['TIR', 'MIR', 'VNIR', 'SAR']",0f8adf00-f7e3-477f-94aa-e5ba2a80d405
+17.0,-100.5,wildfire,70240,12300,48.7,"['TIR', 'MIR', 'VNIR', 'SAR']",17748d7d-22da-41d1-8ce3-36c9337a91cd
+47.0,-115.0,wildfire,70240,14100,56.1,"['TIR', 'MIR', 'VNIR', 'SAR']",f7c99b77-43a1-4dfa-9a5e-8f3b36521ee0
+20.0,-89.5,wildfire,70240,4200,49.2,"['TIR', 'MIR', 'VNIR', 'SAR']",67a1b33d-1e50-4bce-99ef-40e7827f19b2
+19.0,-100.5,wildfire,70240,10500,53.7,"['TIR', 'MIR', 'VNIR', 'SAR']",738a85fb-fe71-4d94-8054-f480e5bbebb8
+9.5,-66.0,wildfire,70240,8700,52.9,"['TIR', 'MIR', 'VNIR', 'SAR']",d5d41af8-d6cd-4e86-9e1b-17844383e433
+20.0,-97.5,wildfire,70240,3300,42.4,"['TIR', 'MIR', 'VNIR', 'SAR']",98dcbf81-a04f-4079-9274-713430d96200
+17.0,-95.0,wildfire,70240,15900,52.8,"['TIR', 'MIR', 'VNIR', 'SAR']",ac71b1d5-22b8-4cd1-b3ec-533b278ffec5
+16.5,-90.5,wildfire,70240,15000,51.9,"['TIR', 'MIR', 'VNIR', 'SAR']",3989da78-a94a-48cf-9f89-525451deaa78
+22.0,-98.0,wildfire,70240,9600,44.0,"['TIR', 'MIR', 'VNIR', 'SAR']",6fd9b859-60e0-4a0c-839c-0f7ad1afd90e
+18.5,-96.0,wildfire,70240,15900,49.8,"['TIR', 'MIR', 'VNIR', 'SAR']",da06770d-a2c9-42e3-ac5c-d9ee0b60cd88
+-12.0,-47.0,wildfire,70240,11400,43.7,"['TIR', 'MIR', 'VNIR', 'SAR']",51bfa677-6655-4a73-bacf-29bd667b6afd
+18.0,-101.0,wildfire,70240,6900,45.9,"['TIR', 'MIR', 'VNIR', 'SAR']",cb2b4c52-2b47-41b8-a23c-60ee0bbaf3ee
+16.5,-98.5,wildfire,70240,13200,62.0,"['TIR', 'MIR', 'VNIR', 'SAR']",5c376422-2ae2-45ab-9eb7-d5bf7bfd8826
+19.0,-102.0,wildfire,70240,7800,46.5,"['TIR', 'MIR', 'VNIR', 'SAR']",7666f77b-2d3a-484b-84f3-93cb9843a44c
+18.0,-95.0,wildfire,70240,8700,45.3,"['TIR', 'MIR', 'VNIR', 'SAR']",22821ef2-6cfe-40c9-a505-0c5a30e89ec8
+49.5,-98.5,wildfire,70240,5100,61.9,"['TIR', 'MIR', 'VNIR', 'SAR']",6b2ad6ef-f33e-41a4-87e5-9d06bd43af8b
+-4.0104,19.5187,high_flow_river,70366,16034,7.3,"['VNIR', 'Altimeter']",eaee85ae-de7c-4f52-ac48-66a354a53709
+9.9896,-74.8021,high_flow_river,70988,15412,16.3,"['VNIR', 'Altimeter']",2b7beb00-db9d-402d-9c5c-b2d09eb3e0d6
+25.0,-106.5,wildfire,71140,15000,49.1,"['TIR', 'MIR', 'VNIR', 'SAR']",e57b989e-2d73-4837-a0a4-ccf68ebe4920
+24.5,-107.0,wildfire,71140,3300,51.4,"['TIR', 'MIR', 'VNIR', 'SAR']",437bd840-9fcb-421d-b4eb-0b655bdadb3e
+-17.0,-61.5,wildfire,71140,2400,48.5,"['TIR', 'MIR', 'VNIR', 'SAR']",ba1c9527-afac-4027-9b42-d02540808fa4
+25.0,-107.5,wildfire,71140,8700,49.2,"['TIR', 'MIR', 'VNIR', 'SAR']",b33c5022-dffe-41b2-b747-d17202a87681
+20.5,-101.5,wildfire,71140,8700,48.0,"['TIR', 'MIR', 'VNIR', 'SAR']",a6f28c93-fc6e-4324-9069-03d09da3d425
+19.0,-103.0,wildfire,71140,3300,46.7,"['TIR', 'MIR', 'VNIR', 'SAR']",f9c3b84d-6229-4f30-853a-011facd229dc
+18.5,-100.5,wildfire,71140,6900,48.5,"['TIR', 'MIR', 'VNIR', 'SAR']",4e7637b2-2588-4ceb-95e9-ed8ddd1fc5ef
+20.5,-104.5,wildfire,71140,2400,47.7,"['TIR', 'MIR', 'VNIR', 'SAR']",92a1ae23-3f31-4961-a448-f0e90f859dbe
+19.5,-104.0,wildfire,71140,3300,45.7,"['TIR', 'MIR', 'VNIR', 'SAR']",5787d951-7430-483a-a975-ef74f5552768
+23.0,-98.0,wildfire,71140,5100,41.1,"['TIR', 'MIR', 'VNIR', 'SAR']",59e180ee-45c5-467f-9e4f-40a65dfd5ccd
+25.0,-106.0,wildfire,71140,1500,60.3,"['TIR', 'MIR', 'VNIR', 'SAR']",00d19e87-5e46-4f12-82a1-6214b8fad123
+20.0,-105.0,wildfire,71140,14100,49.2,"['TIR', 'MIR', 'VNIR', 'SAR']",d4652f75-8928-4619-9d63-e444ca3883d6
+61.6271,96.0062,high_flow_river,71818,14582,5.3,"['VNIR', 'Altimeter']",50dabdac-96ae-4c9e-a411-71ea7debf47a
+-17.0,-52.0,wildfire,72040,14100,56.6,"['TIR', 'MIR', 'VNIR', 'SAR']",7871a7eb-af08-4507-be21-b3b0025799ca
+21.0,-98.5,wildfire,72040,2400,43.7,"['TIR', 'MIR', 'VNIR', 'SAR']",9004d723-c68d-403c-9fbf-be6de509ddf0
+-14.0,-56.5,wildfire,72040,10500,54.1,"['TIR', 'MIR', 'VNIR', 'SAR']",4b96b09c-fd0b-4e30-a53b-95026362e461
+28.0,-109.5,wildfire,72040,14100,55.9,"['TIR', 'MIR', 'VNIR', 'SAR']",c2e8a35c-85e4-427c-adb2-0315474cec7f
+48.0,-91.5,wildfire,72040,600,50.7,"['TIR', 'MIR', 'VNIR', 'SAR']",2e759dc7-b610-4b07-949f-178f0132ae10
+19.5,-101.0,wildfire,72040,10500,44.4,"['TIR', 'MIR', 'VNIR', 'SAR']",598c4620-2081-406b-96ac-62885ca42469
+23.5,-98.0,wildfire,72040,3300,47.4,"['TIR', 'MIR', 'VNIR', 'SAR']",cf6b68ee-8f15-4fcb-b6e6-0648a882ac02
+19.5,-88.0,wildfire,72040,7800,48.4,"['TIR', 'MIR', 'VNIR', 'SAR']",a22a795a-ed62-4e98-95a5-a0e4a2645aff
+-14.5,-67.0,wildfire,72040,3300,44.3,"['TIR', 'MIR', 'VNIR', 'SAR']",72f5a492-f868-47b4-8db1-324f99406241
+17.0,-91.5,wildfire,72040,11400,52.8,"['TIR', 'MIR', 'VNIR', 'SAR']",7e7712d8-5fd4-4735-a20c-7efaddb5e823
+17.0,-94.0,wildfire,72040,12300,50.6,"['TIR', 'MIR', 'VNIR', 'SAR']",4cdf33fe-dc01-47e1-b052-5612f0473568
+47.5,-91.5,wildfire,72040,1500,51.3,"['TIR', 'MIR', 'VNIR', 'SAR']",269e3467-1878-43fb-a3c0-1855154c1286
+-13.5,-50.5,wildfire,72040,3300,41.5,"['TIR', 'MIR', 'VNIR', 'SAR']",531c6212-c01d-463b-8bdc-49f8b8858ecc
+-15.0,-47.5,wildfire,72040,4200,41.4,"['TIR', 'MIR', 'VNIR', 'SAR']",b3de1cef-65b1-4c88-bda6-9b02327622e8
+48.0,-97.0,wildfire,72040,1500,67.0,"['TIR', 'MIR', 'VNIR', 'SAR']",a9be1dd7-5c42-4283-82e6-4e5762ce1a1b
+34.0,-94.5,wildfire,72040,6000,40.6,"['TIR', 'MIR', 'VNIR', 'SAR']",01b443b0-6515-4c93-9ecd-4501e2089ebd
+64.0646,123.9021,high_flow_river,72194,14206,0.4,"['VNIR', 'Altimeter']",20449f89-4324-4ff2-a779-b1fcceb70927
+22.4021,113.2562,high_flow_river,72857,13543,0.0,"['VNIR', 'Altimeter']",63d6486e-01dc-48b3-9ac7-9695dbcc73f3
+-22.0,-55.0,wildfire,72940,6000,50.4,"['TIR', 'MIR', 'VNIR', 'SAR']",2334b206-5395-4412-adb6-b7f2e45526af
+-13.0,-47.5,wildfire,72940,9600,42.6,"['TIR', 'MIR', 'VNIR', 'SAR']",8995a492-6818-4cd8-8931-d910631d7fb5
+19.0,-88.0,wildfire,72940,600,50.9,"['TIR', 'MIR', 'VNIR', 'SAR']",b77fb2c3-70b7-4ea2-bab9-39ee05e75f75
+26.0,-107.5,wildfire,72940,13200,48.2,"['TIR', 'MIR', 'VNIR', 'SAR']",396104d0-187a-4662-b320-214e250cd137
+16.5,-98.0,wildfire,72940,10500,45.7,"['TIR', 'MIR', 'VNIR', 'SAR']",938f77a5-f4fb-43a8-85c5-97fc7fb009d6
+-21.0,-57.5,wildfire,72940,5100,39.5,"['TIR', 'MIR', 'VNIR', 'SAR']",5f10bb47-a540-4711-a5f9-f0f01d9e8b3d
+18.0,-89.5,wildfire,72940,6900,44.6,"['TIR', 'MIR', 'VNIR', 'SAR']",95a848dd-f13f-411b-b819-83007cb71e09
+22.0,-105.0,wildfire,72940,4200,44.0,"['TIR', 'MIR', 'VNIR', 'SAR']",62fe757f-9605-4ccc-a248-1a6d9c8603ef
+8.3646,10.0354,high_flow_river,73639,12761,4.9,"['VNIR', 'Altimeter']",360079f8-2374-438c-b0a0-4c897661ba95
+-18.5,-49.5,wildfire,73840,9600,62.2,"['TIR', 'MIR', 'VNIR', 'SAR']",533e6d23-97b3-4812-a6c4-915087ac2745
+46.0,-97.0,wildfire,73840,5100,54.6,"['TIR', 'MIR', 'VNIR', 'SAR']",97b7091b-1131-44e6-9fcb-2e0c7486df3b
+3.0,-72.0,wildfire,73840,6900,42.8,"['TIR', 'MIR', 'VNIR', 'SAR']",70a3c167-90e1-4a93-97c6-6fd8ce69a6b2
+23.0,-105.5,wildfire,73840,4200,46.6,"['TIR', 'MIR', 'VNIR', 'SAR']",3409c1c4-c1bf-4f3d-b191-220e4e7180a4
+23.0,-105.0,wildfire,73840,11400,46.8,"['TIR', 'MIR', 'VNIR', 'SAR']",a5f91b7a-fe90-4077-808b-97c0a63982d2
+22.0,-99.0,wildfire,73840,6900,46.2,"['TIR', 'MIR', 'VNIR', 'SAR']",959446b3-e7e7-4a71-8473-18b48e32d0ad
+48.0,-96.0,wildfire,73840,3300,69.2,"['TIR', 'MIR', 'VNIR', 'SAR']",5d477095-ccc6-4fc1-ae5a-c2d61ba67033
+-13.5,-56.0,wildfire,73840,2400,40.3,"['TIR', 'MIR', 'VNIR', 'SAR']",8728566c-f790-45a5-a327-012d930cf88d
+-23.5,-52.5,wildfire,73840,8700,57.2,"['TIR', 'MIR', 'VNIR', 'SAR']",3fe54540-e9e9-4ad9-96ae-bb240633c151
+49.0,-116.0,wildfire,73840,1500,58.0,"['TIR', 'MIR', 'VNIR', 'SAR']",9763d1e1-0a36-40cd-8654-8beca4acb7ed
+20.0,-90.5,wildfire,73840,3300,46.5,"['TIR', 'MIR', 'VNIR', 'SAR']",b11b4ac7-151b-4785-9d71-9a1e290a40fa
+28.0,-97.0,wildfire,73840,3300,53.8,"['TIR', 'MIR', 'VNIR', 'SAR']",ba11ddf3-f238-4882-9800-4298422d733a
+51.0,-110.5,wildfire,73840,3300,48.2,"['TIR', 'MIR', 'VNIR', 'SAR']",65bdbe11-13a5-4d7a-8a8e-b5cfb51f94cf
+18.0,-93.5,wildfire,73840,5100,43.9,"['TIR', 'MIR', 'VNIR', 'SAR']",2a031f96-0f3f-4983-b5b0-21aa81c63f4f
+13.5,-84.0,wildfire,74740,2400,46.8,"['TIR', 'MIR', 'VNIR', 'SAR']",bb275000-d70b-40c2-9dea-1463cd765f32
+20.5,-98.0,wildfire,74740,11400,51.5,"['TIR', 'MIR', 'VNIR', 'SAR']",4a3fc8bb-0bbf-485f-bfba-f138cf17165b
+16.0,-98.0,wildfire,74740,3300,42.3,"['TIR', 'MIR', 'VNIR', 'SAR']",20af7fc4-a066-4005-a6c1-1a953f814c76
+8.0,-67.5,wildfire,74740,7800,50.5,"['TIR', 'MIR', 'VNIR', 'SAR']",d00fb5ba-d6b1-41cb-b44f-8e8ff40b3567
+16.0,-91.0,wildfire,74740,11400,44.5,"['TIR', 'MIR', 'VNIR', 'SAR']",3a01163a-2f65-456a-84bc-e7c7f5658713
+20.0,-105.5,wildfire,74740,8700,46.2,"['TIR', 'MIR', 'VNIR', 'SAR']",d1a49562-4b6b-4c70-b177-3faf7cb46948
+-24.0,-64.0,wildfire,74740,11400,39.5,"['TIR', 'MIR', 'VNIR', 'SAR']",dc5756c0-4efa-4358-bac7-e876bda97651
+52.5,-106.0,wildfire,74740,600,58.0,"['TIR', 'MIR', 'VNIR', 'SAR']",873f28f6-025d-4621-871b-44c07c62391c
+24.0,-104.5,wildfire,74740,1500,65.5,"['TIR', 'MIR', 'VNIR', 'SAR']",65710a17-c5b0-4da6-8d62-335cc66464d4
+21.0,-89.0,wildfire,75640,6000,44.7,"['TIR', 'MIR', 'VNIR', 'SAR']",50477f97-c132-41b4-b86c-76520fc478aa
+16.0,-93.5,wildfire,75640,3300,48.3,"['TIR', 'MIR', 'VNIR', 'SAR']",ce28d481-97a1-4fe6-bde6-d5c4198cbf2b
+16.5,-89.5,wildfire,75640,3300,53.8,"['TIR', 'MIR', 'VNIR', 'SAR']",a0b83b91-3733-4ddc-a881-2e90b819593f
+21.5,-89.0,wildfire,75640,3300,53.1,"['TIR', 'MIR', 'VNIR', 'SAR']",3705c511-52f0-4572-b9a1-14376a5435f2
+21.5,-89.5,wildfire,75640,4200,54.2,"['TIR', 'MIR', 'VNIR', 'SAR']",3eb14d78-f3f1-4351-b128-b0e10908116e
+18.0,-92.0,wildfire,75640,6000,49.9,"['TIR', 'MIR', 'VNIR', 'SAR']",ac711755-402b-4a02-a2b0-f5845d0f533e
+13.5,-84.5,wildfire,75640,1500,47.0,"['TIR', 'MIR', 'VNIR', 'SAR']",7bd958d5-130e-48c0-a141-836abe40187d
+50.5,-121.0,wildfire,75640,10500,72.6,"['TIR', 'MIR', 'VNIR', 'SAR']",585c8a34-ec11-472e-ba2b-60493942b079
+15.5,-91.0,wildfire,75640,7800,61.0,"['TIR', 'MIR', 'VNIR', 'SAR']",dc8c3a6d-23c3-41df-af7e-c4f1ed8cafea
+52.5,-108.5,wildfire,75640,9600,60.3,"['TIR', 'MIR', 'VNIR', 'SAR']",9a908c91-d83f-48a9-af9a-5e67e2e7a2a4
+59.53035265900007,-159.0008751827521,algal_bloom,75866,10534,70.0,"['VNIR', 'TIR', 'Altimeter']",e278e6ce-1928-47a7-a9ae-e66d8d47cc5a
+57.49697686200011,-156.87821462484737,algal_bloom,75866,10534,70.0,"['VNIR', 'TIR', 'Altimeter']",e9aeb1ea-2087-44c7-a06a-70d1e008c29a
+57.85300742800007,-156.22984123839495,algal_bloom,75866,10534,70.0,"['VNIR', 'TIR', 'Altimeter']",3e415708-e454-4730-91a9-ca4b1f0ec3c3
+59.95069749550015,-158.7207346770485,algal_bloom,75866,10534,70.0,"['VNIR', 'TIR', 'Altimeter']",9df85edc-8c69-4f33-a2bb-2046fa6d9180
+60.30175942050013,-163.87771219130565,algal_bloom,75866,10534,70.0,"['VNIR', 'TIR', 'Altimeter']",a18a03c8-7934-4034-a12d-bc8df03c2324
+58.61273946750018,-156.06855173977277,algal_bloom,75866,10534,58.3,"['VNIR', 'TIR', 'Altimeter']",0813d8ff-cd36-4ac8-a73f-b21973c4e716
+59.55920361750009,-155.11644675843888,algal_bloom,75866,10534,50.3,"['VNIR', 'TIR', 'Altimeter']",b7b5bd91-dc5e-4719-957e-3dfe85be23da
+46.5,-119.0,wildfire,76540,1500,50.6,"['TIR', 'MIR', 'VNIR', 'SAR']",00439ca5-ffac-49be-b513-c122bb64663e
+31.5,-110.0,wildfire,76540,1500,44.5,"['TIR', 'MIR', 'VNIR', 'SAR']",25e847d4-1ff1-4a72-8189-be5ee1cdb47c
+19.5,-96.5,wildfire,76540,4200,44.1,"['TIR', 'MIR', 'VNIR', 'SAR']",bbde8def-fbdd-4122-bae6-94122910ea99
+15.5,-87.5,wildfire,76540,4200,45.7,"['TIR', 'MIR', 'VNIR', 'SAR']",5663c0ef-4134-4a91-be86-647b96e5a0db
+20.0,-102.5,wildfire,76540,6000,46.9,"['TIR', 'MIR', 'VNIR', 'SAR']",536b2031-1090-4322-a16d-c2e93645b1b6
+24.5,-105.5,wildfire,76540,6900,47.4,"['TIR', 'MIR', 'VNIR', 'SAR']",f301b1c9-c8ac-4f54-80e9-6908cbb38ed0
+20.5,-102.0,wildfire,77440,6000,47.2,"['TIR', 'MIR', 'VNIR', 'SAR']",c1ccad72-eed0-4767-b846-068688c0fc1d
+16.5,-88.5,wildfire,77440,1500,44.6,"['TIR', 'MIR', 'VNIR', 'SAR']",5988d040-628a-48f1-959a-d6b6fdfcd9be
+-13.0,-55.5,wildfire,77440,4200,37.9,"['TIR', 'MIR', 'VNIR', 'SAR']",81493ebc-991b-4de8-a185-f03ad30d784d
+49.5,-99.5,wildfire,77440,7800,66.4,"['TIR', 'MIR', 'VNIR', 'SAR']",aff8b6b8-77f2-41b6-9a8c-3bee675187ed
+-18.0,-46.0,wildfire,77440,600,55.2,"['TIR', 'MIR', 'VNIR', 'SAR']",18866062-3bca-42bf-8b76-5a796a48b4d6
+53.5,-103.5,wildfire,77440,6900,58.8,"['TIR', 'MIR', 'VNIR', 'SAR']",f4df4613-3ec2-4247-98e3-35b1ed8794cc
+17.0,-88.5,wildfire,77440,8700,59.3,"['TIR', 'MIR', 'VNIR', 'SAR']",b30a272a-b5aa-43f3-a8d4-26ae43e8e846
+23.0,-104.5,wildfire,77440,5100,43.4,"['TIR', 'MIR', 'VNIR', 'SAR']",df96ccb8-e006-4bda-98fa-54d0d3d01777
+42.0,-122.5,wildfire,78340,600,55.6,"['TIR', 'MIR', 'VNIR', 'SAR']",804eb13b-6d67-48e8-9371-8cf4d2e972d1
+36.5,-116.5,wildfire,78340,600,51.6,"['TIR', 'MIR', 'VNIR', 'SAR']",62aa942a-3ff5-4bd0-862a-c291f1964628
+20.5,-102.5,wildfire,78340,7800,46.0,"['TIR', 'MIR', 'VNIR', 'SAR']",0c8a9062-287f-46f7-b928-1df3f8a70e54
+47.5,-97.5,wildfire,78340,600,60.7,"['TIR', 'MIR', 'VNIR', 'SAR']",19a876e3-7700-4164-968c-fa5ee3393c2e
+47.5,-98.0,wildfire,78340,4200,63.4,"['TIR', 'MIR', 'VNIR', 'SAR']",cea5d09f-191c-45e9-8681-88369e6290e5
+18.0,-96.0,wildfire,78340,7800,40.6,"['TIR', 'MIR', 'VNIR', 'SAR']",c20b53c9-b879-40b2-bc27-dcc15260f691
+47.0,-116.5,wildfire,78660,3600,53.3,"['TIR', 'MIR', 'VNIR', 'SAR']",03fe666c-b57d-4c09-b0a1-64ab456f994b
+16.5,-95.5,wildfire,79240,6000,39.9,"['TIR', 'MIR', 'VNIR', 'SAR']",caeb43e2-66bb-4b27-b17b-cbafc2149770
+-13.5,-51.5,wildfire,79240,4200,43.3,"['TIR', 'MIR', 'VNIR', 'SAR']",09d215a9-db53-473d-8d27-63f9c98ef526
+-21.5,-49.5,wildfire,79240,6900,45.2,"['TIR', 'MIR', 'VNIR', 'SAR']",9e2140ee-430c-4b82-9f42-9c9e1b548815
+17.5,-92.0,wildfire,79240,3300,48.2,"['TIR', 'MIR', 'VNIR', 'SAR']",37a7fa5e-11a2-4f01-bd9f-040770a56e5a
+11.0,-11.5,wildfire,79240,600,53.2,"['TIR', 'MIR', 'VNIR', 'SAR']",3b00fe1f-3ea9-4e43-8117-46a5b064f156
+15.0,-87.0,wildfire,79240,600,52.6,"['TIR', 'MIR', 'VNIR', 'SAR']",3254caf5-4e4a-449b-9e2f-12af89655f1e
+44.5,-123.5,wildfire,79240,600,50.6,"['TIR', 'MIR', 'VNIR', 'SAR']",10d49c64-7d0d-47dd-9274-fc2f63369a20
+11.0,-12.0,wildfire,79240,600,53.9,"['TIR', 'MIR', 'VNIR', 'SAR']",c5d23205-54bb-4cae-b7f8-ee6d8b9e7070
+52.0,-116.0,wildfire,79240,600,54.9,"['TIR', 'MIR', 'VNIR', 'SAR']",6ddece59-ca9f-4c7f-bad2-a64d4f8c412f
+28.5,-111.5,wildfire,79240,5100,58.8,"['TIR', 'MIR', 'VNIR', 'SAR']",0d86bb0a-0869-463d-a3a0-5c19db9b8110
+18.0,-94.0,wildfire,80140,6000,45.1,"['TIR', 'MIR', 'VNIR', 'SAR']",a332537f-7d11-4da9-89b3-437672975983
+9.0,-65.5,wildfire,80140,600,50.8,"['TIR', 'MIR', 'VNIR', 'SAR']",27cafa8d-5ef9-4c94-9a27-377bcba91cfb
+54.0,-112.0,wildfire,80140,3300,57.8,"['TIR', 'MIR', 'VNIR', 'SAR']",cc94bc30-90e0-4a39-b633-f339ccd170da
+39.5,-96.0,wildfire,80140,1500,48.1,"['TIR', 'MIR', 'VNIR', 'SAR']",0fb9142d-8dd4-44ae-bded-96215e68d391
+44.5,-114.0,wildfire,80140,600,50.4,"['TIR', 'MIR', 'VNIR', 'SAR']",0168ffe1-3357-4a16-806a-8890b4ffa381
+20.0,-101.0,wildfire,80140,3300,43.2,"['TIR', 'MIR', 'VNIR', 'SAR']",8b13cf16-69a5-4e50-8fd1-adac6d16fa54
+46.0,-97.5,wildfire,80140,5100,69.6,"['TIR', 'MIR', 'VNIR', 'SAR']",149f6a2b-6fd1-4202-9dc8-7527ee9aba81
+-21.0,-60.0,wildfire,80140,6000,62.7,"['TIR', 'MIR', 'VNIR', 'SAR']",9ac5871e-664a-42fd-ab7a-ee5d0013d0e1
+-22.0,-50.0,wildfire,81040,1500,49.8,"['TIR', 'MIR', 'VNIR', 'SAR']",a816a93c-7179-4f27-942c-efd1acb47b73
+35.5,-115.5,wildfire,81040,2400,86.2,"['TIR', 'MIR', 'VNIR', 'SAR']",c6ec4160-8f23-44ed-b440-3fffc0642701
+16.0,-85.5,wildfire,81040,2400,42.1,"['TIR', 'MIR', 'VNIR', 'SAR']",f2873d0e-5811-4d34-994f-c619bc9dd40f
+-16.5,-61.0,wildfire,81040,5100,34.7,"['TIR', 'MIR', 'VNIR', 'SAR']",0b007def-5fd5-4e21-816f-7d8174dbb6f6
+-18.0,-62.5,wildfire,81040,5100,42.4,"['TIR', 'MIR', 'VNIR', 'SAR']",0e16530c-3e55-4230-ab5d-eb7ad8f6e81d
+17.5,-101.5,wildfire,81040,3300,41.1,"['TIR', 'MIR', 'VNIR', 'SAR']",acb58106-6bcb-4379-8b02-b45b67b7bb40
+47.5,-112.0,wildfire,81940,4200,54.0,"['TIR', 'MIR', 'VNIR', 'SAR']",5c3d6327-0b64-4c47-9b5b-4c8f6f1dd3f3
+19.5,-102.5,wildfire,81940,1500,51.2,"['TIR', 'MIR', 'VNIR', 'SAR']",ced60e1a-909d-4c3b-a08f-dc0ec2095443
+51.5,-113.0,wildfire,81940,600,53.6,"['TIR', 'MIR', 'VNIR', 'SAR']",651cdc1c-1691-4c8b-9a63-56853d359a0d
+47.0,-96.5,wildfire,81940,600,51.0,"['TIR', 'MIR', 'VNIR', 'SAR']",090f9dd8-d37e-4f12-8944-deca3a1431fa
+19.0,-89.0,wildfire,81940,1500,44.4,"['TIR', 'MIR', 'VNIR', 'SAR']",e5d7fe91-9c4c-4519-b804-a6eeb8de4ef1
+20.0,-102.0,wildfire,81940,3300,45.5,"['TIR', 'MIR', 'VNIR', 'SAR']",af4c7ca2-54b9-4d16-b58c-b910b0a06fb3
+36.0,-115.0,wildfire,81940,1500,87.0,"['TIR', 'MIR', 'VNIR', 'SAR']",a12bd3c3-fa92-40cd-995b-b3545e6bcabe
+45.0,-99.0,wildfire,81940,3300,56.2,"['TIR', 'MIR', 'VNIR', 'SAR']",cd3d7f5f-8ddc-402d-8b1b-0443c283e27e
+47.5,-116.5,wildfire,81940,1500,67.3,"['TIR', 'MIR', 'VNIR', 'SAR']",8103a86d-b8fc-40d2-95ee-6e82fd2d5da2
+20.5,-97.5,wildfire,82840,3300,45.5,"['TIR', 'MIR', 'VNIR', 'SAR']",fdabb8c2-3abf-4adb-a089-1a6df7d5b43b
+49.5,-100.0,wildfire,82840,1500,58.3,"['TIR', 'MIR', 'VNIR', 'SAR']",78e3ac95-db11-48c2-908f-8b1128515311
+28.5,-111.0,wildfire,82840,1500,55.2,"['TIR', 'MIR', 'VNIR', 'SAR']",32fe417e-2e03-4078-9e03-e7376d0a8688
+20.5,-104.0,wildfire,82840,600,56.5,"['TIR', 'MIR', 'VNIR', 'SAR']",51f4cbb3-e6b6-4fe3-aa8e-9384354ead58
+27.0,-110.0,wildfire,82840,2400,58.0,"['TIR', 'MIR', 'VNIR', 'SAR']",8cff135a-2b84-4a1d-a5e8-6b6626d30e6a
+33.5,-111.0,wildfire,82840,600,52.0,"['TIR', 'MIR', 'VNIR', 'SAR']",5be68e98-9ad0-44bf-b100-f1f5163c15d2
+31.0,-92.0,wildfire,83740,2400,52.0,"['TIR', 'MIR', 'VNIR', 'SAR']",526cae83-c406-40a9-9a49-8c831ca0e692
+46.0,-119.0,wildfire,83740,600,63.6,"['TIR', 'MIR', 'VNIR', 'SAR']",23b1c001-01ae-47bf-bc5e-9c5b9085c3de
+26.5,-109.0,wildfire,83740,1500,44.4,"['TIR', 'MIR', 'VNIR', 'SAR']",e3d3fb81-bb54-465b-a072-d83d3c573b62
+47.0,-99.0,wildfire,83740,1500,58.4,"['TIR', 'MIR', 'VNIR', 'SAR']",cf165d45-5446-44f9-84c0-31e31e910312
+36.0,-120.0,wildfire,84640,600,68.9,"['TIR', 'MIR', 'VNIR', 'SAR']",e58b778b-ca61-4805-937e-aa2b582a7b77
+36.0,-97.0,wildfire,84640,1500,45.0,"['TIR', 'MIR', 'VNIR', 'SAR']",9f912b02-50af-4ef0-86e4-3ef14a50b90b
+46.0,-95.5,wildfire,84640,600,51.7,"['TIR', 'MIR', 'VNIR', 'SAR']",5996b217-c7ac-4d40-b8c5-104ce5748c58
+48.0,-112.0,wildfire,84640,1500,50.4,"['TIR', 'MIR', 'VNIR', 'SAR']",503882f1-4da6-4c43-b7c1-f22eedf9e295
+-17.0,-62.0,wildfire,84640,1500,47.6,"['TIR', 'MIR', 'VNIR', 'SAR']",05511cdf-b60d-4d26-a15a-9bb4d40273ec
+46.0,-122.5,wildfire,84640,1500,56.1,"['TIR', 'MIR', 'VNIR', 'SAR']",de7f1165-9661-46d8-9249-839ccbf1018c
+36.5,-120.5,wildfire,84640,600,59.5,"['TIR', 'MIR', 'VNIR', 'SAR']",cbb609a0-e4c2-4f6c-b0a4-f496abb8fd6e
+36.5,-120.0,wildfire,84640,600,67.3,"['TIR', 'MIR', 'VNIR', 'SAR']",079bff35-0242-4e27-a984-3bd429d7f232
+41.5,-118.0,wildfire,85540,600,51.4,"['TIR', 'MIR', 'VNIR', 'SAR']",097eb89b-b785-4b66-9804-4fc2e4f11d16
+50.5,-120.5,wildfire,85540,600,55.5,"['TIR', 'MIR', 'VNIR', 'SAR']",dc60c37a-1c44-4d11-9fb4-01ac473249c0
