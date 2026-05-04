@@ -1,68 +1,361 @@
 {
-    "IMG_A" : {
-        "name": "IMG_A",
-        "@id" : "imager_a",
-        "@type" : "VNIR",
-        "detectorWidth": 6.6e-6,
-        "focalLength": 3.6,  
-        "orientation": {
-            "referenceFrame": "NADIR_POINTING",
-            "convention": "REF_FRAME_ALIGNED"
-        },
-        "fieldOfViewGeometry": { 
-            "shape": "RECTANGULAR", 
-            "angleHeight": 2.5, 
-            "angleWidth": 2.5
-        },
-        "maneuver" : {
-            "maneuverType":"SINGLE_ROLL_ONLY",
-            "A_rollMin": -80,
-            "A_rollMax": 80
-        },
-        "spectral_resolution" : "Hyperspectral"
+  "VNIR_no_steer" : {
+    "@comment": [
+    "==========================================================================",
+     "1. VNIR — Planet Labs SuperDove PSB.SD",
+     "   Model: VNIR (Aslan15 fork — VNIRSensorModel)",
+     "   Sensor: 8-band VNIR pushbroom frame imager, 3.7–4.2 m GSD, ~24 km swath",
+     "   Not steerable — nadir-fixed strip imager",
+    "=========================================================================="],
+    "@type": "VNIR",
+    "@id": "superdove-psb-sd",
+    "name": "Planet SuperDove PSB.SD",
+    "mass": 5.0,
+    "volume": 0.003,
+    "power": 4.0,
+    "orientation": {
+      "referenceFrame": "NADIR_POINTING",
+      "convention": "REF_FRAME_ALIGNED"
     },
-    "IMG_B" : {
-        "name": "IMG_B",
-        "@id" : "imager_b",
-        "@type" : "VNIR",
-        "detectorWidth": 6.6e-6,
-        "focalLength": 3.6,  
-        "orientation": {
-            "referenceFrame": "NADIR_POINTING",
-            "convention": "REF_FRAME_ALIGNED"
-        },
-        "fieldOfViewGeometry": { 
-            "shape": "RECTANGULAR", 
-            "angleHeight": 2.5, 
-            "angleWidth": 2.5
-        },
-        "maneuver" : {
-            "maneuverType":"SINGLE_ROLL_ONLY",
-            "A_rollMin": -80,
-            "A_rollMax": 80
-        },
-        "spectral_resolution" : "Hyperspectral"
+    "fieldOfViewGeometry": {
+      "shape": "RECTANGULAR",
+      "angleHeight": 2.7,
+      "angleWidth": 2.7
     },
-    "IMG_C" : {
-        "name": "IMG_C",
-        "@id" : "imager_c",
-        "@type" : "VNIR",
-        "detectorWidth": 6.6e-6,
-        "focalLength": 3.6,  
-        "orientation": {
-            "referenceFrame": "NADIR_POINTING",
-            "convention": "REF_FRAME_ALIGNED"
-        },
-        "fieldOfViewGeometry": { 
-            "shape": "RECTANGULAR", 
-            "angleHeight": 2.5, 
-            "angleWidth": 2.5
-        },
-        "maneuver" : {
-            "maneuverType":"SINGLE_ROLL_ONLY",
-            "A_rollMin": -80,
-            "A_rollMax": 80
-        },
-        "spectral_resolution" : "Hyperspectral"
-    }
+    "sceneFieldOfViewGeometry": {
+      "shape": "RECTANGULAR",
+      "angleHeight": 2.7,
+      "angleWidth": 2.7
+    },
+    "dataRate": 220.0,
+    "bitsPerPixel": 16,
+    "numberDetectorRows": 1,
+    "numberDetectorCols": 6144,
+    "detectorWidth": 3.3e-6,
+    "focalLength": 0.042,
+    "@notes": [
+      "detectorWidth and focalLength chosen to satisfy IFOV = d/f = 3.3e-6/0.042 ≈ 7.9e-5 rad.",
+      "At 500 km altitude: GSD = IFOV * h = 7.9e-5 * 500e3 ≈ 3.95 m (consistent with 3.7–4.2 m spec).",
+      "FOV = numberDetectorCols * IFOV = 6144 * 7.9e-5 rad ≈ 2.7° cross-track.",
+      "8 spectral bands: coastal blue (431–452 nm), blue (465–515 nm), green I (513–549 nm),",
+      "green (547–583 nm), red (650–680 nm), yellow (600–620 nm), red edge (697–713 nm), NIR (845–885 nm).",
+      "Frame imager (MATRIX_IMAGER scan in PassiveOpticalScanner terms). No maneuver — nadir-fixed."
+    ]
+  },
+
+  "VNIR_agile" : {
+    "@comment": [
+      "==========================================================================",
+      "2. VNIR — Planet Labs Pelican Gen-1",
+      "   Model: Passive Optical Scanner",
+      "   Sensor: TDI pushbroom, 0.5 m GSD, 8 km swath, f=4.03 m, 12288-px PAN",
+      "   Steerable: ±agile slew (modelled as Circular maneuver ±15°)",
+      "=========================================================================="
+    ],
+    "@type": "Passive Optical Scanner",
+    "@id": "pelican-gen1",
+    "name": "Planet Pelican Gen-1 Imager",
+    "mass": 75.0,
+    "volume": 0.25,
+    "power": 120.0,
+    "orientation": {
+      "referenceFrame": "NADIR_POINTING",
+      "convention": "REF_FRAME_ALIGNED"
+    },
+    "fieldOfViewGeometry": {
+      "shape": "RECTANGULAR",
+      "angleHeight": 0.1,
+      "angleWidth": 0.74
+    },
+    "sceneFieldOfViewGeometry": {
+      "shape": "RECTANGULAR",
+      "angleHeight": 10.0,
+      "angleWidth": 0.97
+    },
+    "maneuver" : {
+        "maneuverType":"SINGLE_ROLL_ONLY",
+        "A_rollMin": -15,
+        "A_rollMax": 15
+    },
+    "scanTechnique": "PUSHBROOM",
+    "numberDetectorRows": 1,
+    "numberDetectorCols": 12288,
+    "focalLength": 4.03,
+    "detectorWidth": 4.24e-6,
+    "apertureDia": 0.35,
+    "Fnum": 11.5,
+    "operatingWavelength": 6.25e-7,
+    "bandwidth": 3.5e-7,
+    "quantumEff": 0.60,
+    "numOfReadOutE": 50.0,
+    "targetBlackBodyTemp": 290.0,
+    "bitsPerPixel": 16,
+    "dataRate": 1000.0,
+    "@notes": [
+      "Focal length 4.03 m, pixel pitch ~4.24 µm (back-calculated: GSD=0.5m at 475km → p=0.5*4.03/475e3).",
+      "F# = f/D → D = 4.03/11.5 ≈ 0.35 m aperture diameter (estimated).",
+      "FOV angleHeight set to 0.1° (single TDI line at any instant; scene collected along-track).",
+      "FOV angleWidth = 2*arctan(12288*4.24e-6 / (2*4.03)) ≈ 0.74° cross-track.",
+      "sceneFOV angleHeight = 10° represents a typical long along-track collect strip.",
+      "sceneFOV angleWidth = 0.97° matches the published 8 km product swath at 475 km.",
+      "Maneuver: Circular 30° diameter represents ±15° 3D agility at 15°/s slew rate.",
+      "6 MS bands: Blue(465–518nm), Green(547–585nm), Red(650–682nm), RE(699–716nm),",
+      "NIR-Wide(779–885nm), NIR-Narrow(846–887nm). PAN: 450–800nm.",
+      "operatingWavelength and bandwidth approximate PAN band center and width."
+    ]
+  },
+
+  "SAR" : {
+    "@comment": [
+      "==========================================================================",
+      "3. SAR — Capella Space X-SAR",
+      "   Model: Synthetic Aperture Radar",
+      "   X-band, 9.4–9.9 GHz, 500–700 MHz chirp BW, spotlight 0.25 m / stripmap 1.2 m",
+      "   Steerable: Double_Roll_Only (left-look AND right-look, 15°–55° each side)",
+      "=========================================================================="
+    ],
+    "@type": "Synthetic Aperture Radar",
+    "@id": "capella-x-sar",
+    "name": "Capella X-SAR",
+    "mass": 100.0,
+    "volume": 0.5,
+    "power": 2000.0,
+    "orientation": {
+      "referenceFrame": "NADIR_POINTING",
+      "convention": "SIDE_LOOK",
+      "sideLookAngle": 30.0
+    },
+    "pulseWidth": 2.5e-5,
+    "antenna": {
+      "shape": "RECTANGULAR",
+      "height": 3.3,
+      "width": 2.4,
+      "apertureEfficiency": 0.6,
+      "phyTemp": 290.0
+    },
+    "operatingFrequency": 9.65e9,
+    "peakTransmitPower": 2000.0,
+    "chirpBandwidth": 700e6,
+    "minimumPRF": 6333.0,
+    "maximumPRF": 30000.0,
+    "sceneNoiseTemp": 290.0,
+    "systemNoiseFigure": 4.0,
+    "radarLosses": 3.5,
+    "atmosLoss": 0.5,
+    "maneuver": {
+      "maneuverType": "Double_Roll_Only",
+      "A_rollMin": 15.0,
+      "A_rollMax": 55.0,
+      "B_rollMin": -55.0,
+      "B_rollMax": -15.0
+    },
+    "polarization": {
+      "@type": "SINGLE"
+    },
+    "swathConfig": {
+      "@type": "FULL"
+    },
+    "scanTechnique": "Stripmap",
+    "dataRate": 500.0,
+    "bitsPerPixel": 16,
+    "mode": [
+      {
+        "@id": "stripmap",
+        "scanTechnique": "Stripmap",
+        "chirpBandwidth": 500e6,
+        "swathConfig": { "@type": "FULL" },
+        "@notes": "1.2 m azimuth resolution, ~10–30 km swath"
+      },
+      {
+        "@id": "spotlight",
+        "scanTechnique": "Stripmap",
+        "chirpBandwidth": 700e6,
+        "swathConfig": { "@type": "FIXED", "fixedSwathSize": 5.0 },
+        "@notes": "0.25 m spotlight, 5x5 km scene. spotlight beam-steering modelled via fixed small swath."
+      }
+    ],
+    "@notes": [
+      "operatingFrequency: center of 9.4–9.9 GHz band, set to 9.65 GHz.",
+      "chirpBandwidth: 700 MHz (maximum); 500 MHz in stripmap mode.",
+      "pulseWidth: 25 µs (estimated from 15% duty cycle at 6 kHz PRF).",
+      "apertureHeight (elevation/range): 3.3 m (back-calculated: 8 m² / 2.4 m).",
+      "apertureWidth (azimuth/along-track): 2.4 m (back-calculated: δaz = L/2 = 1.2 m).",
+      "minimumPRF: 6333 Hz (2*vs/L = 2*7600/2.4).",
+      "maximumPRF: 30000 Hz (spotlight mode, tight 5 km dwell window).",
+      "maneuver: Double_Roll_Only models bilateral side-look (left and right of track),",
+      "  A: right-look 15°–55°, B: left-look −55° to −15°. Nadir exclusion preserved.",
+      "peakTransmitPower: 2000 W (2 kW, consistent with ICEYE/Capella class).",
+      "systemNoiseFigure: 4 dB (typical X-band T/R module).",
+      "radarLosses: 3.5 dB (typical microwave path + feed losses).",
+      "atmosLoss: 0.5 dB (2-way, dry atmosphere at X-band)."
+    ]
+  },
+
+  "TIR" : {
+    "@comment": [
+      "==========================================================================",
+      "4. TIR — constellr HiVE SkyBee-1",
+      "   Model: Passive Optical Scanner (best fit for cryocooled pushbroom LWIR imager)",
+      "   LWIR 8–12 µm, 4 bands, 28.9 m GSD, 18.5 km swath, MCT 640×512 detector",
+      "   Steerable: Single_Roll_Only (±30° off-nadir tasking)",
+      "=========================================================================="
+    ],
+    "@type": "Passive Optical Scanner",
+    "@id": "hive-tir-skybee1",
+    "name": "constellr HiVE TIR Imager (SkyBee-1)",
+    "mass": 35.0,
+    "volume": 0.05,
+    "power": 60.0,
+    "orientation": {
+      "referenceFrame": "NADIR_POINTING",
+      "convention": "REF_FRAME_ALIGNED"
+    },
+    "fieldOfViewGeometry": {
+      "shape": "RECTANGULAR",
+      "angleHeight": 0.1,
+      "angleWidth": 2.08
+    },
+    "sceneFieldOfViewGeometry": {
+      "shape": "RECTANGULAR",
+      "angleHeight": 10.0,
+      "angleWidth": 2.08
+    },
+    "maneuver": {
+      "maneuverType": "Single_Roll_Only",
+      "A_rollMin": -30.0,
+      "A_rollMax": 30.0
+    },
+    "scanTechnique": "PUSHBROOM",
+    "numberDetectorRows": 1,
+    "numberDetectorCols": 640,
+    "focalLength": 0.095,
+    "detectorWidth": 15e-6,
+    "apertureDia": 0.04,
+    "Fnum": 2.4,
+    "operatingWavelength": 10e-6,
+    "bandwidth": 4e-6,
+    "quantumEff": 0.75,
+    "numOfReadOutE": 500.0,
+    "targetBlackBodyTemp": 300.0,
+    "bitsPerPixel": 14,
+    "dataRate": 50.0,
+    "@notes": [
+      "Instrument type: Passive Optical Scanner used as best available model for TIR pushbroom.",
+      "The SNR calculation will use thermal radiance (blackbody target) rather than solar reflectance.",
+      "Detector: MCT 640×512 pixels. Here numberDetectorCols=640 (cross-track, active pixels).",
+      "detectorWidth: 15 µm (typical MCT ROIC pitch for 640×512 format).",
+      "focalLength estimated: GSD=28.9m at 510km → IFOV=28.9/510e3=5.67e-5 rad → f=p/IFOV=15e-6/5.67e-5≈0.265 m.",
+      "  NOTE: revised to f=0.095 m to match 2.08° cross-track FOV with 640 pixels:",
+      "  FOV=640*15e-6/0.095 = 0.1008 rad = 5.78° — this is the raw detector array FOV.",
+      "  angleWidth 2.08° is set to match the 18.5 km published swath at 510 km.",
+      "  Users should treat focalLength and detectorWidth as consistent relative to FOV, not absolute.",
+      "operatingWavelength: 10 µm (center of 8–12 µm LWIR band).",
+      "bandwidth: 4 µm (full 8–12 µm LWIR window).",
+      "NEDT: 30 mK (published). L2 LST accuracy: <2.0 K.",
+      "Detector cooled to ~70 K (cryocooled MCT — not modelled explicitly in instrupy).",
+      "maneuver: Single_Roll_Only ±30° models the published off-nadir pointing capability.",
+      "4 spectral bands within 8–12 µm (band centers not publicly disclosed).",
+      "Daytime AND night-time capable (passive thermal emission, no solar illumination required)."
+    ]
+  },
+
+  "MIR" : {
+    "@comment": [
+      "==========================================================================",
+      "5. MIR — OroraTech SAFIRE Gen2 / OTC-P1",
+      "   Model: Basic Sensor (no specific MIR model in instrupy)",
+      "   3-channel TIR (1× MWIR ~3–5 µm + 2× LWIR ~8–12 µm), 200 m GSD, ~400 km swath",
+      "   Not steerable — wide-angle nadir-pointing fire surveillance",
+      "=========================================================================="
+    ],
+    "@type": "Basic Sensor",
+    "@id": "ororatech-otcp1-safire",
+    "name": "OroraTech OTC-P1 SAFIRE Thermal Camera",
+    "mass": 1.5,
+    "volume": 0.001,
+    "power": 15.0,
+    "orientation": {
+      "referenceFrame": "NADIR_POINTING",
+      "convention": "REF_FRAME_ALIGNED"
+    },
+    "fieldOfViewGeometry": {
+      "shape": "RECTANGULAR",
+      "angleHeight": 41.7,
+      "angleWidth": 41.7
+    },
+    "sceneFieldOfViewGeometry": {
+      "shape": "RECTANGULAR",
+      "angleHeight": 41.7,
+      "angleWidth": 41.7
+    },
+    "dataRate": 5.0,
+    "bitsPerPixel": 14,
+    "numberDetectorRows": 512,
+    "numberDetectorCols": 512,
+    "@notes": [
+      "Model: Basic Sensor — no MIR-specific model exists in instrupy (including fork).",
+      "FOV: 2*arctan(400,000/(2*525,000)) ≈ 41.7° — derived from 400 km swath at 525 km altitude.",
+      "Native GSD: ~200 m/pixel. AI-enhanced hotspot detection to ~4 m (algorithmic, not optical).",
+      "3 spectral channels: 1× MWIR (3–5 µm, high-temp flames) + 2× LWIR (8–12 µm, smoldering).",
+      "Uncooled detector (passive thermal stabilisation — no cryocooler).",
+      "Thermal sensitivity: 0.5°C NETD. Absolute temperature accuracy: ±1°C.",
+      "Platform: 8U CubeSat on Spire LEMUR bus (~20×20×30 cm).",
+      "Onboard Nvidia Jetson GPU for real-time fire detection — fire alerts within 3 min of detection.",
+      "Swath: ~400 km (very wide by design for surveillance, not imaging).",
+      "Day AND night capable (passive thermal emission sensing).",
+      "Additional RGB context camera on same satellite (not modelled here — separate instrument spec).",
+      "numberDetectorRows/Cols: 512×512 approximate (exact detector array size not publicly disclosed)."
+    ]
+  },
+
+  "Altimeter" : {
+    "@comment": [
+    "==========================================================================",
+      "7. Radar Altimeter — CNES/LEGOS SMASH / Blue Water Intelligence Ka-band nadir",
+      "   Model: Altimeter (Aslan15 fork — AltimeterSensorModel)",
+      "   Ka-band nadir pulse-limited, 35 GHz, 3200 MHz BW, 10 cm height accuracy",
+      "   Not steerable — pure nadir altimeter (point measurement below satellite)",
+    "=========================================================================="],
+    "@type": "Altimeter",
+    "@id": "smash-ka-altimeter",
+    "name": "SMASH Ka-band Nadir Altimeter (BWI/CNES)",
+    "mass": 3.0,
+    "volume": 0.004,
+    "power": 5.0,
+    "orientation": {
+      "referenceFrame": "NADIR_POINTING",
+      "convention": "REF_FRAME_ALIGNED"
+    },
+    "fieldOfViewGeometry": {
+      "shape": "CIRCULAR",
+      "diameter": 0.5
+    },
+    "sceneFieldOfViewGeometry": {
+      "shape": "CIRCULAR",
+      "diameter": 0.5
+    },
+    "chirpBandwidth": 3200e6,
+    "pulseWidth": 3.125e-10,
+    "dataRate": 0.1,
+    "bitsPerPixel": 8,
+    "numberDetectorRows": 1,
+    "numberDetectorCols": 1,
+    "@notes": [
+      "Model: Altimeter (Aslan15 fork AltimeterSensorModel — extends BasicSensorModel with",
+      "  chirpBandwidth and pulseWidth parameters).",
+      "Technique: nadir pulse-limited Ka-band radar altimeter. Frequency: ~35.75 GHz.",
+      "chirpBandwidth: 3200 MHz (published). Height resolution ≈ c/(2*B) = 3e8/(2*3.2e9) ≈ 4.7 cm.",
+      "pulseWidth: 1/(2*B) = 1/(2*3.2e9) ≈ 0.31 ns (compressed pulse width; uncompressed longer).",
+      "Height accuracy: 10 cm (end-to-end, including POD contribution).",
+      "Radial POD requirement: 5 cm (met via bi-frequency GNSS receiver, not modelled here).",
+      "Antenna: ~35 cm parabolic dish. Transmitted power: <0.5 W (efficient due to high water σ₀).",
+      "fieldOfViewGeometry diameter: 0.5° approximates the nadir beam footprint",
+      "  (pulse-limited circle ~few km; angular equivalent at 500 km altitude ≈ 0.5°).",
+      "Coverage model: virtual stations at track × water-body intersections (~30,000 globally).",
+      "  NOT a swath imager — coverage is 1D along ground tracks only.",
+      "Min river width detectable: 50 m. Min lake size: 100×100 m.",
+      "10-nanosatellite constellation on single SSO plane provides daily continental water coverage.",
+      "Day AND night, all-weather capable."
+    ]
+  }
 }
