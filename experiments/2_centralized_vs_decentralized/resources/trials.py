@@ -60,61 +60,60 @@ if __name__ == "__main__":
     
     # define experiment parameters
     test_params = {
-        "Strategy": [
-            "Centralized", 
-            "Decentralized"
-        ],
         "Preplanner" : [
             "None",
             "DP",
-            "MILP",
-            "Metaheuristic"
+            "Centralized-MILP_priority",
+            # "Centralized-MILP_assignments"
+            # "Centralized-Metaheuristics" # TODO
         ],
         "Replanner": [
+            "None",
             "Greedy", 
             "CBBA", 
-            "None",
         ],
-        "Latency": [
-            "Low", 
-            "Medium", 
-            "High"
+        "Connectivity": [
+            "GS",                   # sats can only talk to ground station (no inter-sat comms)
+            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
+            "Interconstellation"    # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
         ],
         "Scenario": [
-            "water_quality",
-            # "Comprehensive"
+            "water_quality",        # water quality monitoring (algal blooms + high-flow events)
+            "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
         ],
         "Data Processing" : [
-            "Onboard", 
-            "Oracle", 
-            # "Ground" #TODO 
+            "Onboard",              # sats must discover events using default mission tasks
+            # "Ground", #TODO       # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
+            "Oracle",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
+        ],
+        "Constellation" : [
+            "Commercial",
+            "Walker-Delta",
         ],
         "Date" : [
-            "2018-02-15",   # Winter NH
-            "2018-05-15",   # Spring NH
-            "2018-08-10",   # Summer NH / peak fire season
-            "2018-11-10",   # Fall NH
+            # 2018 dates 
+            # TODO include if cases from 2019 show seasonal trends that we want to compare against (e.g. fire season)
+            # "2018-02-15",   # Winter NH
+            # "2018-05-15",   # Spring NH
+            # "2018-08-10",   # Summer NH / peak fire season
+            # "2018-11-10",   # Fall NH
+            
+            # 2019 dates 
             "2019-02-15",   # Winter NH
             "2019-05-15",   # Spring NH
             "2019-08-10",   # Summer NH / peak fire season
             "2019-11-10"    # Fall NH
         ], 
-        # "Sats per Mission" : [
-        #     10,
-        #     25,
-        # ]
     }    
 
     # define experiment parameter rules
-    rules = [
-        # Centralized only with MILP or Metaheuristic preplanner (i.e. no point in centralized replanning if preplanner is already optimal)
-        lambda d: (d["Strategy"] != "Centralized") | (d["Preplanner"] == "MILP") | (d["Preplanner"] == "Metaheuristic"),
-        # Centralized must not have a replanner (i.e. replanning is only relevant for decentralized strategies)
-        lambda d: (d["Strategy"] != "Centralized") | (d["Replanner"] == "None"),
-        # None replanner not allowed with `None` preplanner (i.e. if no preplanner, must have a replanner)
-        lambda d: (d["Replanner"] != "None") | (d["Preplanner"] != "None"),
-        # Decentralized must not have "MILP" preplanner (i.e. MILP is too slow to be practical for decentralized strategies, which need fast replanning)
-        lambda d: (d["Strategy"] != "Decentralized") | (d["Preplanner"] != "MILP")
+    rules = [        
+        # centralized preplanners must have `none` replanenrs (i.e. replanning is only relevant for decentralized strategies)
+        lambda d: (d["Preplanner"] != "Centralized-MILP_priority") | (d["Replanner"] == "None"),
+        lambda d: (d["Preplanner"] != "Centralized-MILP_assignments") | (d["Replanner"] == "None"),
+        # None preplanner cannot have a none replanner (i.e. if no initial plan, must have some kind of replanning strategy)
+        lambda d: (d["Preplanner"] != "None") | (d["Replanner"] != "None"),
+        
     ]
 
     # generate full enumeration of trials per experiment
