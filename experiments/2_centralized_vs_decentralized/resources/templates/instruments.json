@@ -8,6 +8,7 @@
      "   Not steerable — nadir-fixed strip imager",
     "=========================================================================="],
     "@type": "Passive Optical Scanner",
+    "@type_id" : "VNIR",
     "@id": "superdove-psb-sd",
     "name": "Planet SuperDove PSB.SD",
     "mass": 5.0,
@@ -82,6 +83,7 @@
       "=========================================================================="
     ],
     "@type": "Passive Optical Scanner",
+    "@type_id" : "VNIR",
     "@id": "pelican-gen1",
     "name": "Planet Pelican Gen-1 Imager",
     "mass": 75.0,
@@ -144,6 +146,7 @@
       "=========================================================================="
     ],
     "@type": "Synthetic Aperture Radar",
+    "@type_id" : "SAR",
     "@id": "capella-x-sar",
     "name": "Capella X-SAR",
     "mass": 100.0,
@@ -230,6 +233,7 @@
       "=========================================================================="
     ],
     "@type": "Passive Optical Scanner",
+    "@type_id" : "TIR",
     "@id": "hive-tir-skybee1",
     "name": "constellr HiVE TIR Imager (SkyBee-1)",
     "mass": 35.0,
@@ -298,6 +302,7 @@
       "=========================================================================="
     ],
     "@type": "Basic Sensor",
+    "@type_id" : "MIR",
     "@id": "ororatech-otcp1-safire",
     "name": "OroraTech OTC-P1 SAFIRE Thermal Camera",
     "mass": 1.5,
@@ -346,6 +351,7 @@
       "   Not steerable — pure nadir altimeter (point measurement below satellite)",
     "=========================================================================="],
     "@type": "Altimeter",
+    "@type_id" : "ALT",
     "@id": "smash-ka-altimeter",
     "name": "SMASH Ka-band Nadir Altimeter (BWI/CNES)",
     "mass": 3.0,

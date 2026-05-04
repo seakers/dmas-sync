@@ -282,7 +282,7 @@
             }
         },
         //=============================================
-        //              EXPERIMENTS
+        //        EXPERIMENT 1 : CBBA VALIDATION
         //=============================================
         {
             "name": "EXPERIMENT 1: PREP - Connectivity Analysis",
@@ -447,6 +447,38 @@
                 "--force-summarize",
                 "--quiet",
                 // "--exceptions",
+            ]
+        },
+        //=============================================
+        // EXPERIMENT 2 : Centralized vs Decentralized
+        //=============================================
+        {
+            "name": "EXPERIMENT 2: TESTER",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "program": "${workspaceRoot}/experiments/2_centralized_vs_decentralized/study.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            },
+            "args": [
+                "-t", "full_factorial_trials_2026-05-03",
+                 "--single-trial", "224",
+                // "--profile-cpu",
+                // "--profile-mem",
+                "--single-thread",
+                // "--only-precompute",
+                // "--only-simulate",
+                // "--only-postprocess",
+                "--force-simulate",
+                // "--force-postprocess",
+                "--force-summarize",
+                "--reduced",
+                "--quiet",
+                "--exceptions",
             ]
         },
     ]
