@@ -915,7 +915,7 @@ class OrbitData:
 
             # propagate data and save to orbit data directory
             if printouts: tqdm.write("Propagating orbits...")
-            mission : Mission = Mission.from_json(scenario_specs, printouts=printouts)  
+            mission : Mission = Mission.from_json(copy.deepcopy(scenario_specs), printouts=printouts)  
             mission.execute(printouts=printouts)                
             if printouts: tqdm.write("Propagation done!")
 
@@ -1053,6 +1053,15 @@ class OrbitData:
                         mission_sat["spacecraftBus"].pop("components")
 
                     if scenario_sat != mission_sat:
+                        for key in scenario_sat:
+                            if scenario_sat[key] != mission_sat.get(key, None):
+                                for subkey in scenario_sat[key] if isinstance(scenario_sat[key], dict) else []:
+                                    if isinstance(scenario_sat[key][subkey], list) and isinstance(mission_sat.get(key, None), dict) and subkey in mission_sat[key]:
+                                        if scenario_sat[key][subkey] != mission_sat[key][subkey]:
+                                            return True
+                                    elif scenario_sat[key][subkey] != mission_sat.get(key, {}).get(subkey, None):
+                                        return True
+
                         return True
                         
         return False

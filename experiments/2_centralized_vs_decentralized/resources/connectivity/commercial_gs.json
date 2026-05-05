@@ -122,13 +122,11 @@
                 "ground_stations"
             ]
         },
-        [
-            {
-                "action": "deny",
-                "scope": "within",
-                "targets": "instruments"
-            }
-        ],
+        {
+            "action": "deny",
+            "scope": "within",
+            "targets": "instruments"
+        },
         {
             "action": "deny",
             "scope": "within",

@@ -97,7 +97,7 @@ def create_scenario_specifications(base_path : str,
             },
             "connectivity" : {
                 "@type" : "PREDEF",
-                "rulesPath" : f"./experiments/2_centralized_vs_decentralized/resources/connectivity/{constellation.lower()}-{connectivity.lower()}.json",
+                "rulesPath" : f"./experiments/2_centralized_vs_decentralized/resources/connectivity/{constellation.lower()}_{connectivity.lower()}.json",
                 "relaysEnabled" : True
             },
             "scenarioPath" : base_path,
@@ -307,7 +307,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
     if reduced: results_dir += "_reduced"
     
     # define event file path based on scenario parameters
-    events_file = f'{scenario.lower()}_case_{date}_.csv'
+    events_file = f'{scenario.lower()}_case_{date}.csv'
     events_path = os.path.join(base_path, 'resources', 'events', events_file)
 
     # set simulation duration and propagator step size

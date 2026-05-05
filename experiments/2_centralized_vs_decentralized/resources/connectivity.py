@@ -48,7 +48,7 @@ def generate_gs_connectivity_specs(constellation_spec : List[dict], connectivity
         "action": "deny",
         "scope": "within",
         "targets": "instruments"
-    },
+    }
     no_intrarelay_connectivity = {
         "action": "deny",
         "scope": "within",

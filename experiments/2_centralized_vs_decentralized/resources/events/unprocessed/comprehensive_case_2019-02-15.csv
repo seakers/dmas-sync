@@ -1,4 +1,4 @@
-lat [deg],lon [deg],event_type,start time [s],duration [s],severity,measurements,uuid
+lat [deg],lon [deg],event type,start time [s],duration [s],severity,measurements,uuid
 49.9979,136.7896,high_flow_river,0,46995,0.0,"['VNIR', 'Altimeter']",f7c2099d-a6fc-4873-914e-88eb65deca85
 -4.0021,-52.6021,high_flow_river,0,86400,100.0,"['VNIR', 'Altimeter']",ef4ae66e-b4ca-46c9-bbf5-02179fa1ef2e
 -4.0021,-55.6354,high_flow_river,0,63317,100.0,"['VNIR', 'Altimeter']",c02680fc-de58-4bb3-af77-d100cdd3170f
