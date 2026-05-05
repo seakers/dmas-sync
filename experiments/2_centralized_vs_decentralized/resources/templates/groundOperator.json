@@ -1,7 +1,8 @@
 {
     "announcer" : {
-        "name" : "NEN",
-        "@id" : "nen",
+        "name" : "Task Announcer",
+        "@id" : "gs-announcer",
+        "network" : "NEN",
         "planner" : {
             "preplanner": {
                 "@type": "eventAnnouncer",
@@ -10,5 +11,12 @@
             }
         },
         "mission" : "MISSION NAME GOES HERE"
+    },
+    "planner" : {
+        "name" : "Centralized Planner",
+        "@id" : "gs-planner",
+        "network" : "NEN",
+        "planner" : {},
+        "mission" : "NONE"
     }
 }

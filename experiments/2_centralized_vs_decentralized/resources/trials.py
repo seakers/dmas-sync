@@ -78,7 +78,7 @@ if __name__ == "__main__":
             "Interconstellation"    # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
         ],
         "Scenario": [
-            "water_quality",        # water quality monitoring (algal blooms + high-flow events)
+            "Water-Quality",        # water quality monitoring (algal blooms + high-flow events)
             "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
         ],
         "Data Processing" : [
@@ -87,7 +87,7 @@ if __name__ == "__main__":
             "Oracle",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
         ],
         "Constellation" : [
-            "Commercial",
+            # "Commercial",
             "Walker-Delta",
         ],
         "Date" : [
@@ -116,7 +116,7 @@ if __name__ == "__main__":
         
     ]
 
-    # generate full enumeration of trials per experiment
+    # 1) generate full enumeration of trials per experiment
     test_trials = generate_full_tactorial_trials(test_params)
 
     trial_dfs = {
@@ -130,9 +130,10 @@ if __name__ == "__main__":
     # apply rules to filter out invalid scenarios
     all_trials = apply_rules(all_trials, rules)
 
-    # sort by date
-    all_trials["Date"] = pd.to_datetime(all_trials["Date"])
-    all_trials = all_trials.sort_values("Date").reset_index(drop=True)
+    # 2) sort trials (optional, but can help with scheduling and analysis later)
+    # # sort by date
+    # all_trials["Date"] = pd.to_datetime(all_trials["Date"])
+    # all_trials = all_trials.sort_values("Date").reset_index(drop=True)
 
     # 3) Trial IDs after ordering
     all_trials.insert(0, "Trial ID", all_trials.index)

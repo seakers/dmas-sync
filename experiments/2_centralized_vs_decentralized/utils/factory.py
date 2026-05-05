@@ -107,9 +107,9 @@ def create_scenario_specifications(base_path : str,
 
 def create_grid_specifications(base_path : str, scenario : str, date : str) -> dict:
     # construct grid file path
-    lakes_grid_name = f'lakes_grid.csv'
-    rivers_grid_name = f"rivers_grid.csv"    
-    wildifres_grid_name = f'wildfires_grid_{date}.csv'
+    lakes_grid_name = f'lake_grid.csv'
+    rivers_grid_name = f"river_grid.csv"    
+    wildifres_grid_name = f'wildfire_grid_{date}.csv'
 
     # grid_path = os.path.join(base_path, 'resources','grids', grid_name)
     
@@ -138,7 +138,7 @@ def create_propagator_settings_specifications(base_path : str,
                                               date : str,
                                               reduced : bool) -> dict:
     # define out_dir name
-    scenario_name = f"{scenario}_{date}"
+    scenario_name = f"{scenario.lower()}_{date}"
     if reduced: scenario_name += "_reduced"
     
     # make out_dir if it does not exist
@@ -181,107 +181,33 @@ def create_spacecraft_specifications(
             spacecraft_specs_template=spacecraft_specs_template,
             instrument_specs=instrument_specs,
             mission_type=mission_type
-        )
-    
-    # assign appropriately missions
+        )    
 
     # assign preplanners and replanners 
+    for satellite_spec in satellite_specifications:       
+        # check if satellite has autonomous planning capabilities (i.e. if it is not a simple relay satellite like TDRSS)
+        if 'planner' not in satellite_spec:
+            continue  # skip planner assignment for this satellite
 
-    raise NotImplementedError("Mission assignment and planner assignment logic is not implemented yet. Please implement this based on your desired scenario design and mission profiles.")
+        # set planner settings
+        if preplanner.lower() != 'none':
+            if 'centralized' in preplanner.lower():
+                satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['worker']
+            else:
+                satellite_spec['planner']['preplanner'] = planner_specs['preplanners'][preplanner.lower()]
+        if replanner.lower() != 'none':
+            satellite_spec['planner']['replanner'] = planner_specs['replanners'][replanner.lower()]
+        
+        # enforce planning horizon for CBBA preplanner if needed
+        if replanner.lower() == 'cbba' and preplanner.lower() == 'none':
+            satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['blank']
 
-    # # get altitude and inclination from template
-    # alt = spacecraft_specs_template['orbitState']['state']['sma'] - Constellation.EARTH_RADIUS_KM  # [km]
-    # inc = spacecraft_specs_template['orbitState']['state']['inc']                                  # [deg]
-    
-    # # create a walker-delta constellation for given number of satellites;
-    # #   choose number of planes and satellites per plane to approximate a square-ish constellation
-    # num_sats = 100 
-    # num_planes = min([p for p in range(1, num_sats+1)], 
-    #                 key=lambda p: abs(num_sats/p - np.sqrt(num_sats)))
-    # # choose a fixed phasing factor
-    # phasing_factor = 1
+        # remove planner if no preplanner or replanner specified
+        if preplanner.lower() == 'none' and replanner.lower() == 'none':
+            satellite_spec.pop('planner', None)  
 
-    # # create constellation instance
-    # constellation = WalkerDeltaConstellation(alt, inc, num_sats, num_planes, phasing_factor)
-
-    # # extract orbital elements
-    # orbital_elements : List[dict] = constellation.to_orbital_elements()
-
-    # # create satellite specifications list
-    # satellite_specifications = []
-    # for sat_idx,orbit_state in enumerate(orbital_elements):
-    #     # create satellite specification from template
-    #     satellite_spec = copy.deepcopy(spacecraft_specs_template)
-
-    #     # check if centralized preplanner was assigned 
-    #     if strategy.lower() == 'centralized':
-    #         preplanner = 'worker'
-    #         replanner = 'none'
-
-    #     # planner settings
-    #     if preplanner.lower() != 'none':
-    #         satellite_spec['planner']['preplanner'] = planner_specs['preplanners'][preplanner.lower()]
-    #     if replanner.lower() != 'none':
-    #         satellite_spec['planner']['replanner'] = planner_specs['replanners'][replanner.lower()]
-
-    #     # remove planner if no preplanner or replanner specified
-    #     if preplanner.lower() == 'none' and replanner.lower() == 'none':
-    #         satellite_spec.pop('planner', None)  
-
-    #     # assign orbit state
-    #     satellite_spec['orbitState']['state'] = orbit_state
-
-    #     # select instrument 
-    #     instrument_idx = sat_idx % len(instrument_specs)
-    #     instrument_spec = instrument_specs[list(instrument_specs.keys())[instrument_idx]]
-
-    #     # assign instrument to satellite
-    #     satellite_spec['instrument'] = copy.deepcopy(instrument_spec)
-
-    #     # determine satellite name and ID
-    #     satellite_spec['name'] = f"{instrument_spec['@id']}_sat_{sat_idx // len(instrument_specs)}"
-    #     satellite_spec['@id'] = f"sat_{sat_idx}"
-
-    #     # add to list of satellite specifications
-    #     satellite_specifications.append(satellite_spec)
-
-    # # add TRDSS satellites to the scenario for increased connectivity
-    # # define GEO constellation parameters
-    # geo_alt = 35_786.0  # [km]
-    # geo_inc = 0.0     # [deg]
-    # geo_num_sats = 3  # number of GEO satellites
-    # geo_num_planes = 1  # number of planes in GEO constellation
-    # geo_phasing_factor = 0  # phasing factor for GEO constellation
-
-    # # create GEO constellation instance
-    # geo_constellation = WalkerDeltaConstellation(geo_alt, geo_inc, geo_num_sats, geo_num_planes, geo_phasing_factor)
-    
-    # # extract orbital elements
-    # geo_orbital_elements : List[dict] = geo_constellation.to_orbital_elements()
-
-    # # create satellite specifications list
-    # for geo_sat_idx,geo_orbit_state in enumerate(geo_orbital_elements):
-    #     # create satellite specification from template
-    #     geo_satellite_spec : dict = copy.deepcopy(spacecraft_specs_template)
-
-    #     # do not assign a planner to the GEO satellites; they are just relays in this scenario
-    #     geo_satellite_spec.pop('planner', None)
-
-    #     # assign orbit state
-    #     geo_satellite_spec['orbitState']['state'] = geo_orbit_state
-
-    #     # remove instrument; GEO satellites are just relays in this scenario
-    #     geo_satellite_spec.pop('instrument', None)
-
-    #     # define satellite name and ID
-    #     geo_satellite_spec['name'] = f"tdrss_sat_{geo_sat_idx}"
-    #     geo_satellite_spec['@id'] = f"tdrss_{geo_sat_idx}"
-
-    #     # add to list of satellite specifications
-    #     satellite_specifications.append(geo_satellite_spec)
-
-    # # return satellite specifications
-    # return satellite_specifications
+    # return satellite specifications
+    return satellite_specifications
 
 def setup_announcer_preplanner(events_path : str) -> dict:
     """ Setup announcer planner configuration for the scenario. """
@@ -325,15 +251,39 @@ def load_ground_stations(base_path : str, network_name : str) -> List[dict]:
     return gs_network
 
 
-def create_ground_operator_specifications(ground_operator_specs_template : dict, events_path : str) -> List[dict]:
-    # create ground operator specifications from template
-    ground_operator_specs = copy.deepcopy(ground_operator_specs_template)
+def create_ground_operator_specifications(
+        preplanner : str,         
+        data_processing : str, 
+        events_path : str,
+        planner_specs : dict,
+        ground_operator_specs_template : dict, 
+    ) -> List[dict]:
+
+    # initialize list of operators
+    operators = []
+
+    if 'centralized' in preplanner.lower():      
+        # create planner ground operator  
+        announcer_specs = copy.deepcopy(ground_operator_specs_template['planner'])
+
+        # set planner 
+        announcer_specs['planner']['preplanner'] = planner_specs['preplanners'][preplanner.lower()]
+
+        # add to list of operators
+        operators.append(announcer_specs)
+
+    if data_processing.lower() == 'oracle':
+        # create event announcer ground operator
+        announcer_specs = copy.deepcopy(ground_operator_specs_template['announcer'])
     
-    # set events path
-    ground_operator_specs['planner']['preplanner']['eventsPath'] = events_path
+        # set events path
+        announcer_specs['planner']['preplanner']['eventsPath'] = events_path
+
+        # add to list of operators
+        operators.append(announcer_specs)
 
     # return ground operator specifications
-    return [ground_operator_specs]
+    return operators
 
 
 def generate_scenario_mission_specs(mission_specs_template : dict, 
@@ -387,7 +337,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
 
     # assign ground operator to mission specs
     mission_specs['groundOperator'] \
-        = create_ground_operator_specifications(ground_operator_specs_template, events_path)
+        = create_ground_operator_specifications(preplanner, data_processing, events_path, planner_specs, ground_operator_specs_template)
         
     # return mission specifications
     return mission_specs

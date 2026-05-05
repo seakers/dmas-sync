@@ -42,6 +42,7 @@
     "targetBlackBodyTemp": 290.0,
     "bitsPerPixel": 12,
     "dataRate": 220.0,
+    "opticsSysEff" : 1.0,
     "@notes": [
         "Published specs (peer-reviewed sources):",
         "  GSD: 3.7 m at 475 km altitude (Frazier & Hemingway 2021, Remote Sens. 13(19):3930).",
@@ -122,6 +123,7 @@
     "targetBlackBodyTemp": 290.0,
     "bitsPerPixel": 16,
     "dataRate": 1000.0,
+    "opticsSysEff" : 1.0,
     "@notes": [
       "Focal length 4.03 m, pixel pitch ~4.24 µm (back-calculated: GSD=0.5m at 475km → p=0.5*4.03/475e3).",
       "F# = f/D → D = 4.03/11.5 ≈ 0.35 m aperture diameter (estimated).",
@@ -206,6 +208,7 @@
         "@notes": "0.25 m spotlight, 5x5 km scene. spotlight beam-steering modelled via fixed small swath."
       }
     ],
+    "radarLoss" : 0.5,
     "@notes": [
       "operatingFrequency: center of 9.4–9.9 GHz band, set to 9.65 GHz.",
       "chirpBandwidth: 700 MHz (maximum); 500 MHz in stripmap mode.",
@@ -272,6 +275,7 @@
     "targetBlackBodyTemp": 300.0,
     "bitsPerPixel": 14,
     "dataRate": 50.0,
+    "opticsSysEff" : 1.0,
     "@notes": [
       "Instrument type: Passive Optical Scanner used as best available model for TIR pushbroom.",
       "The SNR calculation will use thermal radiance (blackbody target) rather than solar reflectance.",

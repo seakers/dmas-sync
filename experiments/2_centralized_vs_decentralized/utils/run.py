@@ -413,7 +413,11 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
         # iterate over trial rows
         for i, row in enumerate(trial_rows):
             if not sim_cfg.quiet:
-                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n - scenario_id={row[0]}\n - preplanner={row[1]}\n - replanner={row[2]}\n - n_sats={row[3]}\n - latency={row[4]}\n - task_arrival_rate={row[5]}\n - scenario_idx={row[7]}\n")
+                # Unpack trial row
+                #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_centralization`
+                trial_id,preplanner,replanner,connectivity,scenario,data_processing,constellation,date, *_ = row
+
+                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n - trial_id={trial_id}\n - preplanner={preplanner}\n - replanner={replanner}\n - connectivity={connectivity}\n - scenario={scenario}\n - data_processing={data_processing}\n - constellation={constellation}\n - date={date}\n")
 
             # run one trial
             res = run_one_trial(row, run_cfg, sim_cfg, pbar_pos=1)

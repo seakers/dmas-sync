@@ -1624,11 +1624,11 @@ class OrbitData:
                     
                     # generate mission-long connectivity access
                     duration = timedelta(days=float(simulation_duration))
-                    data = [[0.0, duration.total_seconds() // time_step + 1]]
-                    assert data[0][1] > 0.0
+                    access_data = [[0.0, duration.total_seconds() // time_step + 1]]
+                    assert access_data[0][1] > 0.0
 
                     # return modified connectivity
-                    comms_data = pd.DataFrame(data=data, columns=columns)
+                    comms_data = pd.DataFrame(data=access_data, columns=columns)
 
                 else:
                     raise ValueError(f'Unknown agent type `{u_type}` for agent `{u_name}`.')
