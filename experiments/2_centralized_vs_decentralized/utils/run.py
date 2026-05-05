@@ -143,7 +143,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
 
         # ------------------------------------------------------------
         # Stage 1: Precompute (controlled by force/only)
-        # ------------------------------------------------------------
+        # ------------------------------------------------------------        
         orbitdata_dir: Optional[str] = None
         if sim_cfg.only_precompute or sim_cfg.force_precompute:
             orbitdata_dir = OrbitData.precompute(mission_specs, printouts=printouts)

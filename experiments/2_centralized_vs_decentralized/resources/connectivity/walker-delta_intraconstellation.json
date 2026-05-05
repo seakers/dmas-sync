@@ -111,7 +111,8 @@
             "tdrss_sat_2"
         ],
         "ground_stations": [
-            "NEN"
+            "GS Announcer",
+            "GS Planner"
         ]
     },
     "rules": [

@@ -1,6 +1,6 @@
 {
     "announcer" : {
-        "name" : "Task Announcer",
+        "name" : "GS Announcer",
         "@id" : "gs-announcer",
         "network" : "NEN",
         "planner" : {
@@ -13,7 +13,7 @@
         "mission" : "MISSION NAME GOES HERE"
     },
     "planner" : {
-        "name" : "Centralized Planner",
+        "name" : "GS Planner",
         "@id" : "gs-planner",
         "network" : "NEN",
         "planner" : {},

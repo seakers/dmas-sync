@@ -135,10 +135,11 @@ def create_grid_specifications(base_path : str, scenario : str, date : str) -> d
 
 def create_propagator_settings_specifications(base_path : str, 
                                               scenario : str,
+                                              constellation : str,
                                               date : str,
                                               reduced : bool) -> dict:
     # define out_dir name
-    scenario_name = f"{scenario.lower()}_{date}"
+    scenario_name = f"{constellation.lower()}_{scenario.lower()}_{date}"
     if reduced: scenario_name += "_reduced"
     
     # make out_dir if it does not exist
@@ -159,6 +160,7 @@ def create_spacecraft_specifications(
                                      data_processing : str,
                                      constellation : str,
                                      date : str,
+                                    #  events_path : str,
                                      spacecraft_specs_template : dict, 
                                      instrument_specs : dict, 
                                      planner_specs : dict,
@@ -206,24 +208,17 @@ def create_spacecraft_specifications(
         if preplanner.lower() == 'none' and replanner.lower() == 'none':
             satellite_spec.pop('planner', None)  
 
+    # assign onboard processing if specified
+    if data_processing.lower() == 'onboard':
+        # TODO generate events foreach possible mission configuration and assign path here
+        raise NotImplementedError("Onboard data processing is not yet implemented in this study. Please set data processing type to 'oracle' or 'none' for now.")
+        science_specs = {
+            "@type": "lookup", 
+            "eventsPath" : None
+        }
+
     # return satellite specifications
     return satellite_specifications
-
-def setup_announcer_preplanner(events_path : str) -> dict:
-    """ Setup announcer planner configuration for the scenario. """
-
-    # validate event file exists
-    assert os.path.isfile(events_path), \
-        f"Event file not found: {events_path}"
-    
-    # return event announcer planner config
-    return {
-            "preplanner": {
-                "@type": "eventAnnouncer",
-                "debug": "False",                        
-                "eventsPath" : events_path
-            }
-        }
 
 def load_ground_stations(base_path : str, network_name : str) -> List[dict]:
     # construct ground stations file path
@@ -272,15 +267,21 @@ def create_ground_operator_specifications(
         # add to list of operators
         operators.append(announcer_specs)
 
-    if data_processing.lower() == 'oracle':
-        # create event announcer ground operator
-        announcer_specs = copy.deepcopy(ground_operator_specs_template['announcer'])
     
-        # set events path
-        announcer_specs['planner']['preplanner']['eventsPath'] = events_path
+    # create event announcer ground operator
+    announcer_specs = copy.deepcopy(ground_operator_specs_template['announcer'])
 
-        # add to list of operators
-        operators.append(announcer_specs)
+    # set events path
+    if data_processing.lower() == 'oracle':
+        announcer_specs['planner']['preplanner']['eventsPath'] = events_path
+    else:
+        # replace last part of events path with `no_events.csv` for non-oracle data processing types 
+        no_events_path = events_path.split('/')[:-1] + ['no_events.csv']
+        no_events_path = os.path.join(*no_events_path)
+        announcer_specs['planner']['preplanner']['eventsPath'] = no_events_path
+
+    # add to list of operators
+    operators.append(announcer_specs)
 
     # return ground operator specifications
     return operators
@@ -321,7 +322,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
 
     # set propagator settings
     mission_specs['settings'] \
-        = create_propagator_settings_specifications(base_path, scenario, date, reduced)
+        = create_propagator_settings_specifications(base_path, scenario, constellation, date, reduced)
     
     # create satellite specifications
     mission_specs['spacecraft'] \

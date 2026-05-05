@@ -138,10 +138,11 @@ class DealerMILPPlanner(DealerPlanner):
                                                 for task_idx,_ in enumerate(schedulable_client_tasks[client])]
         
         # Initialize constants
-        t_start   = [[task.accessibility.left-state._t 
+        t_curr = state.get_time()
+        t_start   = [[max(task.accessibility.left-t_curr, 0.0) 
                               for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
                               for client in indexed_clients]
-        t_end     = [[task.accessibility.right-state._t 
+        t_end     = [[min(task.accessibility.right-t_curr, self._horizon) 
                               for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
                               for client in indexed_clients]
         d         = [[task.min_duration 

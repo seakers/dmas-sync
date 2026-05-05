@@ -6,8 +6,6 @@ import numpy as np
 
 from orbitpy.util import Spacecraft
 
-import pandas as pd
-
 from execsatm.observations import ObservationOpportunity
 from execsatm.tasks import DefaultMissionTask, GenericObservationTask
 from execsatm.mission import Mission
