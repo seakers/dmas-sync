@@ -160,7 +160,7 @@ def create_spacecraft_specifications(
                                      data_processing : str,
                                      constellation : str,
                                      date : str,
-                                    #  events_path : str,
+                                     events_path : str,
                                      spacecraft_specs_template : dict, 
                                      instrument_specs : dict, 
                                      planner_specs : dict,
@@ -208,14 +208,31 @@ def create_spacecraft_specifications(
         if preplanner.lower() == 'none' and replanner.lower() == 'none':
             satellite_spec.pop('planner', None)  
 
-    # assign onboard processing if specified
-    if data_processing.lower() == 'onboard':
-        # TODO generate events foreach possible mission configuration and assign path here
-        raise NotImplementedError("Onboard data processing is not yet implemented in this study. Please set data processing type to 'oracle' or 'none' for now.")
-        science_specs = {
-            "@type": "lookup", 
-            "eventsPath" : None
-        }
+        # assign onboard processing if specified
+        if data_processing.lower() == 'onboard':
+            # TODO generate events foreach possible mission configuration and assign path here
+            if "commercial" in constellation.lower():
+                raise NotImplementedError("Onboard data processing is not yet implemented for commercial constellations in this study. Please set data processing type to 'oracle' or 'none' for now.")
+            elif "walker" in constellation.lower():                
+                sat_mission = satellite_spec['mission']
+                if "algal bloom" in sat_mission.lower():
+                    event_type = 'algal_bloom'
+                elif "high flow" in sat_mission.lower():
+                    event_type = 'high_flow_river'
+                elif "fire" in sat_mission.lower():
+                    event_type = 'wildfire'
+                else:
+                    raise ValueError(f"Could not identify event type from satellite mission: {sat_mission}")
+            else:
+                raise ValueError(f"Constellation {constellation} not recognized for onboard data processing assignment.")
+            
+            events_path = events_path.split('/')[:-1] + [f'{event_type}_{date}.csv']
+            events_path = os.path.join(*events_path)
+            
+            satellite_spec['science'] = {
+                "@type": "lookup", 
+                "eventsPath" : events_path
+            }
 
     # return satellite specifications
     return satellite_specifications
@@ -308,7 +325,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
     
     # define event file path based on scenario parameters
     events_file = f'{scenario.lower()}_case_{date}.csv'
-    events_path = os.path.join(base_path, 'resources', 'events', events_file)
+    events_path = os.path.join(base_path, 'resources', 'events', 'processed', events_file)
 
     # set simulation duration and propagator step size
     mission_specs['duration'] = duration
@@ -326,7 +343,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
     
     # create satellite specifications
     mission_specs['spacecraft'] \
-        = create_spacecraft_specifications(preplanner, replanner, scenario, data_processing, constellation, date,
+        = create_spacecraft_specifications(preplanner, replanner, scenario, data_processing, constellation, date, events_path,
                                            spacecraft_specs_template, instrument_specs, planner_specs)
     
     # set network name from ground segment type

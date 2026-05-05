@@ -82,7 +82,7 @@ if __name__ == "__main__":
             "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
         ],
         "Data Processing" : [
-            # "Onboard",              # sats must discover events using default mission tasks
+            "Onboard",              # sats must discover events using default mission tasks
             # "Ground", #TODO       # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
             "Oracle",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
         ],

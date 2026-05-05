@@ -333,7 +333,7 @@ def generate_walker_delta(
         instrument_specs=instrument_specs,
         spacecraft_specs_template=spacecraft_specs_template
     )
-    assign_mission_to_constellation(flood_monitoring_specs, f"flood {mission_type}")
+    assign_mission_to_constellation(flood_monitoring_specs, f"high flow river {mission_type}")
 
     # Wildfire monitoring constellation (SSO, 550 km, 97 deg, 36 sats in 3 planes)
     wildfire_monitoring = WalkerDeltaConstellation(

@@ -54,8 +54,9 @@ def process_file(filepath: str, date_str: str) -> pd.DataFrame:
 
     df['lat [deg]'] = matched_lats
     df['lon [deg]'] = matched_lons
+    df.rename(columns={'uuid': 'id'}, inplace=True)
     df.insert(0, 'grid index', grid_indices)
-    df.insert(1, 'GP index', gp_indices)
+    df.insert(1, 'gp_index', gp_indices)
     return df
 
 
@@ -79,6 +80,12 @@ def main():
         df = process_file(in_path, date_str)
         df.to_csv(out_path, index=False)
         print(f'  -> {out_path} ({len(df)} events)')
+
+        if filename.startswith('comprehensive_case_'):
+            for event_type, group in df.groupby('event type'):
+                type_path = os.path.join(PROCESSED_DIR, f'{event_type}_{date_str}.csv')
+                group.to_csv(type_path, index=False)
+                print(f'  -> {type_path} ({len(group)} events)')
 
 
 if __name__ == '__main__':

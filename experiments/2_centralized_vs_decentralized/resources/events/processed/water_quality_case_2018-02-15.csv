@@ -1,4 +1,4 @@
-grid index,GP index,lat [deg],lon [deg],event type,start time [s],duration [s],severity,measurements,uuid
+grid index,gp_index,lat [deg],lon [deg],event type,start time [s],duration [s],severity,measurements,id
 1,1143,26.2729,32.0062,high_flow_river,0,86400,100.0,"['VNIR', 'Altimeter']",bc7d82ad-aca7-4c01-9f22-6f0389f67e6a
 1,1046,-8.0146,-52.7146,high_flow_river,0,58296,7.1,"['VNIR', 'Altimeter']",59340e42-acbf-4a7a-b1dd-12b3d01f13a3
 1,1148,29.9562,116.5854,high_flow_river,1699,27428,100.0,"['VNIR', 'Altimeter']",e6c49b41-19d7-4910-94d6-3795d647a6b3
