@@ -530,9 +530,9 @@ class Simulation:
 
         # unpack agent info
         scenario_duration : float = d['duration']  
-        spacecraft_dict : List[dict] = d.get('spacecraft', None)
+        space_segment : List[dict] = d.get('spacecraft', None)
         gstation_dict   : List[dict] = d.get('groundStation', None)
-        gops_dict       : List[dict] = d.get('groundOperator', None)
+        ground_operators       : List[dict] = d.get('groundOperator', None)
         gsensor_dict    : List[dict] = d.get('groundSensor', None)
         scenario_dict   : dict = d.get('scenario', None)        
         settings_dict   : dict = d.get('settings', None)
@@ -541,18 +541,18 @@ class Simulation:
         if not isinstance(calc_dual, bool):
             calc_dual = str(calc_dual).lower() == 'true' # convert string to bool if needed
 
-        if gops_dict is not None: assert gstation_dict is not None, \
+        if ground_operators is not None: assert gstation_dict is not None, \
             "Both `groundStation` and `groundOperator` must be defined in the input file."
         
         # load agent names
         agent_names = [SimulationRoles.ENVIRONMENT.value]
         agent_ids = []
-        if spacecraft_dict: 
-            agent_names.extend([spacecraft['name'] for spacecraft in spacecraft_dict])
-            agent_ids.extend([spacecraft['@id'] for spacecraft in spacecraft_dict])
-        if gops_dict:
-            agent_names.extend([ground_operator['name'] for ground_operator in gops_dict])
-            agent_ids.extend([ground_operator['@id'] for ground_operator in gops_dict])
+        if space_segment: 
+            agent_names.extend([spacecraft['name'] for spacecraft in space_segment])
+            agent_ids.extend([spacecraft['@id'] for spacecraft in space_segment])
+        if ground_operators:
+            agent_names.extend([ground_operator['name'] for ground_operator in ground_operators])
+            agent_ids.extend([ground_operator['@id'] for ground_operator in ground_operators])
 
         # validate agent names and ids
         assert len(agent_names) > 1, "At least one agent (spacecraft, UAV, or ground station) must be defined in the input file."
@@ -573,7 +573,7 @@ class Simulation:
         results_path : str = Simulation.__setup_results_directory(scenario_path, scenario_name, agent_names, overwrite)
 
         # precompute orbit data
-        orbitdata_dir = OrbitData.precompute(d, printouts=printouts) if spacecraft_dict is not None else None
+        orbitdata_dir = OrbitData.precompute(d, printouts=printouts) if space_segment is not None else None
         simulation_orbitdata : Dict[str, OrbitData] = OrbitData.from_directory(orbitdata_dir, d, printouts=printouts) if orbitdata_dir is not None else {}
         
         # load missions
@@ -598,34 +598,40 @@ class Simulation:
         # ------------------------------------
         # create agents 
         agents : list[SimulationAgent] = []
-        if isinstance(spacecraft_dict, list):
-            for spacecraft in tqdm(spacecraft_dict, leave=False, desc='Initializing Satellite Agents', unit=' agents', disable=not printouts):
+        if isinstance(space_segment, list):
+            for spacecraft in tqdm(space_segment, leave=False, desc='Initializing Satellite Agents', unit=' agents', disable=not printouts):
 
                 # create satellite agent
-                agent = Simulation.__spacecraft_agent_factory(spacecraft,
+                agent = Simulation.__spacecraft_agent_factory(
+                                                            spacecraft,
+                                                            space_segment,
                                                             simulation_orbitdata,
                                                             simulation_missions,
                                                             results_path,
                                                             orbitdata_dir,
                                                             level,
                                                             logger,
-                                                            printouts)
+                                                            printouts
+                                                        )
 
                 # add to list of agents
                 agents.append(agent)
 
-        if isinstance(gops_dict, list):
-            for ground_operator in tqdm(gops_dict, leave=False, desc='Initializing Ground Operator Agents', unit=' agents', disable=not printouts):
+        if isinstance(ground_operators, list):
+            for ground_operator in tqdm(ground_operators, leave=False, desc='Initializing Ground Operator Agents', unit=' agents', disable=not printouts):
                 
                 # create ground operator agent
-                agent = Simulation.__ground_operator_agent_factory(ground_operator,
-                                                                 simulation_orbitdata,
-                                                                 simulation_missions,
-                                                                 results_path,
-                                                                 orbitdata_dir,
-                                                                 level,
-                                                                 logger,
-                                                                 printouts)
+                agent = Simulation.__ground_operator_agent_factory(
+                                                                ground_operator,
+                                                                space_segment, 
+                                                                simulation_orbitdata,
+                                                                simulation_missions,
+                                                                results_path,
+                                                                orbitdata_dir,
+                                                                level,
+                                                                logger,
+                                                                printouts
+                                                            )
                 
                 # add to list of agents
                 agents.append(agent)
@@ -638,8 +644,8 @@ class Simulation:
         # create environment
         environment = SimulationEnvironment(results_path, 
                                             simulation_orbitdata,
-                                            spacecraft_dict,
-                                            gops_dict,
+                                            space_segment,
+                                            ground_operators,
                                             events,
                                             level,
                                             logger,
@@ -785,16 +791,18 @@ class Simulation:
         return events
     
     @staticmethod
-    def __agent_factory(agent_dict : dict,
-                      agent_specs : object,
-                      initial_state : SimulationAgentState,
-                      simulation_orbitdata : Dict[str, OrbitData],
-                      simulation_missions : Dict[str, Mission],
-                      simulation_results_path : str,
-                      orbitdata_dir : str,
-                      level : int,
-                      logger : logging.Logger,
-                      printouts : bool
+    def __agent_factory(
+                        agent_dict : dict,
+                        agent_specs : object,
+                        initial_state : SimulationAgentState,
+                        space_segment : List[dict],
+                        simulation_orbitdata : Dict[str, OrbitData],
+                        simulation_missions : Dict[str, Mission],
+                        simulation_results_path : str,
+                        orbitdata_dir : str,
+                        level : int,
+                        logger : logging.Logger,
+                        printouts : bool
                     ) -> SimulationAgent:
         """ creates a simulation agent from dictionary """
         
@@ -825,15 +833,17 @@ class Simulation:
         
         # load planners
         preplanner, replanner = \
-                Simulation.__load_planners(agent_name, 
-                                         planner_dict, 
-                                         orbitdata_dir, 
-                                         agent_mission, 
-                                         simulation_missions, 
-                                         simulation_orbitdata, 
-                                         simulation_results_path,
-                                         logger,
-                                         printouts
+                Simulation.__load_planners(
+                                            agent_name, 
+                                            planner_dict, 
+                                            space_segment,
+                                            orbitdata_dir, 
+                                            agent_mission, 
+                                            simulation_missions, 
+                                            simulation_orbitdata, 
+                                            simulation_results_path,
+                                            logger,
+                                            printouts
                                         )  
 
         # build and return agent 
@@ -852,7 +862,9 @@ class Simulation:
                                 printouts)
 
     @staticmethod
-    def __spacecraft_agent_factory(agent_dict : dict,
+    def __spacecraft_agent_factory(
+                                 agent_dict : dict,
+                                 space_segment : List[dict],
                                  simulation_orbitdata : Dict[str, OrbitData],
                                  simulation_missions : Dict[str, Mission],
                                  simulation_results_path : str,
@@ -888,9 +900,11 @@ class Simulation:
                                             time_step=dt) 
         
         # return created agent
-        return Simulation.__agent_factory(agent_dict,
+        return Simulation.__agent_factory(
+                                        agent_dict,
                                         agent_specs,
                                         initial_state,
+                                        space_segment,
                                         simulation_orbitdata,
                                         simulation_missions,
                                         simulation_results_path,
@@ -901,14 +915,16 @@ class Simulation:
 
 
     @staticmethod
-    def __ground_operator_agent_factory(agent_dict : dict,
-                                      simulation_orbitdata : Dict[str, OrbitData],
-                                      simulation_missions : Dict[str, Mission],
-                                      simulation_results_path : str,
-                                      orbitdata_dir : str,
-                                      level : int,
-                                      logger : logging.Logger,
-                                      printouts : bool
+    def __ground_operator_agent_factory(
+                                        agent_dict : dict,
+                                        space_segment : List[dict],
+                                        simulation_orbitdata : Dict[str, OrbitData],
+                                        simulation_missions : Dict[str, Mission],
+                                        simulation_results_path : str,
+                                        orbitdata_dir : str,
+                                        level : int,
+                                        logger : logging.Logger,
+                                        printouts : bool
                                     ) -> SimulationAgent:
         """ creates a ground operator simulation agent from dictionary """
         
@@ -926,20 +942,24 @@ class Simulation:
         initial_state = GroundOperatorAgentState(agent_name, agent_id)
 
         # return created agent
-        return Simulation.__agent_factory(agent_dict,
-                                        agent_specs,
-                                        initial_state,
-                                        simulation_orbitdata,
-                                        simulation_missions,
-                                        simulation_results_path,
-                                        orbitdata_dir,
-                                        level,
-                                        logger,
-                                        printouts)
+        return Simulation.__agent_factory(
+                                            agent_dict,
+                                            agent_specs,
+                                            initial_state,
+                                            space_segment,
+                                            simulation_orbitdata,
+                                            simulation_missions,
+                                            simulation_results_path,
+                                            orbitdata_dir,
+                                            level,
+                                            logger,
+                                            printouts
+                                        )
 
     
     @staticmethod
-    def __load_data_processor(science_dict : dict, 
+    def __load_data_processor(
+                            science_dict : dict, 
                             agent_name : str,
                             mission : Mission
                         ) -> ObservationDataProcessor:
@@ -970,15 +990,17 @@ class Simulation:
         return None
     
     @staticmethod
-    def __load_planners(agent_name : str, 
-                      planner_dict : dict, 
-                      orbitdata_dir : str, 
-                      agent_mission : Mission, 
-                      simulation_missions : Dict[str,Mission], 
-                      simulation_orbitdata: Dict[str, OrbitData],
-                      simulation_results_path : str,
-                      logger : logging.Logger,
-                      printouts : bool
+    def __load_planners(
+                        agent_name : str, 
+                        planner_dict : dict, 
+                        space_segment : List[dict],
+                        orbitdata_dir : str, 
+                        agent_mission : Mission, 
+                        simulation_missions : Dict[str,Mission], 
+                        simulation_orbitdata: Dict[str, OrbitData],
+                        simulation_results_path : str,
+                        logger : logging.Logger,
+                        printouts : bool
                     ) -> tuple:
         # check if planner dictionary is empty
         if planner_dict is None: return None, None
@@ -987,7 +1009,7 @@ class Simulation:
         agent_results_dir = os.path.join(simulation_results_path, agent_name.lower())
 
         # load preplanner
-        preplanner = Simulation.__load_preplanner(planner_dict, agent_results_dir, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
+        preplanner = Simulation.__load_preplanner(planner_dict, agent_results_dir, space_segment, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
 
         # load replanner
         replanner = Simulation.__load_replanner(planner_dict, agent_results_dir, logger, printouts)
@@ -998,6 +1020,7 @@ class Simulation:
     @staticmethod
     def __load_preplanner(planner_dict : dict, 
                           agent_results_dir : str,
+                          space_segment : List[dict],
                           agent_mission : Mission, 
                           simulation_missions : Dict[str,Mission],
                           simulation_orbitdata : Dict[str, OrbitData],
@@ -1066,22 +1089,22 @@ class Simulation:
 
             # load client ids for all agents (except self)
             client_ids : Dict[str, str] = { d['name'] : d['@id'] 
-                                            for d in mission_specs.get('spacecraft', [])
+                                            for d in space_segment
                                             if is_client(d)}
 
             # load client specs for all agents (except self)            
             client_specs : Dict[str, Spacecraft] = {d['name']: Spacecraft.from_dict(d) 
-                                                    for d in mission_specs.get('spacecraft', [])
+                                                    for d in space_segment
                                                     if is_client(d)}
 
             # load client missions for all agents (except self)
             client_missions : Dict[str, Mission] = {d['name'] : simulation_missions[d['mission'].lower()] 
-                                                    for d in mission_specs.get('spacecraft', [])
+                                                    for d in space_segment
                                                     if is_client(d)}
 
             # load client orbitdata for all agents (except self)
             satellite_specs = {d['name'] : d 
-                                for d in mission_specs.get('spacecraft', [])}
+                                for d in space_segment}
             client_orbitdata = {k:v for k,v in simulation_orbitdata.items() 
                                 if is_client(satellite_specs.get(k, {}))}
 

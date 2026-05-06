@@ -2,11 +2,9 @@ import copy
 import json
 import os
 from typing import List, Tuple
-import numpy as np
 import pandas as pd
 
-from dmas.utils.constellations import Constellation, WalkerDeltaConstellation
-from .constellations import generate_commercial, generate_walker_delta, generate_tdrss
+from .constellations import generate_commercial, generate_walker_delta
 
 # ------------------------------------------------------------------
 # Study setup helper functions

@@ -537,7 +537,7 @@
     ],
     "@type": "Altimeter",
     "@id": "smash-ka-altimeter-flood",
-    "name": "SMASH Ka-band Nadir Altimeter - Flood shell (ALT-FL)",
+    "name": "SMASH Ka-band Nadir Altimeter (ALT-FL)",
     "mass": 3.0,
     "volume": 0.004,
     "power": 5.0,
@@ -881,7 +881,7 @@
     ],
     "@type": "Passive Optical Scanner",
     "@id": "hive-tir-fire-shell",
-    "name": "constellr HiVE TIR Imager - Fire shell",
+    "name": "constellr HiVE TIR Imager (TIR-FR)",
     "mass": 35.0,
     "volume": 0.05,
     "power": 60.0,
@@ -919,6 +919,26 @@
     "bitsPerPixel": 14,
     "dataRate": 50.0,
     "opticsSysEff" : 0.60,
+    "@spectral_config": {
+      "sensor_type": "TIR - LWIR multispectral, 4 bands within 8-12 um",
+      "spectral_range_um": [
+        8.0,
+        12.0
+      ],
+      "center_wavelength_um": 10.0,
+      "bandwidth_um": 4.0,
+      "num_bands": 4,
+      "detector_material": "MCT (Mercury Cadmium Telluride), cryocooled ~70 K",
+      "nedt_mk": 30,
+      "lst_accuracy_k": 2.0,
+      "constellation": "Water quality (primary) + Fire monitoring (secondary via cross-constellation)",
+      "mission_suitability": {
+        "water_temperature": true,
+        "fire_lst": true,
+        "chl_a_direct": false,
+        "flood_extent": false
+      }
+    },
     "@notes": [
       "Identical instrument spec to hive-tir-skybee1 (water quality shell).",
       "Separate @id used so simulation can distinguish fire-shell vs water-quality-shell TIR.",

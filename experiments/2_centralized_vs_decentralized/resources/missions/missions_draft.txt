@@ -15,6 +15,7 @@ Mission: algal blooms
 			VNIR: X/Z [600dB, 200dB]
 		R7: Revisit Time
 			All: [3600s, 5000s, 7200s]
+            
 	Param: Temperature
 		R1: Spatial Resolution 
 			VNIR: A/Z [30m, 100m]
