@@ -5,7 +5,7 @@ import logging
 import queue
 from typing import Dict, Set, Tuple
 
-from instrupy.base import BasicSensorModel
+from instrupy.base import BasicSensorModel, SyntheticApertureRadarModel
 from instrupy.passive_optical_scanner_model import PassiveOpticalScannerModel
 from instrupy.util import ViewGeometry, SphericalGeometry
 from orbitpy.util import Spacecraft
@@ -1133,12 +1133,23 @@ class AbstractPlanner(ABC):
                     instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
                     if instrument_fov_geometry.shape == 'RECTANGULAR':
                         cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width) 
                     else:
                         raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
                 elif isinstance(instrument_model, PassiveOpticalScannerModel):
                     instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
                     instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
                     if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    else:
+                        raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
+                elif isinstance(instrument_model, SyntheticApertureRadarModel):
+                    instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
+                    instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
+                    if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
                         cross_track_fov.append(instrument_fov_geometry.angle_width)
                     else:
                         raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')

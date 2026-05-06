@@ -42,7 +42,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
         super().__init__(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
 
         # check parameters
-        assert isinstance(client_orbitdata, dict), "Clients must be a dictionary mapping agent names to OrbitData instances."
+        assert isinstance(client_orbitdata, dict), \
+            "Clients must be a dictionary mapping agent names to OrbitData instances."
         assert all(isinstance(client, str) for client in client_orbitdata.keys()), \
             "All keys in clients must be strings representing agent names."
         assert all(isinstance(orbitdata, OrbitData) for orbitdata in client_orbitdata.values()), \
@@ -56,9 +57,9 @@ class DealerPlanner(AbstractPeriodicPlanner):
         assert all(isinstance(mission, Mission) for mission in client_missions.values()), \
             "All client missions must be instances of Mission."
         assert len(client_orbitdata) == len(client_specs), \
-            "Clients and client_specs must have the same number of entries."
+            "Clients and client_specs must have the same number of entries ({0}).".format(len(client_orbitdata))
         assert len(client_orbitdata) == len(client_missions), \
-            "Clients and client_missions must have the same number of entries."
+            "Clients and client_missions must have the same number of entries ({0}).".format(len(client_orbitdata))
         assert all(client in client_specs for client in client_orbitdata), \
             "Clients and client_specs must have the same keys."
         assert all(client in client_missions for client in client_orbitdata), \
@@ -68,11 +69,11 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
         # store client information
         self.client_orbitdata : Dict[str, OrbitData] = \
-            {client.lower(): client_orbitdata for client, client_orbitdata in client_orbitdata.items()}
+            {client: client_orbitdata for client, client_orbitdata in client_orbitdata.items()}
         self.client_specs : Dict[str, object] = \
-            {client.lower(): client_specs for client, client_specs in client_specs.items()}
+            {client: client_specs for client, client_specs in client_specs.items()}
         self.client_missions : Dict[str, Mission] = \
-            {client.lower(): client_mission for client, client_mission in client_missions.items()}
+            {client: client_mission for client, client_mission in client_missions.items()}
         self.cross_track_fovs : Dict[str, Dict[str, float]] = \
             self._collect_client_cross_track_fovs(client_specs)
         self.client_states : Dict[str, SatelliteAgentState] = \

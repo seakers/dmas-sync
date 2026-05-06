@@ -7,16 +7,16 @@
             "preplanner": {
                 "@type": "eventAnnouncer",
                 "debug": "False",                        
-                "eventsPath" : "PATH GOES HERE"
+                "eventsPath" : "PATH/TO/EVENTS"
             }
         },
-        "mission" : "MISSION NAME GOES HERE"
+        "mission" : "none"
     },
     "planner" : {
         "name" : "GS Planner",
         "@id" : "gs-planner",
         "network" : "NEN",
         "planner" : {},
-        "mission" : "NONE"
+        "mission" : "none"
     }
 }

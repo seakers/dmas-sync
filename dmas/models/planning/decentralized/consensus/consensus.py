@@ -1202,13 +1202,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
              # -------------------------------
             # DEBUG PRINTOUTS
-            if self._debug and new_bids:
+            # if self._debug and new_bids:
             # if new_bids and state._t > 32_299.0:
             # if new_bids:
-                self._log_results('PLANNING PHASE - RESULTS (AFTER LOADING PREPLAN)', state, self._results)
-                self._log_bundle('PLANNING PHASE - BUNDLE (AFTER LOADING PREPLAN)', state, self._bundle)
-                print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
-                x = 1 # breakpoint
+                # self._log_results('PLANNING PHASE - RESULTS (AFTER LOADING PREPLAN)', state, self._results)
+                # self._log_bundle('PLANNING PHASE - BUNDLE (AFTER LOADING PREPLAN)', state, self._bundle)
+                # print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
+                # x = 1 # breakpoint
             # -------------------------------
 
         # update bundle and path according to replanning model

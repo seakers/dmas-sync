@@ -9,7 +9,7 @@ import shutil
 import sys
 import time
 import tracemalloc
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -1054,23 +1054,36 @@ class Simulation:
             with open(client_specs_path, 'r') as clients_file:
                 mission_specs : dict = json.load(clients_file)
 
+            def is_client(d : Union[Spacecraft, dict]) -> bool:
+                return (
+                    'name' in d
+                    and d['name'] != agent_name 
+                    and 'planner' in d
+                    and 'preplanner' in d['planner'] 
+                    and d['planner']['preplanner']['@type'] == 'worker'
+                    and d['planner']['preplanner']['dealerName'] == agent_name
+                )
+
             # load client ids for all agents (except self)
             client_ids : Dict[str, str] = { d['name'] : d['@id'] 
                                             for d in mission_specs.get('spacecraft', [])
-                                            if d['name'] != agent_name}
+                                            if is_client(d)}
 
             # load client specs for all agents (except self)            
             client_specs : Dict[str, Spacecraft] = {d['name']: Spacecraft.from_dict(d) 
                                                     for d in mission_specs.get('spacecraft', [])
-                                                    if d['name'] != agent_name}
+                                                    if is_client(d)}
 
             # load client missions for all agents (except self)
             client_missions : Dict[str, Mission] = {d['name'] : simulation_missions[d['mission'].lower()] 
                                                     for d in mission_specs.get('spacecraft', [])
-                                                    if d['name'] != agent_name}
+                                                    if is_client(d)}
 
             # load client orbitdata for all agents (except self)
-            client_orbitdata = {k:v for k,v in simulation_orbitdata.items() if k != agent_name}
+            satellite_specs = {d['name'] : d 
+                                for d in mission_specs.get('spacecraft', [])}
+            client_orbitdata = {k:v for k,v in simulation_orbitdata.items() 
+                                if is_client(satellite_specs.get(k, {}))}
 
             # remove other clients if specified
             if clients is not None:

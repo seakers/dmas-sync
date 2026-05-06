@@ -14,7 +14,7 @@ from dmas.utils.constellations import Constellation, WalkerDeltaConstellation
 
 def assign_instruments_to_constellation(
         constellation : Constellation,
-        name : str,
+        const_name : str,
         const_id : str,
         instruments : List[str],
         instrument_specs : dict, 
@@ -39,14 +39,16 @@ def assign_instruments_to_constellation(
         instrument = instruments[instrument_idx]
 
         # get matching instrument spec for satellite
-        instrument_spec = copy.deepcopy(instrument_specs[instrument])
+        # instrument_spec = copy.deepcopy(instrument_specs[instrument])
+        instrument_spec = instrument_specs[instrument].copy()
 
         # assign deep copy of instrument to satellite
         sat['instrument'] = instrument_spec
 
         # determine satellite name and ID
-        sat['@id'] = f"{const_id}_{sat['instrument']['@id']}_{sat_idx // len(instruments)}"
-        sat['name'] = f"{name} - {sat['instrument']['name']} Sat {sat['@id']}"
+        n_instr = sat_idx // len(instruments)
+        sat['@id'] = f"{const_id}_{sat['instrument']['@id']}_{n_instr}"
+        sat['name'] = f"{const_name} - {sat['instrument']['name']} Sat {n_instr}"
 
         # add to list of satellite specifications
         constellation_specs.append(sat)
@@ -64,7 +66,7 @@ def assign_single_instrument_to_constellation(
     ) -> List[dict]:
     return assign_instruments_to_constellation(
         constellation=constellation,
-        name=name,
+        const_name=name,
         const_id=const_id,
         instruments=[instrument],
         instrument_specs=instrument_specs,
@@ -308,9 +310,9 @@ def generate_walker_delta(
     )
     algal_bloom_monitoring_specs = assign_instruments_to_constellation(
         constellation=algal_bloom_monitoring,
-        name="Algal Bloom Monitoring",
-        const_id="abm",
-        instruments=["VNIR_agile", "TIR", "Altimeter"],
+        const_name="Algal Bloom Monitoring",
+        const_id="wq",
+        instruments=["VNIR-WQ", "TIR-WQ", "ALT-WQ"],
         instrument_specs=instrument_specs,
         spacecraft_specs_template=spacecraft_specs_template,
     )
@@ -327,9 +329,9 @@ def generate_walker_delta(
     )
     flood_monitoring_specs = assign_instruments_to_constellation(
         constellation=flood_monitoring,
-        name="Flood Monitoring",
-        const_id="fm",
-        instruments=["VNIR_agile", "Altimeter"],
+        const_name="Flood Monitoring",
+        const_id="fl",
+        instruments=["VNIR-FL", "ALT-FL"],
         instrument_specs=instrument_specs,
         spacecraft_specs_template=spacecraft_specs_template
     )
@@ -346,9 +348,9 @@ def generate_walker_delta(
     )
     wildfire_monitoring_specs = assign_instruments_to_constellation(
         constellation=wildfire_monitoring,
-        name="Wildfire Monitoring",
-        const_id="wm",
-        instruments=["TIR", "MIR", "VNIR_agile", "SAR"],
+        const_name="Wildfire Monitoring",
+        const_id="fr",
+        instruments=["TIR-FR", "MIR-FR", "VNIR-FR", "SAR-FR"],
         instrument_specs=instrument_specs,
         spacecraft_specs_template=spacecraft_specs_template,
     )
@@ -393,11 +395,11 @@ if __name__ == "__main__":
     with open(planner_specs_path, "r") as f:
         planner_specs = json.load(f)
     
-    # generate commercial constellation design
-    commercial_constellation : dict = generate_commercial(spacecraft_specs_template, instrument_specs)
+    # # generate commercial constellation design
+    # commercial_constellation : dict = generate_commercial(spacecraft_specs_template, instrument_specs)
 
     # generate walker delta constellation design    
-    walker_delta_constellation : dict = generate_walker_delta(spacecraft_specs_template, instrument_specs)
+    walker_delta_constellation : dict = generate_walker_delta(spacecraft_specs_template, instrument_specs, 'monitoring')
     
     # define output path for constellation designs
     out_dir = os.path.join('.', 'experiments','2_centralized_vs_decentralized', 'resources', 'constellations')
@@ -406,16 +408,16 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     # save constellation designs to json
-    commercial_out_path = os.path.join(out_dir, "commercial_constellation.json")
-    with open(commercial_out_path, "w") as f:
-        json.dump(commercial_constellation, f, indent=4)
+    # commercial_out_path = os.path.join(out_dir, "commercial_constellation.json")
+    # with open(commercial_out_path, "w") as f:
+    #     json.dump(commercial_constellation, f, indent=4)
 
     walker_delta_out_path = os.path.join(out_dir, "walker_delta_constellation.json")
     with open(walker_delta_out_path, "w") as f:
         json.dump(walker_delta_constellation, f, indent=4)
 
     # diagnostic print
-    print(f"Commercial constellation design saved to: \n\t`{commercial_out_path}`")
+    # print(f"Commercial constellation design saved to: \n\t`{commercial_out_path}`")
     print(f"Walker delta constellation design saved to: \n\t`{walker_delta_out_path}`")
 
     # TODO print summary of constellation designs

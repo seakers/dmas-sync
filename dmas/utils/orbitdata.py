@@ -52,6 +52,7 @@ class OrbitData:
                 ):
         # assign attributes
         self.agent_name = agent_name
+        self.agent_name_safe = OrbitData.safe_name(agent_name)
         self.time_step = time_step
         self.epoch_type = epoch_type
         self.epoch = epoch
@@ -702,8 +703,8 @@ class OrbitData:
             # otherwise, filter for target of interest
 
             # get column index of this agent and the target in the comms links table
-            u_idx = self.comms_target_indices[self.agent_name]
-            v_idx = self.comms_target_indices[target]
+            u_idx = self.comms_target_indices[self.agent_name_safe]
+            v_idx = self.comms_target_indices[OrbitData.safe_name(target)]
 
             # filter for intervals where this agent and the target are in the same component (i.e. have access to each other) and compile list of target access intervals
             target_intervals = [
@@ -737,7 +738,7 @@ class OrbitData:
             out = []
 
             # get column index of this agent in the comms links table
-            u_column_idx = self.comms_target_indices[self.agent_name]
+            u_column_idx = self.comms_target_indices[self.agent_name_safe]
 
             # iterate through list of intervals in this time period 
             for interval, *component_indices in future_intervals:
@@ -759,8 +760,8 @@ class OrbitData:
         out = []
 
         # get column index of this agent and the target in the comms links table
-        u_column_idx = self.comms_target_indices[self.agent_name]
-        v_column_idx = self.comms_target_indices[target]
+        u_column_idx = self.comms_target_indices[self.agent_name_safe]
+        v_column_idx = self.comms_target_indices[OrbitData.safe_name(target)]
 
         # iterate through list of intervals in this time period 
         for interval, *component_indices in future_intervals:
@@ -1916,7 +1917,7 @@ class OrbitData:
         # encode extras (mostly same as your existing code, but don't write per-column files)
         for col in extra_cols:
             # get a safe name for the column
-            safe = OrbitData.__safe_name(col)
+            safe = OrbitData.safe_name(col)
 
             # get data series for working column
             s: pd.Series = work[col]
@@ -2107,7 +2108,7 @@ class OrbitData:
         )
 
     @staticmethod
-    def __safe_name(col: str) -> str:
+    def safe_name(col: str) -> str:
         return col.replace(" ", "_").replace("[", "").replace("]", "").replace("/", "_")
     
 
@@ -2301,7 +2302,7 @@ class OrbitData:
         extras_data: dict[str, np.ndarray] = {}
 
         for col in cols_to_write:
-            safe = OrbitData.__safe_name(col)
+            safe = OrbitData.safe_name(col)
             s: pd.Series = work[col]
 
             is_stringish = (

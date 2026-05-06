@@ -86,7 +86,14 @@ def create_scenario_specifications(base_path : str,
                                    events_path : str, 
                                    constellation : str,
                                    connectivity : str,
+                                   data_processing : str,
                                 ) -> dict:
+    
+    if "oracle" in data_processing.lower():
+        mission_filename = "response.json"
+    else:
+        mission_filename = "monitoring.json"
+    
     return {
             "events": {
                 "@type": "PREDEF",
@@ -102,7 +109,7 @@ def create_scenario_specifications(base_path : str,
             },
             "scenarioPath" : base_path,
             "name" : results_dir,
-            "missionsPath" : os.path.join(base_path, 'resources','missions',f'missions.json')
+            "missionsPath" : os.path.join(base_path, 'resources','missions',mission_filename)
         }
 
 def create_grid_specifications(base_path : str, scenario : str, date : str) -> dict:
@@ -332,7 +339,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
     mission_specs['propagator']['stepSize'] = step_size
 
     # set scenario specifications
-    mission_specs['scenario'] = create_scenario_specifications(base_path, results_dir, events_path, constellation, connectivity)
+    mission_specs['scenario'] = create_scenario_specifications(base_path, results_dir, events_path, constellation, connectivity, data_processing)
 
     # set target distribution type
     mission_specs['grid'] = create_grid_specifications(base_path, scenario, date)

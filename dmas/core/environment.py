@@ -154,7 +154,8 @@ class SimulationEnvironment(object):
             action_statuses[agent_name] = updated_action_status
             
             # store outgoing messages depending on current connectivity
-            for receiver in self._current_connectivity_map[agent_name]:
+            agent_name_safe = OrbitData.safe_name(agent_name)
+            for receiver in self._current_connectivity_map[agent_name_safe]:
                 msgs[receiver].extend(msgs_out)
 
             # store observations

@@ -64,13 +64,14 @@ if __name__ == "__main__":
             "None",
             "DP",
             "Centralized-MILP_priority",
-            # "Centralized-MILP_assignments"
+            # "Centralized-MILP_assignments" 
             # "Centralized-Metaheuristics" # TODO
         ],
         "Replanner": [
             "None",
             "Greedy", 
             "CBBA", 
+            # "Metaheuristic"
         ],
         "Connectivity": [
             "GS",                   # sats can only talk to ground station (no inter-sat comms)
@@ -78,7 +79,7 @@ if __name__ == "__main__":
             "Interconstellation"    # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
         ],
         "Scenario": [
-            "Water-Quality",        # water quality monitoring (algal blooms + high-flow events)
+            "Water-Quality",        # water quality monitoring (algal blooms + high-flow events = water quality)
             "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
         ],
         "Data Processing" : [

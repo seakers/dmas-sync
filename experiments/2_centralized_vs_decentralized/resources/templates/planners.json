@@ -19,7 +19,7 @@
         },
         "worker" : {
             "@type": "worker", 
-            "dealerName": "dealer-sat"
+            "dealerName": "GS Planner"
         },
         "centralized-milp_priority" : {
             "@type": "dealer",
