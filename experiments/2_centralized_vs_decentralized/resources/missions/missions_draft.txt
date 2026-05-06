@@ -58,7 +58,8 @@ Mission: high flow events
 			VNIR: X/Z [>=600, >=200]
 		R7: Revisit Time
 			All: [3600s, 5000s, 7200s]
-	Param: Temperature
+	
+    Param: Temperature <- DISCARD FOR NOW
 		R1: Spatial Resolution 
 			VNIR: A/Z [30m, 100m]
 			TIR: X/A [30m, 60m]
@@ -75,6 +76,7 @@ Mission: high flow events
 			VNIR: B/Z [400dB]
 		R7: Revisit Time
 			All: [3600s, 5000s, 7200s]
+
 	Param: Water Level:
 		R1: Spatial Resolution 
 			ALT: [30m, 100m]			
