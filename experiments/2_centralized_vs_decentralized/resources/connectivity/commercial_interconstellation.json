@@ -116,6 +116,11 @@
     "rules": [
         {
             "action": "allow",
+            "scope": "within",
+            "targets": "ground_stations"
+        },
+        {
+            "action": "allow",
             "scope": "between",
             "targets": [
                 "instruments",

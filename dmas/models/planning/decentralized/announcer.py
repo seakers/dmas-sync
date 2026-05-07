@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from execsatm.tasks import EventObservationTask
 from execsatm.events import GeophysicalEvent
-from execsatm.mission import Mission
+from execsatm.mission import Dict, Mission
 from execsatm.objectives import EventDrivenObjective
 from execsatm.utils import Interval
 
@@ -26,7 +26,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
     def __init__(self, 
                  agent_results_dir : str,
                  events_path : str,
-                 mission : Mission,
+                 simulation_missions : Dict[str,Mission],
                  debug = False, 
                  logger = None,
                  printouts : bool = True
@@ -43,13 +43,13 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         # validate inputs
         if not os.path.isfile(events_path):
             raise ValueError('`events_path` must point to an existing file.')
-        if not isinstance(mission, Mission):
-            raise ValueError('`mission` must be of type `Mission`.')
+        if not isinstance(simulation_missions, Dict):
+            raise ValueError('`simulation_missions` must be a dictionary of mission objects.')
 
 
         # load predefined events
         self.events : list[GeophysicalEvent] = self.load_events(events_path)
-        self.parent_mission : Mission = mission
+        self.simulation_missions : Dict[str,Mission] = simulation_missions
     
     def load_events(self, events_path : str) -> pd.DataFrame:        
         events_df : pd.DataFrame = pd.read_csv(events_path)
@@ -118,20 +118,30 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                           disable=(len(future_events) < 10) or not self._printouts
                         ):
             # get event objetives from mission
-            objectives  : list[EventDrivenObjective] = [objective for objective in self.parent_mission.objectives
+            for mission,event_objectives in self.simulation_missions.items():
+                for objective in event_objectives:
+                    x = 1
+                    if isinstance(objective, EventDrivenObjective):
+                        x = 1
+                        if objective.event_type == event.event_type:
+                            x= 1
+
+            event_objectives  : list[EventDrivenObjective] = [(mission_name,objective) 
+                                                        for mission_name,objectives in self.simulation_missions.items()
+                                                        for objective in objectives
                                                         if isinstance(objective, EventDrivenObjective)
                                                         and objective.event_type == event.event_type]
 
-            for objective in objectives:
+            for mission_name,objective in event_objectives:
                 objective : EventDrivenObjective
                 # create task
                 task = EventObservationTask(objective.parameter, event=event, objective=objective)
 
                 # generate task request 
                 task_request = TaskRequest(task,
-                                            requester = state.agent_name,
-                                            mission_name = self.parent_mission.name,
-                                            t_req = event.t_start)
+                                            requester=state.agent_name,
+                                            mission_name=mission_name,
+                                            t_req=event.t_start)
                 
                 # generate measurement request message
                 task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
@@ -150,7 +160,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                                                 ):
             
             # get column index of this agent in the comms links table
-            u_idx = orbitdata.comms_target_indices[state.agent_name]
+            u_idx = orbitdata.comms_target_indices[OrbitData.safe_name(state.agent_name)]
             cols = orbitdata.comms_target_columns
 
             # iterate through list of intervals in this time period 

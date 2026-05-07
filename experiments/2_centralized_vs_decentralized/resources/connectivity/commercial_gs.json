@@ -123,6 +123,11 @@
             ]
         },
         {
+            "action": "allow",
+            "scope": "within",
+            "targets": "ground_stations"
+        },
+        {
             "action": "deny",
             "scope": "within",
             "targets": "instruments"

@@ -44,6 +44,11 @@ def generate_gs_connectivity_specs(constellation_spec : List[dict], connectivity
         "scope" : "between",
         "targets" : ["instruments", "ground_stations"]
     }
+    intra_gs_connectivity = {
+        "action" : "allow",
+        "scope" : "within",
+        "targets" : "ground_stations"
+    }
     no_intrasat_connectivity = {
         "action": "deny",
         "scope": "within",
@@ -58,6 +63,7 @@ def generate_gs_connectivity_specs(constellation_spec : List[dict], connectivity
     # set connectivity rules in spec
     connectivity_spec['rules'] = [
         gs_only_connectivity,
+        intra_gs_connectivity,
         no_intrasat_connectivity,
         no_intrarelay_connectivity
     ]
@@ -207,6 +213,11 @@ def generate_walker_intraconstellation_connectivity_specs(constellation_spec : L
         "scope": "within",
         "targets": "relays"
     }
+    intra_gs_connectivity = {
+        "action" : "allow",
+        "scope" : "within",
+        "targets" : "ground_stations"
+    }
     intra_algal_bloom_monitoring_connectivity = {
         "action": "allow",
         "scope": "within",
@@ -247,6 +258,7 @@ def generate_walker_intraconstellation_connectivity_specs(constellation_spec : L
     # set connectivity rules in spec
     connectivity_spec['rules'] = [
         intra_tdrss_connectivity,
+        intra_gs_connectivity,
         intra_algal_bloom_monitoring_connectivity,
         intra_flood_monitoring_connectivity,
         intra_wildfire_monitoring_connectivity,
@@ -285,6 +297,11 @@ def generate_interconstellation_connectivity_specs(constellation_spec : List[dic
     }
 
     # define connectivity rules
+    intra_gs_connectivity = {
+        "action" : "allow",
+        "scope" : "within",
+        "targets" : "ground_stations"
+    }
     interconstellation_connectivity = {
         "action" : "allow",
         "scope" : "between",
@@ -303,6 +320,7 @@ def generate_interconstellation_connectivity_specs(constellation_spec : List[dic
 
     # set connectivity rules in spec
     connectivity_spec['rules'] = [
+        intra_gs_connectivity,
         interconstellation_connectivity,
         intraconstellation_connectivity,
         intrarelay_connectivity

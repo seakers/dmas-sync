@@ -284,13 +284,13 @@ def create_ground_operator_specifications(
 
     if 'centralized' in preplanner.lower():      
         # create planner ground operator  
-        announcer_specs = copy.deepcopy(ground_operator_specs_template['planner'])
+        centralized_planner_specs = copy.deepcopy(ground_operator_specs_template['planner'])
 
         # set planner 
-        announcer_specs['planner']['preplanner'] = planner_specs['preplanners'][preplanner.lower()]
+        centralized_planner_specs['planner']['preplanner'] = planner_specs['preplanners'][preplanner.lower()]
 
         # add to list of operators
-        operators.append(announcer_specs)
+        operators.append(centralized_planner_specs)
 
     # get event date from events path to construct announcer specs
     *event_dir_path,event_filename = events_path.split('/')

@@ -618,15 +618,15 @@ class OrbitData:
 
         # ----------------------------
         # DEBUG SECTION
-        # valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
-        # false_pairs = [pair for pair, allowed in connectivity_mask.items() if not allowed]
+        valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
+        false_pairs = [pair for pair, allowed in connectivity_mask.items() if not allowed]
 
-        # for u,v in false_pairs:
-        #     if u not in groups['instruments']:
-        #         x = 1
-        #     elif v not in groups['instruments']:
-        #         x = 1
-        # x = 1
+        for u,v in false_pairs:
+            if u not in groups['instruments']:
+                x = 1
+            elif v not in groups['instruments']:
+                x = 1
+        x = 1
         # ----------------------------
 
         # iterate through override rules and apply to connectivity mask
@@ -1169,6 +1169,11 @@ class OrbitData:
             gs_access_dfs, comms_link_dfs, gp_access_dfs, \
                 grid_data_dfs = OrbitData.__load_csv_data(orbitdata_dir, simulation_duration, printouts)
             
+        # DEBUG SECTION-----------------------
+        non_empty_accesses = [(key,df) for key,df in comms_link_dfs.items() if not df.empty]
+        x = 1
+        # ------------------------------------
+
         # create instances of OrbitData for each agent and store in dictionary indexed by agent name
         schemas = dict()
         for *__,agent_name in agents_loaded: 
@@ -1206,7 +1211,7 @@ class OrbitData:
             }
 
         # compile comms link data for all agents into single dataframe
-        comms_data_concat :pd.DataFrame = OrbitData.__compile_agent_comms_data(comms_link_dfs)
+        comms_data_concat : pd.DataFrame = OrbitData.__compile_agent_comms_data(comms_link_dfs)
         
         # save agent comms link data into single dataframe and print to binary
         comms_meta = OrbitData.__write_interval_data_table(comms_data_concat, bin_dir, 'comms_data', time_specs['time step'], allow_overwrite=True)
@@ -1641,15 +1646,15 @@ class OrbitData:
                     # get all ground station accesses for this spacecraft
                     comms_data = gs_access_dfs[v_name]                    
 
-                    # filter ground station accesses for the ground operator's network's stations
-                    comms_data = comms_data[(comms_data['gndStn network'] == u_name)]
+                    # TODO filter ground station accesses for the ground operator's network's stations
+                    # comms_data = comms_data[(comms_data['gndStn network'] == u_name)]
 
                 elif u_type == 'spacecraft' and v_type == 'groundOperator':     
                     # get all ground station accesses for this spacecraft
                     comms_data = gs_access_dfs[u_name]                    
                     
-                    # filter ground station accesses for the ground operator's network's stations
-                    comms_data = comms_data[(comms_data['gndStn network'] == v_name)]
+                    # TODO filter ground station accesses for the ground operator's network's stations
+                    # comms_data = comms_data[(comms_data['gndStn network'] == v_name)]
                     
                 elif u_type == 'groundOperator' and v_type == 'groundOperator':
                     # all ground operators can communicate with each other for the entire duration of the simulation

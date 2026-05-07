@@ -24,7 +24,7 @@ from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
 from dmas.utils.orbitdata import OrbitData
-from dmas.models.actions import AgentAction, BroadcastMessageAction
+from dmas.models.actions import AgentAction
 from dmas.models.agent import SimulationAgent
 from dmas.core.environment import SimulationEnvironment
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
@@ -1183,7 +1183,7 @@ class Simulation:
             events_path = preplanner_dict.get('eventsPath', None)
             if events_path is None: raise ValueError(f'predefined events path not specified in input file.')
             
-            return EventAnnouncerPlanner(agent_results_dir, events_path, agent_mission, debug, logger, printouts)
+            return EventAnnouncerPlanner(agent_results_dir, events_path, simulation_missions, debug, logger, printouts)
 
         elif preplanner_type.lower() == 'dealer':
             # unpack preplanner parameters

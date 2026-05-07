@@ -124,6 +124,11 @@
         {
             "action": "allow",
             "scope": "within",
+            "targets": "ground_stations"
+        },
+        {
+            "action": "allow",
+            "scope": "within",
             "targets": "algal_bloom_monitoring"
         },
         {
