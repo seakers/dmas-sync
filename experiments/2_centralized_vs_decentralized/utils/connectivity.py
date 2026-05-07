@@ -10,6 +10,12 @@ from typing import List
 from dmas.utils.tools import print_scenario_banner
 
 GS_NETWORK = "NEN"
+GS_GROUP = [
+    "GS Announcer",
+    "GS Planner (Algal Blooms)",
+    "GS Planner (High Flow Rivers)",
+    "GS Planner (Wildfires)",
+]
 GS_ANNOUNCER = "GS Announcer"
 GS_PLANNER = "GS Planner"
 
@@ -29,7 +35,7 @@ def generate_gs_connectivity_specs(constellation_spec : List[dict], connectivity
         sat_spec['name'] for sat_spec in constellation_spec
         if "tdrss" in sat_spec['name'].lower() # include only TDRSS in relay group
     ]  
-    ground_station_group = [GS_ANNOUNCER, GS_PLANNER]
+    ground_station_group = GS_GROUP
 
     # add groups to connectivity spec
     connectivity_spec['groups'] = {
@@ -95,7 +101,7 @@ def generate_commercial_intraconstellation_connectivity_specs(constellation_spec
             groups["relays"].append(sat_spec['name'])
         else:
             raise ValueError(f"Satellite {sat_spec['name']} does not match any known constellation group")
-    groups['ground_stations'] = [GS_ANNOUNCER, GS_PLANNER]
+    groups['ground_stations'] = GS_GROUP
 
     # add groups to connectivity spec
     connectivity_spec['groups'] = dict(groups)
@@ -202,7 +208,7 @@ def generate_walker_intraconstellation_connectivity_specs(constellation_spec : L
             groups["wildfire_monitoring"].append(sat_spec['name'])
         else:
             raise ValueError(f"Satellite {sat_spec['name']} does not match any known constellation group")
-    groups['ground_stations'] = [GS_ANNOUNCER, GS_PLANNER]
+    groups['ground_stations'] = GS_GROUP
 
     # add groups to connectivity spec
     connectivity_spec['groups'] = dict(groups)
@@ -287,7 +293,7 @@ def generate_interconstellation_connectivity_specs(constellation_spec : List[dic
         sat_spec['name'] for sat_spec in constellation_spec
         if "tdrss" in sat_spec['name'].lower() # include only TDRSS in relay group
     ]  
-    ground_station_group = [GS_ANNOUNCER, GS_PLANNER]
+    ground_station_group = GS_GROUP
 
     # add groups to connectivity spec
     connectivity_spec['groups'] = {

@@ -270,7 +270,6 @@ def load_ground_stations(base_path : str, network_name : str) -> List[dict]:
 
     return gs_network
 
-
 def create_ground_operator_specifications(
         preplanner : str,         
         data_processing : str, 
@@ -296,30 +295,61 @@ def create_ground_operator_specifications(
     *event_dir_path,event_filename = events_path.split('/')
     scenario = event_filename.split('_')[0]
     event_date = event_filename.split('_')[-1].split('.')[0]
-
-    # create event announcer ground operator
-    announcer_specs = copy.deepcopy(ground_operator_specs_template['announcer'])
-
-    # set events path
-    if data_processing.lower() == 'oracle':
-        # for oracle data processing, announcer has access to all events, so use the full events file
-        announcer_specs['planner']['preplanner']['eventsPath'] = events_path
+   
+    # define scenario-specific event types to announce
+    announcer_types = []
+    if scenario.lower() == 'lakes':
+        announcer_types = ['algal_bloom']
+    elif scenario.lower() == 'rivers':
+        announcer_types = ['high_flow_river']   
+    elif scenario.lower() == 'wildfires':
+        announcer_types = ['wildfire']
+    elif scenario.lower() == 'water-quality':
+        announcer_types = ['algal_bloom', 'high_flow_river']
     elif scenario.lower() == 'comprehensive':
-        # only announce wildfires in comprehensive scenario since they are the most challenging events to detect and respond to
-        wildfire_events_path = os.path.join(*event_dir_path, f'wildfire_{event_date}.csv')
-        announcer_specs['planner']['preplanner']['eventsPath'] = wildfire_events_path
+        announcer_types = ['algal_bloom', 'high_flow_river', 'wildfire']
     else:
-        # replace last part of events path with `no_events.csv` for non-oracle data processing types 
-        no_events_path = events_path.split('/')[:-1] + ['no_events.csv']
-        no_events_path = os.path.join(*no_events_path)
-        announcer_specs['planner']['preplanner']['eventsPath'] = no_events_path        
+        raise ValueError(f"Scenario `{scenario}` not recognized for ground operator specification generation.")
 
-    # add to list of operators
-    operators.append(announcer_specs)
+    # define mission type based on data processing type
+    if data_processing.lower() == 'onboard':
+        mission_type = "monitoring"
+    else:
+        mission_type = "response"
+
+    # create event announcers for each relevant event type
+    for announcer_type in announcer_types:
+        # skip announcer creation if data processing type is onboard; only announce wildfires
+        skip_announcer = bool(data_processing.lower() == 'onboard' and announcer_type in ['algal_bloom', 'high_flow_river'])
+
+        # create event announcer ground operator
+        announcer_specs = copy.deepcopy(ground_operator_specs_template['announcer'])
+
+        # set events path
+        file_name = f"{announcer_type}_{event_date}.csv" if not skip_announcer else "no_events.csv"
+        announcer_events_path = os.path.join(*event_dir_path, file_name)
+        announcer_specs['planner']['preplanner']['eventsPath'] = announcer_events_path
+
+        # update name of announcer based on event type
+        announcer_type_name = announcer_type.replace('_', ' ').title()
+        announcer_specs['name'] += f" ({announcer_type_name}s)"
+        announcer_specs['@id'] += f"-{announcer_type}s"         
+
+        # add mission to planner specifications based on event type
+        if announcer_type == 'algal_bloom':
+            announcer_specs['mission'] = f'algal bloom {mission_type}'
+        elif announcer_type == 'high_flow_river':
+            announcer_specs['mission'] = f'high flow river {mission_type}'
+        elif announcer_type == 'wildfire':
+            announcer_specs['mission'] = f'wildfire {mission_type}'
+        else:
+            raise ValueError(f"Announcer type `{announcer_type}` not recognized for mission assignment in ground operator specification generation.")
+
+        # add to list of operators
+        operators.append(announcer_specs)    
 
     # return ground operator specifications
     return operators
-
 
 def generate_scenario_mission_specs(mission_specs_template : dict, 
                                     duration : float, 

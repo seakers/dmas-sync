@@ -14,7 +14,7 @@ import scipy
 from tqdm import tqdm
 import pandas as pd
 
-from instrupy.base import BasicSensorModel
+from instrupy.base import BasicSensorModel, SyntheticApertureRadarModel
 from instrupy.passive_optical_scanner_model import PassiveOpticalScannerModel
 from instrupy.util import ViewGeometry, SphericalGeometry
 from orbitpy.util import Spacecraft
@@ -569,13 +569,12 @@ class ResultsProcessor:
             compiled_orbitdata : Dict[str, OrbitData]
         ) -> Dict[Tuple[int,int], np.ndarray]:
 
-        # initialize list of columns and dictionary of column chunks
-        cols = None
-        chunks = None  # maps: col -> list of arrays
+        # 1) Collect per-agent arrays; different instrument types may have different extra columns
+        agent_arrays = []   # list of {col: np.ndarray}, one entry per non-empty agent
+        all_cols = []       # ordered union of all columns seen across agents
 
-        # 1) Collect per-sat arrays (no per-row dicts)
         for agent_orbit_data in compiled_orbitdata.values():
-            # get access data for this agent 
+            # get access data for this agent
             access = agent_orbit_data.gp_access_data.lookup_interval(
                 0.0,
                 include_extras=True,
@@ -585,28 +584,36 @@ class ResultsProcessor:
             # check if access data is empty
             t = access.get("time [s]", None)
             if t is None or len(t) == 0:
-                # if so, skip this agent
                 continue
 
-            # check if columns have been initialized
-            if cols is None:
-                # if not, initialize columns and chunks dictionary
-                cols = list(access.keys())
-                chunks = {c: [] for c in cols}
+            agent_arr = {c: np.asarray(v) for c, v in access.items()}
+            agent_arrays.append(agent_arr)
 
-            # append arrays for each column
-            for c in cols:
-                chunks[c].append(np.asarray(access[c]))
+            # extend column union preserving insertion order
+            for c in agent_arr:
+                if c not in all_cols:
+                    all_cols.append(c)
 
         # check if any access data was found
-        if cols is None: 
-            # no data found; return empty results
-            return {}, {} 
+        if not agent_arrays:
+            return {}, {}
 
-        # 2) Concatenate once per column
+        # 2) Concatenate once per column; fill NaN where an agent lacks a column
+        n_rows = [len(a["time [s]"]) for a in agent_arrays]
         big = {}
-        for c in cols:
-            big[c] = np.concatenate(chunks[c], axis=0) if chunks[c] else np.array([])
+        for c in all_cols:
+            parts = []
+            for arr, n in zip(agent_arrays, n_rows):
+                if c in arr:
+                    parts.append(arr[c])
+                else:
+                    # column absent for this agent — infer fill type from other agents
+                    ref = next((a[c] for a in agent_arrays if c in a), None)
+                    if ref is not None and np.issubdtype(ref.dtype, np.number):
+                        parts.append(np.full(n, np.nan, dtype=float))
+                    else:
+                        parts.append(np.full(n, None, dtype=object))
+            big[c] = np.concatenate(parts, axis=0)
 
         # check if time column is empty after concatenation
         if big["time [s]"].size == 0:
@@ -624,7 +631,7 @@ class ResultsProcessor:
         keys_sorted = keys[order]
 
         # reorder all columns once
-        for c in cols:
+        for c in big:
             big[c] = np.asarray(big[c])[order]
 
         # group boundaries
@@ -3671,12 +3678,31 @@ class ResultsProcessor:
                     instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
                     if instrument_fov_geometry.shape == 'RECTANGULAR':
                         cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width) 
+                    # if instrument_fov_geometry.shape == 'RECTANGULAR':
+                    #     cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    # elif instrument_fov_geometry.shape == 'CIRCULAR':
+                    #     cross_track_fov.append(instrument_fov_geometry.angle_width) # circular FOV: angle width is diameter, which is the relevant FOV dimension for access calculations
                     else:
                         raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
                 elif isinstance(instrument_model, PassiveOpticalScannerModel):
                     instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
                     instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
                     if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width) 
+                    # if instrument_fov_geometry.shape == 'RECTANGULAR':
+                    #     cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    else:
+                        raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
+                elif isinstance(instrument_model, SyntheticApertureRadarModel):
+                    instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
+                    instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
+                    if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
                         cross_track_fov.append(instrument_fov_geometry.angle_width)
                     else:
                         raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')

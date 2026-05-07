@@ -118,7 +118,9 @@
         ],
         "ground_stations": [
             "GS Announcer",
-            "GS Planner"
+            "GS Planner (Algal Blooms)",
+            "GS Planner (High Flow Rivers)",
+            "GS Planner (Wildfires)"
         ]
     },
     "rules": [
