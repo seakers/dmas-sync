@@ -849,22 +849,32 @@ class AbstractPlanner(ABC):
                 obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
 
             # update instrument-specific observation performance information
-            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower())
-                or ('vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower())):
-                if isinstance(instrument_spec.spectral_resolution, str):
-                    obs_perf.update({
-                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
-                    })
-                elif isinstance(instrument_spec.spectral_resolution, (int,float)):
-                    obs_perf.update({
-                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
-                    })
-                else:
-                    raise ValueError('Unsupported type for spectral resolution in instrument specification.')
-                
-            elif ('altimeter' in instrument_name.lower()
-                  or 'altimeter' in instrument_spec._type.lower()):
+            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
+                or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
+                spectral_bands_config = instrument_spec.spectral_config.get('bands') if instrument_spec.spectral_config is not None else []
+                spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
+                                  # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
+                                  for band in spectral_bands_config] 
                 obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : spectral_bands,
+                    ObservationRequirementAttributes.ACCURACY.value : np.Inf,
+                })
+
+                # if isinstance(instrument_spec.spectral_resolution, str):
+                #     obs_perf.update({
+                #         ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
+                #     })
+                # elif isinstance(instrument_spec.spectral_resolution, (int,float)):
+                #     obs_perf.update({
+                #         ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
+                #     })
+                # else:
+                #     raise ValueError('Unsupported type for spectral resolution in instrument specification.')
+                
+            elif ('altimeter' in instrument_name.lower() or 'alt' in instrument_name.lower()
+                  or 'altimeter' in instrument_spec._type.lower() or 'alt' in instrument_spec._type.lower()):
+                obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
                     ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
                 })
             else:

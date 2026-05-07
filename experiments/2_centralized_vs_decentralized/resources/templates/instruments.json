@@ -45,7 +45,7 @@
     "bitsPerPixel": 12,
     "dataRate": 80.0,
     "opticsSysEff" : 0.70,
-    "@spectral_config": {
+    "spectral_config": {
       "sensor_type": "Multispectral - 8 discrete bands (SeaWiFS heritage), NOT hyperspectral",
       "chl_a_capable": true,
       "chl_a_rationale": "8-band SeaWiFS-heritage configuration explicitly designed for ocean/inland water Chl-A retrieval. Band 1 (412 nm) and Band 2 (443 nm) enable CDOM and aerosol correction over water. Band 6 (670 nm) provides Chl-A absorption trough. Peer-reviewed validation in lakes, estuaries, and coastal zones (SeaHawk mission, Nature Scientific Data 2024).",
@@ -239,19 +239,50 @@
     "bitsPerPixel": 14,
     "dataRate": 50.0,
     "opticsSysEff" : 0.60,
-    "@spectral_config": {
+    "spectral_config": {
       "sensor_type": "TIR - LWIR multispectral, 4 bands within 8-12 um",
-      "spectral_range_um": [
-        8.0,
-        12.0
-      ],
-      "center_wavelength_um": 10.0,
-      "bandwidth_um": 4.0,
-      "num_bands": 4,
       "detector_material": "MCT (Mercury Cadmium Telluride), cryocooled ~70 K",
-      "nedt_mk": 30,
-      "lst_accuracy_k": 2.0,
-      "constellation": "Water quality (primary) + Fire monitoring (secondary via cross-constellation)",
+      "bands": [
+        {
+          "id": 1,
+          "name": "TIR-1",
+          "center_nm": 8500.0,
+          "range_nm": [8000.0, 9000.0],
+          "FWHM_nm": 1000.0,
+          "use": "Surface emissivity, silicate composition, geological discrimination"
+        },
+        {
+          "id": 2,
+          "name": "TIR-2",
+          "center_nm": 9400.0,
+          "range_nm": [8900.0, 9800.0],
+          "FWHM_nm": 900.0,
+          "use": "Emissivity retrieval, vegetation-soil discrimination"
+        },
+        {
+          "id": 3,
+          "name": "TIR-3",
+          "center_nm": 10800.0,
+          "range_nm": [10400.0, 11200.0],
+          "FWHM_nm": 800.0,
+          "use": "Split-window Ch.1 - primary LST retrieval, water surface temperature"
+        },
+        {
+          "id": 4,
+          "name": "TIR-4",
+          "center_nm": 11600.0,
+          "range_nm": [11200.0, 12000.0],
+          "FWHM_nm": 800.0,
+          "use": "Split-window Ch.2 - water vapor correction for LST"
+        }
+      ],
+      "spatial_resolution_m": 28.9,
+      "swath_km": 18.5,
+      "nedt_reference": {
+        "nedt_mk": 30,
+        "lst_accuracy_k": 2.0,
+        "note": "NEdT < 30 mK at 300 K scene temperature (constellr published spec)"
+      },
       "mission_suitability": {
         "water_temperature": true,
         "fire_lst": true,
@@ -298,7 +329,7 @@
     "bitsPerPixel": 8,
     "numberDetectorRows": 1,
     "numberDetectorCols": 1,
-    "@spectral_config": {
+    "spectral_config": {
       "sensor_type": "Active nadir Ka-band radar altimeter - single frequency",
       "rf_frequency_ghz": 35.75,
       "rf_band": "Ka-band",
@@ -366,13 +397,13 @@
     "bitsPerPixel": 12,
     "dataRate": 500.0,
     "opticsSysEff" : 0.75,
-    "@spectral_config": {
+    "spectral_config": {
       "sensor_type": "Multispectral - 11 bands Sentinel-2 matched VNIR, NOT hyperspectral",
       "chl_a_capable": false,
       "chl_a_rationale": "Missing 412 nm violet and 443 nm coastal blue - essential for ocean color atmospheric correction. Bands matched to Sentinel-2 (land surface focus), not SeaWiFS (ocean color focus). Cannot retrieve Chl-A reliably.",
       "flood_ndwi_capable": true,
       "flood_rationale": "Green (~560 nm) and NIR (~865 nm) bands enable MNDWI = (Green-SWIR)/(Green+SWIR) and NDWI = (Green-NIR)/(Green+NIR). High 3-6 m GSD enables precise land-water boundary at infrastructure scale.",
-      "bands_sentinel2_matched": [
+      "bands": [
         {
           "id": 1,
           "name": "Coastal Aerosol",
@@ -381,6 +412,7 @@
             433,
             453
           ],
+          "FWHM_nm": 30,
           "note": "B1 S2 analog - aerosol, not ocean color quality"
         },
         {
@@ -391,6 +423,7 @@
             458,
             522
           ],
+          "FWHM_nm": 30,
           "note": "B2 S2 analog"
         },
         {
@@ -401,6 +434,7 @@
             543,
             578
           ],
+          "FWHM_nm": 30,
           "note": "B3 S2 analog - primary NDWI band"
         },
         {
@@ -411,6 +445,7 @@
             650,
             680
           ],
+          "FWHM_nm": 30,
           "note": "B4 S2 analog - NDVI, burn mapping"
         },
         {
@@ -421,6 +456,7 @@
             698,
             712
           ],
+          "FWHM_nm": 30,
           "note": "B5 S2 analog"
         },
         {
@@ -431,6 +467,7 @@
             733,
             748
           ],
+          "FWHM_nm": 30,
           "note": "B6 S2 analog"
         },
         {
@@ -441,6 +478,7 @@
             773,
             793
           ],
+          "FWHM_nm": 30,
           "note": "B7 S2 analog"
         },
         {
@@ -451,6 +489,7 @@
             785,
             900
           ],
+          "FWHM_nm": 30,
           "note": "B8 S2 analog - primary NDWI NIR"
         },
         {
@@ -461,6 +500,7 @@
             855,
             875
           ],
+          "FWHM_nm": 30,
           "note": "B8A S2 analog"
         },
         {
@@ -471,6 +511,7 @@
             935,
             955
           ],
+          "FWHM_nm": 30,
           "note": "B9 S2 analog - atmospheric correction"
         },
         {
@@ -481,6 +522,7 @@
             1360,
             1390
           ],
+          "FWHM_nm": 30,
           "note": "B10 S2 analog - cloud screening"
         }
       ],
@@ -642,7 +684,7 @@
         "@notes": "0.25 m spotlight, 5x5 km. Used for detailed burn / flood structure mapping."
       }
     ],
-    "@spectral_config": {
+    "spectral_config": {
       "sensor_type": "Active microwave SAR - X-band single frequency",
       "rf_band": "X-band",
       "frequency_range_ghz": [
@@ -721,7 +763,7 @@
     "bitsPerPixel": 12,
     "dataRate": 150.0,
     "opticsSysEff" : 0.65,
-    "@spectral_config": {
+    "spectral_config": {
       "sensor_type": "VNIR+SWIR combined - multispectral across 450-1750 nm, NOT hyperspectral",
       "chl_a_capable": false,
       "chl_a_rationale": "No 412 nm or 443 nm ocean color bands. Bands optimized for land surface targets (vegetation, fire, burn severity). Cannot perform ocean color Chl-A retrieval.",
@@ -729,7 +771,7 @@
       "burn_severity_rationale": "NBR = (NIR_{865} - SWIR^2^2_o_o) / (NIR_{865} + SWIR^2^2_o_o). dNBR = NBR_pre - NBR_post. Both bands present. 20 m GSD consistent with Sentinel-2 burn severity heritage at field scale.",
       "fire_extent_capable": true,
       "fire_extent_rationale": "Red (665 nm) + NIR (865 nm) enable NDVI change detection for fire perimeter at 20 m. 40 km swath suitable for large wildfire extent mapping. SWIR provides smoke penetration advantage for post-fire mapping.",
-      "vnir_bands": [
+      "bands": [
         {
           "id": 1,
           "name": "Blue",
@@ -738,6 +780,7 @@
             450,
             530
           ],
+          "FWHM_nm": 80,
           "use": "Contextual, cloud masking"
         },
         {
@@ -748,6 +791,7 @@
             530,
             590
           ],
+          "FWHM_nm": 60,
           "use": "Vegetation health, smoke"
         },
         {
@@ -758,6 +802,7 @@
             635,
             695
           ],
+          "FWHM_nm": 60,
           "use": "NDVI, fire extent, burn mapping"
         },
         {
@@ -768,6 +813,7 @@
             705,
             755
           ],
+          "FWHM_nm": 50,
           "use": "Vegetation stress, fire boundary"
         },
         {
@@ -778,10 +824,9 @@
             845,
             885
           ],
+          "FWHM_nm": 40,
           "use": "NBR numerator, NDVI, fire extent"
-        }
-      ],
-      "swir_bands": [
+        },
         {
           "id": 6,
           "name": "SWIR-1",
@@ -790,6 +835,7 @@
             1000,
             1200
           ],
+          "FWHM_nm": 200,
           "use": "Active fire detection support, soil moisture"
         },
         {
@@ -800,6 +846,7 @@
             1300,
             1460
           ],
+          "FWHM_nm": 160,
           "use": "Cirrus cloud screening, smoke"
         },
         {
@@ -810,6 +857,7 @@
             1540,
             1660
           ],
+          "FWHM_nm": 120,
           "use": "Burn severity (alternative NBR), snow/ice"
         },
         {
@@ -820,6 +868,7 @@
             2080,
             2320
           ],
+          "FWHM_nm": 240,
           "use": "NBR denominator (primary burn severity SWIR)"
         }
       ],
@@ -919,19 +968,50 @@
     "bitsPerPixel": 14,
     "dataRate": 50.0,
     "opticsSysEff" : 0.60,
-    "@spectral_config": {
+    "spectral_config": {
       "sensor_type": "TIR - LWIR multispectral, 4 bands within 8-12 um",
-      "spectral_range_um": [
-        8.0,
-        12.0
-      ],
-      "center_wavelength_um": 10.0,
-      "bandwidth_um": 4.0,
-      "num_bands": 4,
       "detector_material": "MCT (Mercury Cadmium Telluride), cryocooled ~70 K",
-      "nedt_mk": 30,
-      "lst_accuracy_k": 2.0,
-      "constellation": "Water quality (primary) + Fire monitoring (secondary via cross-constellation)",
+      "bands": [
+        {
+          "id": 1,
+          "name": "TIR-1",
+          "center_nm": 8500.0,
+          "range_nm": [8000.0, 9000.0],
+          "FWHM_nm": 1000.0,
+          "use": "Surface emissivity, silicate composition, geological discrimination"
+        },
+        {
+          "id": 2,
+          "name": "TIR-2",
+          "center_nm": 9400.0,
+          "range_nm": [8900.0, 9800.0],
+          "FWHM_nm": 900.0,
+          "use": "Emissivity retrieval, vegetation-soil discrimination"
+        },
+        {
+          "id": 3,
+          "name": "TIR-3",
+          "center_nm": 10800.0,
+          "range_nm": [10400.0, 11200.0],
+          "FWHM_nm": 800.0,
+          "use": "Split-window Ch.1 - primary LST retrieval, water surface temperature"
+        },
+        {
+          "id": 4,
+          "name": "TIR-4",
+          "center_nm": 11600.0,
+          "range_nm": [11200.0, 12000.0],
+          "FWHM_nm": 800.0,
+          "use": "Split-window Ch.2 - water vapor correction for LST"
+        }
+      ],
+      "spatial_resolution_m": 28.9,
+      "swath_km": 18.5,
+      "nedt_reference": {
+        "nedt_mk": 30,
+        "lst_accuracy_k": 2.0,
+        "note": "NEdT < 30 mK at 300 K scene temperature (constellr published spec)"
+      },
       "mission_suitability": {
         "water_temperature": true,
         "fire_lst": true,
@@ -958,7 +1038,7 @@
       "   Not steerable - wide-angle nadir-pointing fire surveillance",
       "=========================================================================="
     ],
-    "@type": "Basic Sensor",
+    "@type": "Passive Optical Scanner",
     "@id": "ororatech-otcp1-safire",
     "name": "OroraTech OTC-P1 SAFIRE Thermal Camera (MIR-FR)",
     "mass": 1.5,
@@ -978,41 +1058,45 @@
       "angleHeight": 41.7,
       "angleWidth": 41.7
     },
+    "scanTechnique": "MATRIX_IMAGER",
     "dataRate": 5.0,
     "bitsPerPixel": 14,
     "numberDetectorRows": 512,
     "numberDetectorCols": 512,
-    "@spectral_config": {
+    "spectral_config": {
       "sensor_type": "Thermal infrared - 3 channels (1x MWIR 3-5 um + 2x LWIR 8-12 um)",
-      "channels": [
+      "bands": [
         {
           "id": 1,
           "designation": "MWIR",
-          "range_um": [
-            3.0,
-            5.0
+          "range_nm": [
+            3000.0,
+            5000.0
           ],
-          "center_um": 4.0,
+          "center_nm": 4000.0,
+          "FWHM_nm": 2000.0,
           "primary": "Active fire FRP, high-temp combustion"
         },
         {
           "id": 2,
           "designation": "LWIR-1",
-          "range_um": [
-            8.0,
-            12.0
+          "range_nm": [
+            8000.0,
+            12000.0
           ],
-          "center_um": 10.0,
+          "center_nm": 10000.0,
+          "FWHM_nm": 2000.0,
           "primary": "Smoldering, ambient LST"
         },
         {
           "id": 3,
           "designation": "LWIR-2",
-          "range_um": [
-            8.0,
-            12.0
+          "range_nm": [
+            8000.0,
+            12000.0
           ],
-          "center_um": 10.5,
+          "center_nm": 10500.0,
+          "FWHM_nm": 2000.0,
           "primary": "Contextual thermal, cloud mask"
         }
       ],

@@ -534,8 +534,8 @@ class OrbitData:
         groups = predef_rules_dict.get('groups', {})
 
         # DEBUG
-        assert sum(len(group_members) for group_members in groups.values()) == len(agent_names), \
-            f'The total number of members across all groups must equal the number of agents. Groups: {groups}, Agents: {agent_names}'
+        # assert sum(len(group_members) for group_members in groups.values()) == len(agent_names), \
+        #     f'The total number of members across all groups must equal the number of agents. Groups: {groups}, Agents: {agent_names}'
 
         # ensure all groups are lists of strings
         assert all(isinstance(group_members, list) and all(isinstance(member, str) for member in group_members) for group_members in groups.values()), \
@@ -1170,8 +1170,8 @@ class OrbitData:
                 grid_data_dfs = OrbitData.__load_csv_data(orbitdata_dir, simulation_duration, printouts)
             
         # DEBUG SECTION-----------------------
-        non_empty_accesses = [(key,df) for key,df in comms_link_dfs.items() if not df.empty]
-        x = 1
+        # non_empty_accesses = [(key,df) for key,df in comms_link_dfs.items() if not df.empty]
+        # x = 1
         # ------------------------------------
 
         # create instances of OrbitData for each agent and store in dictionary indexed by agent name
