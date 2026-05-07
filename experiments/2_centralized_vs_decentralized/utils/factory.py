@@ -112,8 +112,8 @@ def create_scenario_specifications(base_path : str,
 
 def create_grid_specifications(base_path : str, scenario : str, date : str) -> dict:
     # construct grid file path
-    lakes_grid_name = f'lake_grid.csv'
-    rivers_grid_name = f"river_grid.csv"    
+    lakes_grid_name = f'algal_bloom_grid.csv'
+    rivers_grid_name = f"high_flow_river_grid_{date}.csv"    
     wildifres_grid_name = f'wildfire_grid_{date}.csv'
 
     # grid_path = os.path.join(base_path, 'resources','grids', grid_name)
