@@ -117,10 +117,10 @@
             "tdrss_sat_2"
         ],
         "ground_stations": [
-            "GS Announcer",
-            "GS Planner (Algal Blooms)",
-            "GS Planner (High Flow Rivers)",
-            "GS Planner (Wildfires)"
+            "GS Planner",
+            "GS Announcer (Algal Blooms)",
+            "GS Announcer (High Flow Rivers)",
+            "GS Announcer (Wildfires)"
         ]
     },
     "rules": [

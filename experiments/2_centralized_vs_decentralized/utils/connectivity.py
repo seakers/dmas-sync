@@ -11,10 +11,10 @@ from dmas.utils.tools import print_scenario_banner
 
 GS_NETWORK = "NEN"
 GS_GROUP = [
-    "GS Announcer",
-    "GS Planner (Algal Blooms)",
-    "GS Planner (High Flow Rivers)",
-    "GS Planner (Wildfires)",
+    "GS Planner",
+    "GS Announcer (Algal Blooms)",
+    "GS Announcer (High Flow Rivers)",
+    "GS Announcer (Wildfires)",
 ]
 GS_ANNOUNCER = "GS Announcer"
 GS_PLANNER = "GS Planner"

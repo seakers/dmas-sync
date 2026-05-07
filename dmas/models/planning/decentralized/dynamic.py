@@ -31,6 +31,11 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                                observation_history : TaskObservationTracker
                                ) -> List[ObservationAction]:
         
+        # DEBUG --------------------------
+        if len(observation_opportunities) > 1:
+            x = 1
+        # ---------------------------------
+
         if not isinstance(state, SatelliteAgentState):
             raise NotImplementedError(f'Naive planner not yet implemented for agents of type `{type(state)}.`')
         elif not isinstance(specs, Spacecraft):
