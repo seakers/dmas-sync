@@ -39,11 +39,13 @@ class ObservationDataProcessor(ABC):
                              measurements : list) -> List[TaskRequest]:
         
         # unpack incoming requests
-        incoming_detected_events = {req.event for req in incoming_reqs 
-                                    if req.event is not None}
-        incoming_event_requesters = {req.event : req.requester 
+        incoming_detected_events = {req.task.event for req in incoming_reqs 
+                                    if isinstance(req.task, EventObservationTask) 
+                                    and req.task.event is not None}
+        incoming_event_requesters = {req.task.event : req.requester 
                                      for req in incoming_reqs
-                                     if req.event is not None}
+                                     if isinstance(req.task, EventObservationTask)
+                                     and req.task.event is not None}
         
         # update list of known events and requests
         self.known_events.update(incoming_detected_events)

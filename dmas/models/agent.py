@@ -25,8 +25,8 @@ from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.trackers import DataSink, TaskObservationTracker
 from dmas.models.science.processing import ObservationDataProcessor
-from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.science.requests import TaskRequest
+from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
 from dmas.utils.tools import SimulationRoles
 
@@ -521,11 +521,6 @@ class SimulationAgent(object):
         for task in new_tasks.values():
             shareable = not isinstance(task, DefaultMissionTask) # default mission tasks are not shareable
             self._observations_tracker.register_task(task, shareable)
-
-        if new_tasks and not new_reqs:
-            x= 1
-        if new_reqs:
-            x = 1
 
         # return new_reqs.values(), new_tasks.values()
         return list(new_reqs.values()), list(new_tasks.values())    
