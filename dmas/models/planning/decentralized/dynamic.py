@@ -36,6 +36,9 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         elif not isinstance(specs, Spacecraft):
             raise ValueError(f'`specs` needs to be of type `{Spacecraft}` for agents with states of type `{SatelliteAgentState}`')
         
+        if len(observation_opportunities) == 0:
+            return []  # no observation opportunities for this planning horizon, return empty schedule
+        
         # compile list of instruments available in payload
         payload : dict = {instrument.name: instrument for instrument in specs.instrument}
         
@@ -153,16 +156,20 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                 updated_task_states[task.id] = (n_obs_prev + 1, t_obs_i)
 
             # DEBUG --------------------------
-            if len(observation_opportunities) > 1:
+            if i > 0:
                 x = 1
             # ---------------------------------
-
 
             # calculate reward for this observation opportunity
             obs_i_reward = self.estimate_observation_opportunity_value(
                 obs_i, t_obs_i, d_obs_i, specs, cross_track_fovs, 
                 orbitdata, mission, observation_history, task_n_obs, task_t_prevs
             ) if i > 0 else 1  # dummy observation has no reward but intrinsic value of 1 to ensure that reachable observations are selected as starting points for paths
+
+            # DEBUG --------------------------
+            if i > 0:
+                x = 1
+            # ---------------------------------
 
             # calculate cumulative reward for this observation opportunity
             current_value = dp_state_i['value'] + obs_i_reward

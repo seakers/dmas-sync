@@ -371,7 +371,7 @@
                                             "strategy": "spectral_resolution",
                                             "wavelength_range": [380, 1000],
                                             "thresholds": [5, 10],
-                                            "scores": [1.0, 0.67, 0.0]
+                                            "scores": [1.0, 0.67, 0.01]
                                         },
                                         {
                                             "req_type": "spectral",
@@ -514,7 +514,7 @@
                                             "strategy": "spectral_resolution",
                                             "wavelength_range": [3400, 4200],
                                             "thresholds": [100],
-                                            "scores": [1.0, 0.0]
+                                            "scores": [1.0, 0.01]
                                         },
                                         {
                                             "req_type": "spectral",
@@ -585,7 +585,7 @@
                                             "strategy": "spectral_resolution",
                                             "wavelength_range": [10400, 12300],
                                             "thresholds": [500],
-                                            "scores": [1.0, 0.0]
+                                            "scores": [1.0, 0.01]
                                         },
                                         {
                                             "req_type": "spectral",
@@ -658,7 +658,7 @@
                                             "strategy": "spectral_resolution",
                                             "wavelength_range": [600, 750],
                                             "thresholds": [20],
-                                            "scores": [1.0, 0.0]
+                                            "scores": [1.0, 0.01]
                                         },
                                         {
                                             "req_type": "spectral",
@@ -666,7 +666,7 @@
                                             "strategy": "spectral_resolution",
                                             "wavelength_range": [840, 880],
                                             "thresholds": [20],
-                                            "scores": [1.0, 0.0]
+                                            "scores": [1.0, 0.01]
                                         },
                                         {
                                             "req_type": "spectral",
@@ -758,7 +758,7 @@
                                             "strategy": "spectral_resolution",
                                             "wavelength_range": [3400, 4200],
                                             "thresholds": [100],
-                                            "scores": [1.0, 0.0]
+                                            "scores": [1.0, 0.01]
                                         },
                                         {
                                             "req_type": "spectral",

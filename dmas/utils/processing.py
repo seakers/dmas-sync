@@ -1832,7 +1832,7 @@ class ResultsProcessor:
                                 if b[0].left <= a[0].right + t_corr]
 
                 # get parameters in this co-observation group
-                params_in_group = {a[3].lower() for a in co_obs_group} | {a[3].lower()}
+                params_in_group = {b[3].lower() for b in co_obs_group}
                 
                 # check if this group is the best so far
                 if len(params_in_group) > len(best_params_in_group):
@@ -1885,7 +1885,7 @@ class ResultsProcessor:
                                 if b[0]['t_start'] <= a['t_end'] + t_corr]
 
                 # get parameters in this co-observation group
-                params_in_group = {a[1] for a in co_obs_group} | {a[1]}
+                params_in_group = {b[1] for b in co_obs_group}
 
                 # check if this group is the best so far
                 if len(params_in_group) > len(best_params_in_group):
