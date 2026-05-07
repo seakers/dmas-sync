@@ -1772,25 +1772,24 @@ class ResultsProcessor:
         # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
 
         # map events to tasks that observe them
-        event_to_task : Dict[GeophysicalEvent, GenericObservationTask] = dict()
+        event_to_tasks : Dict[GeophysicalEvent, GenericObservationTask] = defaultdict(list)
         for task in known_tasks:
             if isinstance(task, EventObservationTask):
                 event = task.event
-                if event in event_to_task:
-                    raise NotImplementedError(f"Multiple tasks found for event {event.id}. Co-observability classification not yet supported for multiple tasks per event.")
-                event_to_task[event] = task
+                event_to_tasks[event].append(task)
         
         # map events to required obserations for their tasks
-        event_to_required_observations : Dict[GeophysicalEvent, Set[Dict]] = defaultdict(set)
-        for event, task in event_to_task.items():
+        event_to_required_observations : Dict[GeophysicalEvent, Dict[str, set]] = dict()
+        for event, tasks in event_to_tasks.items():
             # initialize set of required observations
-            required_observations = set()
-
-            for req in task.objective:
-                # check for instrument capability requirements
-                if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
-                    for val in req.valid_values: required_observations.add(val)
-                # TODO include other capability requirements that define a co-observation here
+            # required_observations = {task.objective.parameter for task in tasks}
+            required_observations = defaultdict(set)
+            for task in tasks:
+                for req in task.objective:
+                    # check for instrument capability requirements
+                    if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
+                        for val in req.valid_values: required_observations[task.objective.parameter].add(val)
+                    # TODO include other capability requirements that define a co-observation here
 
             # add to map of events to required observations
             event_to_required_observations[event] = required_observations
@@ -1802,9 +1801,10 @@ class ResultsProcessor:
                 # unpack access
                 *_,instrument = a
 
-                # check if instrument is part of those required for this event 
-                if instrument.lower() in event_to_required_observations[event]:
-                    co_observation_acesses[event].append(a)
+                # check if instrument is part of those required for this event
+                for param,valid_instruments in event_to_required_observations[event].items():
+                    if instrument.lower() in valid_instruments:
+                        co_observation_acesses[event].append((*a,param))
 
             # sort accesses by start time
             co_observation_acesses[event].sort(key=lambda x: x[0].left) 
@@ -1824,28 +1824,28 @@ class ResultsProcessor:
             
             # initiate group 
             # best_co_obs_group = []
-            best_instruments_in_group = set()
+            best_params_in_group = set()
 
             for i,a in enumerate(observations):
                 # get accesses within the desired decorreleation time 
                 co_obs_group = [b for b in observations[i:]
                                 if b[0].left <= a[0].right + t_corr]
 
-                # get instruments in this co-observation group
-                instruments_in_group = {a[2].lower() for a in co_obs_group} | {a[2].lower()}
+                # get parameters in this co-observation group
+                params_in_group = {a[3].lower() for a in co_obs_group} | {a[3].lower()}
                 
                 # check if this group is the best so far
-                if len(instruments_in_group) > len(best_instruments_in_group):
+                if len(params_in_group) > len(best_params_in_group):
                     # best_co_obs_group = co_obs_group
-                    best_instruments_in_group = instruments_in_group
+                    best_params_in_group = params_in_group
             
-            # check if more than one instrument is available to observe this event
-            if len(best_instruments_in_group) > 1:
+            # check if more than one parameter is available to observe this event
+            if len(best_params_in_group) > 1:
                 # add to set of co-observable events
                 events_co_observable.add(event)
 
                 # classify co-observability of this event based on best co-observation group
-                if event_to_required_observations[event] == best_instruments_in_group:
+                if set(event_to_required_observations[event].keys()) == best_params_in_group:
                     events_co_observable_fully.add(event)
                 else:
                     events_co_observable_partially.add(event)
@@ -1855,11 +1855,12 @@ class ResultsProcessor:
         for event, observations in observations_per_event.items():
             for a in observations:
                 # check if instrument is part of those required for this event 
-                if a['instrument'].lower() in event_to_required_observations[event]:
-                    possible_co_observations[event].append(a)
+                for param,valid_instruments in event_to_required_observations[event].items():
+                    if a['instrument'].lower() in valid_instruments:
+                        possible_co_observations[event].append((a,param))
 
             # sort accesses by start time
-            possible_co_observations[event].sort(key=lambda x: x['t_start'])
+            possible_co_observations[event].sort(key=lambda x: x[0]['t_start'])
 
         # initiate event co-observation sets
         events_co_obs = set()
@@ -1876,35 +1877,178 @@ class ResultsProcessor:
 
             # initiate group 
             # best_co_obs_group = []
-            best_instruments_in_group = set()
+            best_params_in_group = set()
 
-            for i,a in enumerate(observations):
+            for i,(a,param) in enumerate(observations):
                 # get accesses within the desired decorreleation time 
                 co_obs_group = [b for b in observations[i:]
-                                if b['t_start'] <= a['t_end'] + t_corr]
+                                if b[0]['t_start'] <= a['t_end'] + t_corr]
 
-                # get instruments in this co-observation group
-                instruments_in_group = {a['instrument'].lower() for a in co_obs_group} | {a['instrument'].lower()}
+                # get parameters in this co-observation group
+                params_in_group = {a[1] for a in co_obs_group} | {a[1]}
 
                 # check if this group is the best so far
-                if len(instruments_in_group) > len(best_instruments_in_group):
+                if len(params_in_group) > len(best_params_in_group):
                     # best_co_obs_group = co_obs_group
-                    best_instruments_in_group = instruments_in_group
-            
+                    best_params_in_group = params_in_group            
 
             # check if more than one instrument was involved in observations of this event
-            if len(best_instruments_in_group) > 1:
+            if len(best_params_in_group) > 1:
                 # add to set of co-observed events
                 events_co_obs.add(event)
 
                 # classify co-observability of this event based on best co-observation group
-                if event_to_required_observations[event] == best_instruments_in_group:
+                if list(event_to_required_observations[event].keys()) == best_params_in_group:
                     events_co_obs_fully.add(event)
                 else:
                     events_co_obs_partially.add(event)
 
         return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
             events_co_obs, events_co_obs_fully, events_co_obs_partially
+
+    # @staticmethod
+    # def __classify_event_coobservations(
+    #         accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
+    #         observations_per_event : Dict[GeophysicalEvent, List[Dict]],
+    #         known_tasks : List[GenericObservationTask],
+    #         t_corr : float = 3600.0 # TODO temp solution
+    #     ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
+    #     # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
+
+        # # map events to tasks that observe them
+        # event_to_task : Dict[GeophysicalEvent, GenericObservationTask] = dict()
+        # for task in known_tasks:
+        #     if isinstance(task, EventObservationTask):
+        #         event = task.event
+        #         if event in event_to_task:
+        #             raise NotImplementedError(f"Multiple tasks found for event {event.id}. Co-observability classification not yet supported for multiple tasks per event.")
+        #         event_to_task[event] = task
+        
+        # # map events to required obserations for their tasks
+        # event_to_required_observations : Dict[GeophysicalEvent, Set[Dict]] = defaultdict(set)
+        # for event, task in event_to_task.items():
+        #     # initialize set of required observations
+        #     required_observations = set()
+
+        #     for req in task.objective:
+        #         # check for instrument capability requirements
+        #         if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
+        #             for val in req.valid_values: required_observations.add(val)
+        #         # TODO include other capability requirements that define a co-observation here
+
+        #     # add to map of events to required observations
+        #     event_to_required_observations[event] = required_observations
+
+    #     # classify accesses
+    #     co_observation_acesses = defaultdict(list)
+    #     for event, observations in accesses_per_event.items():
+    #         for a in observations:
+    #             # unpack access
+    #             *_,instrument = a
+
+    #             # check if instrument is part of those required for this event 
+    #             if instrument.lower() in event_to_required_observations[event]:
+    #                 co_observation_acesses[event].append(a)
+
+    #         # sort accesses by start time
+    #         co_observation_acesses[event].sort(key=lambda x: x[0].left) 
+        
+    #     # initiate event co-observability sets
+    #     events_co_observable = set()
+    #     events_co_observable_fully = set()
+    #     events_co_observable_partially = set()
+
+    #     # evaluate events co-observable based on accesses
+    #     for event, observations in co_observation_acesses.items():
+    #         # check if more than one type of observation is required for this event
+    #         if len(event_to_required_observations[event]) < 2: 
+    #             # only one or no observation types required;
+    #             #  co-observability classification not applicable
+    #             continue
+            
+    #         # initiate group 
+    #         # best_co_obs_group = []
+    #         best_instruments_in_group = set()
+
+    #         for i,a in enumerate(observations):
+    #             # get accesses within the desired decorreleation time 
+    #             co_obs_group = [b for b in observations[i:]
+    #                             if b[0].left <= a[0].right + t_corr]
+
+    #             # get instruments in this co-observation group
+    #             instruments_in_group = {a[2].lower() for a in co_obs_group} | {a[2].lower()}
+                
+    #             # check if this group is the best so far
+    #             if len(instruments_in_group) > len(best_instruments_in_group):
+    #                 # best_co_obs_group = co_obs_group
+    #                 best_instruments_in_group = instruments_in_group
+            
+    #         # check if more than one instrument is available to observe this event
+    #         if len(best_instruments_in_group) > 1:
+    #             # add to set of co-observable events
+    #             events_co_observable.add(event)
+
+    #             # classify co-observability of this event based on best co-observation group
+    #             if event_to_required_observations[event] == best_instruments_in_group:
+    #                 events_co_observable_fully.add(event)
+    #             else:
+    #                 events_co_observable_partially.add(event)
+
+    #     # classify observations
+    #     possible_co_observations = defaultdict(list)
+    #     for event, observations in observations_per_event.items():
+    #         for a in observations:
+    #             # check if instrument is part of those required for this event 
+    #             if a['instrument'].lower() in event_to_required_observations[event]:
+    #                 possible_co_observations[event].append(a)
+
+    #         # sort accesses by start time
+    #         possible_co_observations[event].sort(key=lambda x: x['t_start'])
+
+    #     # initiate event co-observation sets
+    #     events_co_obs = set()
+    #     events_co_obs_fully = set()
+    #     events_co_obs_partially = set()  
+
+    #     # evaluate events co-observable based on accesses
+    #     for event, observations in possible_co_observations.items():
+    #         # check if more than one type of observation is required for this event
+    #         if len(event_to_required_observations[event]) < 2: 
+    #             # only one or no observation types required;
+    #             #  co-observability classification not applicable
+    #             continue
+
+    #         # initiate group 
+    #         # best_co_obs_group = []
+    #         best_instruments_in_group = set()
+
+    #         for i,a in enumerate(observations):
+    #             # get accesses within the desired decorreleation time 
+    #             co_obs_group = [b for b in observations[i:]
+    #                             if b['t_start'] <= a['t_end'] + t_corr]
+
+    #             # get instruments in this co-observation group
+    #             instruments_in_group = {a['instrument'].lower() for a in co_obs_group} | {a['instrument'].lower()}
+
+    #             # check if this group is the best so far
+    #             if len(instruments_in_group) > len(best_instruments_in_group):
+    #                 # best_co_obs_group = co_obs_group
+    #                 best_instruments_in_group = instruments_in_group
+            
+
+    #         # check if more than one instrument was involved in observations of this event
+    #         if len(best_instruments_in_group) > 1:
+    #             # add to set of co-observed events
+    #             events_co_obs.add(event)
+
+    #             # classify co-observability of this event based on best co-observation group
+    #             if event_to_required_observations[event] == best_instruments_in_group:
+    #                 events_co_obs_fully.add(event)
+    #             else:
+    #                 events_co_obs_partially.add(event)
+
+    #     return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
+    #         events_co_obs, events_co_obs_fully, events_co_obs_partially
 
     @staticmethod
     def __count_observations(orbitdata : Dict[str, OrbitData], 
@@ -3448,22 +3592,20 @@ class ResultsProcessor:
                 obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
 
             # update instrument-specific observation performance information
-            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower())
-                or ('vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower())):
-                if isinstance(instrument_spec.spectral_resolution, str):
-                    obs_perf.update({
-                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
-                    })
-                elif isinstance(instrument_spec.spectral_resolution, (int,float)):
-                    obs_perf.update({
-                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
-                    })
-                else:
-                    raise ValueError('Unsupported type for spectral resolution in instrument specification.')
-                
-            elif ('altimeter' in instrument_name.lower()
-                  or 'altimeter' in instrument_spec._type.lower()):
+            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
+                or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
+                spectral_bands_config = instrument_spec.spectral_config.get('bands') if instrument_spec.spectral_config is not None else []
+                spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
+                                  # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
+                                  for band in spectral_bands_config] 
                 obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : spectral_bands,
+                    ObservationRequirementAttributes.ACCURACY.value : np.Inf,
+                })
+            elif ('altimeter' in instrument_name.lower() or 'alt' in instrument_name.lower()
+                  or 'altimeter' in instrument_spec._type.lower() or 'alt' in instrument_spec._type.lower()):
+                obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
                     ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
                 })
             else:

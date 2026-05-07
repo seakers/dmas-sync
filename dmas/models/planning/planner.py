@@ -859,18 +859,6 @@ class AbstractPlanner(ABC):
                     ObservationRequirementAttributes.SPECTRAL_BANDS.value : spectral_bands,
                     ObservationRequirementAttributes.ACCURACY.value : np.Inf,
                 })
-
-                # if isinstance(instrument_spec.spectral_resolution, str):
-                #     obs_perf.update({
-                #         ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
-                #     })
-                # elif isinstance(instrument_spec.spectral_resolution, (int,float)):
-                #     obs_perf.update({
-                #         ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
-                #     })
-                # else:
-                #     raise ValueError('Unsupported type for spectral resolution in instrument specification.')
-                
             elif ('altimeter' in instrument_name.lower() or 'alt' in instrument_name.lower()
                   or 'altimeter' in instrument_spec._type.lower() or 'alt' in instrument_spec._type.lower()):
                 obs_perf.update({

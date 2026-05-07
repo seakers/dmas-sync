@@ -30,11 +30,6 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                                mission : Mission,
                                observation_history : TaskObservationTracker
                                ) -> List[ObservationAction]:
-        
-        # DEBUG --------------------------
-        if len(observation_opportunities) > 1:
-            x = 1
-        # ---------------------------------
 
         if not isinstance(state, SatelliteAgentState):
             raise NotImplementedError(f'Naive planner not yet implemented for agents of type `{type(state)}.`')
@@ -156,6 +151,12 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                                 
                 # Update task state after observation
                 updated_task_states[task.id] = (n_obs_prev + 1, t_obs_i)
+
+            # DEBUG --------------------------
+            if len(observation_opportunities) > 1:
+                x = 1
+            # ---------------------------------
+
 
             # calculate reward for this observation opportunity
             obs_i_reward = self.estimate_observation_opportunity_value(

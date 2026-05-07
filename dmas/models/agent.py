@@ -524,6 +524,8 @@ class SimulationAgent(object):
 
         if new_tasks and not new_reqs:
             x= 1
+        if new_reqs:
+            x = 1
 
         # return new_reqs.values(), new_tasks.values()
         return list(new_reqs.values()), list(new_tasks.values())    

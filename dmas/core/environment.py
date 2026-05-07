@@ -161,7 +161,7 @@ class SimulationEnvironment(object):
             # store observations
             if agent_observations:
                 measurements[agent_name].extend(agent_observations)
-
+        
         # compile senses per agent
         agent_percepts : Dict[str, tuple] = dict()
         for agent_name in states.keys():
@@ -169,7 +169,7 @@ class SimulationEnvironment(object):
                 states[agent_name],
                 actions[agent_name],
                 action_statuses[agent_name],
-                msgs[agent_name],
+                msgs[OrbitData.safe_name(agent_name)], # msgs[agent_name],
                 measurements.get(agent_name, [])
             )
 
@@ -647,6 +647,7 @@ class SimulationEnvironment(object):
         for agent_idx, component_idx in enumerate(component_indices):
             agent_name = agent_orbitdata.comms_target_columns[agent_idx]
             # add agent to component membership dict
+            # component_membership[component_idx].add(OrbitData.safe_name(agent_name))
             component_membership[component_idx].add(agent_name)
 
         # convert component membership dict to list of components (as sets)
