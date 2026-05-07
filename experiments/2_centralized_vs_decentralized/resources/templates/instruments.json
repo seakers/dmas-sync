@@ -1058,11 +1058,21 @@
       "angleHeight": 41.7,
       "angleWidth": 41.7
     },
-    "scanTechnique": "MATRIX_IMAGER",
-    "dataRate": 5.0,
+    "scanTechnique": "PUSHBROOM",
+    "numberDetectorRows": 1,
+    "numberDetectorCols": 640,
+    "focalLength": 0.015,
+    "detectorWidth": 1.7e-05,
+    "apertureDia": 0.0125,
+    "Fnum": 1.2,
+    "operatingWavelength": 7.5e-06,
+    "bandwidth": 9e-06,
+    "quantumEff": 0.7,
+    "numOfReadOutE": 2000.0,
+    "targetBlackBodyTemp": 300.0,
+    "opticsSysEff": 0.6,
     "bitsPerPixel": 14,
-    "numberDetectorRows": 512,
-    "numberDetectorCols": 512,
+    "dataRate": 5.0,
     "spectral_config": {
       "sensor_type": "Thermal infrared - 3 channels (1x MWIR 3-5 um + 2x LWIR 8-12 um)",
       "bands": [
@@ -1085,7 +1095,7 @@
             12000.0
           ],
           "center_nm": 10000.0,
-          "FWHM_nm": 2000.0,
+          "FWHM_nm": 4000.0,
           "primary": "Smoldering, ambient LST"
         },
         {
@@ -1096,7 +1106,7 @@
             12000.0
           ],
           "center_nm": 10500.0,
-          "FWHM_nm": 2000.0,
+          "FWHM_nm": 4000.0,
           "primary": "Contextual thermal, cloud mask"
         }
       ],
