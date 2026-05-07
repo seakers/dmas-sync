@@ -17,6 +17,7 @@ from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
 
 from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementBidMessage, MeasurementRequestMessage, ObservationResultsMessage, RewardGridMessage, SimulationMessage, SimulationMessageTypes
+from dmas.models.planning.centralized.worker import WorkerPlanner
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
@@ -41,6 +42,7 @@ class SimulationAgent(object):
                  processor : ObservationDataProcessor = None, 
                  preplanner : AbstractPeriodicPlanner = None,
                  replanner : AbstractReactivePlanner = None,
+                 default_tasks : Dict[Tuple,DefaultMissionTask] = {},
                  level : int = logging.INFO, 
                  logger : logging.Logger = None,
                  printouts : bool = True
@@ -94,8 +96,11 @@ class SimulationAgent(object):
         self._message_outbox : Queue = Queue([])
         self._plan : Plan = PeriodicPlan(t=-1.0)
         self._plan_history = []
+        if preplanner is not None and isinstance(preplanner, WorkerPlanner):
+            default_tasks = {} # discard default tasks for worker planner since they are used by the centralized task dealer.
         self._known_tasks : Dict[Tuple, GenericObservationTask] \
-            = SimulationAgent.__initialize_default_mission_tasks(mission, orbitdata)
+            = default_tasks 
+            # = SimulationAgent.__initialize_default_mission_tasks(mission, orbitdata)
         self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
         # initialize trackers and data sinks
@@ -303,9 +308,10 @@ class SimulationAgent(object):
                 # if self._preplanner._debug: 
                 # if state.get_time() < 1:
                 # if 'worker' in curr_state.agent_name:
+                if 'GS' in curr_state.agent_name:
                 # if True:
-                #     self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                #     x = 1 # breakpoint
+                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
@@ -573,7 +579,6 @@ class SimulationAgent(object):
             # The tracker resolves grid/gp coords to task_ids internally.
             measurements = [obs_list for _, obs_list in my_observations]
             self._observations_tracker.update_from_observations(measurements)
-
         
         if external_observations:
             measurements = [obs_list for _, obs_list in external_observations]

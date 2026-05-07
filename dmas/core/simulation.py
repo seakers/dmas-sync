@@ -1,4 +1,5 @@
 
+from collections import defaultdict
 from datetime import timedelta
 from enum import Enum
 import gc
@@ -17,7 +18,8 @@ from tqdm import tqdm
 from instrupy.base import Instrument
 from orbitpy.util import Spacecraft, dictionary_list_to_object_list
 
-from execsatm.mission import Mission
+from execsatm.mission import DefaultMissionObjective, DefaultMissionTask, GenericObservationTask, Mission 
+from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
 from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
@@ -26,7 +28,7 @@ from dmas.models.actions import AgentAction, BroadcastMessageAction
 from dmas.models.agent import SimulationAgent
 from dmas.core.environment import SimulationEnvironment
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
-from dmas.models.planning.centralized.dealer import TestingDealer
+from dmas.models.planning.centralized.dealer import DealerPlanner, TestingDealer
 from dmas.models.planning.centralized.milp import DealerMILPPlanner
 from dmas.models.planning.centralized.worker import WorkerPlanner
 from dmas.models.planning.decentralized.announcer import EventAnnouncerPlanner
@@ -595,6 +597,23 @@ class Simulation:
             logger.addHandler(c_handler)
             logger.setLevel(level)
 
+        # initialize default mission tasks
+        default_mission_tasks : Dict[Mission, List[DefaultMissionTask]] = dict()
+        for spacecraft in space_segment:
+            mission_name = spacecraft.get('mission', None)
+            if mission_name is None:
+                raise ValueError(f"Spacecraft `{spacecraft['name']}` does not have a mission assigned in the input file.")
+            elif mission_name.lower() == "none":
+                default_mission_tasks[mission_name] = {}
+                continue # skip if no mission assigned
+            mission = simulation_missions.get(mission_name, None)
+            if mission is None:
+                raise ValueError(f"Mission `{mission_name}` assigned to spacecraft `{spacecraft['name']}` not found in missions file.")
+            if mission_name in default_mission_tasks:
+                continue # default tasks for this mission already initialized
+            default_tasks : Dict[Tuple, DefaultMissionTask] = Simulation.__initialize_default_mission_tasks(mission, simulation_orbitdata[spacecraft['name']])
+            default_mission_tasks[mission_name] = default_tasks
+
         # ------------------------------------
         # create agents 
         agents : list[SimulationAgent] = []
@@ -607,6 +626,7 @@ class Simulation:
                                                             space_segment,
                                                             simulation_orbitdata,
                                                             simulation_missions,
+                                                            default_mission_tasks,
                                                             results_path,
                                                             orbitdata_dir,
                                                             level,
@@ -626,6 +646,7 @@ class Simulation:
                                                                 space_segment, 
                                                                 simulation_orbitdata,
                                                                 simulation_missions,
+                                                                default_mission_tasks,
                                                                 results_path,
                                                                 orbitdata_dir,
                                                                 level,
@@ -791,6 +812,78 @@ class Simulation:
         return events
     
     @staticmethod
+    def __initialize_default_mission_tasks(mission : Mission, orbitdata : OrbitData) -> Dict[Tuple, GenericObservationTask]:
+        """ 
+        Creates default observation tasks for each default mission objective
+         based on the spatial requirements of each objective.
+        """
+        # initialize task list
+        tasks = dict()
+
+        # gather targets for each default mission objective
+        objective_targets = { objective : [] for objective in mission 
+                             # ignore non-default objectives
+                             if isinstance(objective, DefaultMissionObjective)
+                             }
+        
+        # iterate through each mission objective
+        for objective,targets in objective_targets.items():  
+            # collect spatial coverage requirements
+            spatial_requirements = [req for req in objective.requirements
+                                    if isinstance(req, SpatialCoverageRequirement)]
+
+            # iterate through each spatial requirement
+            for req in spatial_requirements:
+                if isinstance(req, SinglePointSpatialRequirement):
+                    # collect specified target
+                    req_targets = [req.target]
+                
+                elif isinstance(req, MultiPointSpatialRequirement):
+                    # collect all specified targets
+                    req_targets = [target for target in req.targets]
+                
+                elif isinstance(req, GridSpatialRequirement):
+                    # collect all targets matching this grid requirement
+                    req_targets = [
+                        (lat, lon, grid_index, gp_index)
+                        for lat,lon,grid_index,gp_index in orbitdata.grid_data
+                        if grid_index == req.grid_index and gp_index < req.grid_size
+                    ]
+                else: 
+                    raise TypeError(f"Unknown spatial requirement type: {type(req)}")
+                    
+                # add to list of targets for this objective
+                targets.extend(req_targets)
+
+            # check if any spatial coverage requirements were found
+            if not spatial_requirements:
+                # no spatial coverage requirements found; 
+                #   collect all targets from all grids known to this agent
+                req_targets = list({
+                    (lat, lon, grid_index, gp_index)
+                    for lat,lon,grid_index,gp_index in orbitdata.grid_data
+                })
+                targets.extend(req_targets)
+        
+        # iterate through each mission objective
+        for objective,targets in objective_targets.items():                           
+            # create monitoring tasks from each location in this mission objective
+            objective_tasks = [DefaultMissionTask(objective.parameter,
+                                        location=(lat, lon, grid_index, gp_index),
+                                        mission_duration=orbitdata.duration*24*3600,
+                                        objective=objective,
+                                        )
+                        for lat,lon,grid_index,gp_index in targets
+                    ]
+            
+            # add to list of known tasks
+            tasks.update({SimulationAgent._task_key(task.to_dict()) : task
+                          for task in objective_tasks})
+
+        # return list of created tasks
+        return tasks
+
+    @staticmethod
     def __agent_factory(
                         agent_dict : dict,
                         agent_specs : object,
@@ -798,6 +891,7 @@ class Simulation:
                         space_segment : List[dict],
                         simulation_orbitdata : Dict[str, OrbitData],
                         simulation_missions : Dict[str, Mission],
+                        default_mission_tasks : Dict[Mission, List[DefaultMissionTask]],
                         simulation_results_path : str,
                         orbitdata_dir : str,
                         level : int,
@@ -846,6 +940,14 @@ class Simulation:
                                             printouts
                                         )  
 
+        # get default tasks for this mission
+        if isinstance(preplanner, DealerPlanner):
+            default_tasks = {}
+            for _, t_default in default_mission_tasks.items():
+                default_tasks.update(t_default) 
+        else:
+            default_tasks = default_mission_tasks.get(agent_mission.name, None)
+
         # build and return agent 
         return SimulationAgent( agent_name, 
                                 agent_id,
@@ -857,6 +959,7 @@ class Simulation:
                                 processor,
                                 preplanner,
                                 replanner,
+                                default_tasks,
                                 level,
                                 logger,
                                 printouts)
@@ -867,6 +970,7 @@ class Simulation:
                                  space_segment : List[dict],
                                  simulation_orbitdata : Dict[str, OrbitData],
                                  simulation_missions : Dict[str, Mission],
+                                 default_mission_tasks : Dict[Mission, List[DefaultMissionTask]],
                                  simulation_results_path : str,
                                  orbitdata_dir : str,
                                  level : int,
@@ -907,6 +1011,7 @@ class Simulation:
                                         space_segment,
                                         simulation_orbitdata,
                                         simulation_missions,
+                                        default_mission_tasks,
                                         simulation_results_path,
                                         orbitdata_dir,
                                         level,
@@ -920,6 +1025,7 @@ class Simulation:
                                         space_segment : List[dict],
                                         simulation_orbitdata : Dict[str, OrbitData],
                                         simulation_missions : Dict[str, Mission],
+                                        default_mission_tasks : Dict[Mission, List[DefaultMissionTask]],
                                         simulation_results_path : str,
                                         orbitdata_dir : str,
                                         level : int,
@@ -949,6 +1055,7 @@ class Simulation:
                                             space_segment,
                                             simulation_orbitdata,
                                             simulation_missions,
+                                            default_mission_tasks,
                                             simulation_results_path,
                                             orbitdata_dir,
                                             level,
@@ -1009,7 +1116,18 @@ class Simulation:
         agent_results_dir = os.path.join(simulation_results_path, agent_name.lower())
 
         # load preplanner
-        preplanner = Simulation.__load_preplanner(planner_dict, agent_results_dir, space_segment, agent_mission, simulation_missions, simulation_orbitdata, orbitdata_dir, agent_name, logger, printouts)
+        preplanner = Simulation.__load_preplanner(
+            planner_dict, 
+            agent_results_dir, 
+            space_segment, 
+            agent_mission, 
+            simulation_missions, 
+            simulation_orbitdata, 
+            orbitdata_dir, 
+            agent_name, 
+            logger, 
+            printouts
+        )
 
         # load replanner
         replanner = Simulation.__load_replanner(planner_dict, agent_results_dir, logger, printouts)

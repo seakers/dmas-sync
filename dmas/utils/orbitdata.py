@@ -533,6 +533,10 @@ class OrbitData:
         # unpack groups
         groups = predef_rules_dict.get('groups', {})
 
+        # DEBUG
+        assert sum(len(group_members) for group_members in groups.values()) == len(agent_names), \
+            f'The total number of members across all groups must equal the number of agents. Groups: {groups}, Agents: {agent_names}'
+
         # ensure all groups are lists of strings
         assert all(isinstance(group_members, list) and all(isinstance(member, str) for member in group_members) for group_members in groups.values()), \
             f'All groups specified in connectivity rules must be lists of strings. Invalid groups: {groups}'
@@ -608,9 +612,22 @@ class OrbitData:
 
                     # update connectivity mask based on rule type
                     connectivity_mask[key] = (action == 'allow')
-           
+
             else:
                 raise ValueError(f'Connectivity rule not recognized: {rule}. Supported rules are `allow_between`, `deny_between`, `allow_within`, and `deny_within`.')
+
+        # ----------------------------
+        # DEBUG SECTION
+        # valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
+        # false_pairs = [pair for pair, allowed in connectivity_mask.items() if not allowed]
+
+        # for u,v in false_pairs:
+        #     if u not in groups['instruments']:
+        #         x = 1
+        #     elif v not in groups['instruments']:
+        #         x = 1
+        # x = 1
+        # ----------------------------
 
         # iterate through override rules and apply to connectivity mask
         for override_rule in predef_rules_dict.get('overrides', []):
@@ -625,6 +642,12 @@ class OrbitData:
             
             # update connectivity mask based on action value
             connectivity_mask[pair] = (action == 'allow')
+
+        # ----------------------------
+        # DEBUG SECTION
+        valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
+        x = 1
+        # ----------------------------
 
         # return connectivity mask
         return connectivity_mask

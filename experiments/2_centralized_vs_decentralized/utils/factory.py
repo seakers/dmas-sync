@@ -151,11 +151,14 @@ def create_propagator_settings_specifications(base_path : str,
     out_dir = os.path.join(base_path, 'orbit_data', scenario_name)
     if not os.path.exists(out_dir): os.makedirs(out_dir, exist_ok=True)
 
+    # define `save_unprocessed` flag
+    save_unprocessed = "True" if reduced else "False"
+
     # return settings specifications
     return {
             "coverageType": "GRID COVERAGE",
             "outDir" : out_dir,
-            "saveUnprocessedCoverage" : "False"
+            "saveUnprocessedCoverage" : save_unprocessed
         }
     
 def create_spacecraft_specifications(
@@ -289,18 +292,27 @@ def create_ground_operator_specifications(
         # add to list of operators
         operators.append(announcer_specs)
 
-    
+    # get event date from events path to construct announcer specs
+    *event_dir_path,event_filename = events_path.split('/')
+    scenario = event_filename.split('_')[0]
+    event_date = event_filename.split('_')[-1].split('.')[0]
+
     # create event announcer ground operator
     announcer_specs = copy.deepcopy(ground_operator_specs_template['announcer'])
 
     # set events path
     if data_processing.lower() == 'oracle':
+        # for oracle data processing, announcer has access to all events, so use the full events file
         announcer_specs['planner']['preplanner']['eventsPath'] = events_path
+    elif scenario.lower() == 'comprehensive':
+        # only announce wildfires in comprehensive scenario since they are the most challenging events to detect and respond to
+        wildfire_events_path = os.path.join(*event_dir_path, f'wildfire_{event_date}.csv')
+        announcer_specs['planner']['preplanner']['eventsPath'] = wildfire_events_path
     else:
         # replace last part of events path with `no_events.csv` for non-oracle data processing types 
         no_events_path = events_path.split('/')[:-1] + ['no_events.csv']
         no_events_path = os.path.join(*no_events_path)
-        announcer_specs['planner']['preplanner']['eventsPath'] = no_events_path
+        announcer_specs['planner']['preplanner']['eventsPath'] = no_events_path        
 
     # add to list of operators
     operators.append(announcer_specs)

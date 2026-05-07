@@ -620,7 +620,7 @@
             ]
         },
         {
-            "name": "high flow river response",
+            "name": "high flow river monitoring",
             "objectives" : [
                 {
                     "objective_type" : "default_mission",
@@ -892,7 +892,7 @@
             ]
         },
         {
-            "name": "wildfire response",
+            "name": "wildfire monitoring",
             "objectives" : [
                 {
                     "objective_type" : "default_mission",

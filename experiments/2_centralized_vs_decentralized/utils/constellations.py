@@ -358,7 +358,7 @@ def generate_walker_delta(
 
     # TDRSS constellation for increased connectivity
     tdrss_specs = generate_tdrss(spacecraft_specs_template)
-    assign_mission_to_constellation(tdrss_specs, f"NONE")
+    assign_mission_to_constellation(tdrss_specs, f"none")
 
     # compile constellation design into dictionary format
     constellation_design = []
