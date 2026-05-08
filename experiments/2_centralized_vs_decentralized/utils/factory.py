@@ -199,53 +199,66 @@ def create_spacecraft_specifications(
         if 'planner' not in satellite_spec:
             continue  # skip planner assignment for this satellite
 
+        # define which event this satellite is tasked with based on its mission and constellation
+        if "commercial" in constellation.lower():
+            raise NotImplementedError("Onboard data processing is not yet implemented for commercial constellations in this study. Please set data processing type to 'oracle' or 'none' for now.")
+        elif "walker" in constellation.lower():                
+            sat_mission = satellite_spec['mission']
+            if "algal bloom" in sat_mission.lower():
+                event_type = 'algal_bloom'
+            elif "high flow" in sat_mission.lower():
+                event_type = 'high_flow_river'
+            elif "fire" in sat_mission.lower():
+                event_type = 'wildfire'
+            else:
+                raise ValueError(f"Could not identify event type from satellite mission: {sat_mission}")
+        else:
+            raise ValueError(f"Constellation {constellation} not recognized for onboard data processing assignment.")
+        
+        relevant_events_path = events_path.split('/')[:-1] + [f'{event_type}_{date}.csv']
+        relevant_events_path = os.path.join(*relevant_events_path)
+
+        # initialzie planner
+        agent_preplanner = preplanner
+        agent_replanner = replanner
+
         # check if agent has a non-steerable instrument
         if 'maneuver' not in satellite_spec['instrument']:
             # agent cannot maneuver and is therfore not taskable;
-            #  set preplanner to nadir and replanner to none 
-            preplanner, replanner = 'nadir', 'none'
+            # set preplanner based on onboard planning capabilities
+            agent_preplanner = 'announcer' if data_processing.lower() == 'onboard' else 'none'            
+            # set replanner to only perform default observations at a fixed attitude
+            agent_replanner = 'default'
 
         # set planner settings
-        if preplanner.lower() != 'none':
-            if 'centralized' in preplanner.lower():
+        if agent_preplanner.lower() != 'none':
+            # check if there is a centralized preplanner specified
+            if 'centralized' in agent_preplanner.lower():
+                # assign worker preplanner for following centralized planner architecture
                 satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['worker']
             else:
-                satellite_spec['planner']['preplanner'] = planner_specs['preplanners'][preplanner.lower()]
-        if replanner.lower() != 'none':
-            satellite_spec['planner']['replanner'] = planner_specs['replanners'][replanner.lower()]
+                # assign specified preplanner for non-centralized architectures
+                satellite_spec['planner']['preplanner'] = planner_specs['preplanners'][agent_preplanner.lower()]
+        if agent_preplanner.lower() == 'announcer':
+            # assign events path for announcer preplanner
+            satellite_spec['planner']['preplanner']['eventsPath'] = relevant_events_path
+        
+        if agent_replanner.lower() != 'none':
+            satellite_spec['planner']['replanner'] = planner_specs['replanners'][agent_replanner.lower()]
         
         # enforce planning horizon for CBBA preplanner if needed
-        if replanner.lower() == 'cbba' and preplanner.lower() == 'none':
+        if agent_replanner.lower() == 'cbba' and agent_preplanner.lower() == 'none':
             satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['blank']
 
         # remove planner if no preplanner or replanner specified
-        if preplanner.lower() == 'none' and replanner.lower() == 'none':
+        if agent_preplanner.lower() == 'none' and agent_replanner.lower() == 'none':
             satellite_spec.pop('planner', None)  
 
         # assign onboard processing if specified
-        if data_processing.lower() == 'onboard':
-            # TODO generate events foreach possible mission configuration and assign path here
-            if "commercial" in constellation.lower():
-                raise NotImplementedError("Onboard data processing is not yet implemented for commercial constellations in this study. Please set data processing type to 'oracle' or 'none' for now.")
-            elif "walker" in constellation.lower():                
-                sat_mission = satellite_spec['mission']
-                if "algal bloom" in sat_mission.lower():
-                    event_type = 'algal_bloom'
-                elif "high flow" in sat_mission.lower():
-                    event_type = 'high_flow_river'
-                elif "fire" in sat_mission.lower():
-                    event_type = 'wildfire'
-                else:
-                    raise ValueError(f"Could not identify event type from satellite mission: {sat_mission}")
-            else:
-                raise ValueError(f"Constellation {constellation} not recognized for onboard data processing assignment.")
-            
-            events_path = events_path.split('/')[:-1] + [f'{event_type}_{date}.csv']
-            events_path = os.path.join(*events_path)
-            
+        if data_processing.lower() == 'onboard':          
             satellite_spec['science'] = {
                 "@type": "lookup", 
-                "eventsPath" : events_path
+                "eventsPath" : relevant_events_path
             }
 
     # return satellite specifications

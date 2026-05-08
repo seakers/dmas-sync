@@ -35,6 +35,11 @@
             "period" : 250,
             "maxTasks": 100,
             "debug" : "False"
+        },
+        "announcer": {
+            "@type": "eventAnnouncer",
+            "debug": "False",                        
+            "eventsPath" : "PATH/TO/EVENTS"
         }
     },
     "replanners" : {
@@ -50,6 +55,11 @@
             "@type": "earliest",
             "debug": "False",
             "replanThreshold": 1
+        },
+        "default" : {
+            "@type": "default",
+            "fixedAttitude": [0.0, 0.0, 0.0],
+            "debug": "False"
         }
     }
 }

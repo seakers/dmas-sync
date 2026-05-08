@@ -1813,7 +1813,8 @@ class ResultsProcessor:
         # evaluate events co-observable based on accesses
         for event, observations in co_observation_acesses.items():
             # check if more than one type of observation is required for this event
-            if len(event_to_required_observations[event]) < 2: 
+            if (event not in event_to_required_observations 
+                or len(event_to_required_observations[event]) < 2): 
                 # only one or no observation types required;
                 #  co-observability classification not applicable
                 continue

@@ -38,6 +38,7 @@ from dmas.models.planning.decentralized.dynamic import DynamicProgrammingPlanner
 from dmas.models.planning.decentralized.earliest import EarliestAccessPeriodicPlanner, EarliestAccessReactivePlanner
 from dmas.models.planning.decentralized.heuristic import HeuristicInsertionPeriodicPlanner, HeuristicInsertionReactivePlanner
 from dmas.models.planning.decentralized.nadir import NadirPointingPeriodicPlanner, NadirPointingReactivePlanner
+from dmas.models.planning.decentralized.default import FixedPointingDefaultPlanner 
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
@@ -1343,6 +1344,10 @@ class Simulation:
         
         elif replanner_type.lower() in ['nadir']:
             return NadirPointingReactivePlanner(replan_threshold, debug, logger, printouts)
+        
+        elif replanner_type.lower() in ['default']:
+            fixed_attitude = replanner_dict.get('fixedAttitude', [0.0, 0.0, 0.0])
+            return FixedPointingDefaultPlanner(fixed_attitude=fixed_attitude, debug=debug, logger=logger, printouts=printouts)
 
         # fallback for unimplemented replanner types
         raise NotImplementedError(f'replanner of type `{replanner_dict}` not yet supported.')
