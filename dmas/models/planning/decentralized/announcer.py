@@ -97,114 +97,97 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         return [] # No scheduling, only announcing events
     
     def _schedule_broadcasts(self, state : SimulationAgentState, _, orbitdata : OrbitData, __ = None) -> List[BroadcastMessageAction]:
-        # initialize broadcasts from parent planner
-        # broadcasts : List[BroadcastMessageAction] = super()._schedule_broadcasts(state, observations, orbitdata, t)
         broadcasts : List[BroadcastMessageAction] = []
         t_curr : float = state.get_time()
 
-        # get list of future events
-        future_events : List[GeophysicalEvent] = [event for event in tqdm(self.events, 
-                                                                          desc=f'{state.agent_name}-PREPLANNER: Collecting future events', 
+        # collect currently available events
+        future_events : List[GeophysicalEvent] = [event for event in tqdm(self.events,
+                                                                          desc=f'{state.agent_name}-PREPLANNER: Collecting future events',
                                                                           leave=False,
                                                                           disable=(len(self.events) < 10) or not self._printouts
                                                                         )
                                                   if event.is_available(state._t)]
 
-        # create requests for each event
+        # build task requests for each event x objective pair
         task_requests : List[Tuple[GeophysicalEvent, TaskRequest]] = []
-        for event in tqdm(future_events, 
-                          desc=f'{state.agent_name}-PREPLANNER: Generating task request from known events',
+        for event in tqdm(future_events,
+                          desc=f'{state.agent_name}-PREPLANNER: Generating task requests from known events',
                           leave=False,
                           disable=(len(future_events) < 10) or not self._printouts
                         ):
-            # get event objetives from mission
-            for mission,event_objectives in self.simulation_missions.items():
-                for objective in event_objectives:
-                    x = 1
-                    if isinstance(objective, EventDrivenObjective):
-                        x = 1
-                        if objective.event_type == event.event_type:
-                            x= 1
+            event_objectives : list = [(mission_name, objective)
+                                       for mission_name, objectives in self.simulation_missions.items()
+                                       for objective in objectives
+                                       if isinstance(objective, EventDrivenObjective)
+                                       and objective.event_type == event.event_type]
 
-            event_objectives  : list[EventDrivenObjective] = [(mission_name,objective) 
-                                                        for mission_name,objectives in self.simulation_missions.items()
-                                                        for objective in objectives
-                                                        if isinstance(objective, EventDrivenObjective)
-                                                        and objective.event_type == event.event_type]
-
-            for mission_name,objective in event_objectives:
+            for mission_name, objective in event_objectives:
                 objective : EventDrivenObjective
-                # create task
                 task = EventObservationTask(objective.parameter, event=event, objective=objective)
-
-                # generate task request 
                 task_request = TaskRequest(task,
-                                            requester=state.agent_name,
-                                            mission_name=mission_name,
-                                            t_req=event.t_start)
-                
-                # generate measurement request message
+                                           requester=state.agent_name,
+                                           mission_name=mission_name,
+                                           t_req=event.t_start)
                 task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
-                
-                # update list of generated requests 
                 task_requests.append((event, task_request, task_request_msg))
 
-        # initialize set of times when broadcasts are scheduled (sets to avoid duplicates)
-        t_broadcasts = defaultdict(list)
+        # group messages by event so coverage tracking is per-event
+        event_requests : Dict = defaultdict(list)
+        for event, task_req, task_request_msg in task_requests:
+            event_requests[event].append((task_req, task_request_msg))
 
-        # create broadcasts for each request
-        for event,task_req,task_request_msg in tqdm(task_requests, 
-                                                    desc=f'{state.agent_name}/PREPLANNER: Scheduling broadcasts for generated task requests',
-                                                    leave=False,
-                                                    disable=(len(task_requests) < 10) or not self._printouts
-                                                ):
-            
-            # get column index of this agent in the comms links table
-            u_idx = orbitdata.comms_target_indices[OrbitData.safe_name(state.agent_name)]
-            cols = orbitdata.comms_target_columns
+        # comms index for this agent
+        u_idx = orbitdata.comms_target_indices[OrbitData.safe_name(state.agent_name)]
+        n_cols = len(orbitdata.comms_target_columns)
+        n_targets = len(orbitdata.comms_targets)
 
-            # iterate through list of intervals in this time period 
-            for _, row in orbitdata.comms_links.iter_rows_packed(event.availability.left, 
-                                                                 event.availability.right, 
-                                                                 include_current=True):
-                # unpack row data
-                t_start = float(row[orbitdata.comms_links._col["start"]])
-                # t_end   = float(row[orbitdata.comms_links._col["end"]])
-                comps   = row[3:]  
+        # for each event, schedule only as many broadcasts as needed to cover all reachable agents
+        t_broadcasts : Dict = defaultdict(list)
+        for event, reqs in tqdm(event_requests.items(),
+                                desc=f'{state.agent_name}-PREPLANNER: Scheduling broadcasts for events',
+                                leave=False,
+                                disable=(len(event_requests) < 10) or not self._printouts
+                               ):
+            msgs = [msg for _, msg in reqs]
+            t_req = min(req.t_req for req, _ in reqs)
 
-                # get communication targets for this interval based on component membership
+            # broadcast window starts at the earliest useful moment
+            t_window_start = max(event.availability.left, t_req, t_curr)
+            t_window_end = event.availability.right
+
+            # track which peer agents have already been covered by a scheduled broadcast
+            agents_covered = np.zeros(n_cols, dtype=bool)
+            n_covered = 0
+
+            for _, row in orbitdata.comms_links.iter_rows_packed(t_window_start, t_window_end, include_current=True):
+                t_row_start = float(row[orbitdata.comms_links._col["start"]])
+                comps = row[3:]
+
                 u_comp = comps[u_idx]
-                m = (comps == u_comp)
-                m[u_idx] = False
-                v_idxs = np.nonzero(m)[0]
-                targets = {cols[int(j)] for j in v_idxs}
+                reachable = (comps == u_comp)
+                reachable[u_idx] = False  # exclude self
 
-                # if no targets available, skip this interval
-                if len(targets) == 0:
+                # only schedule a broadcast when this interval introduces agents not yet covered
+                new_agents = np.where(reachable & ~agents_covered)[0]
+                if new_agents.size == 0:
                     continue
 
-                # calculate broadcast time to earliest in this access interval
-                t_broadcast : float = max(t_start, task_req.t_req, t_curr)
+                t_broadcast = max(t_row_start, t_window_start)
+                t_broadcasts[t_broadcast].extend(msgs)
 
-                # add broadcast time to set of broadcast times and assign request to be broadcast at this time
-                t_broadcasts[t_broadcast].append(task_request_msg)
-                
-        # iterate through access start times to find active requests
-        for t_broadcast, task_requests_msgs in tqdm(t_broadcasts.items(),
-                                                    desc=f'{state.agent_name}/PREPLANNER: Compiling broadcasts for each scheduled broadcast time',
-                                                    leave=False,
-                                                    disable=(len(t_broadcasts) < 10) or not self._printouts
-                                                ):
-            # ensure there is at least one active request to broadcast;
-            #  should always be true due to previous checks
+                agents_covered[new_agents] = True
+                n_covered += new_agents.size
+
+                # stop once every known target has been covered
+                if n_covered >= n_targets:
+                    break
+
+        # compile accumulated messages into one BroadcastMessageAction per time slot
+        for t_broadcast, task_requests_msgs in t_broadcasts.items():
             assert len(task_requests_msgs) > 0, "No active task requests found for broadcast time."
-            
-            # compile all requests into single broadcast message
             bus_broadcast = BusMessage(state.agent_name, state.agent_name, task_requests_msgs)
-
-            # create single broadcast action for all requests
             broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
-  
+
         # return sorted list of broadcasts by time
         return sorted(broadcasts, key=lambda action: action.t_start)
     

@@ -1927,7 +1927,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         #    Shape: (M, K) where M = matching rows, K = columns
         block = cl._buf[row_indices]  # single contiguous read vs M individual reads
 
-        u_idx = orbitdata.comms_target_indices[state.agent_name]
+        u_idx = orbitdata.comms_target_indices[orbitdata.safe_name(state.agent_name)]
         n_agents = len(orbitdata.comms_target_columns)
         # cols_arr = np.array(orbitdata.comms_target_columns)
         n_targets = len(orbitdata.comms_targets)

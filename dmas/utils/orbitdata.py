@@ -69,7 +69,7 @@ class OrbitData:
         comms_target_indices = {target : idx for idx, target in enumerate(comms_targets)}
 
         self.comms_targets = set(comms_targets)
-        self.comms_targets.discard(agent_name)
+        self.comms_targets.discard(OrbitData.safe_name(agent_name))
         self.comms_target_columns = comms_targets
         self.comms_target_indices = comms_target_indices
 
