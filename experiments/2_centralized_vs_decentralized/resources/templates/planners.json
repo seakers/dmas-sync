@@ -21,6 +21,12 @@
             "@type": "worker", 
             "dealerName": "GS Planner"
         },
+        "nadir": {
+            "@type": "nadir",
+            "debug": "False",
+            "horizon": 500,
+            "period" : 500
+        },
         "centralized-milp_priority" : {
             "@type": "dealer",
             "@mode": "milp",

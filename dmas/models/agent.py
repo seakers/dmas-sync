@@ -1084,15 +1084,15 @@ class SimulationAgent(object):
     """
     def print_results(self) -> None:
         try:
-            # log known default tasks
-            columns = ['id', 'task type', 'requester', 'parameter', 'lat [deg]', 'lon [deg]', 'grid index', 'gp index', 't start', 't end', 'priority']
-            data = [(task.id,task.task_type, self.name, task.parameter, task.location[0][0], task.location[0][1], task.location[0][2], task.location[0][3],
-                    task.availability.left, task.availability.right, task.priority)
-                for task in self._known_tasks.values()
-                if isinstance(task, DefaultMissionTask)
-            ]
-            df = pd.DataFrame(data=data, columns=columns)        
-            df.to_parquet(f"{self._results_path}/known_tasks.parquet", index=False)
+            # # log known default tasks
+            # columns = ['id', 'task type', 'requester', 'parameter', 'lat [deg]', 'lon [deg]', 'grid index', 'gp index', 't start', 't end', 'priority']
+            # data = [(task.id,task.task_type, self.name, task.parameter, task.location[0][0], task.location[0][1], task.location[0][2], task.location[0][3],
+            #         task.availability.left, task.availability.right, task.priority)
+            #     for task in self._known_tasks.values()
+            #     if isinstance(task, DefaultMissionTask)
+            # ]
+            # df = pd.DataFrame(data=data, columns=columns)        
+            # df.to_parquet(f"{self._results_path}/known_tasks.parquet", index=False)
 
             # log known and generated requests
             columns = ['id','requester','lat [deg]','lon [deg]','grid index', 'GP index','severity','start time [s]','end time [s]','detection time [s]','event type']

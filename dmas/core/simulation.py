@@ -59,6 +59,7 @@ class Simulation:
                  events : List[GeophysicalEvent],
                  environment : SimulationEnvironment,
                  agents : List[SimulationAgent],
+                 default_mission_tasks : Dict[str, List[DefaultMissionTask]],
                  level : int,
                  time_step : float = None,
                  printouts : bool = True,
@@ -116,6 +117,7 @@ class Simulation:
         self._events : List[GeophysicalEvent] = events
         self._environment : SimulationEnvironment = environment
         self._agents : list[SimulationAgent] = agents
+        self._default_mission_tasks : Dict[str, List[DefaultMissionTask]] = default_mission_tasks
         self._level = level
         self._printouts : bool = printouts
         self._calc_dual : bool = calc_dual
@@ -294,6 +296,17 @@ class Simulation:
         """ prints simulation results after execution """
         # TODO add any results printing here
 
+        # log known default tasks
+        columns = ['id', 'task type', 'requester', 'parameter', 'lat [deg]', 'lon [deg]', 'grid index', 'gp index', 't start', 't end', 'priority']
+        data = [(task.id,task.task_type, mission_name, task.parameter, task.location[0][0], task.location[0][1], task.location[0][2], task.location[0][3],
+                task.availability.left, task.availability.right, task.priority)
+            for mission_name,tasks in self._default_mission_tasks.items()
+            for task in tasks
+            if isinstance(task, DefaultMissionTask)
+        ]
+        df = pd.DataFrame(data=data, columns=columns)         
+        df.to_parquet(f"{self._environment._results_path}/default_tasks.parquet", index=False)
+
         # print runtime stats
         if self.__executed:
             runtime = self._t_f - self._t_0
@@ -353,6 +366,7 @@ class Simulation:
             # collect name of processed results files
             self.__processed_results = ResultsProcessor.load_processed_results(self._results_path,
                                                                                self._orbitdata,
+                                                                               self._missions,
                                                                                agent_missions,
                                                                                self._events,
                                                                                printouts
@@ -366,8 +380,10 @@ class Simulation:
                                             for agent in self._agents}
 
             # process results and store processed 
-            self.__processed_results = ResultsProcessor.process_results(self._results_path,
+            self.__processed_results = ResultsProcessor.process_results(
+                                                                 self._results_path,
                                                                  self._orbitdata,
+                                                                 self._missions,
                                                                  agent_missions,
                                                                  self._events,
                                                                  agent_specs,
@@ -672,6 +688,10 @@ class Simulation:
                                             logger,
                                             printouts=printouts)
             
+        # flatten default mission tasks dictionary for easier access during simulation
+        default_mission_tasks = {mission_name : list(tasks.values()) 
+                                 for mission_name, tasks in default_mission_tasks.items()}
+
         # return initialized mission
         return Simulation(scenario_name,
                           scenario_duration,
@@ -681,6 +701,7 @@ class Simulation:
                           events,
                           environment,
                           agents,
+                          default_mission_tasks,
                           level,
                           printouts=printouts,
                           calc_dual=calc_dual)

@@ -39,6 +39,7 @@ class ResultsProcessor:
     @staticmethod
     def process_results(results_path : str,
                         compiled_orbitdata : Dict[str, OrbitData], 
+                        missions : Dict[str, Mission],
                         agent_missions : Dict[str, Mission], 
                         events : List[GeophysicalEvent],
                         agent_specs : Dict[str, object],
@@ -53,7 +54,7 @@ class ResultsProcessor:
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         events_detected_df, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, compiled_orbitdata, agent_missions, task_reqs)
+        known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         grid_data_df = ResultsProcessor.__load_grid_data(compiled_orbitdata, printouts)
@@ -190,8 +191,9 @@ class ResultsProcessor:
         return obtained_rewards_df
 
     @staticmethod
-    def load_processed_results(results_path : str,
+    def load_processed_results( results_path : str,
                                 compiled_orbitdata : Dict[str, OrbitData], 
+                                missions : Dict[str, Mission],  
                                 agent_missions : Dict[str, Mission], 
                                 events : List[GeophysicalEvent],
                                 printouts: bool = True
@@ -203,7 +205,7 @@ class ResultsProcessor:
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         _, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        _, known_tasks = ResultsProcessor.__load_known_tasks(results_path, compiled_orbitdata, agent_missions, task_reqs)
+        _, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         
@@ -378,25 +380,13 @@ class ResultsProcessor:
     
     @staticmethod
     def __load_known_tasks(results_path : str,
-                           compiled_orbitdata : Dict[str, OrbitData],
-                           agent_missions : Dict[str, Mission],
+                           missions : Dict[str, Mission],
                            task_reqs : List[TaskRequest]
                            ) -> Tuple[pd.DataFrame, List[GenericObservationTask]]:
-        # compile default tasks from every agent
-        default_tasks_df : pd.DataFrame = None
-        for agent_name in compiled_orbitdata.keys():
-            # define path to agent's known tasks file
-            known_tasks_path = os.path.join(results_path, agent_name.lower(), 'known_tasks.parquet')
-            
-            # skip if file doesn't exist
-            if not os.path.isfile(known_tasks_path): continue
-            
-            # load default tasks
-            default_tasks_temp = pd.read_parquet(known_tasks_path)
-
-            # concatenate to main dataframe
-            default_tasks_df = pd.concat([default_tasks_df, default_tasks_temp], axis=0) \
-                if not default_tasks_temp.empty else default_tasks_df
+        print('Collecting known tasks data...')
+        # load default tasks 
+        known_tasks_path = os.path.join(results_path, 'environment', 'default_tasks.parquet')
+        default_tasks_df = pd.read_parquet(known_tasks_path)
 
         # remove duplicates
         default_tasks_df = default_tasks_df.drop_duplicates().reset_index(drop=True) \
@@ -406,17 +396,17 @@ class ResultsProcessor:
         known_tasks : list[GenericObservationTask] = []
         for _,row in default_tasks_df.iterrows():
             # get name of agent requesting the task
-            requester = row['requester']
+            task_mission = row['requester']
             if row['task type'] != GenericObservationTask.DEFAULT:
                 raise ValueError(f"Unknown task type `{row['task type']}` found in known tasks file.")
             
             # get matching `DefaultMissionObjective`
-            relevant_objectives = [objective for objective in agent_missions[requester]
+            relevant_objectives = [objective for objective in missions.get(task_mission, [])
                                     if isinstance(objective, DefaultMissionObjective)
                                     and objective.parameter == row['parameter']]
             # ensure exactly one matching objective found
             assert relevant_objectives, \
-                f"No matching DefaultMissionObjective found in mission for requester `{requester}` and parameter `{row['parameter']}`."
+                f"No matching DefaultMissionObjective found in mission for requester `{task_mission}` and parameter `{row['parameter']}`."
             
             task = DefaultMissionTask(
                 row['parameter'],
@@ -471,6 +461,8 @@ class ResultsProcessor:
 
     @staticmethod
     def __load_broadcast_history(results_path : str) -> pd.DataFrame:
+        print('Collecting agent broadcast history...')
+
         # define results path for the environment
         environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())        
         
@@ -1800,6 +1792,10 @@ class ResultsProcessor:
             for a in observations:
                 # unpack access
                 *_,instrument = a
+
+                if event not in event_to_required_observations:
+                    # no tasks require observations of this event                    
+                    continue # skip co-observability classification for this event
 
                 # check if instrument is part of those required for this event
                 for param,valid_instruments in event_to_required_observations[event].items():

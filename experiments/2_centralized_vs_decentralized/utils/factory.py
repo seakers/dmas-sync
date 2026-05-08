@@ -199,6 +199,12 @@ def create_spacecraft_specifications(
         if 'planner' not in satellite_spec:
             continue  # skip planner assignment for this satellite
 
+        # check if agent has a non-steerable instrument
+        if 'maneuver' not in satellite_spec['instrument']:
+            # agent cannot maneuver and is therfore not taskable;
+            #  set preplanner to nadir and replanner to none 
+            preplanner, replanner = 'nadir', 'none'
+
         # set planner settings
         if preplanner.lower() != 'none':
             if 'centralized' in preplanner.lower():
