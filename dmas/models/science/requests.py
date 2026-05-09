@@ -41,7 +41,11 @@ class TaskRequest:
         self.task : GenericObservationTask = task
         self.mission_name : str = mission_name
         self.t_req : float = t_req
-        self.id : str = str(uuid.UUID(id)) if id is not None else str(uuid.uuid1())
+        if id is not None:
+            self.id : str = str(uuid.UUID(id))
+        else:
+            name = f"{task.id}|{requester}|{mission_name}|{t_req}"
+            self.id : str = str(uuid.uuid5(uuid.NAMESPACE_OID, name))
 
     def __repr__(self):
         task_id = self.id.split('-')

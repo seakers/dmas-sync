@@ -22,13 +22,13 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         ## common cases
         self.single_sat_toy = False     # NOT IMPLEMENTED YET
         self.multiple_sat_toy = False   # NOT IMPLEMENTED YET
-        self.single_sat_lakes = False   
+        self.single_sat_lakes = True   
         self.multiple_sat_lakes = False # NOT IMPLEMENTED YET
 
         ## toy cases
         self.toy_1 = False  # single sat    default mission     single target, no events
         self.toy_2 = False  # single sat    no default mission  one event
-        self.toy_3 = True  # two sats      no default mission  one event
+        self.toy_3 = False  # two sats      no default mission  one event
         self.toy_4 = False  # two sats      no default mission  one event           optimistic bidding
         self.toy_5 = False  # two sats      no default mission  one event           comm delays
         self.toy_6 = False  # two sats      no default mission  two targets         two events

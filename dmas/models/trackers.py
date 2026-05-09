@@ -1000,7 +1000,8 @@ class TaskObservationTracker:
             for tid, clock, t_last, last_actor, last_instrument in payload:
                 task_id = str(tid)
                 if not self.is_registered(task_id):
-                    raise UnknownTaskError(task_id, "update_from_peer()")
+                    continue # skip unregistered tasks
+                    # raise UnknownTaskError(task_id, "update_from_peer()")
                 foreign = {
                     "clock":           clock,
                     "t_last":          float(t_last) if t_last is not None else -math.inf,

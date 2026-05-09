@@ -14,7 +14,7 @@ import scipy
 from tqdm import tqdm
 import pandas as pd
 
-from instrupy.base import BasicSensorModel
+from instrupy.base import BasicSensorModel, SyntheticApertureRadarModel
 from instrupy.passive_optical_scanner_model import PassiveOpticalScannerModel
 from instrupy.util import ViewGeometry, SphericalGeometry
 from orbitpy.util import Spacecraft
@@ -39,6 +39,7 @@ class ResultsProcessor:
     @staticmethod
     def process_results(results_path : str,
                         compiled_orbitdata : Dict[str, OrbitData], 
+                        missions : Dict[str, Mission],
                         agent_missions : Dict[str, Mission], 
                         events : List[GeophysicalEvent],
                         agent_specs : Dict[str, object],
@@ -53,7 +54,7 @@ class ResultsProcessor:
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         events_detected_df, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, compiled_orbitdata, agent_missions, task_reqs)
+        known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         grid_data_df = ResultsProcessor.__load_grid_data(compiled_orbitdata, printouts)
@@ -190,8 +191,9 @@ class ResultsProcessor:
         return obtained_rewards_df
 
     @staticmethod
-    def load_processed_results(results_path : str,
+    def load_processed_results( results_path : str,
                                 compiled_orbitdata : Dict[str, OrbitData], 
+                                missions : Dict[str, Mission],  
                                 agent_missions : Dict[str, Mission], 
                                 events : List[GeophysicalEvent],
                                 printouts: bool = True
@@ -203,7 +205,7 @@ class ResultsProcessor:
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         _, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        _, known_tasks = ResultsProcessor.__load_known_tasks(results_path, compiled_orbitdata, agent_missions, task_reqs)
+        _, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         
@@ -378,25 +380,13 @@ class ResultsProcessor:
     
     @staticmethod
     def __load_known_tasks(results_path : str,
-                           compiled_orbitdata : Dict[str, OrbitData],
-                           agent_missions : Dict[str, Mission],
+                           missions : Dict[str, Mission],
                            task_reqs : List[TaskRequest]
                            ) -> Tuple[pd.DataFrame, List[GenericObservationTask]]:
-        # compile default tasks from every agent
-        default_tasks_df : pd.DataFrame = None
-        for agent_name in compiled_orbitdata.keys():
-            # define path to agent's known tasks file
-            known_tasks_path = os.path.join(results_path, agent_name.lower(), 'known_tasks.parquet')
-            
-            # skip if file doesn't exist
-            if not os.path.isfile(known_tasks_path): continue
-            
-            # load default tasks
-            default_tasks_temp = pd.read_parquet(known_tasks_path)
-
-            # concatenate to main dataframe
-            default_tasks_df = pd.concat([default_tasks_df, default_tasks_temp], axis=0) \
-                if not default_tasks_temp.empty else default_tasks_df
+        print('Collecting known tasks data...')
+        # load default tasks 
+        known_tasks_path = os.path.join(results_path, 'environment', 'default_tasks.parquet')
+        default_tasks_df = pd.read_parquet(known_tasks_path)
 
         # remove duplicates
         default_tasks_df = default_tasks_df.drop_duplicates().reset_index(drop=True) \
@@ -406,17 +396,17 @@ class ResultsProcessor:
         known_tasks : list[GenericObservationTask] = []
         for _,row in default_tasks_df.iterrows():
             # get name of agent requesting the task
-            requester = row['requester']
+            task_mission = row['requester']
             if row['task type'] != GenericObservationTask.DEFAULT:
                 raise ValueError(f"Unknown task type `{row['task type']}` found in known tasks file.")
             
             # get matching `DefaultMissionObjective`
-            relevant_objectives = [objective for objective in agent_missions[requester]
+            relevant_objectives = [objective for objective in missions.get(task_mission, [])
                                     if isinstance(objective, DefaultMissionObjective)
                                     and objective.parameter == row['parameter']]
             # ensure exactly one matching objective found
             assert relevant_objectives, \
-                f"No matching DefaultMissionObjective found in mission for requester `{requester}` and parameter `{row['parameter']}`."
+                f"No matching DefaultMissionObjective found in mission for requester `{task_mission}` and parameter `{row['parameter']}`."
             
             task = DefaultMissionTask(
                 row['parameter'],
@@ -471,6 +461,8 @@ class ResultsProcessor:
 
     @staticmethod
     def __load_broadcast_history(results_path : str) -> pd.DataFrame:
+        print('Collecting agent broadcast history...')
+
         # define results path for the environment
         environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())        
         
@@ -569,13 +561,12 @@ class ResultsProcessor:
             compiled_orbitdata : Dict[str, OrbitData]
         ) -> Dict[Tuple[int,int], np.ndarray]:
 
-        # initialize list of columns and dictionary of column chunks
-        cols = None
-        chunks = None  # maps: col -> list of arrays
+        # 1) Collect per-agent arrays; different instrument types may have different extra columns
+        agent_arrays = []   # list of {col: np.ndarray}, one entry per non-empty agent
+        all_cols = []       # ordered union of all columns seen across agents
 
-        # 1) Collect per-sat arrays (no per-row dicts)
         for agent_orbit_data in compiled_orbitdata.values():
-            # get access data for this agent 
+            # get access data for this agent
             access = agent_orbit_data.gp_access_data.lookup_interval(
                 0.0,
                 include_extras=True,
@@ -585,28 +576,36 @@ class ResultsProcessor:
             # check if access data is empty
             t = access.get("time [s]", None)
             if t is None or len(t) == 0:
-                # if so, skip this agent
                 continue
 
-            # check if columns have been initialized
-            if cols is None:
-                # if not, initialize columns and chunks dictionary
-                cols = list(access.keys())
-                chunks = {c: [] for c in cols}
+            agent_arr = {c: np.asarray(v) for c, v in access.items()}
+            agent_arrays.append(agent_arr)
 
-            # append arrays for each column
-            for c in cols:
-                chunks[c].append(np.asarray(access[c]))
+            # extend column union preserving insertion order
+            for c in agent_arr:
+                if c not in all_cols:
+                    all_cols.append(c)
 
         # check if any access data was found
-        if cols is None: 
-            # no data found; return empty results
-            return {}, {} 
+        if not agent_arrays:
+            return {}, {}
 
-        # 2) Concatenate once per column
+        # 2) Concatenate once per column; fill NaN where an agent lacks a column
+        n_rows = [len(a["time [s]"]) for a in agent_arrays]
         big = {}
-        for c in cols:
-            big[c] = np.concatenate(chunks[c], axis=0) if chunks[c] else np.array([])
+        for c in all_cols:
+            parts = []
+            for arr, n in zip(agent_arrays, n_rows):
+                if c in arr:
+                    parts.append(arr[c])
+                else:
+                    # column absent for this agent — infer fill type from other agents
+                    ref = next((a[c] for a in agent_arrays if c in a), None)
+                    if ref is not None and np.issubdtype(ref.dtype, np.number):
+                        parts.append(np.full(n, np.nan, dtype=float))
+                    else:
+                        parts.append(np.full(n, None, dtype=object))
+            big[c] = np.concatenate(parts, axis=0)
 
         # check if time column is empty after concatenation
         if big["time [s]"].size == 0:
@@ -624,7 +623,7 @@ class ResultsProcessor:
         keys_sorted = keys[order]
 
         # reorder all columns once
-        for c in cols:
+        for c in big:
             big[c] = np.asarray(big[c])[order]
 
         # group boundaries
@@ -835,11 +834,13 @@ class ResultsProcessor:
             if any(not isinstance(task_req.task, EventObservationTask) for task_req in task_reqs):
                 raise NotImplementedError("Non-event observation tasks are not yet supported in event observation classification.")
             else:
-                matching_requests = sorted([task_req for task_req in task_reqs if task_req.task.event == event], 
+                matching_requests = sorted([task_req for task_req in task_reqs 
+                                            if task_req.task.event == event], 
                                             key= lambda a : a.t_req)
             
             # add to map of events to matching requests
-            requests_per_event[event] = matching_requests
+            if matching_requests:
+                requests_per_event[event] = matching_requests
 
             for task_req in matching_requests:
                 event_rquests_df_data.append({
@@ -1433,7 +1434,8 @@ class ResultsProcessor:
                           observations_per_event : Dict[GeophysicalEvent, List[Dict]],
                           observations_per_task : Dict[GenericObservationTask, list],
                           precision : int = 5,
-                          printouts : bool = True
+                          printouts : bool = True,
+                          calc_dual : bool = True,
                         ) -> pd.DataFrame:      
 
         # classify re-observations
@@ -1532,18 +1534,20 @@ class ResultsProcessor:
 
         total_obtained_reward = np.round(obtained_rewards_df['reward'].sum(), precision) if obtained_rewards_df is not None else 0.0
         total_obtained_utility = np.round(obtained_rewards_df['reward'].sum() - execution_costs_df['cost'].sum(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0
-
-        reward_primal_bound, reward_dual_bound \
-            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
         
         total_task_priority, total_observable_task_priority \
             = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
 
-        # validate reward values
-        assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-6, \
-            "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
-        assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
-            "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
+        if calc_dual:
+            reward_primal_bound, reward_dual_bound \
+                = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
+            # validate reward values
+            assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-6, \
+                "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
+            assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
+                "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
+        else:
+            reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -1762,25 +1766,24 @@ class ResultsProcessor:
         # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
 
         # map events to tasks that observe them
-        event_to_task : Dict[GeophysicalEvent, GenericObservationTask] = dict()
+        event_to_tasks : Dict[GeophysicalEvent, GenericObservationTask] = defaultdict(list)
         for task in known_tasks:
             if isinstance(task, EventObservationTask):
                 event = task.event
-                if event in event_to_task:
-                    raise NotImplementedError(f"Multiple tasks found for event {event.id}. Co-observability classification not yet supported for multiple tasks per event.")
-                event_to_task[event] = task
+                event_to_tasks[event].append(task)
         
         # map events to required obserations for their tasks
-        event_to_required_observations : Dict[GeophysicalEvent, Set[Dict]] = defaultdict(set)
-        for event, task in event_to_task.items():
+        event_to_required_observations : Dict[GeophysicalEvent, Dict[str, set]] = dict()
+        for event, tasks in event_to_tasks.items():
             # initialize set of required observations
-            required_observations = set()
-
-            for req in task.objective:
-                # check for instrument capability requirements
-                if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
-                    for val in req.valid_values: required_observations.add(val)
-                # TODO include other capability requirements that define a co-observation here
+            # required_observations = {task.objective.parameter for task in tasks}
+            required_observations = defaultdict(set)
+            for task in tasks:
+                for req in task.objective:
+                    # check for instrument capability requirements
+                    if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
+                        for val in req.valid_values: required_observations[task.objective.parameter].add(val)
+                    # TODO include other capability requirements that define a co-observation here
 
             # add to map of events to required observations
             event_to_required_observations[event] = required_observations
@@ -1792,9 +1795,14 @@ class ResultsProcessor:
                 # unpack access
                 *_,instrument = a
 
-                # check if instrument is part of those required for this event 
-                if instrument.lower() in event_to_required_observations[event]:
-                    co_observation_acesses[event].append(a)
+                if event not in event_to_required_observations:
+                    # no tasks require observations of this event                    
+                    continue # skip co-observability classification for this event
+
+                # check if instrument is part of those required for this event
+                for param,valid_instruments in event_to_required_observations[event].items():
+                    if instrument.lower() in valid_instruments:
+                        co_observation_acesses[event].append((*a,param))
 
             # sort accesses by start time
             co_observation_acesses[event].sort(key=lambda x: x[0].left) 
@@ -1807,35 +1815,36 @@ class ResultsProcessor:
         # evaluate events co-observable based on accesses
         for event, observations in co_observation_acesses.items():
             # check if more than one type of observation is required for this event
-            if len(event_to_required_observations[event]) < 2: 
+            if (event not in event_to_required_observations 
+                or len(event_to_required_observations[event]) < 2): 
                 # only one or no observation types required;
                 #  co-observability classification not applicable
                 continue
             
             # initiate group 
             # best_co_obs_group = []
-            best_instruments_in_group = set()
+            best_params_in_group = set()
 
             for i,a in enumerate(observations):
                 # get accesses within the desired decorreleation time 
                 co_obs_group = [b for b in observations[i:]
                                 if b[0].left <= a[0].right + t_corr]
 
-                # get instruments in this co-observation group
-                instruments_in_group = {a[2].lower() for a in co_obs_group} | {a[2].lower()}
+                # get parameters in this co-observation group
+                params_in_group = {b[3].lower() for b in co_obs_group}
                 
                 # check if this group is the best so far
-                if len(instruments_in_group) > len(best_instruments_in_group):
+                if len(params_in_group) > len(best_params_in_group):
                     # best_co_obs_group = co_obs_group
-                    best_instruments_in_group = instruments_in_group
+                    best_params_in_group = params_in_group
             
-            # check if more than one instrument is available to observe this event
-            if len(best_instruments_in_group) > 1:
+            # check if more than one parameter is available to observe this event
+            if len(best_params_in_group) > 1:
                 # add to set of co-observable events
                 events_co_observable.add(event)
 
                 # classify co-observability of this event based on best co-observation group
-                if event_to_required_observations[event] == best_instruments_in_group:
+                if set(event_to_required_observations[event].keys()) == best_params_in_group:
                     events_co_observable_fully.add(event)
                 else:
                     events_co_observable_partially.add(event)
@@ -1843,13 +1852,18 @@ class ResultsProcessor:
         # classify observations
         possible_co_observations = defaultdict(list)
         for event, observations in observations_per_event.items():
+            # check if event was discovered and requested to be observed
+            if event not in event_to_required_observations:
+                continue # if not, skip co-observability classification for this event
+
             for a in observations:
                 # check if instrument is part of those required for this event 
-                if a['instrument'].lower() in event_to_required_observations[event]:
-                    possible_co_observations[event].append(a)
+                for param,valid_instruments in event_to_required_observations[event].items():
+                    if a['instrument'].lower() in valid_instruments:
+                        possible_co_observations[event].append((a,param))
 
             # sort accesses by start time
-            possible_co_observations[event].sort(key=lambda x: x['t_start'])
+            possible_co_observations[event].sort(key=lambda x: x[0]['t_start'])
 
         # initiate event co-observation sets
         events_co_obs = set()
@@ -1866,35 +1880,178 @@ class ResultsProcessor:
 
             # initiate group 
             # best_co_obs_group = []
-            best_instruments_in_group = set()
+            best_params_in_group = set()
 
-            for i,a in enumerate(observations):
+            for i,(a,param) in enumerate(observations):
                 # get accesses within the desired decorreleation time 
                 co_obs_group = [b for b in observations[i:]
-                                if b['t_start'] <= a['t_end'] + t_corr]
+                                if b[0]['t_start'] <= a['t_end'] + t_corr]
 
-                # get instruments in this co-observation group
-                instruments_in_group = {a['instrument'].lower() for a in co_obs_group} | {a['instrument'].lower()}
+                # get parameters in this co-observation group
+                params_in_group = {b[1] for b in co_obs_group}
 
                 # check if this group is the best so far
-                if len(instruments_in_group) > len(best_instruments_in_group):
+                if len(params_in_group) > len(best_params_in_group):
                     # best_co_obs_group = co_obs_group
-                    best_instruments_in_group = instruments_in_group
-            
+                    best_params_in_group = params_in_group            
 
             # check if more than one instrument was involved in observations of this event
-            if len(best_instruments_in_group) > 1:
+            if len(best_params_in_group) > 1:
                 # add to set of co-observed events
                 events_co_obs.add(event)
 
                 # classify co-observability of this event based on best co-observation group
-                if event_to_required_observations[event] == best_instruments_in_group:
+                if list(event_to_required_observations[event].keys()) == best_params_in_group:
                     events_co_obs_fully.add(event)
                 else:
                     events_co_obs_partially.add(event)
 
         return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
             events_co_obs, events_co_obs_fully, events_co_obs_partially
+
+    # @staticmethod
+    # def __classify_event_coobservations(
+    #         accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
+    #         observations_per_event : Dict[GeophysicalEvent, List[Dict]],
+    #         known_tasks : List[GenericObservationTask],
+    #         t_corr : float = 3600.0 # TODO temp solution
+    #     ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
+    #     # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
+
+        # # map events to tasks that observe them
+        # event_to_task : Dict[GeophysicalEvent, GenericObservationTask] = dict()
+        # for task in known_tasks:
+        #     if isinstance(task, EventObservationTask):
+        #         event = task.event
+        #         if event in event_to_task:
+        #             raise NotImplementedError(f"Multiple tasks found for event {event.id}. Co-observability classification not yet supported for multiple tasks per event.")
+        #         event_to_task[event] = task
+        
+        # # map events to required obserations for their tasks
+        # event_to_required_observations : Dict[GeophysicalEvent, Set[Dict]] = defaultdict(set)
+        # for event, task in event_to_task.items():
+        #     # initialize set of required observations
+        #     required_observations = set()
+
+        #     for req in task.objective:
+        #         # check for instrument capability requirements
+        #         if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
+        #             for val in req.valid_values: required_observations.add(val)
+        #         # TODO include other capability requirements that define a co-observation here
+
+        #     # add to map of events to required observations
+        #     event_to_required_observations[event] = required_observations
+
+    #     # classify accesses
+    #     co_observation_acesses = defaultdict(list)
+    #     for event, observations in accesses_per_event.items():
+    #         for a in observations:
+    #             # unpack access
+    #             *_,instrument = a
+
+    #             # check if instrument is part of those required for this event 
+    #             if instrument.lower() in event_to_required_observations[event]:
+    #                 co_observation_acesses[event].append(a)
+
+    #         # sort accesses by start time
+    #         co_observation_acesses[event].sort(key=lambda x: x[0].left) 
+        
+    #     # initiate event co-observability sets
+    #     events_co_observable = set()
+    #     events_co_observable_fully = set()
+    #     events_co_observable_partially = set()
+
+    #     # evaluate events co-observable based on accesses
+    #     for event, observations in co_observation_acesses.items():
+    #         # check if more than one type of observation is required for this event
+    #         if len(event_to_required_observations[event]) < 2: 
+    #             # only one or no observation types required;
+    #             #  co-observability classification not applicable
+    #             continue
+            
+    #         # initiate group 
+    #         # best_co_obs_group = []
+    #         best_instruments_in_group = set()
+
+    #         for i,a in enumerate(observations):
+    #             # get accesses within the desired decorreleation time 
+    #             co_obs_group = [b for b in observations[i:]
+    #                             if b[0].left <= a[0].right + t_corr]
+
+    #             # get instruments in this co-observation group
+    #             instruments_in_group = {a[2].lower() for a in co_obs_group} | {a[2].lower()}
+                
+    #             # check if this group is the best so far
+    #             if len(instruments_in_group) > len(best_instruments_in_group):
+    #                 # best_co_obs_group = co_obs_group
+    #                 best_instruments_in_group = instruments_in_group
+            
+    #         # check if more than one instrument is available to observe this event
+    #         if len(best_instruments_in_group) > 1:
+    #             # add to set of co-observable events
+    #             events_co_observable.add(event)
+
+    #             # classify co-observability of this event based on best co-observation group
+    #             if event_to_required_observations[event] == best_instruments_in_group:
+    #                 events_co_observable_fully.add(event)
+    #             else:
+    #                 events_co_observable_partially.add(event)
+
+    #     # classify observations
+    #     possible_co_observations = defaultdict(list)
+    #     for event, observations in observations_per_event.items():
+    #         for a in observations:
+    #             # check if instrument is part of those required for this event 
+    #             if a['instrument'].lower() in event_to_required_observations[event]:
+    #                 possible_co_observations[event].append(a)
+
+    #         # sort accesses by start time
+    #         possible_co_observations[event].sort(key=lambda x: x['t_start'])
+
+    #     # initiate event co-observation sets
+    #     events_co_obs = set()
+    #     events_co_obs_fully = set()
+    #     events_co_obs_partially = set()  
+
+    #     # evaluate events co-observable based on accesses
+    #     for event, observations in possible_co_observations.items():
+    #         # check if more than one type of observation is required for this event
+    #         if len(event_to_required_observations[event]) < 2: 
+    #             # only one or no observation types required;
+    #             #  co-observability classification not applicable
+    #             continue
+
+    #         # initiate group 
+    #         # best_co_obs_group = []
+    #         best_instruments_in_group = set()
+
+    #         for i,a in enumerate(observations):
+    #             # get accesses within the desired decorreleation time 
+    #             co_obs_group = [b for b in observations[i:]
+    #                             if b['t_start'] <= a['t_end'] + t_corr]
+
+    #             # get instruments in this co-observation group
+    #             instruments_in_group = {a['instrument'].lower() for a in co_obs_group} | {a['instrument'].lower()}
+
+    #             # check if this group is the best so far
+    #             if len(instruments_in_group) > len(best_instruments_in_group):
+    #                 # best_co_obs_group = co_obs_group
+    #                 best_instruments_in_group = instruments_in_group
+            
+
+    #         # check if more than one instrument was involved in observations of this event
+    #         if len(best_instruments_in_group) > 1:
+    #             # add to set of co-observed events
+    #             events_co_obs.add(event)
+
+    #             # classify co-observability of this event based on best co-observation group
+    #             if event_to_required_observations[event] == best_instruments_in_group:
+    #                 events_co_obs_fully.add(event)
+    #             else:
+    #                 events_co_obs_partially.add(event)
+
+    #     return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
+    #         events_co_obs, events_co_obs_fully, events_co_obs_partially
 
     @staticmethod
     def __count_observations(orbitdata : Dict[str, OrbitData], 
@@ -3438,22 +3595,20 @@ class ResultsProcessor:
                 obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
 
             # update instrument-specific observation performance information
-            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower())
-                or ('vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower())):
-                if isinstance(instrument_spec.spectral_resolution, str):
-                    obs_perf.update({
-                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
-                    })
-                elif isinstance(instrument_spec.spectral_resolution, (int,float)):
-                    obs_perf.update({
-                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
-                    })
-                else:
-                    raise ValueError('Unsupported type for spectral resolution in instrument specification.')
-                
-            elif ('altimeter' in instrument_name.lower()
-                  or 'altimeter' in instrument_spec._type.lower()):
+            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
+                or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
+                spectral_bands_config = instrument_spec.spectral_config.get('bands') if instrument_spec.spectral_config is not None else []
+                spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
+                                  # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
+                                  for band in spectral_bands_config] 
                 obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : spectral_bands,
+                    ObservationRequirementAttributes.ACCURACY.value : np.Inf,
+                })
+            elif ('altimeter' in instrument_name.lower() or 'alt' in instrument_name.lower()
+                  or 'altimeter' in instrument_spec._type.lower() or 'alt' in instrument_spec._type.lower()):
+                obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
                     ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
                 })
             else:
@@ -3668,12 +3823,31 @@ class ResultsProcessor:
                     instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
                     if instrument_fov_geometry.shape == 'RECTANGULAR':
                         cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width) 
+                    # if instrument_fov_geometry.shape == 'RECTANGULAR':
+                    #     cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    # elif instrument_fov_geometry.shape == 'CIRCULAR':
+                    #     cross_track_fov.append(instrument_fov_geometry.angle_width) # circular FOV: angle width is diameter, which is the relevant FOV dimension for access calculations
                     else:
                         raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
                 elif isinstance(instrument_model, PassiveOpticalScannerModel):
                     instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
                     instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
                     if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width) 
+                    # if instrument_fov_geometry.shape == 'RECTANGULAR':
+                    #     cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    else:
+                        raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
+                elif isinstance(instrument_model, SyntheticApertureRadarModel):
+                    instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
+                    instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
+                    if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
                         cross_track_fov.append(instrument_fov_geometry.angle_width)
                     else:
                         raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')

@@ -421,7 +421,8 @@ class WalkerConstellation(Constellation):
                  inc : float,
                  num_sats : int,
                  num_planes : int,
-                 phasing_param : int
+                 phasing_param : int,
+                 raan_offset : float = 0.0
                 ):
         """ Describes an abstract Walker constellation."""
         # validate inputs
@@ -440,6 +441,7 @@ class WalkerConstellation(Constellation):
         self.num_sats = num_sats
         self.num_planes = num_planes
         self.phasing_param = phasing_param
+        self.raan_offset = raan_offset
 
     def get_default_propagation_period(self):
         return self.T / 2 / 3600.0 / 24.0 # propagate for half an orbit by default
@@ -470,7 +472,7 @@ class WalkerConstellation(Constellation):
         # generate orbital parameters for every satellite in every plane
         for plane_idx in range(self.num_planes):
             # calculate plane RAAN and initial aop
-            raan = plane_idx * raan_spacing
+            raan = plane_idx * raan_spacing + self.raan_offset
             aop = plane_idx * aop_phasing 
 
             # calculate sats per plane (distribute remaining sats)
@@ -534,10 +536,11 @@ class WalkerDeltaConstellation(WalkerConstellation):
                  inc : float,
                  num_sats : int,
                  num_planes : int,
-                 phasing_param : int
+                 phasing_param : int,
+                 raan_offset : float = 0.0
                 ):
         """ Describes a Walker Delta constellation."""
-        super().__init__(alt, inc, num_sats, num_planes, phasing_param)
+        super().__init__(alt, inc, num_sats, num_planes, phasing_param, raan_offset)
 
     def default_out_dir(self) -> str:
         """ Returns the default output directory for the constellation propagation. """
@@ -553,10 +556,11 @@ class WalkerStarConstellation(WalkerConstellation):
                  inc : float,
                  num_sats : int,
                  num_planes : int,
-                 phasing_param : int
+                 phasing_param : int,
+                 raan_offset : float = 0.0
                 ):
         """ Describes a Walker Star constellation."""
-        super().__init__(alt, inc, num_sats, num_planes, phasing_param)
+        super().__init__(alt, inc, num_sats, num_planes, phasing_param, raan_offset)
     
     def default_out_dir(self) -> str:
         """ Returns the default output directory for the constellation propagation. """

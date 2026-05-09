@@ -6,8 +6,6 @@ import numpy as np
 
 from orbitpy.util import Spacecraft
 
-import pandas as pd
-
 from execsatm.observations import ObservationOpportunity
 from execsatm.tasks import DefaultMissionTask, GenericObservationTask
 from execsatm.mission import Mission
@@ -22,6 +20,7 @@ from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import SatelliteAgentState, SimulationAgentState
 from dmas.core.messages import  AgentStateMessage, PlanMessage
 from dmas.utils.orbitdata import OrbitData
+from dmas.utils.series import TargetGridTable
 
 
 class DealerPlanner(AbstractPeriodicPlanner):
@@ -30,6 +29,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
     """
     def __init__(self, 
                  agent_results_dir : str,
+                 client_ids : Dict[str, str],
                  client_orbitdata : Dict[str, OrbitData], 
                  client_specs : Dict[str, object],
                  client_missions : Dict[str, Mission],
@@ -42,7 +42,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
         super().__init__(agent_results_dir, horizon, period, sharing, debug, logger, printouts)
 
         # check parameters
-        assert isinstance(client_orbitdata, dict), "Clients must be a dictionary mapping agent names to OrbitData instances."
+        assert isinstance(client_orbitdata, dict), \
+            "Clients must be a dictionary mapping agent names to OrbitData instances."
         assert all(isinstance(client, str) for client in client_orbitdata.keys()), \
             "All keys in clients must be strings representing agent names."
         assert all(isinstance(orbitdata, OrbitData) for orbitdata in client_orbitdata.values()), \
@@ -56,9 +57,9 @@ class DealerPlanner(AbstractPeriodicPlanner):
         assert all(isinstance(mission, Mission) for mission in client_missions.values()), \
             "All client missions must be instances of Mission."
         assert len(client_orbitdata) == len(client_specs), \
-            "Clients and client_specs must have the same number of entries."
+            "Clients and client_specs must have the same number of entries ({0}).".format(len(client_orbitdata))
         assert len(client_orbitdata) == len(client_missions), \
-            "Clients and client_missions must have the same number of entries."
+            "Clients and client_missions must have the same number of entries ({0}).".format(len(client_orbitdata))
         assert all(client in client_specs for client in client_orbitdata), \
             "Clients and client_specs must have the same keys."
         assert all(client in client_missions for client in client_orbitdata), \
@@ -67,14 +68,21 @@ class DealerPlanner(AbstractPeriodicPlanner):
             f"Sharing mode `{sharing}` is not recognized. Supported modes are: `{self.OPPORTUNISTIC}`, `{self.PERIODIC}`."
 
         # store client information
-        self.client_orbitdata : Dict[str, OrbitData] = {client.lower(): client_orbitdata[client] for client in client_orbitdata}
-        self.client_specs : Dict[str, object] = {client.lower(): client_specs[client] for client in client_specs}
-        self.client_missions : Dict[str, Mission] = {client.lower(): client_missions[client] for client in client_missions}
-        self.cross_track_fovs : Dict[str, Dict[str, float]] = self._collect_client_cross_track_fovs(client_specs)
-        self.client_states : Dict[str, SatelliteAgentState] = self.__initiate_client_states(client_orbitdata, client_specs)
-        self.client_plans : Dict[str, PeriodicPlan] = {client : PeriodicPlan([], t=0.0, horizon=self._horizon, t_next=np.Inf) 
-                                           for client in self.client_orbitdata}
-        self.client_tasks : Dict[Mission, List[GenericObservationTask]] = self.__generate_default_client_tasks(client_missions, client_orbitdata)
+        self.client_orbitdata : Dict[str, OrbitData] = \
+            {client: client_orbitdata for client, client_orbitdata in client_orbitdata.items()}
+        self.client_specs : Dict[str, object] = \
+            {client: client_specs for client, client_specs in client_specs.items()}
+        self.client_missions : Dict[str, Mission] = \
+            {client: client_mission for client, client_mission in client_missions.items()}
+        self.cross_track_fovs : Dict[str, Dict[str, float]] = \
+            self._collect_client_cross_track_fovs(client_specs)
+        self.client_states : Dict[str, SatelliteAgentState] = \
+            self.__initiate_client_states(client_ids, client_orbitdata, client_specs)
+        self.client_plans : Dict[str, PeriodicPlan] =\
+            {client : PeriodicPlan([], t=0.0, horizon=self._horizon, t_next=np.Inf) 
+                for client in self.client_orbitdata}
+        self.mission_tasks : Dict[Mission, List[GenericObservationTask]] \
+            = self.__generate_default_mission_tasks(client_missions, client_orbitdata)
 
     def _collect_client_cross_track_fovs(self, client_specs : Dict[str, Spacecraft]) -> Dict[str, Dict[str, float]]:
         """ get instrument field of view specifications from agent specs object """
@@ -95,11 +103,13 @@ class DealerPlanner(AbstractPeriodicPlanner):
                  for client in self.client_specs})
 
     def __initiate_client_states(self, 
+                                 client_ids : Dict[str, str],
                                  client_orbitdata : Dict[str, OrbitData], 
                                  client_specs : Dict[str, Spacecraft]
                                  ) -> Dict[str, SatelliteAgentState]:
         """ initiate client agent states at the start of the simulation """
         states: Dict[str, SatelliteAgentState] = {client_name : SatelliteAgentState(client_name, 
+                                                                                    client_ids[client_name], 
                                                                                     client_specs[client_name].orbitState.to_dict(), 
                                                                                     client_orbitdata[client_name].time_step)
                                                    for client_name in client_orbitdata
@@ -117,16 +127,17 @@ class DealerPlanner(AbstractPeriodicPlanner):
         return states
     
     def update_percepts(self, 
-                        state, 
-                        current_plan, 
-                        tasks,
-                        incoming_reqs, 
-                        relay_messages, 
-                        misc_messages, 
-                        completed_actions, 
-                        aborted_actions, 
-                        pending_actions):
-        super().update_percepts(state, current_plan, tasks, incoming_reqs, relay_messages, misc_messages, completed_actions, aborted_actions, pending_actions)
+                        state : SimulationAgentState,
+                        current_plan : Plan,
+                        tasks : Dict[Tuple,GenericObservationTask],
+                        incoming_reqs: Dict[Tuple,Dict], 
+                        misc_messages : list,
+                        completed_actions: list,
+                        aborted_actions : list,
+                        pending_actions : list,
+                    ):
+        # update parent class percepts
+        super().update_percepts(state, current_plan, tasks, incoming_reqs, misc_messages, completed_actions, aborted_actions, pending_actions)
 
         # check if any client broadcasted their state or plan
         agent_state_messages : list[AgentStateMessage] = [msg for msg in misc_messages 
@@ -180,23 +191,25 @@ class DealerPlanner(AbstractPeriodicPlanner):
                         tasks : List[GenericObservationTask],
                         observation_history : TaskObservationTracker,
                     ) -> Plan:
+        # get current time and next replanning time
+        t_curr = state.get_time()
+        t_next = t_curr + self._period
+        horizon = self._horizon if self._horizon != np.Inf else self._period        
+        
         # update plans for all client agents
         self.client_plans : Dict[str, PeriodicPlan] = self._generate_client_plans(state, specs, orbitdata, mission, tasks, observation_history)
 
         # schedule plan broadcasts to be performed
         plan_broadcasts : list[BroadcastMessageAction] = self._schedule_broadcasts(state, orbitdata)
-        
-        # generate plan from actions
-        self.plan : PeriodicPlan = PeriodicPlan(plan_broadcasts, t=state._t, horizon=self._horizon, t_next=state._t+self._period)    
-        
-        # schedule wait for next planning period to start
-        replan_waits : list[WaitAction] = self._schedule_periodic_replan(state, self.plan, state._t+self._period)
 
-        # add waits to plan
-        self.plan.add_all(replan_waits, t=state._t)
+        # schedule wait for next planning period to start
+        replan_waits : list[WaitAction] = self._schedule_periodic_replan(state, t_next)
+
+        # generate plan from actions
+        self._plan : PeriodicPlan = PeriodicPlan(plan_broadcasts, replan_waits, t=t_curr, horizon=horizon, t_next=t_next)    
 
         # return plan and save local copy
-        return self.plan.copy()
+        return self._plan.copy()
         
     def _generate_client_plans(self, 
                                state : SimulationAgentState, 
@@ -210,35 +223,44 @@ class DealerPlanner(AbstractPeriodicPlanner):
         """
 
         # Outline planning horizon interval
-        planning_horizons : Dict[str,Interval] = self._calculate_horizons(state, orbitdata, self._horizon)
+        planning_horizons : Dict[str,Interval] = self._calculate_horizons(state)
 
-        # check if there are clients reachable in the planning horizon
-        if all([orbitdata.get_next_agent_access(state._t, target=client, 
-                                                t_max=state._t+self._period, 
-                                                include_current=True) is None 
-                for client in self.client_orbitdata.keys()]):
+        # Calculate next access to each client within the replanning period
+        next_accesses : Dict[str, Interval] = self._calculate_accesses(state, orbitdata)
+
+        # check if there are clients reachable in the planning period
+        if all(next_access is None for next_access in next_accesses.values()):
+            # all clients are unreachable within the planning period; 
+            # generate empty plans with only a wait action until the next planning period
+            
+            # get current time and next replanning time
+            t_curr = state.get_time()
+            t_next = t_curr + self._period
+            horizon = self._horizon if self._horizon != np.Inf else self._period
+
+            # return empty plans for each client
             return {client: PeriodicPlan([], 
-                                         t=state._t, 
-                                         horizon=planning_horizons[client].right, 
-                                         t_next=state._t+self._period)
+                                         t=t_curr, 
+                                         horizon=horizon, 
+                                         t_next=t_next)
                         for client in self.client_orbitdata
                     }
 
         # collect only available tasks
-        available_client_tasks : Dict[Mission, GenericObservationTask] = \
-            self._collect_available_client_tasks(planning_horizons)
+        available_mission_tasks : Dict[Mission, GenericObservationTask] = \
+            self._collect_available_mission_tasks(planning_horizons)
 
         # calculate coverage opportunities for tasks
         target_access_opportunities : Dict[str, List[ List[ Dict[str, tuple]]]] = \
-              self._calculate_client_target_access_opportunities(planning_horizons)
+              self._calculate_client_target_access_opportunities(available_mission_tasks, planning_horizons)
 
         # create schedulable tasks from known tasks and future access opportunities
         schedulable_client_tasks : Dict[str, list[ObservationOpportunity]] = \
-              self._create_schedulable_client_tasks(available_client_tasks, target_access_opportunities)
+              self._create_schedulable_client_tasks(available_mission_tasks, target_access_opportunities)
 
-        # schedule observations for each client
+        # 1: schedule observations for each client
         client_observations : Dict[str, List[ObservationAction]] = \
-              self._schedule_client_observations(state, available_client_tasks, schedulable_client_tasks, observation_history)
+              self._schedule_client_observations(state, available_mission_tasks, schedulable_client_tasks, observation_history)
                 
         # validate observation paths for each client
         for client,observations in client_observations.items():
@@ -249,7 +271,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
             assert self.is_observation_path_valid(self.client_states[client], observations, None, None, self.client_specs[client]), \
                 f'Generated observation path/sequence is not valid. Overlaps or mutually exclusive tasks detected.'
             
-        # schedule maneuvers for each client
+        # 2: schedule maneuvers for each client
         client_maneuvers : Dict[str, List[ManeuverAction]] = self._schedule_client_maneuvers(client_observations)
         
         # validate maneuver paths for each client
@@ -265,8 +287,9 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                                self.cross_track_fovs[client]), \
                 f'Generated maneuver path/sequence is not valid. Overlaps or mutually exclusive tasks detected.'
 
-        # schedule broadcasts for each client
-        client_broadcasts : Dict[str, List[BroadcastMessageAction]] = self._schedule_client_broadcasts(state, orbitdata)
+        # 3: schedule broadcasts for each client
+        client_broadcasts : Dict[str, List[BroadcastMessageAction]] \
+            = self._schedule_client_broadcasts(state, orbitdata)
 
         # validate broadcast paths for each client
         for client,broadcasts in client_broadcasts.items():
@@ -285,27 +308,49 @@ class DealerPlanner(AbstractPeriodicPlanner):
         # return plans
         return client_plans
 
-    def _calculate_horizons(self, state : SimulationAgentState, orbitdata : OrbitData, dt : float) -> Dict[str, Interval]:
+    def _calculate_horizons(self, state : SimulationAgentState) -> Dict[str, Interval]:
         """ calculate planning horizon intervals for each client """
 
-        # initialize dictionary to hold planning horizons for each client
-        horizons : Dict[str, Interval] = dict()
-        
-        # calculate planning horizon for each client
-        for client in self.client_orbitdata:
-            # Try to find the next access after the desired horizon `dt`
-            next_access : Interval = orbitdata.get_next_agent_access(client, state._t + dt)
+        # get current simulation time
+        t_curr = state.get_time()
 
-            # If access exists after the planning horizon, plan up to that start time
-            # Otherwise, this agent wont be accessible again, so just plan up to the desired horizon
-            horizon_end = max(next_access.left, state._t+dt) if next_access else state._t + dt
+        # calculate planning horizon span
+        t_next = t_curr + self._horizon
+
+        # initialize and populate dictionary to hold planning horizons for each client
+        horizons : Dict[str, Interval] = {
+            client : Interval(t_curr, t_next)
+            for client in self.client_orbitdata
+        }        
+            
+        # return horizons
+        return horizons
+    
+    def _calculate_accesses(self, state : SimulationAgentState, orbitdata : OrbitData) -> Dict[str, List[Tuple[Interval, str]]]:
+        # get current simulation time
+        t_curr = state.get_time()
+
+        # calculate next replanning time
+        t_next = t_curr + self._period
+
+        # initialize dictionary to hold next access intervals for each client
+        next_accesses : Dict[str, Interval] = dict()
+
+        # calculate next access for each client
+        for client in self.client_orbitdata:            
+            # Try to find the next access after the desired horizon 
+            next_access,*_ = orbitdata.get_next_agent_access(t_curr, target=client, t_max=t_next, include_current=True)
 
             # set planning horizon interval for this client
-            horizons[client] = Interval(state._t, horizon_end)
-            
-        return horizons
+            next_accesses[client] = next_access
 
-    def __generate_default_client_tasks(self, client_missions : Dict[str, Mission], client_orbitdata : Dict[str, OrbitData]) -> List[GenericObservationTask]:
+        # return next accesses
+        return next_accesses
+
+    def __generate_default_mission_tasks(self, 
+                                         client_missions : Dict[str, Mission], 
+                                         client_orbitdata : Dict[str, OrbitData]
+                                        ) -> Dict[Mission, List[GenericObservationTask]]:
         """ generate default tasks for all clients based on their missions and orbitdata """
 
         # map missions to clients
@@ -315,7 +360,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                                      for mission in client_missions.values()}
 
         # collect coverage grids for each client
-        client_coverage_grids : Dict[str, list[pd.DataFrame]] = {client : orbitdata.grid_data 
+        client_coverage_grids : Dict[str, TargetGridTable] = {client : orbitdata.grid_data 
                                                                  for client,orbitdata in client_orbitdata.items()}
         
         # validate that all clients with the same mission have the same coverage grids in their orbitdata
@@ -327,7 +372,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
                 # check same grid values
                 for i,grid_i in enumerate(client_coverage_grids[clients[0]]):
-                    assert all([grid_i.equals(client_coverage_grids[client][i]) for client in clients]), \
+                    assert all([grid_i == (client_coverage_grids[client][i]) for client in clients]), \
                         f"All clients with the same mission must have the same coverage grids in their orbitdata. Clients {clients} do not."
                     
                 # check same mission duration for clients with the same mission
@@ -339,7 +384,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                                     for mission,clients in mission_clients.items()}
 
         # map missions to grids
-        mission_grids : Dict[Mission, list[pd.DataFrame]] = {mission : client_coverage_grids[clients[0]] if len(clients) > 0 else []
+        mission_grids : Dict[Mission, TargetGridTable] = {mission : client_coverage_grids[clients[0]] if len(clients) > 0 else []
                                                              for mission,clients in mission_clients.items()}
 
         # initialize list of tasks
@@ -392,8 +437,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     #   collect all targets from all grids known to this agent
                     req_targets = list({
                         (lat, lon, int(grid_index), int(gp_index))
-                        for grid in grids
-                        for lat,lon,grid_index,gp_index in grid.values
+                        for lat,lon,grid_index,gp_index in grids
                     })
                     targets.extend(req_targets)
             
@@ -415,24 +459,27 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
         return tasks
 
-    def _collect_available_client_tasks(self, planning_horizons : Dict[str, Interval]) -> Dict[Mission, List[GenericObservationTask]]:
+    def _collect_available_mission_tasks(self, planning_horizons : Dict[str, Interval]) -> Dict[Mission, List[GenericObservationTask]]:
         """ get all known and active tasks for all clients within the planning horizon """        
         # overall planning horizon is the max of all client planning horizons
         mission_planning_horizon = {mission : max([interval 
                                                     for client,interval in planning_horizons.items()
                                                     if self.client_missions[client] == mission], 
                                                   key=lambda x: x.right)
-                                    for mission in self.client_tasks}
+                                    for mission in self.mission_tasks}
         
         # return tasks that overlap with the overall planning horizon
         return {mission: [task for task in tasks
                           if isinstance(task, GenericObservationTask)
                           and task.availability.overlaps(mission_planning_horizon[mission])]
-                for mission, tasks in self.client_tasks.items()}
+                for mission, tasks in self.mission_tasks.items()}
 
-    def _calculate_client_target_access_opportunities(self, planning_horizons : Dict[str, Interval]) -> Dict[str, List[ List[ Dict[str, tuple]]]]:
+    def _calculate_client_target_access_opportunities(self, 
+                                                      available_client_tasks : Dict[Mission, List[GenericObservationTask]], 
+                                                      planning_horizons : Dict[str, Interval]
+                                                    ) -> Dict[str, List[ List[ Dict[str, tuple]]]]:
         """ calculates future access opportunities for ground targets for all clients within the planning horizon """
-        return {client : self.calculate_access_opportunities(self.client_states[client], 
+        return {client : self.calculate_access_opportunities(available_client_tasks[self.client_missions[client]], 
                                                              planning_horizons[client], 
                                                              client_orbitdata)
                 for client, client_orbitdata in self.client_orbitdata.items()}
@@ -441,7 +488,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                           available_tasks : Dict[Mission, List[GenericObservationTask]], 
                                           target_access_opportunities : dict
                                         ) -> Dict:
-        return {client : self.create_observation_opportunities_from_accesses(available_tasks[self.client_missions[client]], 
+        return {client : self.create_observation_opportunities_from_accesses(
+                                                         available_tasks[self.client_missions[client]],
                                                          client_access_opportunities, 
                                                          self.cross_track_fovs[client], 
                                                          self.client_orbitdata[client])
@@ -479,25 +527,29 @@ class DealerPlanner(AbstractPeriodicPlanner):
         # initialize dictionary to hold broadcasts for each client
         client_broadcasts = {client: [] for client in self.client_orbitdata}
 
+        # get current time
+        t_curr = state.get_time()
+        t_next = t_curr + self._period
+
         # create future state broadcast action for each client
         for client in self.client_orbitdata.keys():
             
             if self._sharing == self.OPPORTUNISTIC:
                 # get access intervals with the client agent within the planning horizon
                 access_intervals : List[Tuple[Interval, str]] \
-                    = orbitdata.get_next_agent_accesses(client, state._t, include_current=True)
+                    = orbitdata.get_next_agent_accesses(t_curr, t_max=t_next, target=client, include_current=True)
 
                 # create broadcast actions for each access interval
-                for next_access,_ in access_intervals:
+                for next_access,*_ in access_intervals:
 
                     # if no access opportunities in this planning horizon, skip scheduling
                     if next_access.is_empty(): continue
 
                     # if access opportunity is beyond the next planning period, skip scheduling    
-                    if next_access.right <= state._t + self._period: continue
+                    if next_access.right <= t_next: continue
 
                     # get last access interval and calculate broadcast time
-                    t_broadcast : float = max(next_access.left, state._t+self._period-5e-3) # ensure broadcast happens before the end of the planning period
+                    t_broadcast : float = max(next_access.left, t_next-5e-3) # ensure broadcast happens before the end of the planning period
 
                     # generate plan message to share state
                     state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
@@ -509,7 +561,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
 
                     # add to client broadcast list
-                    client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
+                    # client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
+                    client_broadcasts[client].extend([task_requests_msg])
 
             elif self._sharing == self.PERIODIC:
                 # determine current time        
@@ -544,6 +597,10 @@ class DealerPlanner(AbstractPeriodicPlanner):
         """
         Schedules broadcasts to be performed based on the generated plans for each agent.
         """
+        # get current time
+        t_curr = state.get_time()
+        t_next = t_curr + self._period
+
         # initialize list to hold broadcast actions
         broadcasts : list[BroadcastMessageAction] = []
 
@@ -551,9 +608,12 @@ class DealerPlanner(AbstractPeriodicPlanner):
         t_access_starts = set()    
 
         for client,client_plan in self.client_plans.items():
+            if client_plan.is_empty():
+                continue # no actions scheduled for this client; skip broadcast scheduling
+
             if self._sharing == self.OPPORTUNISTIC:
                 # get next access interval
-                next_access : Interval = orbitdata.get_next_agent_access(client, state._t, include_current=True)
+                next_access,*_ = orbitdata.get_next_agent_access(t_curr, target=client, t_max=t_next, include_current=True)
 
                 # if no access opportunities in this planning horizon, skip scheduling
                 if not next_access: continue
@@ -562,11 +622,11 @@ class DealerPlanner(AbstractPeriodicPlanner):
                 t_access_starts.add(next_access.left)
 
                 # calculate broadcast time
-                # t_broadcast : float = max(next_access.left, state.t)
-                t_broadcast : float = max(
-                                        min(next_access.left + 5*self.EPS,    # give buffer time for access to start
-                                            next_access.right),               # ensure broadcast is before access ends
-                                    state._t)                                # ensure broadcast is not in the past
+                t_broadcast : float = max(next_access.left, t_curr)
+                # t_broadcast : float = max(
+                #                         min(next_access.left + 5*self.EPS,    # give buffer time for access to start
+                #                             next_access.right),               # ensure broadcast is before access ends
+                #                     state._t)                                # ensure broadcast is not in the past
 
 
                 # if broadcast time is beyond the next planning period, skip scheduling
@@ -601,12 +661,12 @@ class DealerPlanner(AbstractPeriodicPlanner):
             else:
                 raise ValueError(f'Unknown sharing mode `{self._sharing}` specified.')          
            
-        # connection waits; allows for messages to be received right after access start times
-        waits = [WaitAction(t_access_start, t_access_start) for t_access_start in t_access_starts]
-        broadcasts.extend(waits)
+        # # connection waits; allows for messages to be received right after access start times
+        # waits = [WaitAction(t_access_start, t_access_start) for t_access_start in t_access_starts]
+        # broadcasts.extend(waits)
 
-        # TODO test waits functionality
-        if waits: raise NotImplementedError('Waits for messages not yet tested in dealer broadcasts.')
+        # # TODO test waits functionality
+        # if waits: raise NotImplementedError('Waits for messages not yet tested in dealer broadcasts.')
 
         # return sorted broadcasts by broadcast start time
         return sorted(broadcasts, key=lambda x: x.t_start)

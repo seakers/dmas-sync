@@ -1,0 +1,22 @@
+{
+    "announcer" : {
+        "name" : "GS Announcer",
+        "@id" : "gs-announcer",
+        "network" : "NEN",
+        "planner" : {
+            "preplanner": {
+                "@type": "eventAnnouncer",
+                "debug": "False",                        
+                "eventsPath" : "PATH/TO/EVENTS"
+            }
+        },
+        "mission" : "none"
+    },
+    "planner" : {
+        "name" : "GS Planner",
+        "@id" : "gs-planner",
+        "network" : "NEN",
+        "planner" : {},
+        "mission" : "none"
+    }
+}

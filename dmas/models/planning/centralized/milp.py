@@ -9,7 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 from execsatm.tasks import GenericObservationTask
-from execsatm.observations import ObservationOpportunity
+from execsatm.observations import DummyObservationOpportunity, ObservationOpportunity
 from execsatm.mission import Mission
 from execsatm.utils import Interval
 
@@ -40,10 +40,12 @@ class DealerMILPPlanner(DealerPlanner):
     MODELS = [STATIC, LINEAR, REOBS, REVISIT]
 
     def __init__(self, 
+                 agent_results_dir : str,
+                 client_ids : Dict[str, str],
                  client_orbitdata : Dict[str, OrbitData],
                  client_specs : Dict[str, object],
                  client_missions : Dict[str, Mission],
-                 model : str, 
+                 model : str = STATIC, 
                  licence_path : str = None, 
                  horizon : float = np.Inf,
                  period : float = np.Inf,
@@ -55,7 +57,8 @@ class DealerMILPPlanner(DealerPlanner):
                  printouts : bool = True,
                 ):
         
-        super().__init__(client_orbitdata, client_specs, client_missions, horizon, period, sharing, debug, logger, printouts)
+        # super().__init__(client_orbitdata, client_specs, client_missions, horizon, period, sharing, debug, logger, printouts)
+        super().__init__(agent_results_dir, client_ids, client_orbitdata, client_specs, client_missions, horizon, period, sharing, debug, logger, printouts)
 
         if not debug or licence_path is not None:
             # Check for Gurobi license
@@ -76,14 +79,14 @@ class DealerMILPPlanner(DealerPlanner):
     
     def _schedule_client_observations(self, 
                                       state : SimulationAgentState,
-                                      available_client_tasks : Dict[Mission, List[GenericObservationTask]],
+                                      available_mission_tasks : Dict[Mission, List[GenericObservationTask]],
                                       schedulable_client_tasks: Dict[str, List[ObservationOpportunity]], 
                                       observation_history : TaskObservationTracker
                                     ) -> Dict[str, List[ObservationAction]]:
         """ schedules observations for all clients """
         
         # short-circuit if no tasks to schedule
-        if all([len(tasks) == 0 for tasks in schedulable_client_tasks.values()]) or len(available_client_tasks) == 0:
+        if all([len(tasks) == 0 for tasks in schedulable_client_tasks.values()]) or len(available_mission_tasks) == 0:
                 return {client: [] for client in self.client_orbitdata} # no tasks to schedule
         
         # collect max slew rates for each client
@@ -104,7 +107,7 @@ class DealerMILPPlanner(DealerPlanner):
 
         # collect list of unique parent tasks across all missions
         parent_tasks : list[GenericObservationTask] = list({ptask 
-                                                            for mission_ptasks in available_client_tasks.values() 
+                                                            for mission_ptasks in available_mission_tasks.values() 
                                                             for ptask in mission_ptasks})
         
         # count max number of reobservations per parent task and instrument
@@ -126,7 +129,7 @@ class DealerMILPPlanner(DealerPlanner):
         client_indices : Dict[str, int] = {client : idx 
                                            for idx,client in enumerate(indexed_clients)}
 
-        indexed_missions : list[Mission] = list(available_client_tasks.keys())
+        indexed_missions : list[Mission] = list(available_mission_tasks.keys())
         mission_indices : Dict[Mission, int] = {mission : idx 
                                                 for idx,mission in enumerate(indexed_missions)}
 
@@ -135,10 +138,11 @@ class DealerMILPPlanner(DealerPlanner):
                                                 for task_idx,_ in enumerate(schedulable_client_tasks[client])]
         
         # Initialize constants
-        t_start   = [[task.accessibility.left-state._t 
+        t_curr = state.get_time()
+        t_start   = [[max(task.accessibility.left-t_curr, 0.0) 
                               for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
                               for client in indexed_clients]
-        t_end     = [[task.accessibility.right-state._t 
+        t_end     = [[min(task.accessibility.right-t_curr, self._horizon) 
                               for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
                               for client in indexed_clients]
         d         = [[task.min_duration 
@@ -180,9 +184,9 @@ class DealerMILPPlanner(DealerPlanner):
         elif self.model == self.LINEAR:
             y,t,z,obj = self.__linear_milp_planner(state, schedulable_client_tasks, observation_history, indexed_clients, task_indices, A, E, t_start, t_end, d, slew_times)
         elif self.model == self.REOBS:
-            y,t,z,obj = self.__reobs_milp_planner(state, available_client_tasks, schedulable_client_tasks, observation_history)
+            y,t,z,obj = self.__reobs_milp_planner(state, available_mission_tasks, schedulable_client_tasks, observation_history)
         elif self.model == self.REVISIT:
-            y,t,z,obj = self.__revisit_milp_planner(state, available_client_tasks, schedulable_client_tasks, observation_history)
+            y,t,z,obj = self.__revisit_milp_planner(state, available_mission_tasks, schedulable_client_tasks, observation_history)
 
         # DEBUGGING OUTPUTS --------------------------------------
         if self._debug: self.__validate_results(y, t, slew_times, d, z)
@@ -202,14 +206,18 @@ class DealerMILPPlanner(DealerPlanner):
         # select an instrument from the agent's payload
         instrument : str = self.client_specs[client].instrument[0].name  # choose the first instrument by default
 
+        # get current time
+        client_state = self.client_states[client]
+        t_curr = self.client_states[client].get_time()
+        th_curr = client_state.attitude[0]
+
         # generate and return dummy task
-        return ObservationOpportunity(set(),                                                   # empty set of parent tasks
-                                            instrument,                                         # some default instrument
-                                            Interval(self.client_states[client]._t,
-                                                     self.client_states[client]._t),             # accessibility set to current time only
-                                            0.0,                                                # zero duration
-                                            Interval(self.client_states[client].attitude[0],
-                                                     self.client_states[client].attitude[0]))   # set slew angle to current attitude angle
+        return DummyObservationOpportunity(
+            instrument_name = instrument,
+            accessibility = Interval(t_curr, t_curr),
+            slew_angles=Interval(th_curr,th_curr), 
+            min_duration = 0.0,  
+        )
 
 
     def __extract_observation_sequence(self,
@@ -261,7 +269,7 @@ class DealerMILPPlanner(DealerPlanner):
                 model.computeIIS()
 
                 # print results to file
-                filepath = f"./chess3d/agents/planning/preplanners/decentralized/{model.ModelName}.ilp"
+                filepath = f"./dmas/models/planning/centralized/{model.ModelName}.ilp"
                 model.write(filepath)
                 model.write(f"{filepath}.json")
                 print(f"IIS written to `{filepath}`")

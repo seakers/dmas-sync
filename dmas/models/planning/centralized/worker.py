@@ -1,10 +1,13 @@
-from dmas.models.actions import AgentAction
+from typing import Dict, Tuple
 
+from execsatm.tasks import GenericObservationTask
+
+from dmas.models.actions import AgentAction
 from dmas.models.actions import ObservationAction, action_from_dict
 from dmas.models.planning.plan import PeriodicPlan, Plan
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.states import SimulationAgentState
-from dmas.core.messages import PlanMessage
+from dmas.core.messages import PlanMessage, message_from_dict
 
 
 class WorkerPlanner(AbstractPeriodicPlanner):
@@ -21,15 +24,36 @@ class WorkerPlanner(AbstractPeriodicPlanner):
         self.dealer_name = dealer_name
         self.plan_message : PlanMessage = None
 
-    def update_percepts(self, state, current_plan, tasks, incoming_reqs, relay_messages, misc_messages, completed_actions, aborted_actions, pending_actions):       
-        super().update_percepts(state, current_plan, tasks, incoming_reqs, relay_messages, misc_messages, completed_actions, aborted_actions, pending_actions)
+    def update_percepts(self, 
+                        state : SimulationAgentState,
+                        current_plan : Plan,
+                        tasks : Dict[Tuple,GenericObservationTask],
+                        incoming_reqs: Dict[Tuple,Dict], 
+                        misc_messages : list,
+                        completed_actions: list,
+                        aborted_actions : list,
+                        pending_actions : list
+                    ) -> None:
+        # update percepts using parent method
+        super().update_percepts(state, current_plan, tasks, incoming_reqs, misc_messages, completed_actions, aborted_actions, pending_actions)
 
         # check if there are any plan messages for this agent
-        plan_messages = {msg for msg in misc_messages 
-                         if isinstance(msg, PlanMessage) # filter by message type
-                         and msg.agent_name == state.agent_name # filter by agent name                         
-                        #  and msg.src == self.dealer_name # TODO filter by dealer name
-                         }
+        plan_messages = []
+        for msg in misc_messages:
+            if isinstance(msg,PlanMessage):
+                if (msg.agent_name == state.agent_name
+                    and msg.src == self.dealer_name):
+                    plan_messages.append(msg)
+            elif isinstance(msg, dict) and msg.get('msg_type', None) == 'PLAN':
+                if (msg.get('agent_name', None) == state.agent_name
+                    and msg.get('src', None) == self.dealer_name):
+                    plan_msg = message_from_dict(**msg)
+                    plan_messages.append(plan_msg)
+        # plan_messages = {msg for msg in misc_messages 
+        #                  if (isinstance(msg, PlanMessage) or msg['msg_type'] == 'PLAN') # filter by message type
+        #                  and msg.agent_name == state.agent_name # filter by agent name                         
+        #                 #  and msg.src == self.dealer_name # TODO filter by dealer name
+        #                  }
         
         # update the latest plan message
         for plan_message in plan_messages:

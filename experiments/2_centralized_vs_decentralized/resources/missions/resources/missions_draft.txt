@@ -1,0 +1,129 @@
+
+Mission: algal blooms
+	Param: Chlorophyll Concentration
+		R1: Spatial Resolution 
+			VNIR: A/Z [10m, 100m]
+		R2: Temporal
+			All: X/A [2 days, 8 days]
+		R3: Spectral Resolution
+			VNIR: X/A [5 nm @ 380-1000nm]
+		R4: Spectral Range
+			VNIR: Z/Z [[<= 380nm, >=2500nm]]
+		R5: Swath
+			VNIR: B/C [10km, 1km]
+		R6: SNR
+			VNIR: X/Z [600dB, 200dB]
+		R7: Revisit Time
+			All: [3600s, 5000s, 7200s]
+            
+	Param: Temperature
+		R1: Spatial Resolution 
+			VNIR: A/Z [30m, 100m]
+			TIR: X/A [30m, 60m]
+		R2: Temporal
+			All: X/A [2 days, 8 days]
+		R3: Spectral Resolution
+			VNIR: X/A [ 5 nm @ 380-1000 nm, 10nm]
+			TIR: A/C [[5 bands @ 8-12 um, 1 band @ 3-4.5 um] , 3 bands @ 8-12 um] 
+		R4: Spectral Range
+			VNIR: Z/Z [[<= 380nm, >=2500nm]]
+		R5: Swath
+			VNIR: B/C [10km, 1km]
+		R6: SNR
+			VNIR: X/Z [600dB, 200dB]
+		R7: Revisit Time
+			All: [3600s, 5000s, 7200s]
+			
+	Param: Water Level
+		R1: Spatial Resolution 
+			ALT: [30m, 100m]			
+		R2: Accuracy
+			ALT: [1m, 5m, 10m]
+		R3: Revisit Time
+			All: [3600s, 5000s, 7200s]
+
+Mission: high flow events
+	Param: Turbidity/TSS
+		R1: Spatial Resolution 
+			VNIR: A/Z [30m, 100m]
+		R2: Temporal
+			VNIR: X/A [2 days, 8 days]
+		R3: Spectral Resolution
+			VNIR: X/C [5nm @ 380-1000mm, 10nm @ 380-1000mm, VNIR multiband]
+		R4: Spectral Range
+			VNIR: A/Z [[<= 380nm, >=2500nm], [380nm, 2500nm]]
+		R5: Swath
+			VNIR: B/C [10km, 1km]
+		R6: SNR
+			VNIR: X/Z [>=600, >=200]
+		R7: Revisit Time
+			All: [3600s, 5000s, 7200s]
+	
+    Param: Temperature <- DISCARD FOR NOW
+		R1: Spatial Resolution 
+			VNIR: A/Z [30m, 100m]
+			TIR: X/A [30m, 60m]
+		R2: Temporal
+			All: X/A [2 days, 8 days]
+		R3: Spectral Resolution
+			VNIR: B/C [30nm @ 380-1000nm, VNIR multiband]
+			TIR: A/C [[5 bands in 8-12 um, 1 band in 3-4.5 um], 3 bands in 8-12 um] 
+		R4: Spectral Range
+			VNIR: Z/Z [[<= 380nm, >=2500nm]]
+		R5: Swath
+			VNIR: C/C [1km]
+		R6: SNR
+			VNIR: B/Z [400dB]
+		R7: Revisit Time
+			All: [3600s, 5000s, 7200s]
+
+	Param: Water Level:
+		R1: Spatial Resolution 
+			ALT: [30m, 100m]			
+		R2: Accuracy
+			ALT: [1m, 5m, 10m]		
+		R3: Revisit Time
+			All: [3600s, 5000s, 7200s]
+		
+		
+Mission: Wildfire Monitoring
+	Param: Temperature
+		R1: Spatial Resolution 
+			TIR :[200m, 1km]
+			MIR :[200m, 1km]
+		R2: Temporal 
+			TIR : [15min, 24hr]
+			MIR : [15min, 24hr]	
+		R3: Spectral Resolution 
+			TIR : [100 nm @ 3.40-4.20 um]
+			MIR : [500 nm @ 10.40-12.30 um]
+		R4: Spectral Range 
+			TIR : 3.40-4.20 um
+			MIR : 10.40-12.30 um
+		R5: SNR 
+			TIR :
+			MIR :
+		R6: Revisit Time
+			All: [3600s, 5000s, 7200s]
+		
+	Param: Fire Extent
+		R1: Spatial Resolution 
+			VNIR : [100m, 250m]
+			SAR : [10m, 30m]
+		R2: Temporal 
+			VNIR : [24hr, 3days]
+			SAR : [12hr, 24hr]
+		R3: Spectral Resolution 
+			VNIR : [[20nm @ 0.60-0.75 um, 20nm @ 0.84-0.88 um]]
+			SAR : [[100nm @ 3.40-4.20 um]] 
+		R4: Swath 
+			VNIR : [200km, 400km]
+			SAR : [30km, 10km]
+		R5: Spectral Range 
+			VNIR : [[0.60-0.75 um], [0.84-0.88 um]] 
+			SAR : [[3.40-4.20 um]]
+		R6: SNR		 
+			VNIR : [90dB, 30dB]
+		R7: Revisit Time
+			All: [3600s, 5000s, 7200s]
+	

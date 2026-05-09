@@ -17,6 +17,7 @@ from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement, GridSpatialRequirement
 
 from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage, MeasurementBidMessage, MeasurementRequestMessage, ObservationResultsMessage, RewardGridMessage, SimulationMessage, SimulationMessageTypes
+from dmas.models.planning.centralized.worker import WorkerPlanner
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
@@ -24,8 +25,8 @@ from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.trackers import DataSink, TaskObservationTracker
 from dmas.models.science.processing import ObservationDataProcessor
-from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.science.requests import TaskRequest
+from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
 from dmas.utils.tools import SimulationRoles
 
@@ -41,6 +42,7 @@ class SimulationAgent(object):
                  processor : ObservationDataProcessor = None, 
                  preplanner : AbstractPeriodicPlanner = None,
                  replanner : AbstractReactivePlanner = None,
+                 default_tasks : Dict[Tuple,DefaultMissionTask] = {},
                  level : int = logging.INFO, 
                  logger : logging.Logger = None,
                  printouts : bool = True
@@ -94,8 +96,11 @@ class SimulationAgent(object):
         self._message_outbox : Queue = Queue([])
         self._plan : Plan = PeriodicPlan(t=-1.0)
         self._plan_history = []
+        if preplanner is not None and isinstance(preplanner, WorkerPlanner):
+            default_tasks = {} # discard default tasks for worker planner since they are used by the centralized task dealer.
         self._known_tasks : Dict[Tuple, GenericObservationTask] \
-            = SimulationAgent.__initialize_default_mission_tasks(mission, orbitdata)
+            = default_tasks 
+            # = SimulationAgent.__initialize_default_mission_tasks(mission, orbitdata)
         self._known_reqs : Dict[Tuple, TaskRequest] = dict() # TODO do we need this or is the task list enough?
         
         # initialize trackers and data sinks
@@ -286,13 +291,14 @@ class SimulationAgent(object):
                 self.__update_tasks(curr_state)
                 
                 # initialize plan      
-                self._plan : Plan = self._preplanner.generate_plan(curr_state, 
+                self._plan : Plan = self._preplanner.generate_plan(
+                                                            curr_state, 
                                                             self._specs,
                                                             self._orbitdata,
                                                             self._mission,
                                                             self._known_tasks.values(),
                                                             self._observations_tracker
-                                                            )
+                                                        )
 
                 # save copy of plan for post-processing
                 plan_copy = [action for action in self._plan]
@@ -300,10 +306,12 @@ class SimulationAgent(object):
                 
                 # --- FOR DEBUGGING PURPOSES ONLY: ---
                 # if self._preplanner._debug: 
-                # if state.get_time() < 1:
+                # if len(self._plan.actions) > 1:
+                # if 'worker' in curr_state.agent_name:
+                # if 'GS' in curr_state.agent_name:
                 # if True:
-                #     self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                #     x = 1 # breakpoint
+                    # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    # x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
@@ -358,8 +366,9 @@ class SimulationAgent(object):
                 # if True:
                 # if curr_state._t > 27_879.00 and ("imager_b_sat_29" in curr_state.agent_name or "imager_b_sat_62" in curr_state.agent_name):
                 # if "imager_c_sat_0" in curr_state.agent_name and curr_state._t > 48_648.0 and self._plan.actions:
-                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
-                    # x = 1 # breakpoint
+                # if len(self._plan.actions) > 0:
+                #     self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                #     x = 1 # breakpoint
                 # -------------------------------------
 
         # get next actions to perform from current plan
@@ -514,9 +523,6 @@ class SimulationAgent(object):
             shareable = not isinstance(task, DefaultMissionTask) # default mission tasks are not shareable
             self._observations_tracker.register_task(task, shareable)
 
-        if new_tasks and not new_reqs:
-            x= 1
-
         # return new_reqs.values(), new_tasks.values()
         return list(new_reqs.values()), list(new_tasks.values())    
 
@@ -571,7 +577,6 @@ class SimulationAgent(object):
             # The tracker resolves grid/gp coords to task_ids internally.
             measurements = [obs_list for _, obs_list in my_observations]
             self._observations_tracker.update_from_observations(measurements)
-
         
         if external_observations:
             measurements = [obs_list for _, obs_list in external_observations]
@@ -1080,15 +1085,15 @@ class SimulationAgent(object):
     """
     def print_results(self) -> None:
         try:
-            # log known default tasks
-            columns = ['id', 'task type', 'requester', 'parameter', 'lat [deg]', 'lon [deg]', 'grid index', 'gp index', 't start', 't end', 'priority']
-            data = [(task.id,task.task_type, self.name, task.parameter, task.location[0][0], task.location[0][1], task.location[0][2], task.location[0][3],
-                    task.availability.left, task.availability.right, task.priority)
-                for task in self._known_tasks.values()
-                if isinstance(task, DefaultMissionTask)
-            ]
-            df = pd.DataFrame(data=data, columns=columns)        
-            df.to_parquet(f"{self._results_path}/known_tasks.parquet", index=False)
+            # # log known default tasks
+            # columns = ['id', 'task type', 'requester', 'parameter', 'lat [deg]', 'lon [deg]', 'grid index', 'gp index', 't start', 't end', 'priority']
+            # data = [(task.id,task.task_type, self.name, task.parameter, task.location[0][0], task.location[0][1], task.location[0][2], task.location[0][3],
+            #         task.availability.left, task.availability.right, task.priority)
+            #     for task in self._known_tasks.values()
+            #     if isinstance(task, DefaultMissionTask)
+            # ]
+            # df = pd.DataFrame(data=data, columns=columns)        
+            # df.to_parquet(f"{self._results_path}/known_tasks.parquet", index=False)
 
             # log known and generated requests
             columns = ['id','requester','lat [deg]','lon [deg]','grid index', 'GP index','severity','start time [s]','end time [s]','detection time [s]','event type']

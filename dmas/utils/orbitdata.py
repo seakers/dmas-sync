@@ -52,6 +52,7 @@ class OrbitData:
                 ):
         # assign attributes
         self.agent_name = agent_name
+        self.agent_name_safe = OrbitData.safe_name(agent_name)
         self.time_step = time_step
         self.epoch_type = epoch_type
         self.epoch = epoch
@@ -68,7 +69,7 @@ class OrbitData:
         comms_target_indices = {target : idx for idx, target in enumerate(comms_targets)}
 
         self.comms_targets = set(comms_targets)
-        self.comms_targets.discard(agent_name)
+        self.comms_targets.discard(OrbitData.safe_name(agent_name))
         self.comms_target_columns = comms_targets
         self.comms_target_indices = comms_target_indices
 
@@ -95,6 +96,9 @@ class OrbitData:
     def __del__(self):
         # ensure memmaps are closed when instance is deleted
         self.close()
+
+    def __repr__(self):
+        return f"OrbitData(agent_name={self.agent_name}, time_step={self.time_step}, epoch_type={self.epoch_type}, epoch={self.epoch}, duration={self.duration})"
     
     """
     LOAD FROM PRE-COMPUTED DATA
@@ -529,6 +533,10 @@ class OrbitData:
         # unpack groups
         groups = predef_rules_dict.get('groups', {})
 
+        # DEBUG
+        # assert sum(len(group_members) for group_members in groups.values()) == len(agent_names), \
+        #     f'The total number of members across all groups must equal the number of agents. Groups: {groups}, Agents: {agent_names}'
+
         # ensure all groups are lists of strings
         assert all(isinstance(group_members, list) and all(isinstance(member, str) for member in group_members) for group_members in groups.values()), \
             f'All groups specified in connectivity rules must be lists of strings. Invalid groups: {groups}'
@@ -604,9 +612,22 @@ class OrbitData:
 
                     # update connectivity mask based on rule type
                     connectivity_mask[key] = (action == 'allow')
-           
+
             else:
                 raise ValueError(f'Connectivity rule not recognized: {rule}. Supported rules are `allow_between`, `deny_between`, `allow_within`, and `deny_within`.')
+
+        # ----------------------------
+        # DEBUG SECTION
+        valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
+        false_pairs = [pair for pair, allowed in connectivity_mask.items() if not allowed]
+
+        for u,v in false_pairs:
+            if u not in groups['instruments']:
+                x = 1
+            elif v not in groups['instruments']:
+                x = 1
+        x = 1
+        # ----------------------------
 
         # iterate through override rules and apply to connectivity mask
         for override_rule in predef_rules_dict.get('overrides', []):
@@ -621,6 +642,12 @@ class OrbitData:
             
             # update connectivity mask based on action value
             connectivity_mask[pair] = (action == 'allow')
+
+        # ----------------------------
+        # DEBUG SECTION
+        valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
+        x = 1
+        # ----------------------------
 
         # return connectivity mask
         return connectivity_mask
@@ -684,15 +711,32 @@ class OrbitData:
 
         # check if a target is specified
         if target is None: 
-            # if no target specified, consider all future access intervals
-            target_intervals = future_intervals
+            # if no target specified, consider all future access intervals with any agent that shares component with this agent
+            
+            # get column index of this agent in the comms links table
+            u_idx = self.comms_target_indices[self.agent_name]
+
+            # filter for intervals where this agent and the target are in the same component (i.e. have access to each other) and compile list of target access intervals
+            target_intervals = [
+                (interval,self.agent_name,target) for interval, *component_indices in future_intervals
+                if any(int(component_indices[u_idx]) == int(component_indices[v_idx]) for v_idx in range(len(component_indices)) if v_idx != u_idx)
+            ]
+
         else:
             # otherwise, filter for target of interest
-            target_intervals = [ interval for interval,interval_target in future_intervals
-                                if interval_target == target]
+
+            # get column index of this agent and the target in the comms links table
+            u_idx = self.comms_target_indices[self.agent_name_safe]
+            v_idx = self.comms_target_indices[OrbitData.safe_name(target)]
+
+            # filter for intervals where this agent and the target are in the same component (i.e. have access to each other) and compile list of target access intervals
+            target_intervals = [
+                (interval,self.agent_name,target) for interval, *component_indices in future_intervals
+                if int(component_indices[u_idx]) == int(component_indices[v_idx])
+            ]
         
         # get next access interval (if any)
-        next_interval = min(target_intervals, key=lambda x: x.left) if target_intervals else None
+        next_interval = min(target_intervals, key=lambda x: x[0].left) if target_intervals else (None,None)
 
         # return next access interval
         return next_interval
@@ -717,7 +761,7 @@ class OrbitData:
             out = []
 
             # get column index of this agent in the comms links table
-            u_column_idx = self.comms_target_indices[self.agent_name]
+            u_column_idx = self.comms_target_indices[self.agent_name_safe]
 
             # iterate through list of intervals in this time period 
             for interval, *component_indices in future_intervals:
@@ -734,13 +778,13 @@ class OrbitData:
             return out
 
         # else if a target is specified, filter for target of interest
-
+    
         # initialize compiled list of access intervals
         out = []
 
         # get column index of this agent and the target in the comms links table
-        u_column_idx = self.comms_target_indices[self.agent_name]
-        v_column_idx = self.comms_target_indices[target]
+        u_column_idx = self.comms_target_indices[self.agent_name_safe]
+        v_column_idx = self.comms_target_indices[OrbitData.safe_name(target)]
 
         # iterate through list of intervals in this time period 
         for interval, *component_indices in future_intervals:
@@ -895,7 +939,7 @@ class OrbitData:
 
             # propagate data and save to orbit data directory
             if printouts: tqdm.write("Propagating orbits...")
-            mission : Mission = Mission.from_json(scenario_specs, printouts=printouts)  
+            mission : Mission = Mission.from_json(copy.deepcopy(scenario_specs), printouts=printouts)  
             mission.execute(printouts=printouts)                
             if printouts: tqdm.write("Propagation done!")
 
@@ -1033,6 +1077,15 @@ class OrbitData:
                         mission_sat["spacecraftBus"].pop("components")
 
                     if scenario_sat != mission_sat:
+                        for key in scenario_sat:
+                            if scenario_sat[key] != mission_sat.get(key, None):
+                                for subkey in scenario_sat[key] if isinstance(scenario_sat[key], dict) else []:
+                                    if isinstance(scenario_sat[key][subkey], list) and isinstance(mission_sat.get(key, None), dict) and subkey in mission_sat[key]:
+                                        if scenario_sat[key][subkey] != mission_sat[key][subkey]:
+                                            return True
+                                    elif scenario_sat[key][subkey] != mission_sat.get(key, {}).get(subkey, None):
+                                        return True
+
                         return True
                         
         return False
@@ -1116,6 +1169,11 @@ class OrbitData:
             gs_access_dfs, comms_link_dfs, gp_access_dfs, \
                 grid_data_dfs = OrbitData.__load_csv_data(orbitdata_dir, simulation_duration, printouts)
             
+        # DEBUG SECTION-----------------------
+        # non_empty_accesses = [(key,df) for key,df in comms_link_dfs.items() if not df.empty]
+        # x = 1
+        # ------------------------------------
+
         # create instances of OrbitData for each agent and store in dictionary indexed by agent name
         schemas = dict()
         for *__,agent_name in agents_loaded: 
@@ -1153,7 +1211,7 @@ class OrbitData:
             }
 
         # compile comms link data for all agents into single dataframe
-        comms_data_concat :pd.DataFrame = OrbitData.__compile_agent_comms_data(comms_link_dfs)
+        comms_data_concat : pd.DataFrame = OrbitData.__compile_agent_comms_data(comms_link_dfs)
         
         # save agent comms link data into single dataframe and print to binary
         comms_meta = OrbitData.__write_interval_data_table(comms_data_concat, bin_dir, 'comms_data', time_specs['time step'], allow_overwrite=True)
@@ -1588,15 +1646,15 @@ class OrbitData:
                     # get all ground station accesses for this spacecraft
                     comms_data = gs_access_dfs[v_name]                    
 
-                    # filter ground station accesses for the ground operator's network's stations
-                    comms_data = comms_data[(comms_data['gndStn network'] == u_name)]
+                    # TODO filter ground station accesses for the ground operator's network's stations
+                    # comms_data = comms_data[(comms_data['gndStn network'] == u_name)]
 
                 elif u_type == 'spacecraft' and v_type == 'groundOperator':     
                     # get all ground station accesses for this spacecraft
                     comms_data = gs_access_dfs[u_name]                    
                     
-                    # filter ground station accesses for the ground operator's network's stations
-                    comms_data = comms_data[(comms_data['gndStn network'] == v_name)]
+                    # TODO filter ground station accesses for the ground operator's network's stations
+                    # comms_data = comms_data[(comms_data['gndStn network'] == v_name)]
                     
                 elif u_type == 'groundOperator' and v_type == 'groundOperator':
                     # all ground operators can communicate with each other for the entire duration of the simulation
@@ -1604,11 +1662,11 @@ class OrbitData:
                     
                     # generate mission-long connectivity access
                     duration = timedelta(days=float(simulation_duration))
-                    data = [[0.0, duration.total_seconds() // time_step + 1]]
-                    assert data[0][1] > 0.0
+                    access_data = [[0.0, duration.total_seconds() // time_step + 1]]
+                    assert access_data[0][1] > 0.0
 
                     # return modified connectivity
-                    comms_data = pd.DataFrame(data=data, columns=columns)
+                    comms_data = pd.DataFrame(data=access_data, columns=columns)
 
                 else:
                     raise ValueError(f'Unknown agent type `{u_type}` for agent `{u_name}`.')
@@ -1887,7 +1945,7 @@ class OrbitData:
         # encode extras (mostly same as your existing code, but don't write per-column files)
         for col in extra_cols:
             # get a safe name for the column
-            safe = OrbitData.__safe_name(col)
+            safe = OrbitData.safe_name(col)
 
             # get data series for working column
             s: pd.Series = work[col]
@@ -2078,7 +2136,7 @@ class OrbitData:
         )
 
     @staticmethod
-    def __safe_name(col: str) -> str:
+    def safe_name(col: str) -> str:
         return col.replace(" ", "_").replace("[", "").replace("]", "").replace("/", "_")
     
 
@@ -2272,7 +2330,7 @@ class OrbitData:
         extras_data: dict[str, np.ndarray] = {}
 
         for col in cols_to_write:
-            safe = OrbitData.__safe_name(col)
+            safe = OrbitData.safe_name(col)
             s: pd.Series = work[col]
 
             is_stringish = (

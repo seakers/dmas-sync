@@ -1,0 +1,19 @@
+index,name,lat[deg],lon[deg],alt[km],minElevation[deg]
+1,Alaska Satellite Facility,64.9764,-147.5208,0.319,0.0
+2,Wallops Ground Station,37.9467,-75.5400,0.020,0.0
+3,White Sands Ground Station,32.5429,-106.6133,1.443,0.0
+4,McMurdo Ground Station,-77.833,166.667,0.183,0.0
+5,Kennedy Uplink Station,28.572,-80.648,0.010,0.0
+6,Ponce de Leon Ground Station,29.130,-81.360,0.030,0.0
+7,Fairbanks CDA Station,64.9764,-147.5208,0.319,0.0
+8,KSAT Svalbard,78.2287,15.3996,0.400,0.0
+9,KSAT Tromsø,69.660,18.940,0.050,0.0
+10,KSAT TrollSat,-72.010,2.530,1.270,0.0
+11,SSC Kiruna,67.855,20.225,0.500,0.0
+12,SSC Santiago,-33.4489,-70.6693,0.520,0.0
+13,SSC Punta Arenas,-53.162,-70.909,0.050,0.0
+14,SSC Dongara,-29.150,114.950,0.100,0.0
+15,SSC South Point,18.910,-155.680,0.020,0.0
+16,SANSA Hartebeesthoek,-25.892,27.688,1.400,0.0
+17,KSAT Singapore,1.350,103.820,0.015,0.0
+18,Inuvik Ground Station,68.360,-133.720,0.050,0.0

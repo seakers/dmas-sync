@@ -1,7 +1,7 @@
 {
     "missions" : [
         {
-            "name": "Algal blooms monitoring",
+            "name": "algal blooms monitoring",
             "objectives" : [
                 {
                     "objective_type" : "default_mission",
@@ -160,7 +160,7 @@
             ]
         },
         {
-            "name" : "Flood and sediment transport monitoring",
+            "name" : "flood monitoring",
             "objectives" : [
                 {
                     "objective_type" : "default_mission",

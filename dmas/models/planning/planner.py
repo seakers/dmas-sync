@@ -5,7 +5,7 @@ import logging
 import queue
 from typing import Dict, Set, Tuple
 
-from instrupy.base import BasicSensorModel
+from instrupy.base import BasicSensorModel, SyntheticApertureRadarModel
 from instrupy.passive_optical_scanner_model import PassiveOpticalScannerModel
 from instrupy.util import ViewGeometry, SphericalGeometry
 from orbitpy.util import Spacecraft
@@ -849,22 +849,20 @@ class AbstractPlanner(ABC):
                 obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
 
             # update instrument-specific observation performance information
-            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower())
-                or ('vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower())):
-                if isinstance(instrument_spec.spectral_resolution, str):
-                    obs_perf.update({
-                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution.lower()
-                    })
-                elif isinstance(instrument_spec.spectral_resolution, (int,float)):
-                    obs_perf.update({
-                        ObservationRequirementAttributes.SPECTRAL_RESOLUTION.value : instrument_spec.spectral_resolution
-                    })
-                else:
-                    raise ValueError('Unsupported type for spectral resolution in instrument specification.')
-                
-            elif ('altimeter' in instrument_name.lower()
-                  or 'altimeter' in instrument_spec._type.lower()):
+            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
+                or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
+                spectral_bands_config = instrument_spec.spectral_config.get('bands') if instrument_spec.spectral_config is not None else []
+                spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
+                                  # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
+                                  for band in spectral_bands_config] 
                 obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : spectral_bands,
+                    ObservationRequirementAttributes.ACCURACY.value : np.Inf,
+                })
+            elif ('altimeter' in instrument_name.lower() or 'alt' in instrument_name.lower()
+                  or 'altimeter' in instrument_spec._type.lower() or 'alt' in instrument_spec._type.lower()):
+                obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
                     ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
                 })
             else:
@@ -1133,12 +1131,23 @@ class AbstractPlanner(ABC):
                     instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
                     if instrument_fov_geometry.shape == 'RECTANGULAR':
                         cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width) 
                     else:
                         raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
                 elif isinstance(instrument_model, PassiveOpticalScannerModel):
                     instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
                     instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
                     if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    else:
+                        raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
+                elif isinstance(instrument_model, SyntheticApertureRadarModel):
+                    instrument_fov : ViewGeometry = instrument_model.get_field_of_view()
+                    instrument_fov_geometry : SphericalGeometry = instrument_fov.sph_geom
+                    if instrument_fov_geometry.shape == 'RECTANGULAR':
+                        cross_track_fov.append(instrument_fov_geometry.angle_width)
+                    elif instrument_fov_geometry.shape == 'CIRCULAR':
                         cross_track_fov.append(instrument_fov_geometry.angle_width)
                     else:
                         raise NotImplementedError(f'Extraction of FOV for instruments with view geometry of shape `{instrument_fov_geometry.shape}` not yet implemented.')
