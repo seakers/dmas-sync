@@ -1,18 +1,18 @@
-{        
-    "missions" : [
+{
+    "missions": [
         {
             "name": "algal bloom response",
-            "objectives" : [
+            "objectives": [
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Chlorophyll-a concentration [mg/m^3]",
                     "weight": 0.25,
-                    "event_type" : "algal_bloom",
-                    "requirements" : [
+                    "event_type": "algal_bloom",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "HawkEye-class Ocean Color Imager (VNIR-WQ-U)",
                                 "Planet SuperDove-class Wide VNIR (VNIR-FL-U)",
@@ -24,15 +24,29 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [10, 30, 100],
-                            "scores": [1.0, 0.7, 0.1]
+                            "thresholds": [
+                                10,
+                                30,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "spectral",
@@ -46,62 +60,93 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_resolution",
-                                            "wavelength_range": [380, 1000],
-                                            "thresholds": [5],
-                                            "scores": [1.0, 0.0]
+                                            "wavelength_range": [
+                                                400,
+                                                900
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
                                         },
                                         {
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_range",
-                                            "required_min_nm": 380,
-                                            "required_max_nm": 2500
+                                            "required_min_nm": 400,
+                                            "required_max_nm": 900
                                         }
                                     ]
                                 }
                             ]
-                        },                        
-                        {
-                            "req_type" : "performance",
-                            "attribute" : "swath width [km]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [1, 10],
-                            "scores":    [0.5, 1.0]
                         },
                         {
-                            "req_type" : "performance",
-                            "attribute" : "SNR",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [200, 600],
-                            "scores":    [0.5, 1.0]
-                        },                   
+                            "req_type": "performance",
+                            "attribute": "swath width [km]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                1,
+                                10
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "SNR",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                200,
+                                600
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
-                        },                       
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
                     ]
                 },
-                
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Temperature [K]",
                     "weight": 0.25,
-                    "event_type" : "algal_bloom",
-                    "requirements" : [
+                    "event_type": "algal_bloom",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "HawkEye-class Ocean Color Imager (VNIR-WQ-U)",
                                 "Planet SuperDove-class Wide VNIR (VNIR-FL-U)",
@@ -113,16 +158,28 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [30, 100],
-                            "scores": [1.0, 0.1]
+                            "thresholds": [
+                                30,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
-                        },    
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
                         {
                             "req_type": "spectral",
                             "attribute": "spectral_bands",
@@ -135,62 +192,93 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_resolution",
-                                            "wavelength_range": [380, 1000],
-                                            "thresholds": [5, 10],
-                                            "scores": [1.0, 0.5, 0.0]
+                                            "wavelength_range": [
+                                                400,
+                                                900
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
                                         },
                                         {
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_range",
-                                            "required_min_nm": 380,
-                                            "required_max_nm": 2500
+                                            "required_min_nm": 400,
+                                            "required_max_nm": 900
                                         }
                                     ]
                                 }
                             ]
                         },
-                        
                         {
-                            "req_type" : "performance",
-                            "attribute" : "swath width [km]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [1, 10],
-                            "scores":    [0.5, 1.0]
+                            "req_type": "performance",
+                            "attribute": "swath width [km]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                1,
+                                10
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
                         },
                         {
-                            "req_type" : "performance",
-                            "attribute" : "SNR",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [200, 600],
-                            "scores":    [0.5, 1.0]
-                        },                   
+                            "req_type": "performance",
+                            "attribute": "SNR",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                200,
+                                600
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
-                        },                       
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
                     ]
                 },
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Temperature [K]",
                     "weight": 0.25,
-                    "event_type" : "algal_bloom",
-                    "requirements" : [
+                    "event_type": "algal_bloom",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "constellr HiVE TIR Imager (TIR-WQ-T)",
                                 "constellr HiVE TIR Imager (TIR-FR-T)"
@@ -200,15 +288,29 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [30, 60, 100],
-                            "scores": [1.0, 0.5, 0.1]
+                            "thresholds": [
+                                30,
+                                60,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.5,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "spectral",
@@ -222,22 +324,21 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "band_count",
-                                            "wavelength_range": [8000, 12000],
-                                            "thresholds": [5],
-                                            "scores": [0.0, 1.0]
-                                        }
-                                    ]
-                                },
-                                {
-                                    "score": 1.0,
-                                    "requirements": [
-                                        {
-                                            "req_type": "spectral",
-                                            "attribute": "spectral_bands",
-                                            "strategy": "band_count",
-                                            "wavelength_range": [3000, 4500],
-                                            "thresholds": [1],
-                                            "scores": [0.0, 1.0]
+                                            "wavelength_range": [
+                                                8000,
+                                                12000
+                                            ],
+                                            "thresholds": [
+                                                1,
+                                                2,
+                                                4
+                                            ],
+                                            "scores": [
+                                                0.1,
+                                                0.4,
+                                                0.7,
+                                                1.0
+                                            ]
                                         }
                                     ]
                                 },
@@ -248,40 +349,56 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "band_count",
-                                            "wavelength_range": [8000, 12000],
-                                            "thresholds": [3],
-                                            "scores": [0.0, 1.0]
+                                            "wavelength_range": [
+                                                3000,
+                                                4500
+                                            ],
+                                            "thresholds": [
+                                                1
+                                            ],
+                                            "scores": [
+                                                0.0,
+                                                1.0
+                                            ]
                                         }
                                     ]
                                 }
                             ]
-                        },                                                
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
-                        },                       
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
                     ]
                 },
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Water Level",
                     "weight": 0.25,
-                    "event_type" : "algal_bloom",
-                    "requirements" : [
+                    "event_type": "algal_bloom",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "SMASH Ka-band Nadir Altimeter (ALT-WQ-U)",
                                 "SMASH Ka-band Nadir Altimeter (ALT-FL-U)"
@@ -291,34 +408,64 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [30, 60, 100],
-                            "scores": [1.0, 0.5, 0.1]
+                            "thresholds": [
+                                30,
+                                60,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.5,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "accuracy [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [1, 5, 10],
-                            "scores": [1.0, 0.5, 0.1]
+                            "thresholds": [
+                                1,
+                                5,
+                                10
+                            ],
+                            "scores": [
+                                1.0,
+                                0.5,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
@@ -328,17 +475,17 @@
         },
         {
             "name": "high flow river response",
-            "objectives" : [
+            "objectives": [
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Turbidity",
-                    "weight": 0.50,
-                    "event_type" : "high_flow_river",
-                    "requirements" : [
+                    "weight": 0.5,
+                    "event_type": "high_flow_river",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "HawkEye-class Ocean Color Imager (VNIR-WQ-U)",
                                 "Planet SuperDove-class Wide VNIR (VNIR-FL-U)",
@@ -350,15 +497,29 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [10, 30, 100],
-                            "scores": [1.0, 0.7, 0.1]
+                            "thresholds": [
+                                10,
+                                30,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "spectral",
@@ -372,61 +533,93 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_resolution",
-                                            "wavelength_range": [380, 1000],
-                                            "thresholds": [5, 10],
-                                            "scores": [1.0, 0.67, 0.01]
+                                            "wavelength_range": [
+                                                400,
+                                                900
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
                                         },
                                         {
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_range",
-                                            "required_min_nm": 380,
-                                            "required_max_nm": 2500
+                                            "required_min_nm": 400,
+                                            "required_max_nm": 900
                                         }
                                     ]
                                 }
                             ]
-                        },                        
-                        {
-                            "req_type" : "performance",
-                            "attribute" : "swath width [km]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [1, 10],
-                            "scores":    [0.5, 1.0]
                         },
                         {
-                            "req_type" : "performance",
-                            "attribute" : "SNR",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [200, 600],
-                            "scores":    [0.5, 1.0]
-                        },                   
+                            "req_type": "performance",
+                            "attribute": "swath width [km]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                1,
+                                10
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "SNR",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                200,
+                                600
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
-                        },                       
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
                     ]
                 },
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Water Level",
-                    "weight": 0.50,
-                    "event_type" : "high_flow_river",
-                    "requirements" : [
+                    "weight": 0.5,
+                    "event_type": "high_flow_river",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "SMASH Ka-band Nadir Altimeter (ALT-WQ-U)",
                                 "SMASH Ka-band Nadir Altimeter (ALT-FL-U)"
@@ -436,34 +629,64 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [30, 60, 100],
-                            "scores": [1.0, 0.5, 0.1]
+                            "thresholds": [
+                                30,
+                                60,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.5,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "accuracy [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [1, 5, 10],
-                            "scores": [1.0, 0.5, 0.1]
+                            "thresholds": [
+                                1,
+                                5,
+                                10
+                            ],
+                            "scores": [
+                                1.0,
+                                0.5,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
@@ -473,17 +696,17 @@
         },
         {
             "name": "wildfire response",
-            "objectives" : [
+            "objectives": [
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Temperature [K]",
                     "weight": 0.25,
-                    "event_type" : "wildfire",
-                    "requirements" : [
+                    "event_type": "wildfire",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "constellr HiVE TIR Imager (TIR-WQ-T)",
                                 "constellr HiVE TIR Imager (TIR-FR-T)"
@@ -493,15 +716,29 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [200, 1000, 1500],
-                            "scores": [1.0, 0.7, 0.1]
+                            "thresholds": [
+                                200,
+                                1000,
+                                1500
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "spectral",
@@ -515,16 +752,28 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_resolution",
-                                            "wavelength_range": [3400, 4200],
-                                            "thresholds": [100],
-                                            "scores": [1.0, 0.01]
+                                            "wavelength_range": [
+                                                3400,
+                                                4200
+                                            ],
+                                            "thresholds": [
+                                                500,
+                                                2000,
+                                                4000
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
                                         },
                                         {
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_range",
-                                            "required_min_nm": 3400,
-                                            "required_max_nm": 4200
+                                            "required_min_nm": 3000,
+                                            "required_max_nm": 5000
                                         }
                                     ]
                                 }
@@ -533,29 +782,37 @@
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
                     ]
                 },
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Temperature [K]",
                     "weight": 0.25,
-                    "event_type" : "wildfire",
-                    "requirements" : [
+                    "event_type": "wildfire",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "OroraTech OTC-P1 SAFIRE Thermal Camera (MIR-FR-U)"
                             ]
@@ -564,15 +821,29 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [200, 1000, 1500],
-                            "scores": [1.0, 0.7, 0.1]
+                            "thresholds": [
+                                200,
+                                1000,
+                                1500
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "spectral",
@@ -586,16 +857,28 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_resolution",
-                                            "wavelength_range": [10400, 12300],
-                                            "thresholds": [500],
-                                            "scores": [1.0, 0.01]
+                                            "wavelength_range": [
+                                                10000,
+                                                12500
+                                            ],
+                                            "thresholds": [
+                                                500,
+                                                1000,
+                                                2000
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.8,
+                                                0.5,
+                                                0.2
+                                            ]
                                         },
                                         {
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_range",
-                                            "required_min_nm": 10400,
-                                            "required_max_nm": 12300
+                                            "required_min_nm": 8000,
+                                            "required_max_nm": 12500
                                         }
                                     ]
                                 }
@@ -604,29 +887,37 @@
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
                     ]
                 },
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Fire Extent",
                     "weight": 0.25,
-                    "event_type" : "wildfire",
-                    "requirements" : [
+                    "event_type": "wildfire",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "HawkEye-class Ocean Color Imager (VNIR-WQ-U)",
                                 "Planet SuperDove-class Wide VNIR (VNIR-FL-U)",
@@ -638,15 +929,29 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [100, 250, 300],
-                            "scores": [1.0, 0.7, 0.1]
+                            "thresholds": [
+                                100,
+                                250,
+                                300
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "spectral",
@@ -660,17 +965,41 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_resolution",
-                                            "wavelength_range": [600, 750],
-                                            "thresholds": [20],
-                                            "scores": [1.0, 0.01]
+                                            "wavelength_range": [
+                                                600,
+                                                750
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
                                         },
                                         {
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_resolution",
-                                            "wavelength_range": [840, 880],
-                                            "thresholds": [20],
-                                            "scores": [1.0, 0.01]
+                                            "wavelength_range": [
+                                                840,
+                                                880
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
                                         },
                                         {
                                             "req_type": "spectral",
@@ -689,47 +1018,69 @@
                                     ]
                                 }
                             ]
-                        },                       
-                        {
-                            "req_type" : "performance",
-                            "attribute" : "swath width [km]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 30, 90],
-                            "scores":    [0.1, 0.5, 1.0]
                         },
                         {
-                            "req_type" : "performance",
-                            "attribute" : "SNR",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [200, 600],
-                            "scores":    [0.5, 1.0]
-                        },                   
+                            "req_type": "performance",
+                            "attribute": "swath width [km]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                30,
+                                90
+                            ],
+                            "scores": [
+                                0.1,
+                                0.5,
+                                1.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "SNR",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                200,
+                                600
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
-                        },                       
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
                     ]
                 },
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "Fire Extent",
                     "weight": 0.25,
-                    "event_type" : "wildfire",
-                    "requirements" : [
+                    "event_type": "wildfire",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
+                            "strategy": "explicit",
                             "valid_values": [
                                 "Capella X-SAR (SAR-FR-T)"
                             ]
@@ -738,15 +1089,29 @@
                             "req_type": "performance",
                             "attribute": "ground pixel cross-track resolution [m]",
                             "strategy": "discrete_intervals",
-                            "thresholds": [100, 250, 300],
-                            "scores": [1.0, 0.7, 0.1]
+                            "thresholds": [
+                                100,
+                                250,
+                                300
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "spectral",
@@ -760,40 +1125,94 @@
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_resolution",
-                                            "wavelength_range": [3400, 4200],
-                                            "thresholds": [100],
-                                            "scores": [1.0, 0.01]
+                                            "wavelength_range": [
+                                                600,
+                                                750
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
+                                        },
+                                        {
+                                            "req_type": "spectral",
+                                            "attribute": "spectral_bands",
+                                            "strategy": "spectral_resolution",
+                                            "wavelength_range": [
+                                                840,
+                                                880
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
                                         },
                                         {
                                             "req_type": "spectral",
                                             "attribute": "spectral_bands",
                                             "strategy": "spectral_range",
-                                            "required_min_nm": 3400,
-                                            "required_max_nm": 4200
+                                            "required_min_nm": 600,
+                                            "required_max_nm": 750
+                                        },
+                                        {
+                                            "req_type": "spectral",
+                                            "attribute": "spectral_bands",
+                                            "strategy": "spectral_range",
+                                            "required_min_nm": 840,
+                                            "required_max_nm": 880
                                         }
                                     ]
                                 }
                             ]
                         },
-                                             
                         {
-                            "req_type" : "performance",
-                            "attribute" : "swath width [km]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 10, 30],
-                            "scores":    [0.1, 0.5, 1.0]
-                        },             
+                            "req_type": "performance",
+                            "attribute": "swath width [km]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                10,
+                                30
+                            ],
+                            "scores": [
+                                0.1,
+                                0.5,
+                                1.0
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }
@@ -803,37 +1222,55 @@
         },
         {
             "name": "none",
-            "objectives" : [
+            "objectives": [
                 {
-                    "objective_type" : "event_driven",
+                    "objective_type": "event_driven",
                     "parameter": "generic parameter",
                     "weight": 1.0,
-                    "event_type" : "generic event",
-                    "requirements" : [
+                    "event_type": "generic event",
+                    "requirements": [
                         {
                             "req_type": "capability",
                             "attribute": "instrument",
-                            "strategy" : "explicit",
-                            "valid_values": ["IMG_A", "IMG_B", "IMG_C"]
+                            "strategy": "explicit",
+                            "valid_values": [
+                                "IMG_A",
+                                "IMG_B",
+                                "IMG_C"
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "response_time [normalized]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [0, 1.0],
-                            "scores":    [1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
-                            "strategy" : "discrete_intervals",
-                            "thresholds": [10, 60, 900],
-                            "scores":    [0.1, 1.0, 0.0]
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                900
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.0
+                            ]
                         },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
-                            "strategy" : "diminishing_returns",
+                            "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
                         }

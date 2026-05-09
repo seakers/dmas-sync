@@ -473,8 +473,9 @@
                 // "--single-trial", "20",
                 // "--single-trial", "144",
                 // "--single-trial", "148",
-                "--single-trial", "160",
+                // "--single-trial", "160",
                 // "--single-trial", "164",
+                "--single-trial", "212", // None,CBBA,Interconstellation,Comprehensive,Oracle
                 // "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
@@ -484,9 +485,40 @@
                 "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
-                // "--reduced",
+                "--reduced",
                 // "--quiet",
                 "--exceptions",
+            ]
+        },
+        {
+            "name": "EXPERIMENT 2: Full",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "program": "${workspaceRoot}/experiments/2_centralized_vs_decentralized/study.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            },
+            "args": [
+                // "-t", "full_factorial_trials_2026-02-22",
+                // "-t", "full_factorial_trials_2026-02-23",
+                "-t", "full_factorial_trials_2026-03-15",
+                // "-t", "full_factorial_trials_2026-03-16",
+                "--trial-range", "240:375",
+                // "--profile-cpu",
+                // "--profile-mem",
+                "--single-thread",
+                // "--only-precompute",
+                // "--only-simulate",
+                // "--only-postprocess",
+                // "--force-simulate",
+                // "--force-postprocess",
+                "--force-summarize",
+                "--quiet",
+                // "--exceptions",
             ]
         },
     ]
