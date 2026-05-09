@@ -281,23 +281,105 @@ def generate_walker_delta(
         mission_type : str,
     ) -> List[dict]: 
     """
-    ## Case 2 — Walker-Delta Constellation
+    ## Case 2 - Walker-Delta Constellation 
 
-    +---------------------+------------------------+------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------------------+--------------+-----------------+----------------------------------------------+
-    | Mission             | Primary mission        | Instrument | Walker (T/P/F) | Altitude | Inclination | Orbit type | LTAN         | RAAN offset | Sats/plane | N sats (instrument) | N sats total | Off-nadir limit | Instrument arrangement                       |
-    +---------------------+------------------------+------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------------------+--------------+-----------------+----------------------------------------------+
-    | Water quality       | Algal bloom monitoring | VNIR       | 36/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 6          | 12                  | 36           | ±60°            | Pattern 2: cycling VNIR-TIR-ALT per plane    |
-    | Water quality       | Algal bloom monitoring | TIR        | 36/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 6          | 12                  | —            | ±30°            | Pattern 2: cycling VNIR-TIR-ALT per plane    |
-    | Water quality       | Algal bloom monitoring | Altimeter  | 36/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 6          | 12                  | —            | ±0° (nadir)     | Pattern 2: cycling VNIR-TIR-ALT per plane    |
-    | Flood monitoring    | High-flow monitoring   | Altimeter  | 30/5/2         | 550 km   | 53°         | MIO        | N/A          | 36°         | 6          | 15                  | 30           | ±0° (nadir)     | Pattern 2: alternating ALT-VNIR per plane    |
-    | Flood monitoring    | High-flow monitoring   | VNIR       | 30/5/2         | 550 km   | 53°         | MIO        | N/A          | 36°         | 6          | 15                  | —            | ±60°            | Pattern 2: alternating ALT-VNIR per plane    |
-    | Fire monitoring     | Wildfire monitoring    | TIR        | 32/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 8          | 8                   | 32           | ±30°            | Pattern 2: cycling TIR-MIR-VNIR-SAR per plane|
-    | Fire monitoring     | Wildfire monitoring    | MIR        | 32/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 8          | 8                   | —            | ±45°            | Pattern 2: cycling TIR-MIR-VNIR-SAR per plane|
-    | Fire monitoring     | Wildfire monitoring    | VNIR       | 32/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 8          | 8                   | —            | ±60°            | Pattern 2: cycling TIR-MIR-VNIR-SAR per plane|
-    | Fire monitoring     | Wildfire monitoring    | SAR        | 32/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 8          | 8                   | —            | ±45°            | Pattern 2: cycling TIR-MIR-VNIR-SAR per plane|
-    | TOTAL               |                        |            |                |          |             |            |              |             |            |                     | 98           |                 |                                              |
-    +---------------------+------------------------+------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------------------+--------------+-----------------+----------------------------------------------+
+    Constellation design follows an always-on / taskable ConOps where each orbital
+    plane carries a mix of UNTASKABLE (U) wide-FOV event detectors and TASKABLE (T)
+    narrow-FOV steerable measurement instruments. Untaskable satellites perform
+    continuous nadir surveillance and generate event requests via onboard processing.
+    Taskable satellites respond to these requests and execute targeted observations.
 
+    Instrument key format: {INSTRUMENT_TYPE}_{CONSTELLATION}_{T or U}
+        T = Taskable   - has maneuver field; narrow FOV; steerable; creates scheduling decisions
+        U = Untaskable - no maneuver field; wide FOV; nadir-fixed; always-on event detector
+
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+----------------------------------+
+    | Mission             | Primary mission        | Instrument   | Walker (T/P/F) | Altitude | Inclination | Orbit type | LTAN         | RAAN offset | Sats/plane | Role    | N sats (instr.)  | N sats total | Off-nadir limit     | Instrument arrangement           |
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+----------------------------------+
+    | Water quality       | Algal bloom monitoring | VNIR_WQ_U    | 54/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 3          | U (det) | 18               | 54           | ±0° (nadir-fixed)   | Pattern 2: cycling               |
+    | Water quality       | Algal bloom monitoring | TIR_WQ_T     | 54/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 3          | T (msr) | 18               | —            | ±30°                | VNIR_WQ_U – TIR_WQ_T – ALT_WQ_U |
+    | Water quality       | Algal bloom monitoring | ALT_WQ_U     | 54/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 3          | U (msr) | 18               | —            | ±0° (nadir-fixed)   | per plane (3 of each × 6 planes) |
+    | Flood monitoring    | High-flow monitoring   | VNIR_FL_U    | 50/10/2        | 550 km   | 53°         | MIO        | N/A          | 36°         | 2          | U (det) | 20               | 50           | ±0° (nadir-fixed)   | Pattern 2: cycling               |
+    | Flood monitoring    | High-flow monitoring   | VNIR_FL_T    | 50/10/2        | 550 km   | 53°         | MIO        | N/A          | 36°         | 2          | T (msr) | 20               | —            | ±45°                | VNIR_FL_U – VNIR_FL_T – ALT_FL_U |
+    | Flood monitoring    | High-flow monitoring   | ALT_FL_U     | 50/10/2        | 550 km   | 53°         | MIO        | N/A          | 36°         | 1          | U (msr) | 10               | —            | ±0° (nadir-fixed)   | (2-2-1 per plane × 10 planes)    |
+    | Fire monitoring     | Wildfire monitoring    | MIR_FR_U     | 48/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 6          | U (det) | 24               | 48           | ±0° (nadir-fixed)   | Pattern 2: cycling                          |
+    | Fire monitoring     | Wildfire monitoring    | VNIR_FR_T    | 48/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 2          | T (msr) | 8                | —            | ±45°                | MIR_FR_U(×6) – VNIR_FR_T(×2) –             |
+    | Fire monitoring     | Wildfire monitoring    | SAR_FR_T     | 48/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 2          | T (msr) | 8                | —            | ±15°–55° (bilateral)  | SAR_FR_T(×2) – TIR_FR_T(×2) per plane      |
+    | Fire monitoring     | Wildfire monitoring    | TIR_FR_T     | 48/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 2          | T (msr) | 8                | —            | ±30°                | (6-2-2-2 per plane × 4 planes)              |
+    | TOTAL               |                        |              |                |          |             |            |              |
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+----------------------------------+
+
+    Taskable satellites:   TIR_WQ_T (18) + VNIR_FL_T (20) + VNIR_FR_T (12) + SAR_FR_T (12) = 62 taskable
+    Untaskable satellites: VNIR_WQ_U (18) + ALT_WQ_U (18) + VNIR_FL_U (20) + ALT_FL_U (10)
+                        + MIR_FR_U (24)                                                       = 90 untaskable
+    Total: 152 satellites
+
+    Instrument summary:
+        VNIR_WQ_U : HawkEye-class ocean color (SeaHawk heritage, 3U CubeSat)
+                    8-band VNIR 412-865nm; 120m GSD; 216km swath; nadir-fixed
+                    Untaskable Chl-A anomaly detector for algal bloom event generation
+        TIR_WQ_T  : constellr HiVE TIR (SkyBee-1 class, ~100kg microsatellite)
+                    4-band LWIR 8-12um; 28.9m GSD; 18.5km swath; ±30deg off-nadir
+                    Taskable water surface temperature retrieval on detected blooms
+        ALT_WQ_U  : SMASH Ka-band nadir altimeter (BWI/CNES REVALTO, nanosatellite)
+                    Ka-band 35.75GHz; 10cm height accuracy; nadir-only virtual stations
+                    Untaskable scheduled water level — NOT an autonomous event detector
+
+        VNIR_FL_U : Planet SuperDove PSB.SD class (3U CubeSat, ~5kg)
+                    8-band VNIR 431-885nm; 3.7m GSD; 22.7km swath; nadir-fixed
+                    Untaskable NDWI change detector for flood onset event generation
+        VNIR_FL_T : Dragonfly Aerospace Caiman/Komodo class (6-12U CubeSat, ~12kg)
+                    11-band Sentinel-2 matched VNIR 443-1390nm; 6.5m GSD; 15km swath; ±45deg
+                    Taskable high-resolution flood boundary delineation
+        ALT_FL_U  : SMASH Ka-band nadir altimeter — flood shell (same spec as ALT_WQ_U)
+                    53deg MIO orbit provides mid-latitude river basin ground track weighting
+                    Untaskable scheduled river stage — NOT an autonomous event detector
+
+        MIR_FR_U  : OroraTech OTC-P1 SAFIRE (8U CubeSat on Spire LEMUR bus, ~8kg total)
+                    3-channel MWIR+LWIR 3-12um; 625m native GSD; 400km swath; nadir-fixed
+                    Untaskable fire pixel detector (onboard Nvidia Jetson AI, <3min alert)
+        VNIR_FR_T : Dragonfly Aerospace Chameleon-MS+SWIR (6U CubeSat, ~4.5kg)
+                    9-band VNIR+SWIR 450-1750nm; 20m GSD; 40km swath; ±45deg off-nadir
+                    Taskable fire extent (NDVI) and burn severity (dNBR proxy at 1600nm)
+        SAR_FR_T  : Capella Space X-SAR (Acadia class, ~100kg microsatellite)
+                    X-band 9.4-9.9GHz; spotlight 0.25m / stripmap 1.2m; bilateral ±15-55deg
+                    Taskable all-weather night/smoke fire extent and burn structure mapping
+        TIR_FR_T  : constellr HiVE TIR (SkyBee-1 class, ~100kg microsatellite)
+                    4-band LWIR 8-12um; 28.9m GSD; 18.5km swath; ±30deg off-nadir
+                    Taskable fire LST retrieval — smoldering detection and perimeter thermal
+                    gradient mapping at baseline spatial resolution (28.9m vs SAFIRE 625m)
+                    Complements MIR_FR_U LWIR channels with cryocooled MCT sensitivity
+
+    ConOps notes:
+        - Untaskable (U) satellites: no maneuver field in JSON; fixed nadir pointing;
+        execute pre-programmed observation strips; process data onboard to detect events;
+        broadcast event requests to taskable satellites via ISL or ground relay.
+        - Taskable (T) satellites: have maneuver field in JSON; receive event requests;
+        participate in task allocation (CBBA, MILP, greedy planners); execute targeted
+        observations; subject to scheduling decisions by autonomous planners.
+        - ALT_WQ_U and ALT_FL_U are classified as untaskable measurement assets rather
+        than event detectors — they do not autonomously generate event requests. Their
+        nadir-only coverage is insufficient for reliable autonomous flood/bloom detection.
+        Water level data is forwarded to ground for offline analysis.
+        - The untaskable detection coverage gradient (MIR_FR_U >> VNIR_WQ_U >> VNIR_FL_U
+        by swath width: 400km > 216km > 22.7km) creates observable differences in
+        Onboard vs Oracle performance across constellations, motivating RQ2 findings.
+
+    RAAN values at epoch 2019-02-15 12:00 UTC (Sun RA = 328.48 deg):
+        Formula: RAAN = (RA_sun + LTAN_deg - 180) mod 360
+        Water quality (LTAN 10:30, P=6, dRAAN=60 deg):
+            Base RAAN = 305.98 deg
+            Planes: 305.98, 5.98, 65.98, 125.98, 185.98, 245.98 deg
+        Fire (LTAN 13:30, P=4, dRAAN=90 deg):
+            Base RAAN = 350.98 deg
+            Planes: 350.98, 80.98, 170.98, 260.98 deg
+        Flood (MIO 53 deg, P=10, dRAAN=36 deg, epoch only):
+            Base RAAN = 341.98 deg (offset +36 deg from water quality base)
+            Planes: 341.98, 17.98, 53.98, 89.98, 125.98, 161.98, 197.98, 233.98, 269.98, 305.98 deg
+            WARNING: RAAN precesses at ~-2.06 deg/day at 53 deg inclination.
+                    Values valid only at epoch 2019-02-15 12:00 UTC.
+                    Recompute for each simulation date using:
+                    RAAN(t) = RAAN(t0) + (dRAAN/dt) * (t - t0)
     """
     # Algal bloom monitoring constellation (SSO, 500 km, 97 deg, 36 sats in 6 planes)
     algal_bloom_monitoring = WalkerDeltaConstellation(

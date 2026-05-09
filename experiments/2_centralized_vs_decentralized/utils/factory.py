@@ -86,11 +86,11 @@ def create_scenario_specifications(base_path : str,
                                    connectivity : str,
                                    data_processing : str,
                                 ) -> dict:
-    
-    if "oracle" in data_processing.lower():
-        mission_filename = "response.json"
-    else:
-        mission_filename = "monitoring.json"
+    # if "oracle" in data_processing.lower():
+    #     mission_filename = "response.json"
+    # else:
+    #     mission_filename = "monitoring.json"
+    mission_filename = "response.json"    
     
     return {
             "events": {
@@ -174,10 +174,13 @@ def create_spacecraft_specifications(
                                      planner_specs : dict,
                                     ) -> List[dict]:
     # define mission types based on data processing type
-    if data_processing.lower() == 'onboard':
-        mission_type = "monitoring"
-    else:
-        mission_type = "response"
+    # if data_processing.lower() == 'onboard':
+    #     mission_type = "monitoring"
+    # else:
+    #     mission_type = "response"
+
+    # fixed to response; default planner would deal with monitoring for fixed-attitude satellites
+    mission_type = "response" 
     
     # generate constellation design based on scenario parameters
     if "commercial" in constellation.lower():
@@ -229,6 +232,10 @@ def create_spacecraft_specifications(
             agent_preplanner = 'announcer' if data_processing.lower() == 'onboard' else 'none'            
             # set replanner to only perform default observations at a fixed attitude
             agent_replanner = 'default'
+
+            # set max slew rate to 0 for fixed pointing
+            satellite_spec['spacecraftBus']['components']['adcs']['maxRate'] = 0.0
+            satellite_spec['spacecraftBus']['components']['adcs']['maxTorque'] = 0.0
 
         # set planner settings
         if agent_preplanner.lower() != 'none':
@@ -299,16 +306,19 @@ def create_ground_operator_specifications(
 
     # initialize list of operators
     operators = []
+       
+    # create planner ground operator  
+    centralized_planner_specs = copy.deepcopy(ground_operator_specs_template['planner'])
 
-    if 'centralized' in preplanner.lower():      
-        # create planner ground operator  
-        centralized_planner_specs = copy.deepcopy(ground_operator_specs_template['planner'])
-
-        # set planner 
+    # set planner 
+    if 'centralized' in preplanner.lower():   
         centralized_planner_specs['planner']['preplanner'] = planner_specs['preplanners'][preplanner.lower()]
+    else:
+        # remove planner 
+        centralized_planner_specs['planner'] = {}
 
-        # add to list of operators
-        operators.append(centralized_planner_specs)
+    # add to list of operators
+    operators.append(centralized_planner_specs)
 
     # get event date from events path to construct announcer specs
     *event_dir_path,event_filename = events_path.split('/')
@@ -331,10 +341,12 @@ def create_ground_operator_specifications(
         raise ValueError(f"Scenario `{scenario}` not recognized for ground operator specification generation.")
 
     # define mission type based on data processing type
-    if data_processing.lower() == 'onboard':
-        mission_type = "monitoring"
-    else:
-        mission_type = "response"
+    # if data_processing.lower() == 'onboard':
+    #     mission_type = "monitoring"
+    # else:
+    #     mission_type = "response"
+    # fixed to response; default planner would deal with monitoring for fixed-attitude satellites
+    mission_type = "response"
 
     # create event announcers for each relevant event type
     for announcer_type in announcer_types:

@@ -1,13 +1,13 @@
-from typing import List
+from typing import List, Set
 
-from dmas.core.messages import SimulationMessage
+from dmas.core.messages import MeasurementRequestMessage, SimulationMessage
 from dmas.models.actions import AgentAction, BroadcastMessageAction
-from dmas.models.planning.plan import PeriodicPlan, Plan
+from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.requests import TaskRequest
 from dmas.models.states import SimulationAgentState
 
-from execsatm.tasks import GenericObservationTask
+from execsatm.tasks import GenericObservationTask, Interval
 from execsatm.mission import EventObservationTask, Mission
 
 from dmas.models.trackers import TaskObservationTracker
@@ -42,8 +42,8 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
         # initialize properties
         self._new_task_requests : bool = False
         self._scheduled_broadcasts : List[BroadcastMessageAction] = []
-        self._scheduled_requests : List[TaskRequest] = []
-        self._future_tasks : List[EventObservationTask] = []
+        self._scheduled_requests : Set[TaskRequest] = set()
+        self._future_tasks : Set[EventObservationTask] = set()
 
     def update_percepts(self, 
                         state : SimulationAgentState,
@@ -62,8 +62,8 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
             # reset scheduled broadcasts and requests
             self._scheduled_broadcasts : List[BroadcastMessageAction] = []
-            self._scheduled_requests : List[TaskRequest] = []
-            self._future_tasks : List[EventObservationTask] = []
+            self._scheduled_requests : Set[TaskRequest] = set()
+            self._future_tasks : Set[EventObservationTask] = set()
 
             # extract future task requests and broadcasts from periodic plan
             for action in self._preplan:
@@ -73,11 +73,15 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                     self._scheduled_broadcasts.append(action)
 
                     # extract future task from broadcast message if applicable
-                    if isinstance(action.message, SimulationMessage) and action.message.type == "task_announcement":
-                        future_task = EventObservationTask.from_dict(action.message.content['task'])
-                        self._future_tasks.append(future_task)
-                elif isinstance(action, TaskRequest) and action not in self._scheduled_requests:
-                    self._scheduled_requests.append(action)
+                    if action.msg['msg_type'] == 'BUS':
+                        msgs = action.msg['msgs']
+                        for msg in msgs:
+                            if isinstance(msg, MeasurementRequestMessage):
+                                req = TaskRequest.from_dict(msg.req)
+                                self._scheduled_requests.add(req)
+                                self._future_tasks.add(req.task)                            
+                    else:
+                        raise NotImplementedError(f"Unexpected message type `{action.msg['msg_type']}` in broadcast action; expected `BUS`.")
 
             # set flag to trigger new plan generation based on new task requests
             self._new_task_requests = True
@@ -99,7 +103,67 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                         tasks : List[GenericObservationTask],
                         observation_history : TaskObservationTracker,
                     ) -> Plan:
-        
-        # extract scheduled tasks
+        try:
+            # get current time
+            t_curr : float = state.get_time()
 
-        return [] # TODO
+            # PROCESS PRE-COMPUTED PLANS AND TASK REQUESTS -----------------------------------
+
+            # filter expired tasks from future tasks
+            self._future_tasks = set([task for task in self._future_tasks 
+                                      if not task.availability.is_before(t_curr)])
+            
+            # remove requests for expired tasks from scheduled requests
+            self._scheduled_requests = set([req for req in self._scheduled_requests 
+                                            if not req.task.availability.is_before(t_curr)])
+
+            # compile instrument field of view specifications   
+            cross_track_fovs : dict = self._collect_fov_specs(specs)
+
+            # compile agility specifications
+            max_slew_rate, max_torque = self._collect_agility_specs(specs)
+
+            # Outline planning horizon interval
+            if t_curr <= self._preplan.t_next:
+                planning_horizon = Interval(t_curr, self._preplan.t_next)
+            else:
+                # planning_horizon = Interval(t_curr, t_curr + self._preplan._horizon)
+                raise NotImplementedError(f"Current time {t_curr} is beyond the next preplan time {self._preplan.t_next}. This should not happen if replanning is triggered by new task requests from the preplanner's periodic plan, but may happen if replanning is triggered by other events (e.g., task completions). Current implementation does not handle this case yet.")
+            
+            # calculate coverage opportunities for tasks
+            access_opportunities : dict[tuple] = self.calculate_access_opportunities(self._future_tasks, planning_horizon, orbitdata)
+
+            # remove tasks from future tasks if they are not accessible 
+            accessible_future_tasks : Set[EventObservationTask] = set()
+            for task in list(self._future_tasks):
+
+                for *__,grid_index,gp_index in task.location:
+                    matching_accesses = access_opportunities.get((task, grid_index, gp_index))
+                    if matching_accesses:
+                        accessible_future_tasks.add(task)
+                        break
+            self._future_tasks = accessible_future_tasks
+
+            # remove requests for inaccessible tasks from scheduled requests
+            accessible_future_reqs : Set[TaskRequest] = {
+                req for req in self._scheduled_requests
+                if req.task in accessible_future_tasks
+            }
+            self._scheduled_requests = accessible_future_reqs
+
+            if accessible_future_tasks:
+                x = 1 # breakpoint for debugging
+            else:
+                x = 1 # breakpoint for debugging
+
+            # ----------------------------
+
+            return ReactivePlan([], t=t_curr, t_next=self._preplan.t_next) # TODO
+        
+        finally:
+            # reset planning flag
+            self._new_task_requests = False 
+    
+    def print_results(self):
+        # TODO 
+        return super().print_results()

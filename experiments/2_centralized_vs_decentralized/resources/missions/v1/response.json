@@ -14,10 +14,9 @@
                             "attribute": "instrument",
                             "strategy" : "explicit",
                             "valid_values": [
-                                "HawkEye-class Ocean Color Imager (VNIR-WQ-U)",
-                                "Planet SuperDove-class Wide VNIR (VNIR-FL-U)",
-                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)",
-                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)"
+                                "HawkEye-class Ocean Color Imager (VNIR-WQ)",
+                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL)",
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR)"
                             ]
                         },
                         {
@@ -103,10 +102,9 @@
                             "attribute": "instrument",
                             "strategy" : "explicit",
                             "valid_values": [
-                                "HawkEye-class Ocean Color Imager (VNIR-WQ-U)",
-                                "Planet SuperDove-class Wide VNIR (VNIR-FL-U)",
-                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)",
-                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)"
+                                "HawkEye-class Ocean Color Imager (VNIR-WQ)",
+                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL)",
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR)"
                             ]
                         },
                         {
@@ -192,7 +190,8 @@
                             "attribute": "instrument",
                             "strategy" : "explicit",
                             "valid_values": [
-                                "constellr HiVE TIR Imager (TIR-WQ-T)"
+                                "constellr HiVE TIR Imager (TIR-FR)",
+                                "constellr HiVE TIR Imager (TIR-WQ)"
                             ]
                         },
                         {
@@ -339,10 +338,9 @@
                             "attribute": "instrument",
                             "strategy" : "explicit",
                             "valid_values": [
-                                "HawkEye-class Ocean Color Imager (VNIR-WQ-U)",
-                                "Planet SuperDove-class Wide VNIR (VNIR-FL-U)",
-                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)",
-                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)"
+                                "HawkEye-class Ocean Color Imager (VNIR-WQ)",
+                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL)",
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR)"
                             ]
                         },
                         {
@@ -627,10 +625,9 @@
                             "attribute": "instrument",
                             "strategy" : "explicit",
                             "valid_values": [
-                                "HawkEye-class Ocean Color Imager (VNIR-WQ-U)",
-                                "Planet SuperDove-class Wide VNIR (VNIR-FL-U)",
-                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)",
-                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)"
+                                "HawkEye-class Ocean Color Imager (VNIR-WQ)",
+                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL)",
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR)"
                             ]
                         },
                         {
