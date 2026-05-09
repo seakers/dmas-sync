@@ -1850,6 +1850,10 @@ class ResultsProcessor:
         # classify observations
         possible_co_observations = defaultdict(list)
         for event, observations in observations_per_event.items():
+            # check if event was discovered and requested to be observed
+            if event not in event_to_required_observations:
+                continue # if not, skip co-observability classification for this event
+
             for a in observations:
                 # check if instrument is part of those required for this event 
                 for param,valid_instruments in event_to_required_observations[event].items():
