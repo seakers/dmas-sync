@@ -439,7 +439,7 @@ class Plan(ABC):
                         locations = locations[:3]
                         locations.append('...')
 
-                    out += f"\t{action.instrument_name}, targets: {n_locations} {locations}"
+                    out += f"\t{action.instrument_name.split(' ')[-1]}, targets: {n_locations} {locations}"
                 
                 elif isinstance(action, ManeuverAction):
                     # TODO increase dimensionality of maneuver description

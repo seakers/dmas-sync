@@ -242,20 +242,20 @@ def create_spacecraft_specifications(
             # check if there is a centralized preplanner specified
             if 'centralized' in agent_preplanner.lower():
                 # assign worker preplanner for following centralized planner architecture
-                satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['worker']
+                satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['worker'].copy()
             else:
                 # assign specified preplanner for non-centralized architectures
-                satellite_spec['planner']['preplanner'] = planner_specs['preplanners'][agent_preplanner.lower()]
+                satellite_spec['planner']['preplanner'] = planner_specs['preplanners'][agent_preplanner.lower()].copy()
         if agent_preplanner.lower() == 'announcer':
             # assign events path for announcer preplanner
             satellite_spec['planner']['preplanner']['eventsPath'] = relevant_events_path
         
         if agent_replanner.lower() != 'none':
-            satellite_spec['planner']['replanner'] = planner_specs['replanners'][agent_replanner.lower()]
+            satellite_spec['planner']['replanner'] = planner_specs['replanners'][agent_replanner.lower()].copy()
         
         # enforce planning horizon for CBBA preplanner if needed
         if agent_replanner.lower() == 'cbba' and agent_preplanner.lower() == 'none':
-            satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['blank']
+            satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['blank'].copy()
 
         # remove planner if no preplanner or replanner specified
         if agent_preplanner.lower() == 'none' and agent_replanner.lower() == 'none':
@@ -267,7 +267,15 @@ def create_spacecraft_specifications(
                 "@type": "lookup", 
                 "eventsPath" : relevant_events_path
             }
-
+        
+        # ensure that the sat mission and relevant events path match
+        if satellite_spec['mission'] == 'algal bloom response' and 'algal_bloom' not in relevant_events_path:
+            raise ValueError(f"Satellite mission and events path mismatch: {satellite_spec['mission']} vs {relevant_events_path}")
+        if satellite_spec['mission'] == 'high flow river response' and 'high_flow_river' not in relevant_events_path:
+            raise ValueError(f"Satellite mission and events path mismatch: {satellite_spec['mission']} vs {relevant_events_path}")
+        if satellite_spec['mission'] == 'wildfire response' and 'wildfire' not in relevant_events_path:
+            raise ValueError(f"Satellite mission and events path mismatch: {satellite_spec['mission']} vs {relevant_events_path}")
+        
     # return satellite specifications
     return satellite_specifications
 

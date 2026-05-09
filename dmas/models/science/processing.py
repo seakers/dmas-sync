@@ -176,6 +176,8 @@ class LookupProcessor(ObservationDataProcessor):
         t_img_end = obs['t_end']
         lat = obs['lat [deg]']
         lon = obs['lon [deg]']
+        grid_idx = obs['grid index']
+        gp_idx = obs['GP index']
         
         # update list of events to ignore expired events
         if self.t_update is None or abs(self.t_update - t_img_start) > 100.0:
@@ -185,8 +187,10 @@ class LookupProcessor(ObservationDataProcessor):
         observed_events : List[GeophysicalEvent] = [event.copy()
                                                     for event in self.events_lookup
                                                     # same location as the observation
-                                                    if abs(lat - event.location[0]) <= 1e-3
-                                                    and abs(lon - event.location[1]) <= 1e-3
+                                                    # if abs(lat - event.location[0]) <= 1e-3
+                                                    # and abs(lon - event.location[1]) <= 1e-3
+                                                    if event.location[2] == grid_idx 
+                                                    and event.location[3] == gp_idx
                                                     # availability during the time of observation
                                                     and (t_img_start in event.availability or t_img_end in event.availability)
                                                     # event has not been detected before

@@ -1152,7 +1152,12 @@ class Simulation:
         )
 
         # load replanner
-        replanner = Simulation.__load_replanner(planner_dict, agent_results_dir, logger, printouts)
+        replanner = Simulation.__load_replanner(
+            planner_dict, 
+            agent_results_dir, 
+            logger, 
+            printouts
+        )
 
         # return loaded planners
         return preplanner, replanner
