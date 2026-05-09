@@ -408,7 +408,7 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
     # run trials serially
     try:
         # print header for serial execution
-        print_scenario_banner("CBBA Stress Test Study - Serial Execution")
+        print_scenario_banner("Centralized vs Decentralized Study - Serial Execution")
 
         # iterate over trial rows
         for i, row in enumerate(trial_rows):
@@ -503,7 +503,7 @@ def parallel_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Si
     # run trials in parallel
     try:
         # print header for serial execution
-        print_scenario_banner("CBBA Stress Test Study - Parallel Execution")
+        print_scenario_banner("Centralized vs Decentralized Study - Parallel Execution")
 
         # initialize process pool
         with ProcessPoolExecutor(max_workers=max_workers) as ex:
