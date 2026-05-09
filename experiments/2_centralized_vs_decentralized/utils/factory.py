@@ -63,7 +63,7 @@ def load_templates(base_path : str) -> Tuple[dict, dict, dict, dict]:
         spacecraft_specs_template : dict = json.load(spacecraft_template_file)
 
     # load available instrument specifications 
-    instrument_specs_file = os.path.join(base_path, 'resources','templates','instruments.json')
+    instrument_specs_file = os.path.join(base_path, 'resources','instruments','instruments.json')
     with open(instrument_specs_file, 'r') as instrument_specs_file:
         instrument_specs : dict = json.load(instrument_specs_file)
 
@@ -351,7 +351,8 @@ def create_ground_operator_specifications(
     # create event announcers for each relevant event type
     for announcer_type in announcer_types:
         # skip announcer creation if data processing type is onboard; only announce wildfires
-        skip_announcer = bool(data_processing.lower() == 'onboard' and announcer_type in ['algal_bloom', 'high_flow_river'])
+        # skip_announcer = bool(data_processing.lower() == 'onboard' and announcer_type in ['algal_bloom', 'high_flow_river'])
+        skip_announcer = data_processing.lower() == 'onboard'
 
         # create event announcer ground operator
         announcer_specs = copy.deepcopy(ground_operator_specs_template['announcer'])

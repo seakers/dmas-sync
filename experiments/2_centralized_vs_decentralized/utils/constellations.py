@@ -26,6 +26,9 @@ def assign_instruments_to_constellation(
     # initialte list to hold satellite specifications for constellation
     constellation_specs = []
 
+    # initialize instrument counters
+    instrument_counters = {instrument: 0 for instrument in instruments}
+
     # iterate through constellation parameters to create satellite specifications
     for sat_idx,orbit_state in enumerate(constellation_orbit_states):
         # create satellite specification from template
@@ -46,7 +49,8 @@ def assign_instruments_to_constellation(
         sat['instrument'] = instrument_spec
 
         # determine satellite name and ID
-        n_instr = sat_idx // len(instruments)
+        n_instr = instrument_counters[instrument]
+        instrument_counters[instrument] += 1
         sat['@id'] = f"{const_id}_{sat['instrument']['@id']}_{n_instr}"
         sat['name'] = f"{const_name} - {sat['instrument']['name']} Sat {n_instr}"
 
@@ -293,26 +297,34 @@ def generate_walker_delta(
         T = Taskable   - has maneuver field; narrow FOV; steerable; creates scheduling decisions
         U = Untaskable - no maneuver field; wide FOV; nadir-fixed; always-on event detector
 
-    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+----------------------------------+
-    | Mission             | Primary mission        | Instrument   | Walker (T/P/F) | Altitude | Inclination | Orbit type | LTAN         | RAAN offset | Sats/plane | Role    | N sats (instr.)  | N sats total | Off-nadir limit     | Instrument arrangement           |
-    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+----------------------------------+
-    | Water quality       | Algal bloom monitoring | VNIR_WQ_U    | 54/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 3          | U (det) | 18               | 54           | ±0° (nadir-fixed)   | Pattern 2: cycling               |
-    | Water quality       | Algal bloom monitoring | TIR_WQ_T     | 54/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 3          | T (msr) | 18               | —            | ±30°                | VNIR_WQ_U – TIR_WQ_T – ALT_WQ_U |
-    | Water quality       | Algal bloom monitoring | ALT_WQ_U     | 54/6/1         | 500 km   | 97°         | SSO        | 10:30 asc.   | 0°          | 3          | U (msr) | 18               | —            | ±0° (nadir-fixed)   | per plane (3 of each × 6 planes) |
-    | Flood monitoring    | High-flow monitoring   | VNIR_FL_U    | 50/10/2        | 550 km   | 53°         | MIO        | N/A          | 36°         | 2          | U (det) | 20               | 50           | ±0° (nadir-fixed)   | Pattern 2: cycling               |
-    | Flood monitoring    | High-flow monitoring   | VNIR_FL_T    | 50/10/2        | 550 km   | 53°         | MIO        | N/A          | 36°         | 2          | T (msr) | 20               | —            | ±45°                | VNIR_FL_U – VNIR_FL_T – ALT_FL_U |
-    | Flood monitoring    | High-flow monitoring   | ALT_FL_U     | 50/10/2        | 550 km   | 53°         | MIO        | N/A          | 36°         | 1          | U (msr) | 10               | —            | ±0° (nadir-fixed)   | (2-2-1 per plane × 10 planes)    |
-    | Fire monitoring     | Wildfire monitoring    | MIR_FR_U     | 48/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 6          | U (det) | 24               | 48           | ±0° (nadir-fixed)   | Pattern 2: cycling                          |
-    | Fire monitoring     | Wildfire monitoring    | VNIR_FR_T    | 48/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 2          | T (msr) | 8                | —            | ±45°                | MIR_FR_U(×6) – VNIR_FR_T(×2) –             |
-    | Fire monitoring     | Wildfire monitoring    | SAR_FR_T     | 48/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 2          | T (msr) | 8                | —            | ±15°–55° (bilateral)  | SAR_FR_T(×2) – TIR_FR_T(×2) per plane      |
-    | Fire monitoring     | Wildfire monitoring    | TIR_FR_T     | 48/4/1         | 550 km   | 97°         | SSO        | 13:30 asc.   | 60°         | 2          | T (msr) | 8                | —            | ±30°                | (6-2-2-2 per plane × 4 planes)              |
-    | TOTAL               |                        |              |                |          |             |            |              |
-    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+----------------------------------+
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+-----------------------------------------------+
+    | Mission             | Primary mission        | Instrument   | Walker (T/P/F) | Altitude | Inclination | Orbit type | LTAN         | RAAN offset | Sats/plane | Role    | N sats (instr.)  | N sats total | Off-nadir limit     | Instrument arrangement                        |
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+-----------------------------------------------+
+    | Water quality       | Algal bloom monitoring | VNIR_WQ_U    | 54/6/1         | 500 km   | 97 deg      | SSO        | 10:30 asc.   | 0 deg       | 3          | U (det) | 18               | 54           | +/-0 deg (nadir)    | Pattern 2: cycling                            |
+    | Water quality       | Algal bloom monitoring | TIR_WQ_T     | 54/6/1         | 500 km   | 97 deg      | SSO        | 10:30 asc.   | 0 deg       | 3          | T (msr) | 18               | ---          | +/-30 deg           | VNIR_WQ_U -- TIR_WQ_T -- ALT_WQ_U            |
+    | Water quality       | Algal bloom monitoring | ALT_WQ_U     | 54/6/1         | 500 km   | 97 deg      | SSO        | 10:30 asc.   | 0 deg       | 3          | U (msr) | 18               | ---          | +/-0 deg (nadir)    | per plane (3-3-3, 9 sats/plane x 6 planes)   |
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+-----------------------------------------------+
+    | Flood monitoring    | High-flow monitoring   | VNIR_FL_U    | 50/10/2        | 550 km   | 53 deg      | MIO        | N/A          | 36 deg      | 2          | U (det) | 20               | 50           | +/-0 deg (nadir)    | Pattern 2: cycling                            |
+    | Flood monitoring    | High-flow monitoring   | VNIR_FL_T    | 50/10/2        | 550 km   | 53 deg      | MIO        | N/A          | 36 deg      | 2          | T (msr) | 20               | ---          | +/-45 deg           | VNIR_FL_U -- VNIR_FL_T -- VNIR_FL_U --       |
+    | Flood monitoring    | High-flow monitoring   | ALT_FL_U     | 50/10/2        | 550 km   | 53 deg      | MIO        | N/A          | 36 deg      | 1          | U (msr) | 10               | ---          | +/-0 deg (nadir)    | VNIR_FL_T -- ALT_FL_U                        |
+    |                     |                        |              |                |          |             |            |              |             |            |         |                  |              |                     | per plane (2-2-1, 5 sats/plane x 10 planes)  |
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+-----------------------------------------------+
+    | Fire monitoring     | Wildfire monitoring    | MIR_FR_U     | 48/4/1         | 550 km   | 97 deg      | SSO        | 13:30 asc.   | 60 deg      | 6          | U (det) | 24               | 48           | +/-0 deg (nadir)    | Pattern 2: cycling                            |
+    | Fire monitoring     | Wildfire monitoring    | VNIR_FR_T    | 48/4/1         | 550 km   | 97 deg      | SSO        | 13:30 asc.   | 60 deg      | 2          | T (msr) | 8                | ---          | +/-45 deg           | MIR_FR_U -- VNIR_FR_T -- MIR_FR_U --         |
+    | Fire monitoring     | Wildfire monitoring    | SAR_FR_T     | 48/4/1         | 550 km   | 97 deg      | SSO        | 13:30 asc.   | 60 deg      | 2          | T (msr) | 8                | ---          | +/-15 to 55 deg     | SAR_FR_T  -- MIR_FR_U -- TIR_FR_T --         |
+    | Fire monitoring     | Wildfire monitoring    | TIR_FR_T     | 48/4/1         | 550 km   | 97 deg      | SSO        | 13:30 asc.   | 60 deg      | 2          | T (msr) | 8                | ---          | +/-30 deg           | MIR_FR_U -- VNIR_FR_T -- MIR_FR_U --         |
+    |                     |                        |              |                |          |             |            |              |             |            |         |                  |              |                     | SAR_FR_T  -- MIR_FR_U -- TIR_FR_T            |
+    |                     |                        |              |                |          |             |            |              |             |            |         |                  |              |                     | per plane (6-2-2-2, 12 sats/plane x 4 planes)|
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+-----------------------------------------------+
+    | TOTAL               |                        |              |                |          |             |            |              |             |            |         |                  | 152          |                     |                                               |
+    +---------------------+------------------------+--------------+----------------+----------+-------------+------------+--------------+-------------+------------+---------+------------------+--------------+---------------------+-----------------------------------------------+
 
-    Taskable satellites:   TIR_WQ_T (18) + VNIR_FL_T (20) + VNIR_FR_T (12) + SAR_FR_T (12) = 62 taskable
+    Taskable satellites:   TIR_WQ_T (18) + VNIR_FL_T (20) + VNIR_FR_T (8) + SAR_FR_T (8)
+                        + TIR_FR_T (8)                                        = 62 taskable
     Untaskable satellites: VNIR_WQ_U (18) + ALT_WQ_U (18) + VNIR_FL_U (20) + ALT_FL_U (10)
-                        + MIR_FR_U (24)                                                       = 90 untaskable
-    Total: 152 satellites
+                        + MIR_FR_U (24)                                       = 90 untaskable
+    Total:                                                                       152 satellites
+
 
     Instrument summary:
         VNIR_WQ_U : HawkEye-class ocean color (SeaHawk heritage, 3U CubeSat)
@@ -381,11 +393,11 @@ def generate_walker_delta(
                     Recompute for each simulation date using:
                     RAAN(t) = RAAN(t0) + (dRAAN/dt) * (t - t0)
     """
-    # Algal bloom monitoring constellation (SSO, 500 km, 97 deg, 36 sats in 6 planes)
+    # Algal bloom monitoring constellation (SSO, 500 km, 97 deg, 54 sats in 6 planes)
     algal_bloom_monitoring = WalkerDeltaConstellation(
         alt=500,
         inc=97.0,
-        num_sats=36,
+        num_sats=54,
         num_planes=6,
         phasing_param=1,
         raan_offset=0.0
@@ -394,26 +406,27 @@ def generate_walker_delta(
         constellation=algal_bloom_monitoring,
         const_name="Algal Bloom Monitoring",
         const_id="wq",
-        instruments=["VNIR-WQ", "TIR-WQ", "ALT-WQ"],
+        instruments=["VNIR-WQ-U", "TIR-WQ-T", "ALT-WQ-U"],
         instrument_specs=instrument_specs,
         spacecraft_specs_template=spacecraft_specs_template,
     )
     assign_mission_to_constellation(algal_bloom_monitoring_specs, f"algal bloom {mission_type}")
 
-    # High-flow monitoring constellation (MIO, 550 km, 53 deg, 30 sats in 5 planes)
     flood_monitoring = WalkerDeltaConstellation(
         alt=550,
         inc=53.0,
-        num_sats=30,
-        num_planes=5,
+        num_sats=50,
+        num_planes=10,
         phasing_param=2,
         raan_offset=36.0
     )
+    # Per plane: VNIR_FL_U – VNIR_FL_T – VNIR_FL_U – VNIR_FL_T – ALT_FL_U
+    #        (2 untaskable VNIR) + (2 taskable VNIR) + (1 untaskable ALT)
     flood_monitoring_specs = assign_instruments_to_constellation(
         constellation=flood_monitoring,
         const_name="Flood Monitoring",
         const_id="fl",
-        instruments=["VNIR-FL", "ALT-FL"],
+        instruments=["VNIR-FL-U", "VNIR-FL-T", "VNIR-FL-U", "VNIR-FL-T",  "ALT-FL-U"],
         instrument_specs=instrument_specs,
         spacecraft_specs_template=spacecraft_specs_template
     )
@@ -423,16 +436,19 @@ def generate_walker_delta(
     wildfire_monitoring = WalkerDeltaConstellation(
         alt=550,
         inc=97.0,
-        num_sats=32,
+        num_sats=63,
         num_planes=4,
         phasing_param=1,
         raan_offset=60.0
     )
+    # Per plane: MIR_FR_U – VNIR_FR_T – MIR_FR_U – SAR_FR_T – MIR_FR_U – TIR_FR_T
+    #          – MIR_FR_U – VNIR_FR_T – MIR_FR_U – SAR_FR_T – MIR_FR_U – TIR_FR_T
+    #        (6 untaskable MIR) + (2 taskable VNIR) + (2 taskable SAR) + (2 taskable TIR)
     wildfire_monitoring_specs = assign_instruments_to_constellation(
         constellation=wildfire_monitoring,
         const_name="Wildfire Monitoring",
         const_id="fr",
-        instruments=["TIR-FR", "MIR-FR", "VNIR-FR", "SAR-FR"],
+        instruments=["MIR-FR-U", "VNIR-FR-T", "MIR-FR-U", "SAR-FR-T", "MIR-FR-U", "TIR-FR-T"],
         instrument_specs=instrument_specs,
         spacecraft_specs_template=spacecraft_specs_template,
     )
@@ -454,28 +470,21 @@ if __name__ == "__main__":
     """ TEST SCRIPT FOR GENERATING CONSTELLATION DESIGNS """
 
     # define template resources path 
-    resources_path = os.path.join('.', 'experiments','2_centralized_vs_decentralized', 'resources', "templates")
+    resources_path = os.path.join('.', 'experiments','2_centralized_vs_decentralized', 'resources')
 
     # define spacecraft specs template path
-    spacecraft_specs_template_path = os.path.join(resources_path, "spacecraft.json")
+    spacecraft_specs_template_path = os.path.join(resources_path, "templates", "spacecraft.json")
 
     # load spacecraft specs template json
     with open(spacecraft_specs_template_path, "r") as f:
         spacecraft_specs_template = json.load(f)
 
     # define instrument specs path
-    instrument_specs_path = os.path.join(resources_path, "instruments.json")
+    instrument_specs_path = os.path.join(resources_path, "instruments", "instruments.json")
         
     # load instrument specs json
     with open(instrument_specs_path, "r") as f:
         instrument_specs = json.load(f)
-
-    # define planner specs path
-    planner_specs_path = os.path.join(resources_path, "planners.json")
-
-    # load planner specs json
-    with open(planner_specs_path, "r") as f:
-        planner_specs = json.load(f)
     
     # # generate commercial constellation design
     # commercial_constellation : dict = generate_commercial(spacecraft_specs_template, instrument_specs)
