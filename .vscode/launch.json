@@ -472,19 +472,20 @@
                 // "--single-trial", "16",
                 // "--single-trial", "20",
                 // "--single-trial", "144",
-                // "--single-trial", "148",
-                // "--single-trial", "160",
-                // "--single-trial", "164",
-                "--single-trial", "212", // None,CBBA,Interconstellation,Comprehensive,Oracle
+                // "--single-trial", "148", 
+                // "--single-trial", "160", // DP,None,Interconstellation,Comprehensive,Onboard
+                // "--single-trial", "164", // DP,None,Interconstellation,Comprehensive,Oracle
+                "--single-trial", "208", // None,CBBA,Interconstellation,Comprehensive,Onboard
+                // "--single-trial", "212", // None,CBBA,Interconstellation,Comprehensive,Oracle
                 // "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
-                // "--only-simulate",
+                "--only-simulate",
                 // "--only-postprocess",
                 "--force-simulate",
-                "--force-postprocess",
-                "--force-summarize",
+                // "--force-postprocess",
+                // "--force-summarize",
                 "--reduced",
                 // "--quiet",
                 "--exceptions",
@@ -503,20 +504,17 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                // "-t", "full_factorial_trials_2026-02-22",
-                // "-t", "full_factorial_trials_2026-02-23",
-                "-t", "full_factorial_trials_2026-03-15",
-                // "-t", "full_factorial_trials_2026-03-16",
-                "--trial-range", "240:375",
+                "-t", "full_factorial_trials_2026-05-04",
+                "--trial-range", "48:289",
                 // "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
-                // "--only-simulate",
+                "--only-simulate",
                 // "--only-postprocess",
-                // "--force-simulate",
+                "--force-simulate",
                 // "--force-postprocess",
-                "--force-summarize",
+                // "--force-summarize",
                 "--quiet",
                 // "--exceptions",
             ]

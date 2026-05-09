@@ -834,11 +834,13 @@ class ResultsProcessor:
             if any(not isinstance(task_req.task, EventObservationTask) for task_req in task_reqs):
                 raise NotImplementedError("Non-event observation tasks are not yet supported in event observation classification.")
             else:
-                matching_requests = sorted([task_req for task_req in task_reqs if task_req.task.event == event], 
+                matching_requests = sorted([task_req for task_req in task_reqs 
+                                            if task_req.task.event == event], 
                                             key= lambda a : a.t_req)
             
             # add to map of events to matching requests
-            requests_per_event[event] = matching_requests
+            if matching_requests:
+                requests_per_event[event] = matching_requests
 
             for task_req in matching_requests:
                 event_rquests_df_data.append({

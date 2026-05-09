@@ -133,9 +133,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # -------------------------------
         # DEBUG PRINTOUTS
-        # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
+        # debug_case = state._t >= 19_999.00 and ("(VNIR-FR-T) Sat 4" in state.agent_name)
         # if debug_case and incoming_bids:
         if self._debug and incoming_bids:
+        # if incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
             print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
             self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
@@ -156,6 +157,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
         # DEBUG PRINTOUTS        
         # if (task_updates or results_updates or bundle_updates) and debug_case:
+        # if (task_updates or results_updates or bundle_updates) and self._path:
         if (task_updates or results_updates or bundle_updates) and self._debug:
             self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
             print(f'`{state.agent_name}` - Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
@@ -1227,6 +1229,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
         # if debug_case and new_bids:
         if self._debug and new_bids:
+        # if new_bids:
             self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
             self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
             print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
@@ -1836,54 +1839,54 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return broadcasts
         return sorted_broadcasts
 
-    def _schedule_broadcasts_DEPRECATED(self, state: SimulationAgentState, orbitdata: OrbitData, new_bids : dict) -> list:
-        """ Schedules broadcasts to be done by this agent """
-        # validate inputs
-        if not isinstance(state, (SatelliteAgentState, GroundOperatorAgentState)):
-            raise NotImplementedError(f'Broadcast scheduling for agents of type `{type(state)}` not yet implemented.')
-        elif orbitdata is None:
-            raise ValueError(f'`orbitdata` required for agents of type `{type(state)}`.')
+    # def _schedule_broadcasts_DEPRECATED(self, state: SimulationAgentState, orbitdata: OrbitData, new_bids : dict) -> list:
+    #     """ Schedules broadcasts to be done by this agent """
+    #     # validate inputs
+    #     if not isinstance(state, (SatelliteAgentState, GroundOperatorAgentState)):
+    #         raise NotImplementedError(f'Broadcast scheduling for agents of type `{type(state)}` not yet implemented.')
+    #     elif orbitdata is None:
+    #         raise ValueError(f'`orbitdata` required for agents of type `{type(state)}`.')
 
-        # initialize list of broadcasts to be done
-        broadcasts : List[AgentAction] = []       
+    #     # initialize list of broadcasts to be done
+    #     broadcasts : List[AgentAction] = []       
 
-        # generate bid messages to share bids in results
-        bidded_tasks = any(
-            # only consider bids for event-driven tasks
-            isinstance(task, EventObservationTask) \
-            # only tasks with bids
-            and bids
-            for task,bids in self._results.items()
-        )
+    #     # generate bid messages to share bids in results
+    #     bidded_tasks = any(
+    #         # only consider bids for event-driven tasks
+    #         isinstance(task, EventObservationTask) \
+    #         # only tasks with bids
+    #         and bids
+    #         for task,bids in self._results.items()
+    #     )
         
-        # schedule broadcasts at future access opportunities
-        t_broadcasts = self.__schedule_broadcast_times(state, orbitdata, new_bids)
+    #     # schedule broadcasts at future access opportunities
+    #     t_broadcasts = self.__schedule_broadcast_times(state, orbitdata, new_bids)
 
-        # crreate broadcast actions for each broadcast time
-        for t_broadcast in t_broadcasts:
-            # TODO decide whether to broadcast state and observations as well
+    #     # crreate broadcast actions for each broadcast time
+    #     for t_broadcast in t_broadcasts:
+    #         # TODO decide whether to broadcast state and observations as well
             
-            # check if there are any bid messages to share
-            if bidded_tasks:
-                broadcasts.append(FutureBroadcastMessageAction(FutureBroadcastMessageAction.BIDS, t_broadcast))
+    #         # check if there are any bid messages to share
+    #         if bidded_tasks:
+    #             broadcasts.append(FutureBroadcastMessageAction(FutureBroadcastMessageAction.BIDS, t_broadcast))
 
-        # include scheduled broadcasts from preplan
-        t_curr = state.get_time()
-        preplan_broadcasts = [action for action in self._preplan
-                                # extract only broadcast actions
-                                if isinstance(action, BroadcastMessageAction)
-                                # exclude broadcasts of future information; 
-                                #  these would be redundant with those scheduled here 
-                                and not isinstance(action, FutureBroadcastMessageAction)
-                                # exclude past broadcasts; 
-                                #  these should have already been performed
-                                and action.t_start > t_curr - self.EPS
-                                ]
+    #     # include scheduled broadcasts from preplan
+    #     t_curr = state.get_time()
+    #     preplan_broadcasts = [action for action in self._preplan
+    #                             # extract only broadcast actions
+    #                             if isinstance(action, BroadcastMessageAction)
+    #                             # exclude broadcasts of future information; 
+    #                             #  these would be redundant with those scheduled here 
+    #                             and not isinstance(action, FutureBroadcastMessageAction)
+    #                             # exclude past broadcasts; 
+    #                             #  these should have already been performed
+    #                             and action.t_start > t_curr - self.EPS
+    #                             ]
 
-        broadcasts.extend(preplan_broadcasts)
+    #     broadcasts.extend(preplan_broadcasts)
 
-        # return scheduled broadcasts
-        return sorted(broadcasts, key=lambda action: action.t_start) 
+    #     # return scheduled broadcasts
+    #     return sorted(broadcasts, key=lambda action: action.t_start) 
 
     def __schedule_broadcast_times(self, state : SimulationAgentState, orbitdata : OrbitData, new_bids : dict) -> List[float]:
         """ Schedule broadcast times for sharing bids in results with other agents."""
@@ -2021,76 +2024,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # return sorted list of broadcast times
         return t_broadcast_sorted
-
-    def __schedule_broadcast_times_DEPRECATED(self, state : SimulationAgentState, orbitdata : OrbitData, new_bids : dict) -> List[float]:
-        """ Schedule broadcast times for sharing bids in results with other agents."""
-
-        # check if any shareble bids to share exist
-        # if all([not isinstance(task, EventObservationTask) for task in self._results]):
-        if not any(isinstance(task, EventObservationTask) for task in self._results):
-            # No tasks with bids to share; return empty list
-            return []
-        
-        # get current time 
-        t_curr : float = state.get_time()
-
-        # define end of planning horizon for broadcast scheduling
-        t_next = max(self._preplan.t + self._preplan.horizon, t_curr)
-
-        # check if agent is currently participating in consensus bidding
-        include_current = self.__is_participating_in_consensus(new_bids)
-
-        # define set of all communication targets to cover
-        all_targets = set(orbitdata.comms_targets)
-        remaining = set(all_targets)  # targets we still need to “cover”
-        
-        # initiate set of broadcast times to be scheduled (avoids duplicates)
-        t_broadcasts = set()
-        agents_considered = set()
-
-        # get column index of this agent in the comms links table
-        u_idx = orbitdata.comms_target_indices[state.agent_name]
-        cols = orbitdata.comms_target_columns
-
-        # iterate through list of intervals in this time period 
-        for _, row in orbitdata.comms_links.iter_rows_packed(t_curr, t_next, include_current):
-            # unpack row data
-            t_start = float(row[orbitdata.comms_links._col["start"]])
-            comps   = row[3:]  
-
-            # get communication targets for this interval based on component membership
-            u_comp = comps[u_idx]
-            m = (comps == u_comp)
-            m[u_idx] = False
-            v_idxs = np.nonzero(m)[0]
-            targets = {cols[int(j)] for j in v_idxs}
-
-            # skip if target agents have already been considered
-            if targets <= agents_considered:
-                continue
-
-            # get last access interval and calculate broadcast time
-            t_broadcast = t_curr if t_curr > t_start else t_start
-            
-            # add to list of broadcast times if not already present
-            t_broadcasts.add(t_broadcast)
-
-            # mark target agents as considered
-            agents_considered.update(targets)
-
-            # check if all targets have been considered 
-            remaining.difference_update(targets)
-            if not remaining:
-                # all targets have been considered; stop scheduling broadcasts
-                break
-
-        # return sorted list of broadcast times
-        out = sorted(t_broadcasts)
-
-        assert include_current or out[0] > t_curr, \
-            f"First broadcast time should be in the future if not participating in consensus.\nInclude current: {include_current}\nFirst broadcast time: {out[0]}\nCurrent time: {t_curr}"
-
-        return out
 
     def __is_participating_in_consensus(self, new_bids : dict) -> bool:
         """ Check if this agent is currently participating in consensus bidding. """
