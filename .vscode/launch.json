@@ -472,7 +472,8 @@
                 // "--single-trial", "8",
                 // "--single-trial", "16",
                 // "--single-trial", "20",
-                "--single-trial", "48",
+                // "--single-trial", "48",
+                "--single-trial", "50",
                 // "--single-trial", "144",
                 // "--single-trial", "148", 
                 // "--single-trial", "160", // DP,None,Interconstellation,Comprehensive,Onboard

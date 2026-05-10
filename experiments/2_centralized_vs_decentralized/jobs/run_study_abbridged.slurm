@@ -8,8 +8,20 @@
 #SBATCH --mem=32G
 #SBATCH --array=0-5
 
-# Overal scenario : 36 total trials
-# 6 trials per job -> 6 jobs  (sbatch --array=0-5))
+# Overall scenario: 36 total trials
+# 6 jobs x 6 trials each (sbatch --array=0-5)
+# Each job covers one (Connectivity, Data Processing) group.
+# Within each job, trials run fastest-first to spread wall-clock load:
+#   None+Greedy -> DP+None -> DP+Greedy -> Centralized-MILP_priority+None -> None+CBBA -> DP+CBBA
+#
+#  Job  Connectivity         Data Processing   Trial IDs (in run order)
+#  ---  -------------------  ---------------   -------------------------
+#   0   GS                   Onboard           30 18 12  0 24  6
+#   1   GS                   Oracle            31 19 13  1 25  7
+#   2   Interconstellation   Onboard           32 20 14  2 26  8
+#   3   Interconstellation   Oracle            33 21 15  3 27  9
+#   4   Intraconstellation   Onboard           34 22 16  4 28 10
+#   5   Intraconstellation   Oracle            35 23 17  5 29 11
 
 set -euo pipefail
 
@@ -20,10 +32,16 @@ mkdir -p experiments/2_centralized_vs_decentralized/logs/outputs
 mkdir -p experiments/2_centralized_vs_decentralized/logs/errors
 
 # --- Load Modules ---
+# Gurobi/13.0.1 requires GCCcore/14.3.0 which conflicts with GCCcore/11.3.0 (Python 3.8).
+# Load Gurobi first just to capture its license path, then reload the Python environment.
+module purge
+module load GCCcore/14.3.0 Gurobi/13.0.1
+_GRB_LICENSE_FILE="$GRB_LICENSE_FILE"
+
 module purge
 module load GCCcore/11.3.0 Python/3.8.6
 module load Anaconda3
-# module load Gurobi/13.0.1
+export GRB_LICENSE_FILE="$_GRB_LICENSE_FILE"
 
 # --- Conda environment activation ---
 eval "$(conda shell.bash hook)"
@@ -32,15 +50,22 @@ conda activate ./.venv
 # --- Set ulimit for maximum number of open files ---
 ulimit -n 65535
 
-# --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
-i=$SLURM_ARRAY_TASK_ID
-start=$((i * 6))
-end=$((start + 6))
+# --- Trial ID lists per job (fastest -> slowest) ---
+TRIAL_IDS=(
+    "30 18 12  0 24  6"   # Job 0: GS,                 Onboard
+    "31 19 13  1 25  7"   # Job 1: GS,                 Oracle
+    "32 20 14  2 26  8"   # Job 2: Interconstellation,  Onboard
+    "33 21 15  3 27  9"   # Job 3: Interconstellation,  Oracle
+    "34 22 16  4 28 10"   # Job 4: Intraconstellation,  Onboard
+    "35 23 17  5 29 11"   # Job 5: Intraconstellation,  Oracle
+)
 
 # --- Run ---
-python ./experiments/2_centralized_vs_decentralized/study.py \
-  -t full_factorial_trials_2026-05-10 \
-  --trial-range "${start}:${end}" \
-  --single-thread --quiet --exceptions \
-  # --force-simulate --force-postprocess --force-summarize # \
-  # --profile-cpu --profile-mem 
+for trial_id in ${TRIAL_IDS[$SLURM_ARRAY_TASK_ID]}; do
+    python ./experiments/2_centralized_vs_decentralized/study.py \
+      -t full_factorial_trials_2026-05-10 \
+      --single-trial "$trial_id" \
+      --single-thread --quiet --exceptions
+      # --force-simulate --force-postprocess --force-summarize
+      # --profile-cpu --profile-mem
+done

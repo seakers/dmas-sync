@@ -861,7 +861,7 @@ class OrbitData:
             os.mkdir(data_dir)
             changes_to_scenario = True
         else:
-            changes_to_scenario : bool = OrbitData._check_changes_to_scenario(scenario_specs, data_dir)
+            changes_to_scenario : bool = OrbitData._check_changes_to_scenario(scenario_specs, data_dir, verbose=printouts)
 
         if not changes_to_scenario and not overwrite:
             # if propagation data files already exist, load results
@@ -997,103 +997,174 @@ class OrbitData:
     
     def _check_changes_to_scenario(scenario_dict : dict, orbitdata_dir : str, verbose : bool = False) -> bool:
         """
-        Checks if the scenario has already been pre-computed
-        or if relevant changes have been made
-        """
-        def _diff(label, a, b):
-            if verbose:
-                tqdm.write(f'  [orbit-data cache miss] {label}: {a!r} → {b!r}')
+        Checks whether orbit data needs to be recomputed by comparing only the fields
+        that actually affect propagation:
+          - epoch / start date
+          - duration (only triggers if the new duration exceeds what was already computed)
+          - spacecraft count, orbital states (orbitState), and instrument specs
+          - ground station count / locations
+          - coverage grids
 
-        # check if directory exists
+        All planner / replanner / connectivity / science fields are intentionally ignored.
+        """
+        def _miss(reason: str) -> bool:
+            if verbose:
+                tqdm.write(f'  [orbit-data cache miss] {reason}')
+            return True
+
         filename = 'MissionSpecs.json'
         orbitdata_filename = os.path.join(orbitdata_dir, filename)
         if not os.path.exists(orbitdata_filename):
-            if verbose: tqdm.write(f'  [orbit-data cache miss] MissionSpecs.json not found in {orbitdata_dir}')
-            return True
-        
-        # copy scenario specs
-        scenario_specs : dict = copy.deepcopy(scenario_dict)
-            
-        # compare specifications
-        with open(orbitdata_filename, 'r') as orbitdata_specs:
-            orbitdata_dict : dict = json.load(orbitdata_specs)
+            return _miss(f'MissionSpecs.json not found in {orbitdata_dir}')
 
-            scenario_specs.pop('settings')
-            orbitdata_dict.pop('settings')
-            scenario_specs.pop('scenario')
-            orbitdata_dict.pop('scenario')
+        with open(orbitdata_filename, 'r') as _f:
+            saved : dict = json.load(_f)
 
-            if (
-                    scenario_specs['epoch'] != orbitdata_dict['epoch']
-                or scenario_specs['duration'] > orbitdata_dict['duration']
-                or scenario_specs.get('groundStation', None) != orbitdata_dict.get('groundStation', None)
-                # or scenario_dict['grid'] != orbitdata_dict['grid']
-                # or scenario_specs['scenario']['connectivity'] != orbitdata_dict['scenario']['connectivity']
-                ):
-                return True
-            
-            if scenario_specs['grid'] != orbitdata_dict['grid']:
-                if len(scenario_specs['grid']) != len(orbitdata_dict['grid']):
-                    return True
-                
-                for i in range(len(scenario_specs['grid'])):
-                    scenario_grid : dict = scenario_specs['grid'][i]
-                    mission_grid : dict = orbitdata_dict['grid'][i]
+        # epoch / start date
+        if scenario_dict.get('epoch') != saved.get('epoch'):
+            return _miss(f"epoch changed: {scenario_dict.get('epoch')!r} → {saved.get('epoch')!r}")
 
-                    scenario_gridtype = scenario_grid['@type'].lower()
-                    mission_gridtype = mission_grid['@type'].lower()
+        # duration (recompute only if more data is needed than what was saved)
+        if scenario_dict.get('duration', 0) > saved.get('duration', 0):
+            return _miss(f"duration increased: {scenario_dict.get('duration')} > {saved.get('duration')}")
 
-                    if scenario_gridtype != mission_gridtype == 'customgrid':
-                        if scenario_gridtype not in mission_grid['covGridFilePath']:
-                            return True
+        # spacecraft count and orbital states
+        scenario_sats = scenario_dict.get('spacecraft', [])
+        saved_sats    = saved.get('spacecraft', [])
+        if len(scenario_sats) != len(saved_sats):
+            return _miss(f"spacecraft count changed: {len(scenario_sats)} → {len(saved_sats)}")
+        for i, (s_sat, o_sat) in enumerate(zip(scenario_sats, saved_sats)):
+            if s_sat.get('orbitState') != o_sat.get('orbitState'):
+                return _miss(f"spacecraft[{i}].orbitState changed")
+            if s_sat.get('instrument') != o_sat.get('instrument'):
+                return _miss(f"spacecraft[{i}].instrument changed")
 
-            if scenario_specs['spacecraft'] != orbitdata_dict['spacecraft']:
-                if len(scenario_specs['spacecraft']) != len(orbitdata_dict['spacecraft']):
-                    return True
-                
-                for i in range(len(scenario_specs['spacecraft'])):
-                    scenario_sat : dict = scenario_specs['spacecraft'][i]
-                    mission_sat : dict = orbitdata_dict['spacecraft'][i]
-                    
-                    if "planner" in scenario_sat:
-                        scenario_sat.pop("planner")
-                    if "science" in scenario_sat:
-                        scenario_sat.pop("science")
-                    if "notifier" in scenario_sat:
-                        scenario_sat.pop("notifier") 
-                    if "missionProfile" in scenario_sat:
-                        scenario_sat.pop("missionProfile")
-                    if "mission" in scenario_sat:
-                        scenario_sat.pop("mission")
-                    if "spacecraftBus" in scenario_sat and "components" in scenario_sat["spacecraftBus"]:
-                        scenario_sat["spacecraftBus"].pop("components")
+        # ground station count and locations
+        if scenario_dict.get('groundStation') != saved.get('groundStation'):
+            return _miss('groundStation changed')
 
-                    if "planner" in mission_sat:
-                        mission_sat.pop("planner")
-                    if "science" in mission_sat:
-                        mission_sat.pop("science")
-                    if "notifier" in mission_sat:
-                        mission_sat.pop("notifier") 
-                    if "missionProfile" in mission_sat:
-                        mission_sat.pop("missionProfile")
-                    if "mission" in mission_sat:
-                        mission_sat.pop("mission")
-                    if "spacecraftBus" in mission_sat and "components" in mission_sat["spacecraftBus"]:
-                        mission_sat["spacecraftBus"].pop("components")
+        # coverage grids
+        scenario_grids = scenario_dict.get('grid', [])
+        saved_grids    = saved.get('grid', [])
+        if len(scenario_grids) != len(saved_grids):
+            return _miss(f"grid count changed: {len(scenario_grids)} → {len(saved_grids)}")
+        for i, (s_grid, o_grid) in enumerate(zip(scenario_grids, saved_grids)):
+            s_type = s_grid.get('@type', '').lower()
+            o_type = o_grid.get('@type', '').lower()
+            # a uniform/clustered grid is converted to customgrid when saved;
+            # treat as unchanged as long as the original type name appears in the saved path
+            if s_type != o_type:
+                if o_type == 'customgrid' and s_type in o_grid.get('covGridFilePath', ''):
+                    continue
+                return _miss(f"grid[{i}] type changed: {s_type!r} → {o_type!r}")
+            if s_type == 'customgrid':
+                # compare by filename only — robust to moving the project across machines
+                s_name = os.path.basename(s_grid.get('covGridFilePath', ''))
+                o_name = os.path.basename(o_grid.get('covGridFilePath', ''))
+                if s_name != o_name:
+                    return _miss(f"grid[{i}] file changed: {s_name!r} → {o_name!r}")
 
-                    if scenario_sat != mission_sat:
-                        for key in scenario_sat:
-                            if scenario_sat[key] != mission_sat.get(key, None):
-                                for subkey in scenario_sat[key] if isinstance(scenario_sat[key], dict) else []:
-                                    if isinstance(scenario_sat[key][subkey], list) and isinstance(mission_sat.get(key, None), dict) and subkey in mission_sat[key]:
-                                        if scenario_sat[key][subkey] != mission_sat[key][subkey]:
-                                            return True
-                                    elif scenario_sat[key][subkey] != mission_sat.get(key, {}).get(subkey, None):
-                                        return True
-
-                        return True
-                        
         return False
+
+    # -----------------------------------------------------------------------
+    # LEGACY APPROACH (blacklist-based: strip known trial-specific fields then
+    # do a full dict comparison). Kept for A/B reference.
+    # -----------------------------------------------------------------------
+    # def _check_changes_to_scenario(scenario_dict : dict, orbitdata_dir : str, verbose : bool = False) -> bool:
+    #     """
+    #     Checks if the scenario has already been pre-computed
+    #     or if relevant changes have been made
+    #     """    
+    #     # check if directory exists
+    #     filename = 'MissionSpecs.json'
+    #     orbitdata_filename = os.path.join(orbitdata_dir, filename)
+    #     if not os.path.exists(orbitdata_filename):
+    #         if verbose: tqdm.write(f'  [orbit-data cache miss] MissionSpecs.json not found in {orbitdata_dir}')
+    #         return True
+    
+    #     # copy scenario specs
+    #     scenario_specs : dict = copy.deepcopy(scenario_dict)
+    
+    #     # compare specifications
+    #     with open(orbitdata_filename, 'r') as orbitdata_specs:
+    #         orbitdata_dict : dict = json.load(orbitdata_specs)
+    
+    #         scenario_specs.pop('settings')
+    #         orbitdata_dict.pop('settings')
+    #         scenario_specs.pop('scenario')
+    #         orbitdata_dict.pop('scenario')
+    
+    #         if (
+    #                 scenario_specs['epoch'] != orbitdata_dict['epoch']
+    #             or scenario_specs['duration'] > orbitdata_dict['duration']
+    #             or scenario_specs.get('groundStation', None) != orbitdata_dict.get('groundStation', None)
+    #             # or scenario_dict['grid'] != orbitdata_dict['grid']
+    #             # or scenario_specs['scenario']['connectivity'] != orbitdata_dict['scenario']['connectivity']
+    #             ):
+    #             return True
+    
+    #         if scenario_specs['grid'] != orbitdata_dict['grid']:
+    #             if len(scenario_specs['grid']) != len(orbitdata_dict['grid']):
+    #                 return True
+    
+    #             for i in range(len(scenario_specs['grid'])):
+    #                 scenario_grid : dict = scenario_specs['grid'][i]
+    #                 mission_grid : dict = orbitdata_dict['grid'][i]
+    
+    #                 scenario_gridtype = scenario_grid['@type'].lower()
+    #                 mission_gridtype = mission_grid['@type'].lower()
+    
+    #                 if scenario_gridtype != mission_gridtype == 'customgrid':
+    #                     if scenario_gridtype not in mission_grid['covGridFilePath']:
+    #                         return True
+    
+    #         if scenario_specs['spacecraft'] != orbitdata_dict['spacecraft']:
+    #             if len(scenario_specs['spacecraft']) != len(orbitdata_dict['spacecraft']):
+    #                 return True
+    
+    #             for i in range(len(scenario_specs['spacecraft'])):
+    #                 scenario_sat : dict = scenario_specs['spacecraft'][i]
+    #                 mission_sat : dict = orbitdata_dict['spacecraft'][i]
+    
+    #                 if "planner" in scenario_sat:
+    #                     scenario_sat.pop("planner")
+    #                 if "science" in scenario_sat:
+    #                     scenario_sat.pop("science")
+    #                 if "notifier" in scenario_sat:
+    #                     scenario_sat.pop("notifier")
+    #                 if "missionProfile" in scenario_sat:
+    #                     scenario_sat.pop("missionProfile")
+    #                 if "mission" in scenario_sat:
+    #                     scenario_sat.pop("mission")
+    #                 if "spacecraftBus" in scenario_sat and "components" in scenario_sat["spacecraftBus"]:
+    #                     scenario_sat["spacecraftBus"].pop("components")
+    
+    #                 if "planner" in mission_sat:
+    #                     mission_sat.pop("planner")
+    #                 if "science" in mission_sat:
+    #                     mission_sat.pop("science")
+    #                 if "notifier" in mission_sat:
+    #                     mission_sat.pop("notifier")
+    #                 if "missionProfile" in mission_sat:
+    #                     mission_sat.pop("missionProfile")
+    #                 if "mission" in mission_sat:
+    #                     mission_sat.pop("mission")
+    #                 if "spacecraftBus" in mission_sat and "components" in mission_sat["spacecraftBus"]:
+    #                     mission_sat["spacecraftBus"].pop("components")
+    
+    #                 if scenario_sat != mission_sat:
+    #                     for key in scenario_sat:
+    #                         if scenario_sat[key] != mission_sat.get(key, None):
+    #                             for subkey in scenario_sat[key] if isinstance(scenario_sat[key], dict) else []:
+    #                                 if isinstance(scenario_sat[key][subkey], list) and isinstance(mission_sat.get(key, None), dict) and subkey in mission_sat[key]:
+    #                                     if scenario_sat[key][subkey] != mission_sat[key][subkey]:
+    #                                         return True
+    #                                 elif scenario_sat[key][subkey] != mission_sat.get(key, {}).get(subkey, None):
+    #                                     return True
+    
+    #                     return True
+    
+    #     return False
 
     def _create_uniform_grid(scenario_dir : str, grid_index : int, lat_spacing : float, lon_spacing : float) -> str:
         # create uniform grid
