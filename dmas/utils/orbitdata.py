@@ -995,15 +995,20 @@ class OrbitData:
         # return orbit data directory
         return data_dir
     
-    def _check_changes_to_scenario(scenario_dict : dict, orbitdata_dir : str) -> bool:
-        """ 
-        Checks if the scenario has already been pre-computed 
-        or if relevant changes have been made 
+    def _check_changes_to_scenario(scenario_dict : dict, orbitdata_dir : str, verbose : bool = False) -> bool:
         """
+        Checks if the scenario has already been pre-computed
+        or if relevant changes have been made
+        """
+        def _diff(label, a, b):
+            if verbose:
+                tqdm.write(f'  [orbit-data cache miss] {label}: {a!r} → {b!r}')
+
         # check if directory exists
         filename = 'MissionSpecs.json'
         orbitdata_filename = os.path.join(orbitdata_dir, filename)
         if not os.path.exists(orbitdata_filename):
+            if verbose: tqdm.write(f'  [orbit-data cache miss] MissionSpecs.json not found in {orbitdata_dir}')
             return True
         
         # copy scenario specs

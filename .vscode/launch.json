@@ -467,12 +467,12 @@
             "args": [
                 // "-t", "full_factorial_trials_2026-05-03",
                 "-t", "full_factorial_trials_2026-05-04",
-                "--single-trial", "1", // fails at t=t=72489.83s
+                // "--single-trial", "1", // fails at t=t=72489.83s
                 // "--single-trial", "4",
                 // "--single-trial", "8",
                 // "--single-trial", "16",
                 // "--single-trial", "20",
-                // "--single-trial", "48",
+                "--single-trial", "48",
                 // "--single-trial", "144",
                 // "--single-trial", "148", 
                 // "--single-trial", "160", // DP,None,Interconstellation,Comprehensive,Onboard
@@ -513,15 +513,43 @@
                 // "--trial-range", "24:32",
                 // "--trial-range", "32:48",
                 
-                "--trial-range", "1:48",
+                // "--trial-range", "1:48",
                 // "--trial-range", "48:96",
-                // "--trial-range", "96:144",
+                "--trial-range", "96:144",
                 // "--trial-range", "144:192",
                 // "--trial-range", "192:240",
                 // "--trial-range", "240:288",
 
                 // "--trial-range", "48:288",
 
+                // "--single-trial", "48",
+                "--single-thread",
+                // "--only-precompute",
+                // "--only-simulate",
+                // "--only-postprocess",
+                "--force-simulate",
+                // "--force-postprocess",
+                // "--force-summarize",
+                // "--quiet",
+                // "--exceptions",
+            ]
+        },
+        {
+            "name": "EXPERIMENT 2: Abbridged",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "program": "${workspaceRoot}/experiments/2_centralized_vs_decentralized/study.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            },
+            "args": [
+                "-t", "full_factorial_trials_2026-05-10",
+                // "--trial-range", "0:36",
+                // "-l", "6",
                 // "--single-trial", "48",
                 "--single-thread",
                 // "--only-precompute",

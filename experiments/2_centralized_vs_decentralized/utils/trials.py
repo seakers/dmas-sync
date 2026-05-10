@@ -79,7 +79,7 @@ if __name__ == "__main__":
             "Interconstellation"    # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
         ],
         "Scenario": [
-            "Water-Quality",        # water quality monitoring (algal blooms + high-flow events = water quality)
+            # "Water-Quality",        # water quality monitoring (algal blooms + high-flow events = water quality)
             "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
         ],
         "Data Processing" : [
@@ -101,9 +101,9 @@ if __name__ == "__main__":
             
             # 2019 dates 
             "2019-02-15",   # Winter NH
-            "2019-05-15",   # Spring NH
-            "2019-08-10",   # Summer NH / peak fire season
-            "2019-11-10"    # Fall NH
+            # "2019-05-15",   # Spring NH
+            # "2019-08-10",   # Summer NH / peak fire season
+            # "2019-11-10"    # Fall NH
         ], 
     }    
 
