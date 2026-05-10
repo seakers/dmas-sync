@@ -222,9 +222,6 @@ class DealerPlanner(AbstractPeriodicPlanner):
         """
         Generates plans for each agent based on the provided parameters.
         """
-        if tasks:
-            x = 1
-
         # Outline planning horizon interval
         planning_horizons : Dict[str,Interval] = self._calculate_horizons(state)
 
@@ -242,12 +239,54 @@ class DealerPlanner(AbstractPeriodicPlanner):
             horizon = self._horizon if self._horizon != np.Inf else self._period
 
             # return empty plans for each client
-            return {client: PeriodicPlan([], 
-                                         t=t_curr, 
-                                         horizon=horizon, 
+            return {client: PeriodicPlan([],
+                                         t=t_curr,
+                                         horizon=horizon,
                                          t_next=t_next)
                         for client in self.client_orbitdata
                     }
+
+        # Project each client's estimated state forward to t_comms
+        # (when they will actually receive the new plan from the dealer).
+        # Without this, dummy task orientations and maneuver initial attitudes
+        # are computed at state._t, but the client keeps executing its old plan
+        # until t_comms, so its actual attitude at plan receipt differs from
+        # the dealer's estimate — causing negative-time-step maneuver errors.
+        t_curr = state.get_time()
+        for client, next_access in next_accesses.items():
+            if next_access is None:
+                continue
+            t_comms_abs = max(next_access.left, t_curr)
+            t_state = self.client_states[client]._t
+            if t_comms_abs <= t_state + 1e-6:
+                continue
+
+            # find the last old-plan action whose t_start falls in (t_state, t_comms_abs]
+            old_plan = self.client_plans[client]
+            future_actions = sorted(
+                [action for action in old_plan.actions
+                 if isinstance(action, (ManeuverAction, ObservationAction))
+                 and t_state < action.t_start <= t_comms_abs],
+                key=lambda a: a.t_start
+            )
+
+            # propagate pos/vel and _t first; then overwrite attitude with the
+            # plan-derived value (kinematic_model would re-integrate from self._t
+            # using self.attitude_rates, double-counting any slew we computed above)
+            self.client_states[client] = self.client_states[client].propagate(t_comms_abs)
+
+            if future_actions:
+                last_action = future_actions[-1]
+                if isinstance(last_action, ManeuverAction):
+                    # compute attitude at t_comms_abs (or at maneuver end if it finishes first)
+                    t_query = min(t_comms_abs, last_action.t_end)
+                    th = last_action.initial_attitude[0] + last_action.attitude_rates[0] * (t_query - last_action.t_start)
+                    self.client_states[client].attitude = [th, 0.0, 0.0]
+                elif isinstance(last_action, ObservationAction):
+                    self.client_states[client].attitude = [last_action.look_angle, 0.0, 0.0]
+                # always assume zero rates at plan receipt: the client-side stop action
+                # (inserted by WorkerPlanner) zeroes the rates before any gap drift occurs
+                self.client_states[client].attitude_rates = [0.0, 0.0, 0.0]
 
         # collect only available tasks
         available_mission_tasks : Dict[Mission, GenericObservationTask] = \
@@ -501,10 +540,6 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                           available_tasks : Dict[Mission, List[GenericObservationTask]], 
                                           target_access_opportunities : dict
                                         ) -> Dict:
-        if (any(tasks for tasks in available_tasks.values()) 
-            and any(tasks for tasks in available_tasks.values())):
-            x = 1
-
         return {client : self.create_observation_opportunities_from_accesses(
                                                          available_tasks[self.client_missions[client]],
                                                          client_access_opportunities, 

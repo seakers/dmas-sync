@@ -3,7 +3,7 @@ from typing import Dict, Tuple
 from execsatm.tasks import GenericObservationTask
 
 from dmas.models.actions import AgentAction
-from dmas.models.actions import ObservationAction, action_from_dict
+from dmas.models.actions import ManeuverAction, ObservationAction, action_from_dict
 from dmas.models.planning.plan import PeriodicPlan, Plan
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.states import SimulationAgentState
@@ -72,15 +72,20 @@ class WorkerPlanner(AbstractPeriodicPlanner):
         # only keep actions that start after the current time
         actions = [action for action in actions if action.t_start >= state._t]
 
-        # DEBUG SECTION -----
-        observations = sorted([action for action in actions if isinstance(action, ObservationAction)], key=lambda a: a.t_start)
-        if observations:
-            dth = abs(observations[0].look_angle - state.attitude[0])
-            dt = observations[0].t_start - state._t
-            if dt <= dth + 1e-3:
-                # f"Observation angle {dth} must be less than or equal to time difference {dt}"
-                x = 1
-        #--------------------
+        # if the satellite is mid-maneuver at plan receipt, insert a zero-duration
+        # stop ManeuverAction so the execution engine resets attitude_rates to zero
+        # before any gap between plan receipt and the first scheduled ManeuverAction.
+        # without this, kinematic_model() propagates the old slew rate through the
+        # wait gap and the satellite overshoots the new maneuver's target.
+        if any(abs(r) > 1e-6 for r in state.attitude_rates):
+            stop = ManeuverAction(
+                list(state.attitude),
+                list(state.attitude),
+                [0.0, 0.0, 0.0],
+                state._t,
+                state._t,
+            )
+            actions.insert(0, stop)
 
         # create a plan from plan message actions
         self._plan = PeriodicPlan(actions, t=self.plan_message.t_plan)

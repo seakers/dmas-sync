@@ -469,9 +469,10 @@
                 "-t", "full_factorial_trials_2026-05-04",
                 // "--single-trial", "0",
                 // "--single-trial", "4",
-                "--single-trial", "8",
+                // "--single-trial", "8",
                 // "--single-trial", "16",
                 // "--single-trial", "20",
+                "--single-trial", "48",
                 // "--single-trial", "144",
                 // "--single-trial", "148", 
                 // "--single-trial", "160", // DP,None,Interconstellation,Comprehensive,Onboard
@@ -507,7 +508,7 @@
             "args": [
                 "-t", "full_factorial_trials_2026-05-04",
                 // "--trial-range", "0:8",
-                "--trial-range", "8:16",
+                // "--trial-range", "8:16",
                 // "--trial-range", "16:24",
                 // "--trial-range", "24:32",
                 // "--trial-range", "32:48",
@@ -518,6 +519,9 @@
                 // "--trial-range", "144:192",
                 // "--trial-range", "192:240",
                 // "--trial-range", "240:288",
+
+                "--trial-range", "48:288",
+
                 // "--single-trial", "48",
                 "--single-thread",
                 // "--only-precompute",
@@ -526,7 +530,7 @@
                 "--force-simulate",
                 // "--force-postprocess",
                 // "--force-summarize",
-                // "--quiet",
+                "--quiet",
                 // "--exceptions",
             ]
         },

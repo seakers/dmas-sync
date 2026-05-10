@@ -1,7 +1,7 @@
 #!/bin/bash
-#SBATCH --job-name=cbba_study_exp_2_run
-#SBATCH --output=experiments/2_centralized_vs_decentralized/logs/outputs/study_2_run_%A_%a.out
-#SBATCH --error=experiments/2_centralized_vs_decentralized/logs/errors/study_2_run_%A_%a.err
+#SBATCH --job-name=cbba_study_exp_2_precompute
+#SBATCH --output=experiments/2_centralized_vs_decentralized/logs/outputs/study_2_precompute_%A_%a.out
+#SBATCH --error=experiments/2_centralized_vs_decentralized/logs/errors/study_2_precompute_%A_%a.err
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
@@ -34,14 +34,14 @@ conda activate ./.venv
 ulimit -n 65535
 
 # --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
-i=$SLURM_ARRAY_TASK_ID
-start=$((i * 8))
-end=$((start + 8))
+# start=0
+# end=288
 
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
   -t full_factorial_trials_2026-05-04 \
-  --trial-range "${start}:${end}" \
+  # --trial-range "${start}:${end}" \
   --single-thread --quiet --exceptions \
+  --only-precompute \
   # --force-simulate --force-postprocess --force-summarize # \
   # --profile-cpu --profile-mem 
