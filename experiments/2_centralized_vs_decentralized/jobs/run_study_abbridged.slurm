@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=32G
-#SBATCH --array=0-5
+# #SBATCH --array=0-5
 
 # Overall scenario: 36 total trials
 # 6 jobs x 6 trials each (sbatch --array=0-5)
