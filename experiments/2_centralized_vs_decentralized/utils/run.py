@@ -417,7 +417,7 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
                 #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_centralization`
                 trial_id,preplanner,replanner,connectivity,scenario,data_processing,constellation,date, *_ = row
 
-                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n - trial_id={trial_id}\n - preplanner={preplanner}\n - replanner={replanner}\n - connectivity={connectivity}\n - scenario={scenario}\n - data_processing={data_processing}\n - constellation={constellation}\n - date={date}\n")
+                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n - trial_id={trial_id}\n - preplanner={preplanner}\n - replanner={replanner}\n - connectivity={connectivity}\n - scenario={scenario}\n - data_processing={data_processing}\n - constellation={constellation}\n - date={date}\n - reduced={sim_cfg.reduced}\n")
 
             # run one trial
             res = run_one_trial(row, run_cfg, sim_cfg, pbar_pos=1)
@@ -503,7 +503,7 @@ def parallel_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Si
     # run trials in parallel
     try:
         # print header for serial execution
-        print_scenario_banner("Centralized vs Decentralized Study - Parallel Execution")
+        print_scenario_banner("Centralized vs Decentralized Study - Parallel Execution")        
 
         # initialize process pool
         with ProcessPoolExecutor(max_workers=max_workers) as ex:

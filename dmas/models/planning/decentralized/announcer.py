@@ -78,6 +78,9 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                         *__
                     ) -> Plan:
         """ Generates a new plan for the agent """            
+        # get current time 
+        t_curr = state.get_time()
+
         # schedule broadcasts to be perfomed
         broadcasts : list = self._schedule_broadcasts(state, [], orbitdata)
         
@@ -85,10 +88,10 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         # currently assumes omnidirectional antennas
         
         # wait for next planning period to start
-        replan_waits : list = self._schedule_periodic_replan(state, state._t + self._period)
+        replan_waits : list = self._schedule_periodic_replan(state, t_curr + self._period)
 
         # generate plan from actions
-        self._plan : PeriodicPlan = PeriodicPlan(broadcasts, replan_waits, t=state._t, horizon=self._horizon, t_next=state._t+self._period)    
+        self._plan : PeriodicPlan = PeriodicPlan(broadcasts, replan_waits, t=t_curr, horizon=self._horizon, t_next=t_curr+self._period)    
         
         # return plan and save local copy
         return self._plan.copy()
@@ -102,26 +105,30 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
 
         # collect currently available events
         future_events : List[GeophysicalEvent] = [event for event in tqdm(self.events,
-                                                                          desc=f'{state.agent_name}-PREPLANNER: Collecting future events',
+                                                                          desc=f'{state.agent_id}-PREPLANNER: Collecting future events',
                                                                           leave=False,
                                                                           disable=(len(self.events) < 10) or not self._printouts
                                                                         )
-                                                  if event.is_available(state._t)]
+                                                  if event.is_available(t_curr)]
+
+        # if no future events, return empty list of broadcasts
+        if not future_events: return broadcasts
+
+        # pre-index objectives by event type to avoid re-scanning missions per event
+        objectives_by_type : Dict = defaultdict(list)
+        for mission_name, objectives in self.simulation_missions.items():
+            for objective in objectives:
+                if isinstance(objective, EventDrivenObjective):
+                    objectives_by_type[objective.event_type].append((mission_name, objective))
 
         # build task requests for each event x objective pair
         task_requests : List[Tuple[GeophysicalEvent, TaskRequest]] = []
         for event in tqdm(future_events,
-                          desc=f'{state.agent_name}-PREPLANNER: Generating task requests from known events',
+                          desc=f'{state.agent_id}-PREPLANNER: Generating task requests from known events',
                           leave=False,
                           disable=(len(future_events) < 10) or not self._printouts
                         ):
-            event_objectives : list = [(mission_name, objective)
-                                       for mission_name, objectives in self.simulation_missions.items()
-                                       for objective in objectives
-                                       if isinstance(objective, EventDrivenObjective)
-                                       and objective.event_type == event.event_type]
-
-            for mission_name, objective in event_objectives:
+            for mission_name, objective in objectives_by_type[event.event_type]:
                 objective : EventDrivenObjective
                 task = EventObservationTask(objective.parameter, event=event, objective=objective)
                 task_request = TaskRequest(task,
@@ -140,34 +147,42 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         u_idx = orbitdata.comms_target_indices[OrbitData.safe_name(state.agent_name)]
         n_cols = len(orbitdata.comms_target_columns)
         n_targets = len(orbitdata.comms_targets)
+        col_start = orbitdata.comms_links._col["start"]
 
-        # for each event, schedule only as many broadcasts as needed to cover all reachable agents
+        # fetch all comm rows once across the full event horizon
+        t_overall_start = min(max(event.availability.left, t_curr) for event in event_requests)
+        t_overall_end   = max(event.availability.right for event in event_requests)
+        all_rows = [row for _, row in orbitdata.comms_links.iter_rows_packed(
+            t_overall_start, t_overall_end, include_current=True)]
+
+        # for each event, filter cached rows to its window and run coverage logic
         t_broadcasts : Dict = defaultdict(list)
         for event, reqs in tqdm(event_requests.items(),
-                                desc=f'{state.agent_name}-PREPLANNER: Scheduling broadcasts for events',
+                                desc=f'{state.agent_id}-PREPLANNER: Scheduling broadcasts for events',
                                 leave=False,
                                 disable=(len(event_requests) < 10) or not self._printouts
                                ):
             msgs = [msg for _, msg in reqs]
             t_req = min(req.t_req for req, _ in reqs)
 
-            # broadcast window starts at the earliest useful moment
             t_window_start = max(event.availability.left, t_req, t_curr)
             t_window_end = event.availability.right
 
-            # track which peer agents have already been covered by a scheduled broadcast
             agents_covered = np.zeros(n_cols, dtype=bool)
             n_covered = 0
 
-            for _, row in orbitdata.comms_links.iter_rows_packed(t_window_start, t_window_end, include_current=True):
-                t_row_start = float(row[orbitdata.comms_links._col["start"]])
-                comps = row[3:]
+            for row in all_rows:
+                t_row_start = float(row[col_start])
+                if t_row_start > t_window_end:
+                    break
+                if t_row_start < t_window_start:
+                    continue
 
+                comps = row[3:]
                 u_comp = comps[u_idx]
                 reachable = (comps == u_comp)
-                reachable[u_idx] = False  # exclude self
+                reachable[u_idx] = False
 
-                # only schedule a broadcast when this interval introduces agents not yet covered
                 new_agents = np.where(reachable & ~agents_covered)[0]
                 if new_agents.size == 0:
                     continue
@@ -178,7 +193,6 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                 agents_covered[new_agents] = True
                 n_covered += new_agents.size
 
-                # stop once every known target has been covered
                 if n_covered >= n_targets:
                     break
 

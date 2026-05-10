@@ -1,3 +1,4 @@
+import bisect
 from collections import defaultdict
 from typing import Dict, List, Set
 
@@ -57,10 +58,11 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
         self._enable_broadcasts = enable_broadcasts
 
         # initialize properties
-        self._future_task_requests : Dict[str, TaskRequest] = {}  # task_id -> TaskRequest 
+        self._future_task_requests : Dict[str, TaskRequest] = {}  # task_id -> TaskRequest
         self._future_tasks : Set[EventObservationTask] = set()
         self._new_task_requests : bool = False
         self._outbox = []
+        self._cross_track_fovs : dict = None
 
     def update_percepts(self, 
                         state : SimulationAgentState,
@@ -83,13 +85,17 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
             # extract one TaskRequest template per task from the preplan's broadcast messages
             # (templates are needed later to reconstruct messages when scheduling broadcasts)
-            for action in self._preplan:
+            for action in tqdm(self._preplan,
+                               desc=f'{state.agent_id}-REPLANNER: Extracting task requests from preplan',
+                               leave=False,
+                               disable=(len(list(self._preplan)) < 10) or not self._printouts
+                              ):
                 if isinstance(action, BroadcastMessageAction):
                     if action.msg['msg_type'] == 'BUS':
                         for msg in action.msg['msgs']:
                             if isinstance(msg, MeasurementRequestMessage):
-                                req = TaskRequest.from_dict(msg.req)
-                                if req.task.id not in self._future_task_requests:
+                                if msg.req['task']['id'] not in self._future_task_requests:
+                                    req = TaskRequest.from_dict(msg.req)
                                     self._future_task_requests[req.task.id] = req
                                     self._future_tasks.add(req.task)
                     else:
@@ -162,7 +168,11 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
             # keep only future tasks that have at least one access opportunity
             accessible_future_tasks : Set[EventObservationTask] = set()
-            for task in list(self._future_tasks):
+            for task in tqdm(self._future_tasks,
+                             desc=f'{state.agent_id}-REPLANNER: Filtering accessible future tasks',
+                             leave=False,
+                             disable=(len(self._future_tasks) < 10) or not self._printouts
+                            ):
                 for *__, grid_index, gp_index in task.location:
                     if access_opportunities.get((grid_index, gp_index)):
                         accessible_future_tasks.add(task)
@@ -175,26 +185,22 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
             # ==================================================
             # MERGE KNOWN TASKS WITH ACTIVE AND VISIBLE FUTURE TASKS FROM PREPLAN
-            # initialzie list of valid tasks
-            schedulable_tasks = []
 
-            # go through future tasks and see if any known tasks refers to the same event;
-            # if so, add the known task to the schedulable tasks; 
-            schedulable_tasks.extend(tasks) 
+            # pre-build a set of events already covered by known tasks for O(1) lookup
+            known_events = {task.event for task in tasks if isinstance(task, EventObservationTask)}
 
-            # if not, add the future task to the schedulable tasks 
-            # (as it may be visible and schedulable even if it's not known yet)
-            for future_task in self._future_tasks:
-                # check if any known task refers to the same event as the future task
-                matching_known_tasks = [task for task in schedulable_tasks 
-                                        if isinstance(task, EventObservationTask) 
-                                        and task.event == future_task.event]
-                if not matching_known_tasks:
-                    # if there are no matching known tasks, add the future task to the schedulable tasks
+            # start from known tasks; add future tasks only if their event isn't already covered
+            schedulable_tasks = list(tasks)
+            for future_task in tqdm(self._future_tasks,
+                                    desc=f'{state.agent_id}-REPLANNER: Merging future tasks with known tasks',
+                                    leave=False,
+                                    disable=(len(self._future_tasks) < 10) or not self._printouts
+                                   ):
+                if future_task.event not in known_events:
                     schedulable_tasks.append(future_task)
-            
+
             # remove duplicates from schedulable tasks
-            schedulable_tasks = list(set(schedulable_tasks))
+            schedulable_tasks = list({task.id: task for task in schedulable_tasks}.values())
 
             # filter only available tasks
             available_tasks : list[GenericObservationTask] = \
@@ -206,8 +212,10 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
             # calculate coverage opportunities for tasks
             access_opportunities : dict[tuple] = self.calculate_access_opportunities(available_tasks, planning_horizon, orbitdata)
 
-            # compile instrument field of view specifications   
-            cross_track_fovs : dict = self._collect_fov_specs(specs)            
+            # compile instrument field of view specifications (cached — specs never change)
+            if self._cross_track_fovs is None:
+                self._cross_track_fovs = self._collect_fov_specs(specs)
+            cross_track_fovs = self._cross_track_fovs
 
             # create task observation opportunities from known tasks and future access opportunities
             observation_opportunities : list[ObservationOpportunity] \
@@ -226,52 +234,60 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
             )
 
             # generate plan
-            observation_sequence : list[tuple[ObservationOpportunity, ObservationAction]] = []
+            # three parallel lists kept sorted by t_start; non-overlapping actions guarantee t_end is also sorted
+            scheduled_actions  : list[ObservationAction] = []
+            scheduled_t_starts : list[float] = []
+            scheduled_t_ends   : list[float] = []
 
             for obs in tqdm(observation_opportunities,
-                            desc=f'{state.agent_name}-PLANNER: Pre-Scheduling Observations', 
+                            desc=f'{state.agent_id}-PLANNER: Pre-Scheduling Observations',
                             leave=False,
                             disable=(len(observation_opportunities) < 10) or not self._printouts
                             ):
-                
-                # get previous and future observation actions' info
-                th_prev,t_prev,d_prev,th_next,t_next,d_next \
-                    = self._get_previous_and_future_observation_info(state, obs, observation_sequence)
-                
+
+                # latest already-scheduled action ending before this window closes (O(log N))
+                idx_prev = bisect.bisect_right(scheduled_t_ends, obs.accessibility.right + 1e-6) - 1
+                if idx_prev >= 0:
+                    t_prev = scheduled_actions[idx_prev].t_end
+                else:
+                    t_prev = state._t
+
+                # earliest already-scheduled action starting after this window opens (O(log N))
+                idx_next = bisect.bisect_left(scheduled_t_starts, obs.accessibility.left - 1e-6)
+                if idx_next < len(scheduled_actions):
+                    t_next = scheduled_actions[idx_next].t_start
+                else:
+                    t_next = obs.accessibility.right
+
                 # set task observation angle
                 th_img = np.average((obs.slew_angles.left, obs.slew_angles.right))
-                
-                # select task imaging time and duration # TODO room for improvement? Currently aims for earliest and shortest observation possible
-                t_img = max(t_prev + d_prev, obs.accessibility.left)
+
+                # select task imaging time and duration
+                t_img = max(t_prev, obs.accessibility.left)
                 d_img = obs.min_duration
-                
+
                 # check if the observation fits within the task's accessibility window
                 if t_img + d_img not in obs.accessibility: continue
 
                 # check if the observation is feasible
-                prev_action_feasible : bool = (t_prev + d_prev <= t_img - 1e-6)
+                prev_action_feasible : bool = (t_prev <= t_img - 1e-6)
                 curr_action_feasible : bool = (abs(th_img) <= cross_track_fovs[obs.instrument_name] / 2.0)
-                next_action_feasible : bool = (t_img + d_img <= t_next - 1e-6)         
-                
-                if prev_action_feasible and curr_action_feasible and next_action_feasible:
-                    # # check if task is mutually exclusive with any already scheduled tasks
-                    # if any(obs.is_mutually_exclusive(task_j) for task_j,_ in plan_sequence): continue
-                    
-                    # create observation action
-                    action = ObservationAction(obs.instrument_name, 
-                                            th_img, 
-                                            t_img, 
-                                            d_img,
-                                            obs)
+                next_action_feasible : bool = (t_img + d_img <= t_next - 1e-6)
 
-                    # add to plan sequence
-                    observation_sequence.append((obs, action))
-            
-            # extract observations from sequence and sort by start time
-            observations = [obs_action for _, obs_action in sorted(observation_sequence, key=lambda x: x[1].t_start)]
+                if prev_action_feasible and curr_action_feasible and next_action_feasible:
+                    action = ObservationAction(obs.instrument_name, th_img, t_img, d_img, obs)
+
+                    # insert in sorted position by t_start
+                    pos = bisect.bisect_left(scheduled_t_starts, t_img)
+                    scheduled_t_starts.insert(pos, t_img)
+                    scheduled_t_ends.insert(pos, t_img + d_img)
+                    scheduled_actions.insert(pos, action)
+
+            # already sorted by t_start
+            observations = scheduled_actions
 
             # compile broadcasts if enabled
-            broadcasts = []
+            broadcasts : List[AgentAction] = []
             if self._enable_broadcasts:
                 # collect tasks we should announce: still in _future_task_requests (not claimed by others)
                 tasks_to_announce : Dict[str, TaskRequest] = {}
@@ -340,76 +356,14 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                 # clear outbox — contents have been processed into the broadcast schedule
                 self._outbox.clear()
 
-            if observations:
-                x = 1
-            if broadcasts:
-                x = 1   
+            actions = sorted(observations + broadcasts, key=lambda action: action.t_start)
+            plan = ReactivePlan(actions, t=t_curr, t_next=self._preplan.t_next)
 
-            return ReactivePlan(observations, broadcasts, t=t_curr, t_next=self._preplan.t_next)
-        
+            return plan
+
         finally:
             # reset planning flag
-            self._new_task_requests = False 
-    
-    def _get_previous_and_future_observation_info(self, 
-                                                 state : SimulationAgentState, 
-                                                 observation_opportunity : ObservationOpportunity, 
-                                                 plan_sequence : list
-                                                ) -> tuple:
-        
-        # get latest previously scheduled observation
-        action_prev : ObservationAction = self.__get_previous_observation_action(observation_opportunity, plan_sequence)
-
-        # get values from previous action
-        if action_prev:    
-            th_prev = action_prev.look_angle
-            t_prev = action_prev.t_end
-            d_prev = action_prev.t_end - t_prev
-            
-        else:
-            # no prior observation exists; compare with current state
-            th_prev = state.attitude[0]
-            t_prev = state._t
-            d_prev = 0.0
-        
-        # get next earliest scheduled observation
-        action_next : ObservationAction = self.__get_next_observation_action(observation_opportunity, plan_sequence)
-
-        # get values from next action
-        if action_next:
-            th_next = action_next.look_angle
-            t_next = action_next.t_start
-            d_next = action_next.t_end - t_next
-        else:
-            # no future observation exists; compare with current observation opportunity
-            th_next = np.average((observation_opportunity.slew_angles.left, observation_opportunity.slew_angles.right))
-            t_next = observation_opportunity.accessibility.right
-            d_next = 0.0
-
-        return th_prev, t_prev, d_prev, th_next, t_next, d_next
-    
-    def __get_previous_observation_action(self, observation_opportunity : ObservationOpportunity, plan_sequence : list) -> ObservationAction:
-        """ find any previously scheduled observation """
-        # set types
-        observations : list[ObservationAction] = [observation for _,observation in plan_sequence]
-
-        # filter for previous actions
-        actions_prev : list[ObservationAction] = [observation for observation in observations
-                                                 if observation.t_end - 1e-6 <= observation_opportunity.accessibility.right]
-
-        # return latest observation action
-        return max(actions_prev, key=lambda a: a.t_end) if actions_prev else None
-    
-    def __get_next_observation_action(self, observation_opportunity : ObservationOpportunity, plan_sequence : list) -> ObservationAction:
-         # set types
-        observations : list[ObservationAction] = [observation for _,observation in plan_sequence]
-
-        # filter for next actions
-        actions_next = [observation for observation in observations
-                        if observation_opportunity.accessibility.left - 1e-6 <= observation.t_start]
-        
-        # return earliest observation action
-        return min(actions_next, key=lambda a: a.t_start) if actions_next else None
+            self._new_task_requests = False
     
 
     def print_results(self):
