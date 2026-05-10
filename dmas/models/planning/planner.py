@@ -1018,7 +1018,7 @@ class AbstractPlanner(ABC):
         maneuvers : list[ManeuverAction] = []
 
         for i,curr_observation in tqdm(enumerate(observations), 
-                      desc=f'{state.agent_name}-PLANNER: Scheduling Maneuvers', 
+                      desc=f'{state.agent_id}-PLANNER: Scheduling Maneuvers', 
                       leave=False,
                       disable=not self._printouts or len(observations) < 10
                     ):

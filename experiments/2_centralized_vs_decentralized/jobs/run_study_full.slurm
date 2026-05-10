@@ -25,6 +25,7 @@ mkdir -p experiments/2_centralized_vs_decentralized/logs/errors
 module purge
 module load GCCcore/11.3.0 Python/3.8.6
 module load Anaconda3
+module load Gurobi/13.0.1
 
 # --- Conda environment activation ---
 eval "$(conda shell.bash hook)"

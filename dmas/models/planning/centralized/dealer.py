@@ -165,32 +165,52 @@ class DealerPlanner(AbstractPeriodicPlanner):
             # use client_executing_plans (the last plan the client actually received) rather than
             # client_plans (the most recently generated plan, which may be empty for periods when
             # the client was unreachable even though it was still executing a previous multi-period plan)
+            already_propagated = set()
+
             for client in self.client_orbitdata:
                 plan = self.client_executing_plans[client]
                 # get actions performed in between last known client state; ignore broadcast and wait actions
-                filtered_actions = sorted([action for action in plan.actions 
+                filtered_actions = sorted([action for action in plan.actions
                                             if isinstance(action, (ManeuverAction, ObservationAction))
-                                            and self.client_states[client]._t <= action.t_start <= state._t], 
+                                            and self.client_states[client]._t <= action.t_start <= state._t],
                                            key=lambda a: a.t_start)
-                
-                # check if any actions were performed
-                if filtered_actions:
-                    # get the last action in the plan
-                    last_action : AgentAction = filtered_actions[-1]
 
-                    # update state accordingly
-                    if isinstance(last_action, ManeuverAction):
-                        # update attitude to end of last maneuver 
-                        self.client_states[client].perform_action(last_action, min(state._t, last_action.t_end))
+                if not filtered_actions:
+                    continue
 
-                    elif isinstance(last_action, ObservationAction):
-                        # update attitude to end of last observation
-                        self.client_states[client].attitude = [last_action.look_angle, 0.0, 0.0]
-                        self.client_states[client].attitude_rates = [0.0, 0.0, 0.0]
-                
-            # propagate position and velocity
-            self.client_states : Dict[str, SatelliteAgentState] = {client : client_state.propagate(state._t) 
-                                                                    for client,client_state in self.client_states.items()}
+                last_action : AgentAction = filtered_actions[-1]
+
+                if isinstance(last_action, ManeuverAction):
+                    # compute attitude directly from the maneuver's stored kinematics rather than
+                    # calling perform_action — perform_maneuver first calls self.update(t) which
+                    # re-propagates attitude using self.attitude_rates (zeroed by the last projection),
+                    # causing the satellite to appear stuck at its pre-maneuver attitude and then
+                    # triggering the t>=t_end ABORTED branch with the wrong final attitude
+                    t_eval = min(state._t, last_action.t_end)
+                    dt_maneuver = t_eval - last_action.t_start
+                    attitude = [last_action.initial_attitude[i] + last_action.attitude_rates[i] * dt_maneuver
+                                for i in range(len(last_action.initial_attitude))]
+                    # propagate pos/vel first (same pattern as _generate_client_plans) to avoid
+                    # double-counting: kinematic_model would re-apply rates*dt on top of our value
+                    self.client_states[client] = self.client_states[client].propagate(state._t)
+                    self.client_states[client].attitude = attitude
+                    self.client_states[client].attitude_rates = (
+                        [0.0, 0.0, 0.0] if t_eval >= last_action.t_end - 1e-6
+                        else list(last_action.attitude_rates)
+                    )
+                    already_propagated.add(client)
+
+                elif isinstance(last_action, ObservationAction):
+                    # observation ends with zero rates; outer propagate handles pos/vel (no double-count)
+                    self.client_states[client].attitude = [last_action.look_angle, 0.0, 0.0]
+                    self.client_states[client].attitude_rates = [0.0, 0.0, 0.0]
+
+            # propagate position and velocity for clients not yet handled above
+            self.client_states = {
+                client: (client_state if client in already_propagated
+                         else client_state.propagate(state._t))
+                for client, client_state in self.client_states.items()
+            }
 
     
     def generate_plan(  self, 
