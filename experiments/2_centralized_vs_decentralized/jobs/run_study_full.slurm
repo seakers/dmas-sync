@@ -44,4 +44,4 @@ python ./experiments/2_centralized_vs_decentralized/study.py \
   --trial-range "${start}:${end}" \
   --single-thread --quiet --exceptions \
   # --force-simulate --force-postprocess --force-summarize # \
-  # --profile-cpu --profile-mem
+  # --profile-cpu --profile-mem 

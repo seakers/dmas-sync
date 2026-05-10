@@ -332,7 +332,7 @@ def create_ground_operator_specifications(
 
     # get event date from events path to construct announcer specs
     *event_dir_path,event_filename = events_path.split('/')
-    scenario = event_filename.split('_')[0]
+    scenario = '_'.join(event_filename.split('_')[:-2])
     event_date = event_filename.split('_')[-1].split('.')[0]
    
     # define scenario-specific event types to announce

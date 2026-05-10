@@ -468,7 +468,8 @@
                 // "-t", "full_factorial_trials_2026-05-03",
                 "-t", "full_factorial_trials_2026-05-04",
                 // "--single-trial", "0",
-                "--single-trial", "4",
+                // "--single-trial", "4",
+                "--single-trial", "10",
                 // "--single-trial", "16",
                 // "--single-trial", "20",
                 // "--single-trial", "144",
@@ -486,7 +487,7 @@
                 "--force-simulate",
                 // "--force-postprocess",
                 // "--force-summarize",
-                "--reduced",
+                // "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]
