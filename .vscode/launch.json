@@ -468,8 +468,8 @@
                 // "-t", "full_factorial_trials_2026-05-03",
                 "-t", "full_factorial_trials_2026-05-04",
                 // "--single-trial", "0",
-                "--single-trial", "4",
-                // "--single-trial", "8",
+                // "--single-trial", "4",
+                "--single-trial", "8",
                 // "--single-trial", "16",
                 // "--single-trial", "20",
                 // "--single-trial", "144",
@@ -478,7 +478,7 @@
                 // "--single-trial", "164", // DP,None,Interconstellation,Comprehensive,Oracle
                 // "--single-trial", "208", // None,CBBA,Interconstellation,Comprehensive,Onboard
                 // "--single-trial", "212", // None,CBBA,Interconstellation,Comprehensive,Oracle
-                "--profile-cpu",
+                // "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
@@ -487,7 +487,7 @@
                 "--force-simulate",
                 // "--force-postprocess",
                 // "--force-summarize",
-                "--reduced",
+                // "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]

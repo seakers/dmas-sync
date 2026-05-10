@@ -54,8 +54,8 @@ class ResultsProcessor:
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         events_detected_df, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs)
-        agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
+        known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs, printouts)
+        agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path, printouts)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         grid_data_df = ResultsProcessor.__load_grid_data(compiled_orbitdata, printouts)
         
@@ -205,8 +205,8 @@ class ResultsProcessor:
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         _, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        _, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs)
-        agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path)
+        _, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs, printouts)
+        agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path, printouts)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         
         _, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
@@ -381,9 +381,10 @@ class ResultsProcessor:
     @staticmethod
     def __load_known_tasks(results_path : str,
                            missions : Dict[str, Mission],
-                           task_reqs : List[TaskRequest]
+                           task_reqs : List[TaskRequest],
+                           printouts : bool
                            ) -> Tuple[pd.DataFrame, List[GenericObservationTask]]:
-        print('Collecting known tasks data...')
+        if printouts: print('Collecting known tasks data...')
         # load default tasks 
         known_tasks_path = os.path.join(results_path, 'environment', 'default_tasks.parquet')
         default_tasks_df = pd.read_parquet(known_tasks_path)
@@ -460,8 +461,9 @@ class ResultsProcessor:
         return known_tasks_df, known_tasks
 
     @staticmethod
-    def __load_broadcast_history(results_path : str) -> pd.DataFrame:
-        print('Collecting agent broadcast history...')
+    def __load_broadcast_history(results_path : str, printouts : bool = True) -> pd.DataFrame:
+        if printouts:
+            print('Collecting agent broadcast history...')
 
         # define results path for the environment
         environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())        

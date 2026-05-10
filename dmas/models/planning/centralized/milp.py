@@ -149,22 +149,27 @@ class DealerMILPPlanner(DealerPlanner):
             for client in indexed_clients
         ]
 
-        t_start   = [[max(task.accessibility.left - t_curr, 0.0, t_comms[s])
-                              for task in schedulable_client_tasks[client] if isinstance(task, ObservationOpportunity)]
-                              for s, client in enumerate(indexed_clients)]
-        t_end     = [[min(task.accessibility.right-t_curr, self._horizon) 
-                              for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
-                              for client in indexed_clients]
-        d         = [[task.min_duration 
-                              for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
-                              for client in indexed_clients]
-        th_imgs   = [[np.average((task.slew_angles.left, task.slew_angles.right)) 
+        th_imgs   = [[np.average((task.slew_angles.left, task.slew_angles.right))
                               for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
                               for client in indexed_clients]
         slew_times= [[[abs(th_imgs[client_index][j_p]-th_imgs[client_index][j]) / max_client_slew_rates[client]
                                 for j_p,task_j_p in enumerate(schedulable_client_tasks[client]) if isinstance(task_j_p, ObservationOpportunity)]
                                 for j,task_j in enumerate(schedulable_client_tasks[client]) if isinstance(task_j, ObservationOpportunity)]
                                 for client_index, client in enumerate(indexed_clients)]
+
+        # earliest start: task window opens, plan received AND slew from current orientation
+        # (dummy at j=0) to observation j completes — all relative to t_curr
+        t_start   = [[max(task.accessibility.left - t_curr, 0.0, t_comms[s] + slew_times[s][0][j])
+                              for j, task in enumerate(
+                                  t for t in schedulable_client_tasks[client] if isinstance(t, ObservationOpportunity)
+                              )]
+                              for s, client in enumerate(indexed_clients)]
+        t_end     = [[min(task.accessibility.right-t_curr, self._horizon)
+                              for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
+                              for client in indexed_clients]
+        d         = [[task.min_duration
+                              for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
+                              for client in indexed_clients]
         
         # Map sparse arch matrix of feasible task sequences
         A : list = [(s,j,j_p)
