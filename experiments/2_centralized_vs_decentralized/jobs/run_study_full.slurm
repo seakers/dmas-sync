@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=cbba_study_exp_1_run
+#SBATCH --job-name=cbba_study_exp_2_run
 #SBATCH --output=experiments/2_centralized_vs_decentralized/logs/outputs/cbba_stress_%A_%a.out
 #SBATCH --error=experiments/2_centralized_vs_decentralized/logs/errors/cbba_stress_%A_%a.err
 #SBATCH --time=06:00:00
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # --- Go to your project in scratch ---
-cd "$SCRATCH/src/dmas-sync"
+cd "$SCRATCH/src/dmas-sync" || { echo "ERROR: could not cd to $SCRATCH/src/dmas-sync"; exit 1; }
 mkdir -p experiments/2_centralized_vs_decentralized/logs
 mkdir -p experiments/2_centralized_vs_decentralized/logs/outputs
 mkdir -p experiments/2_centralized_vs_decentralized/logs/errors
