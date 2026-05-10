@@ -623,20 +623,25 @@ class SimulationAgent(object):
             # get next set of actions from plan
             actions = self._next_actions_from_plan(t_curr)
 
-            # attach observation requests to any observation actions
-            self._attach_observation_requests(actions, state, t_curr)
-
             # materialize any future-broadcast actions into actual broadcast actions
             actions = self._materialize_future_broadcasts(actions, state, t_curr)
 
             # merge broadcast actions if needed
             actions = self._merge_broadcast_actions_if_needed(actions, t_curr)
 
+            # attach observation requests to any observation actions
+            self._attach_observation_requests(actions, state, t_curr)
+
             # validate actions
             self._validate_actions(actions, t_curr)
 
             # return earliest action
-            return min(actions, key=lambda a: a.t_start, default=None)
+            earliest_action = min(actions, key=lambda a: a.t_start, default=None)
+
+            if isinstance(earliest_action, ObservationAction) and earliest_action.req is None:
+                raise ValueError(f"Observation action {earliest_action} is missing attached observation request.")
+
+            return earliest_action
 
         except Exception as e:
             self.log(f"Error in `get_next_action()`: {e}", logging.ERROR)

@@ -340,6 +340,7 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                             continue
                         bus_broadcast = BusMessage(state.agent_name, state.agent_name, available_msgs)
                         broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
+                        # broadcasts.append(BroadcastMessageAction(bus_broadcast, t_broadcast))
 
                 # clear outbox — contents have been processed into the broadcast schedule
                 self._outbox.clear()

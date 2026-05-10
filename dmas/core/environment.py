@@ -274,6 +274,11 @@ class SimulationEnvironment(object):
                         ) -> Tuple[SimulationAgentState, str, list, list]:
         """ Performs an observation action """
         
+        if action is None:
+            x = 1
+        if action.req is None:
+            x = 1
+
         # unpack message
         agent_state_dict = action.req['agent_state']
         instrument_dict = action.req['instrument']
