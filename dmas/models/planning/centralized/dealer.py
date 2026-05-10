@@ -79,7 +79,13 @@ class DealerPlanner(AbstractPeriodicPlanner):
         self.client_states : Dict[str, SatelliteAgentState] = \
             self.__initiate_client_states(client_ids, client_orbitdata, client_specs)
         self.client_plans : Dict[str, PeriodicPlan] =\
-            {client : PeriodicPlan([], t=0.0, horizon=self._horizon, t_next=np.Inf) 
+            {client : PeriodicPlan([], t=0.0, horizon=self._horizon, t_next=np.Inf)
+                for client in self.client_orbitdata}
+        # tracks the last plan actually transmitted to each client (may lag client_plans when a
+        # client is unreachable for one or more periods, during which it keeps executing the last
+        # plan it received rather than the empty plan the dealer generated for that period)
+        self.client_executing_plans : Dict[str, PeriodicPlan] =\
+            {client : PeriodicPlan([], t=0.0, horizon=self._horizon, t_next=np.Inf)
                 for client in self.client_orbitdata}
         self.mission_tasks : Dict[Mission, List[GenericObservationTask]] \
             = self.__generate_default_mission_tasks(client_missions, client_orbitdata)            
@@ -153,11 +159,14 @@ class DealerPlanner(AbstractPeriodicPlanner):
         for agent_state_msg in agent_state_messages:
             self.client_states[agent_state_msg.src] = SimulationAgentState.from_dict(agent_state_msg.state) 
 
-        # if no updates were received, estimate states    
-        if not agent_state_messages:            
-             
-            # check latest action in their plan
-            for client,plan in self.client_plans.items():
+        # if no updates were received, estimate states
+        if not agent_state_messages:
+
+            # use client_executing_plans (the last plan the client actually received) rather than
+            # client_plans (the most recently generated plan, which may be empty for periods when
+            # the client was unreachable even though it was still executing a previous multi-period plan)
+            for client in self.client_orbitdata:
+                plan = self.client_executing_plans[client]
                 # get actions performed in between last known client state; ignore broadcast and wait actions
                 filtered_actions = sorted([action for action in plan.actions 
                                             if isinstance(action, (ManeuverAction, ObservationAction))
@@ -199,6 +208,16 @@ class DealerPlanner(AbstractPeriodicPlanner):
         
         # update plans for all client agents
         self.client_plans : Dict[str, PeriodicPlan] = self._generate_client_plans(state, specs, orbitdata, mission, tasks, observation_history)
+
+        # update executing plans only for clients that will actually receive their new plan this period;
+        # a client that is unreachable continues executing its last received plan, not the new empty one
+        _next_accesses = self._calculate_accesses(state, orbitdata)
+        for client, _next_access in _next_accesses.items():
+            if _next_access is None:
+                continue
+            _t_broadcast = max(_next_access.left, t_curr)
+            if _t_broadcast < t_next:  # broadcast falls within this planning period
+                self.client_executing_plans[client] = self.client_plans[client]
 
         # schedule plan broadcasts to be performed
         plan_broadcasts : list[BroadcastMessageAction] = self._schedule_broadcasts(state, orbitdata)
@@ -267,7 +286,10 @@ class DealerPlanner(AbstractPeriodicPlanner):
             # Without the in-progress check, a maneuver that finishes between t_state and
             # t_comms_abs is missed: propagate() keeps using the non-zero rate and
             # overshoots the maneuver's true endpoint.
-            old_plan = self.client_plans[client]
+            # use client_executing_plans (not client_plans): if the client was unreachable for
+            # one or more periods, client_plans[client] is the most recently generated (empty)
+            # plan, but the client is still executing the last plan it actually received
+            old_plan = self.client_executing_plans[client]
             relevant_actions = sorted(
                 [action for action in old_plan.actions
                  if isinstance(action, (ManeuverAction, ObservationAction))
