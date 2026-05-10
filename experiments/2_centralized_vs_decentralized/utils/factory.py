@@ -229,9 +229,9 @@ def create_spacecraft_specifications(
 
         # check if agent has a non-steerable instrument
         if not agent_is_maneuverable:
-            # agent cannot maneuver and is therfore not taskable;
-            # set preplanner based on onboard planning capabilities
-            agent_preplanner = 'announcer' if data_processing.lower() == 'onboard' else 'none'            
+            # agent cannot maneuver and is therefore not taskable;
+            # events are loaded directly by the replanner — no announcer preplanner needed
+            agent_preplanner = 'none'
             # set replanner to only perform default observations at a fixed attitude
             agent_replanner = 'default'
 
@@ -248,12 +248,13 @@ def create_spacecraft_specifications(
             else:
                 # assign specified preplanner for non-centralized architectures
                 satellite_spec['planner']['preplanner'] = planner_specs['preplanners'][agent_preplanner.lower()].copy()
-        if agent_preplanner.lower() == 'announcer':
-            # assign events path for announcer preplanner
-            satellite_spec['planner']['preplanner']['eventsPath'] = relevant_events_path
-        
         if agent_replanner.lower() != 'none':
             satellite_spec['planner']['replanner'] = planner_specs['replanners'][agent_replanner.lower()].copy()
+
+        # if agent_replanner.lower() == 'default' and data_processing.lower() == 'onboard':
+        if agent_replanner.lower() == 'default':
+            # pass events path directly to the replanner so it can load tasks at init
+            satellite_spec['planner']['replanner']['eventsPath'] = relevant_events_path
         
         # enforce planning horizon for CBBA preplanner if needed
         if agent_replanner.lower() == 'cbba' and agent_preplanner.lower() == 'none':

@@ -1154,9 +1154,10 @@ class Simulation:
 
         # load replanner
         replanner = Simulation.__load_replanner(
-            planner_dict, 
-            agent_results_dir, 
-            logger, 
+            planner_dict,
+            agent_results_dir,
+            agent_mission,
+            logger,
             printouts
         )
 
@@ -1316,9 +1317,10 @@ class Simulation:
         raise NotImplementedError(f'preplanner of type `{preplanner_dict}` not yet supported.')
         
     @staticmethod
-    def __load_replanner(planner_dict : dict, 
-                         agent_results_dir : str, 
-                         logger : logging.Logger, 
+    def __load_replanner(planner_dict : dict,
+                         agent_results_dir : str,
+                         agent_mission : Mission,
+                         logger : logging.Logger,
                          printouts : bool) -> AbstractReactivePlanner:
         """ loads the replanner for the agent """
         # get replanner specs
@@ -1353,7 +1355,15 @@ class Simulation:
         
         elif replanner_type.lower() in ['default']:
             fixed_attitude = replanner_dict.get('fixedAttitude', [0.0, 0.0, 0.0])
-            return FixedPointingDefaultPlanner(fixed_attitude=fixed_attitude, debug=debug, logger=logger, printouts=printouts)
+            events_path = replanner_dict.get('eventsPath', None)
+            return FixedPointingDefaultPlanner(
+                events_path=events_path,
+                mission=agent_mission,
+                fixed_attitude=fixed_attitude,
+                debug=debug,
+                logger=logger,
+                printouts=printouts
+            )
 
         # fallback for unimplemented replanner types
         raise NotImplementedError(f'replanner of type `{replanner_dict}` not yet supported.')
