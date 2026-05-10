@@ -32,16 +32,12 @@ mkdir -p experiments/2_centralized_vs_decentralized/logs/outputs
 mkdir -p experiments/2_centralized_vs_decentralized/logs/errors
 
 # --- Load Modules ---
-# Gurobi/13.0.1 requires GCCcore/14.3.0 which conflicts with GCCcore/11.3.0 (Python 3.8).
-# Load Gurobi first just to capture its license path, then reload the Python environment.
-module purge
-module load GCCcore/14.3.0 Gurobi/13.0.1
-_GRB_LICENSE_FILE="$GRB_LICENSE_FILE"
-
 module purge
 module load GCCcore/11.3.0 Python/3.8.6
 module load Anaconda3
-export GRB_LICENSE_FILE="$_GRB_LICENSE_FILE"
+
+# --- Gurobi license ---
+export GRB_LICENSE_FILE="$SCRATCH/src/dmas-sync/gurobi.lic"
 
 # --- Conda environment activation ---
 eval "$(conda shell.bash hook)"
