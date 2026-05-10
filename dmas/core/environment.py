@@ -347,7 +347,7 @@ class SimulationEnvironment(object):
 
             # unpack relevant information
             instrument_name = instrument_dict["name"]
-            instrument_id = instrument_dict.get("id", instrument_name) # use name as id if not provided
+            instrument_id = instrument_dict.get("@id", instrument_name) # use name as id if not provided
             satellite_off_axis_angle = agent_state_dict['attitude'][0]
                                     
             # define interval characteristics for grouping observations 
@@ -420,7 +420,7 @@ class SimulationEnvironment(object):
             # Iterate groups (G is usually much smaller than N)
             obs_data : List[Dict] = []
             for s,e in tqdm(zip(starts, ends), 
-                            desc=f"{SimulationRoles.ENVIRONMENT.value}-Merging observation data for instrument {instrument_id}...", 
+                            desc=f"{SimulationRoles.ENVIRONMENT.value}-Merging obs data for `{instrument_id}`", 
                             unit=' obs',
                             disable=len(starts)<10 or not self._printouts,
                             leave=False):

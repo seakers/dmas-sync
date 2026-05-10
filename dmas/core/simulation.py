@@ -238,8 +238,8 @@ class Simulation:
                         iter_counter += 1
                     if iter_counter > 1000:
                         raise RuntimeError(f"ERROR: Simulation may be stuck at t={t:.2f}s. No agent actions ending after this time for {iter_counter} iterations.")
-                    elif iter_counter > 500:
-                        x = 1
+                    # elif iter_counter > 500:
+                    #     x = 1
 
                     # reset agent percepts for next cycle
                     for *_,msgs,obs_data in agent_observations.values():
