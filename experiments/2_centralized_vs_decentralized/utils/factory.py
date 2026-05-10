@@ -413,7 +413,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
     if reduced: results_dir += "_reduced"
     
     # define event file path based on scenario parameters
-    events_file = f'{scenario.lower()}_case_{date}.csv'
+    events_file = f'{scenario.lower().replace("-", "_")}_case_{date}.csv'
     events_path = os.path.join(base_path, 'resources', 'events', 'processed', events_file)
 
     # set simulation duration and propagator step size
