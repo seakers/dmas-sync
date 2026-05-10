@@ -618,15 +618,15 @@ class OrbitData:
 
         # ----------------------------
         # DEBUG SECTION
-        valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
-        false_pairs = [pair for pair, allowed in connectivity_mask.items() if not allowed]
+        # valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
+        # false_pairs = [pair for pair, allowed in connectivity_mask.items() if not allowed]
 
-        for u,v in false_pairs:
-            if u not in groups['instruments']:
-                x = 1
-            elif v not in groups['instruments']:
-                x = 1
-        x = 1
+        # for u,v in false_pairs:
+        #     if u not in groups['instruments']:
+        #         x = 1
+        #     elif v not in groups['instruments']:
+        #         x = 1
+        # x = 1
         # ----------------------------
 
         # iterate through override rules and apply to connectivity mask
@@ -645,8 +645,8 @@ class OrbitData:
 
         # ----------------------------
         # DEBUG SECTION
-        valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
-        x = 1
+        # valid_pairs = [pair for pair, allowed in connectivity_mask.items() if allowed]
+        # x = 1
         # ----------------------------
 
         # return connectivity mask
