@@ -33,6 +33,7 @@
             "model": "static",
             "licensePath": "./gurobi.lic",            
             "period" : 250,
+            "horizon" : 3600,
             "maxTasks": 100,
             "debug" : "False"
         },

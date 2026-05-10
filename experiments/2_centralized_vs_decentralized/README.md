@@ -166,6 +166,10 @@ python ./experiments/1_0_cbba_stress_test/study.py -t full_factorial_no_lhs --on
 4. Observation Number -->
 
 
+```
+python ./experiments/2_centralized_vs_decentralized/study.py -t full_factorial_trials_2026-05-04 --single-trial 0 --only-simulate --reduced
+```
+
 ## HPC Commands
 *Commands for rnuning batch jobs at the TAMU's HPRC*
 

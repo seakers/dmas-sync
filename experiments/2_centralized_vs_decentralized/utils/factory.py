@@ -225,8 +225,10 @@ def create_spacecraft_specifications(
         agent_preplanner = preplanner
         agent_replanner = replanner
 
+        agent_is_maneuverable = 'maneuver' in satellite_spec['instrument']
+
         # check if agent has a non-steerable instrument
-        if 'maneuver' not in satellite_spec['instrument']:
+        if not agent_is_maneuverable:
             # agent cannot maneuver and is therfore not taskable;
             # set preplanner based on onboard planning capabilities
             agent_preplanner = 'announcer' if data_processing.lower() == 'onboard' else 'none'            
@@ -240,7 +242,7 @@ def create_spacecraft_specifications(
         # set planner settings
         if agent_preplanner.lower() != 'none':
             # check if there is a centralized preplanner specified
-            if 'centralized' in agent_preplanner.lower():
+            if 'centralized' in agent_preplanner.lower() and agent_is_maneuverable:
                 # assign worker preplanner for following centralized planner architecture
                 satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['worker'].copy()
             else:

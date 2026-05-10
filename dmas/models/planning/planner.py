@@ -188,6 +188,10 @@ class AbstractPlanner(ABC):
         """
 
         # if not must_overlap: raise NotImplementedError('Clustering without overlap is not yet fully implemented.')
+        
+        # remove duplicate tasks if needed (e.g. if multiple tasks have the same target and availability, but got relayed multiple times due to multiple access opportunities)
+        # available_tasks = list(set(available_tasks))
+        available_tasks = list({task.id: task for task in available_tasks}.values())
 
         # generate task observation opportunities from access times
         atomic_observation_opps : list[ObservationOpportunity] \

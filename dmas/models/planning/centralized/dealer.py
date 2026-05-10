@@ -82,7 +82,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
             {client : PeriodicPlan([], t=0.0, horizon=self._horizon, t_next=np.Inf) 
                 for client in self.client_orbitdata}
         self.mission_tasks : Dict[Mission, List[GenericObservationTask]] \
-            = self.__generate_default_mission_tasks(client_missions, client_orbitdata)
+            = self.__generate_default_mission_tasks(client_missions, client_orbitdata)            
+        
 
     def _collect_client_cross_track_fovs(self, client_specs : Dict[str, Spacecraft]) -> Dict[str, Dict[str, float]]:
         """ get instrument field of view specifications from agent specs object """
@@ -221,6 +222,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
         """
         Generates plans for each agent based on the provided parameters.
         """
+        if tasks:
+            x = 1
 
         # Outline planning horizon interval
         planning_horizons : Dict[str,Interval] = self._calculate_horizons(state)
@@ -248,7 +251,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
         # collect only available tasks
         available_mission_tasks : Dict[Mission, GenericObservationTask] = \
-            self._collect_available_mission_tasks(planning_horizons)
+            self._collect_available_mission_tasks(planning_horizons, tasks)
 
         # calculate coverage opportunities for tasks
         target_access_opportunities : Dict[str, List[ List[ Dict[str, tuple]]]] = \
@@ -260,7 +263,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
         # 1: schedule observations for each client
         client_observations : Dict[str, List[ObservationAction]] = \
-              self._schedule_client_observations(state, available_mission_tasks, schedulable_client_tasks, observation_history)
+              self._schedule_client_observations(state, available_mission_tasks, schedulable_client_tasks, observation_history, next_accesses)
                 
         # validate observation paths for each client
         for client,observations in client_observations.items():
@@ -459,7 +462,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
         return tasks
 
-    def _collect_available_mission_tasks(self, planning_horizons : Dict[str, Interval]) -> Dict[Mission, List[GenericObservationTask]]:
+    def _collect_available_mission_tasks(self, planning_horizons : Dict[str, Interval], tasks: List[GenericObservationTask]) -> Dict[Mission, List[GenericObservationTask]]:
         """ get all known and active tasks for all clients within the planning horizon """        
         # overall planning horizon is the max of all client planning horizons
         mission_planning_horizon = {mission : max([interval 
@@ -468,11 +471,21 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                                   key=lambda x: x.right)
                                     for mission in self.mission_tasks}
         
-        # return tasks that overlap with the overall planning horizon
-        return {mission: [task for task in tasks
+        # TODO consider default mission tasks
+        default_mission_tasks = {mission: [task for task in tasks
                           if isinstance(task, GenericObservationTask)
                           and task.availability.overlaps(mission_planning_horizon[mission])]
                 for mission, tasks in self.mission_tasks.items()}
+        if any(default_tasks for default_tasks in default_mission_tasks.values()):
+            raise NotImplementedError("Default mission tasks are not yet implemented in the dealer planner.")
+                
+        incoming_tasks = {mission: [task for task in tasks 
+                                    if task.availability.overlaps(mission_planning_horizon[mission])
+                                    ]
+                        for mission in self.mission_tasks.keys()}      
+        
+        # return tasks that overlap with the overall planning horizon
+        return incoming_tasks
 
     def _calculate_client_target_access_opportunities(self, 
                                                       available_client_tasks : Dict[Mission, List[GenericObservationTask]], 
@@ -488,6 +501,10 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                           available_tasks : Dict[Mission, List[GenericObservationTask]], 
                                           target_access_opportunities : dict
                                         ) -> Dict:
+        if (any(tasks for tasks in available_tasks.values()) 
+            and any(tasks for tasks in available_tasks.values())):
+            x = 1
+
         return {client : self.create_observation_opportunities_from_accesses(
                                                          available_tasks[self.client_missions[client]],
                                                          client_access_opportunities, 
@@ -496,13 +513,14 @@ class DealerPlanner(AbstractPeriodicPlanner):
                 for client, client_access_opportunities in target_access_opportunities.items()}
 
     @abstractmethod
-    def _schedule_client_observations(self, 
-                                      state : SimulationAgentState, 
+    def _schedule_client_observations(self,
+                                      state : SimulationAgentState,
                                       available_client_tasks : Dict[Mission, List[GenericObservationTask]],
-                                      schedulable_client_tasks: Dict[str, List[ObservationOpportunity]], 
-                                      observation_history : TaskObservationTracker
+                                      schedulable_client_tasks: Dict[str, List[ObservationOpportunity]],
+                                      observation_history : TaskObservationTracker,
+                                      next_accesses : Dict[str, 'Interval'] = None
                                     ) -> Dict[str, List[ObservationAction]]:
-        """ schedules observations for all clients """        
+        """ schedules observations for all clients """
     
     
     def _schedule_client_maneuvers(self, client_observations : Dict[str, List[ObservationAction]]) -> Dict[str, List[ManeuverAction]]:

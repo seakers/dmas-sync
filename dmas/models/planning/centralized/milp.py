@@ -77,11 +77,12 @@ class DealerMILPPlanner(DealerPlanner):
         self.max_observations = max_observations
 
     
-    def _schedule_client_observations(self, 
+    def _schedule_client_observations(self,
                                       state : SimulationAgentState,
                                       available_mission_tasks : Dict[Mission, List[GenericObservationTask]],
-                                      schedulable_client_tasks: Dict[str, List[ObservationOpportunity]], 
-                                      observation_history : TaskObservationTracker
+                                      schedulable_client_tasks: Dict[str, List[ObservationOpportunity]],
+                                      observation_history : TaskObservationTracker,
+                                      next_accesses : Dict[str, 'Interval'] = None
                                     ) -> Dict[str, List[ObservationAction]]:
         """ schedules observations for all clients """
         
@@ -139,9 +140,18 @@ class DealerMILPPlanner(DealerPlanner):
         
         # Initialize constants
         t_curr = state.get_time()
-        t_start   = [[max(task.accessibility.left-t_curr, 0.0) 
-                              for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
-                              for client in indexed_clients]
+
+        # earliest time each client can begin executing its plan (constrained by next comms access)
+        t_comms = [
+            max(next_accesses[client].left, t_curr) - t_curr
+            if next_accesses is not None and next_accesses.get(client) is not None
+            else 0.0
+            for client in indexed_clients
+        ]
+
+        t_start   = [[max(task.accessibility.left - t_curr, 0.0, t_comms[s])
+                              for task in schedulable_client_tasks[client] if isinstance(task, ObservationOpportunity)]
+                              for s, client in enumerate(indexed_clients)]
         t_end     = [[min(task.accessibility.right-t_curr, self._horizon) 
                               for task in schedulable_client_tasks[client]  if isinstance(task, ObservationOpportunity)]
                               for client in indexed_clients]
@@ -247,12 +257,14 @@ class DealerMILPPlanner(DealerPlanner):
         """ Prints model results to console and outputs error logs in case of infeasibility """
 
         # Print model status
-        print("\nStatus code:", model.Status)
+        if self._debug:
+            print("\nStatus code:", model.Status)
 
         # Check model status
         if model.Status == gp.GRB.OPTIMAL:
-            print("Optimal solution found.")
-            print(f"Obj: {model.ObjVal:g}")
+            if self._debug: 
+                print("Optimal solution found.")
+                print(f"Obj: {model.ObjVal:g}")
 
             # delete any `.ilp` files that may have been generated when debugging the model
             class_path = inspect.getfile(type(self))

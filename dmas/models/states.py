@@ -612,7 +612,7 @@ class SatelliteAgentState(SimulationAgentState):
             self.attitude_rates = [0,0,0]
             return ActionStatuses.COMPLETED.value, 0.0
         
-        elif t > action.t_end + self.eps:
+        elif t > action.t_end or abs(t - action.t_end) < 1e-6:
             # could not complete action before action end time
             self.attitude_rates = [0,0,0]
             return ActionStatuses.ABORTED.value, 0.0
