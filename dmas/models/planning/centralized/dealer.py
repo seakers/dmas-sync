@@ -261,12 +261,18 @@ class DealerPlanner(AbstractPeriodicPlanner):
             if t_comms_abs <= t_state + 1e-6:
                 continue
 
-            # find the last old-plan action whose t_start falls in (t_state, t_comms_abs]
+            # Find the last old-plan action that determines state at t_comms_abs.
+            # Include actions already in progress at t_state (t_start <= t_state < t_end)
+            # as well as future actions (t_state < t_start <= t_comms_abs).
+            # Without the in-progress check, a maneuver that finishes between t_state and
+            # t_comms_abs is missed: propagate() keeps using the non-zero rate and
+            # overshoots the maneuver's true endpoint.
             old_plan = self.client_plans[client]
-            future_actions = sorted(
+            relevant_actions = sorted(
                 [action for action in old_plan.actions
                  if isinstance(action, (ManeuverAction, ObservationAction))
-                 and t_state < action.t_start <= t_comms_abs],
+                 and action.t_start <= t_comms_abs   # started before or at comms
+                 and action.t_end > t_state],         # not already finished before t_state
                 key=lambda a: a.t_start
             )
 
@@ -275,8 +281,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
             # using self.attitude_rates, double-counting any slew we computed above)
             self.client_states[client] = self.client_states[client].propagate(t_comms_abs)
 
-            if future_actions:
-                last_action = future_actions[-1]
+            if relevant_actions:
+                last_action = relevant_actions[-1]
                 if isinstance(last_action, ManeuverAction):
                     # compute attitude at t_comms_abs (or at maneuver end if it finishes first)
                     t_query = min(t_comms_abs, last_action.t_end)
