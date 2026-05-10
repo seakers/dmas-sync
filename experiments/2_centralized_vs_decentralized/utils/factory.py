@@ -343,7 +343,7 @@ def create_ground_operator_specifications(
         announcer_types = ['high_flow_river']   
     elif scenario.lower() == 'wildfires':
         announcer_types = ['wildfire']
-    elif scenario.lower() == 'water-quality':
+    elif scenario.lower() == 'water_quality':
         announcer_types = ['algal_bloom', 'high_flow_river']
     elif scenario.lower() == 'comprehensive':
         announcer_types = ['algal_bloom', 'high_flow_river', 'wildfire']
