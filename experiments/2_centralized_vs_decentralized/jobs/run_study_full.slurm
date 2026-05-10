@@ -35,8 +35,8 @@ ulimit -n 65535
 
 # --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
 i=$SLURM_ARRAY_TASK_ID
-start=$((i * 4))
-end=$((start + 4))
+start=$((i * 8))
+end=$((start + 8))
 
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
