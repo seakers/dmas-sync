@@ -40,8 +40,8 @@ ulimit -n 65535
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
   -t full_factorial_trials_2026-05-04 \
-  # --trial-range "${start}:${end}" \
   --single-thread --quiet --exceptions \
   --only-precompute \
+  # --trial-range "${start}:${end}" \
   # --force-simulate --force-postprocess --force-summarize # \
   # --profile-cpu --profile-mem 
