@@ -270,6 +270,8 @@ def create_spacecraft_specifications(
                 "@type": "lookup", 
                 "eventsPath" : relevant_events_path
             }
+        else:
+            satellite_spec.pop('science', None)  # remove science specifications if not onboard processing
         
         # ensure that the sat mission and relevant events path match
         if satellite_spec['mission'] == 'algal bloom response' and 'algal_bloom' not in relevant_events_path:

@@ -182,7 +182,7 @@ class SimulationAgent(object):
                     ]
             
             # add to list of known tasks
-            tasks.update({SimulationAgent._task_key(task.to_dict()) : task
+            tasks.update({SimulationAgent._task_key(task) : task
                           for task in objective_tasks})
 
         # return list of created tasks
@@ -502,7 +502,7 @@ class SimulationAgent(object):
         # find unique and new tasks in new requests
         new_tasks = {key : req.task
                         for req in new_reqs.values()
-                        if (key := self._task_key(req.task.to_dict())) not in self._known_tasks}
+                        if (key := self._task_key(req.task)) not in self._known_tasks}
         
         # find unique and new tasks in incoming requests
         new_task_dicts = {key : msg.req['task']
@@ -555,7 +555,7 @@ class SimulationAgent(object):
             = self._processor.process_measurements(incoming_reqs, measurements)
 
         # add to known requests
-        self._known_reqs.update({self._req_key(req.to_dict()): req for req in new_reqs})
+        self._known_reqs.update({self._req_key(req): req for req in new_reqs})
 
         # return generated requests
         return new_reqs
@@ -1012,23 +1012,16 @@ class SimulationAgent(object):
         return self._state
     
     @staticmethod
-    def _task_key(d : dict) -> tuple:
-        return (
-            d["task_type"],
-            d["parameter"],
-            d["priority"],
-            d["id"],
-        )
-    
+    def _task_key(d) -> tuple:
+        if isinstance(d, dict):
+            return (d["task_type"], d["parameter"], round(d["priority"], 6), d["id"])
+        return (d.task_type, d.parameter, round(d.priority, 6), d.id)
+
     @staticmethod
-    def _req_key(d : dict) -> tuple:
-        return (
-            d["task"]["task_type"],
-            d["task"]["parameter"],
-            d["task"]["priority"],
-            d["task"]["id"],
-            d["requester"],
-        )
+    def _req_key(d) -> tuple:
+        if isinstance(d, dict):
+            return (d["task"]["task_type"], d["task"]["parameter"], round(d["task"]["priority"], 6), d["task"]["id"], d["requester"])
+        return (d.task.task_type, d.task.parameter, round(d.task.priority, 6), d.task.id, d.requester)
     
     def log(self, msg : str, level=logging.DEBUG) -> None:
         """

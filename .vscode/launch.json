@@ -484,17 +484,18 @@
                 
                 "-t", "full_factorial_trials_2026-05-10",
                 "--single-trial", "19",
+                // "--single-trial", "21",
 
-                // "--profile-cpu",
+                "--profile-cpu",
                 // "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
                 "--only-simulate",
                 // "--only-postprocess",
                 "--force-simulate",
-                // "--force-postprocess",
-                // "--force-summarize",
-                // "--reduced",
+                "--force-postprocess",
+                "--force-summarize",
+                "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]
@@ -541,7 +542,7 @@
             ]
         },
         {
-            "name": "EXPERIMENT 2: Abbridged",
+            "name": "EXPERIMENT 2: Abridged",
             "type": "debugpy",
             "request": "launch",
             "python": "${workspaceFolder}/.venv/bin/python",
