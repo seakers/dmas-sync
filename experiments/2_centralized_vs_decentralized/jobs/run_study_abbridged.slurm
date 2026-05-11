@@ -48,12 +48,12 @@ ulimit -n 65535
 
 # --- Trial ID lists per job (fastest -> slowest) ---
 TRIAL_IDS=(
-    "30 18 12  0 24  6"   # Job 0: GS,                 Onboard
-    "31 19 13  1 25  7"   # Job 1: GS,                 Oracle
-    "32 20 14  2 26  8"   # Job 2: Interconstellation,  Onboard
-    "33 21 15  3 27  9"   # Job 3: Interconstellation,  Oracle
-    "34 22 16  4 28 10"   # Job 4: Intraconstellation,  Onboard
-    "35 23 17  5 29 11"   # Job 5: Intraconstellation,  Oracle
+    "30 18 12  24  6 0"   # Job 0: GS,                 Onboard
+    "31 19 13  25  7 1"   # Job 1: GS,                 Oracle
+    "32 20 14  26  8 2"   # Job 2: Interconstellation,  Onboard
+    "33 21 15  27  9 3"   # Job 3: Interconstellation,  Oracle
+    "34 22 16  28 10 4"   # Job 4: Intraconstellation,  Onboard
+    "35 23 17  29 11 5"   # Job 5: Intraconstellation,  Oracle
 )
 
 # --- Run ---
