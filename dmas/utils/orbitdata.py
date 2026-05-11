@@ -1035,16 +1035,27 @@ class OrbitData:
         saved_sats    = sorted(saved.get('spacecraft', []),          key=lambda s: s.get('@id', ''))
         if len(scenario_sats) != len(saved_sats):
             return _miss(f"spacecraft count changed: {len(scenario_sats)} → {len(saved_sats)}")
-        # Only the fields that affect orbit propagation / coverage calculations.
-        # spectral_config, @notes, @comment, mass, power, etc. are intentionally ignored —
-        # they may be augmented by the pre-compute step and differ from the live scenario dict.
-        _INST_ORBIT_KEYS = ('@type', 'orientation', 'fieldOfViewGeometry', 'sceneFieldOfViewGeometry')
+        # instrupy strips @-prefixed metadata keys (e.g. @id, @comment, @notes) when
+        # round-tripping an instrument through an object, so they will be absent from the
+        # saved MissionSpecs.json even though the live scenario dict retains them.
+        # Strip all @-prefixed keys recursively from both sides before comparing so that
+        # these metadata-only differences don't trigger a false cache miss.
+        # @type is the one @ field instrupy does preserve, so it is compared separately.
+        def _strip_at(v):
+            if isinstance(v, dict):
+                return {k: _strip_at(val) for k, val in v.items() if not k.startswith('@')}
+            if isinstance(v, list):
+                return [_strip_at(item) for item in v]
+            return v
+
         for i, (s_sat, o_sat) in enumerate(zip(scenario_sats, saved_sats)):
             if s_sat.get('orbitState') != o_sat.get('orbitState'):
                 return _miss(f"spacecraft[{i}] ({s_sat.get('@id','?')}).orbitState changed")
-            s_inst = {k: s_sat.get('instrument', {}).get(k) for k in _INST_ORBIT_KEYS}
-            o_inst = {k: o_sat.get('instrument', {}).get(k) for k in _INST_ORBIT_KEYS}
-            if s_inst != o_inst:
+            s_inst = s_sat.get('instrument', {})
+            o_inst = o_sat.get('instrument', {})
+            if s_inst.get('@type') != o_inst.get('@type'):
+                return _miss(f"spacecraft[{i}] ({s_sat.get('@id','?')}).instrument @type changed")
+            if _strip_at(s_inst) != _strip_at(o_inst):
                 return _miss(f"spacecraft[{i}] ({s_sat.get('@id','?')}).instrument changed")
 
         # ground station count and locations
