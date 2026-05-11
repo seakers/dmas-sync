@@ -61,7 +61,7 @@ for trial_id in ${TRIAL_IDS[$SLURM_ARRAY_TASK_ID]}; do
     python ./experiments/2_centralized_vs_decentralized/study.py \
       -t full_factorial_trials_2026-05-10 \
       --single-trial "$trial_id" \
-      --single-thread --quiet --exceptions \
+      --single-thread --quiet \
       --force-simulate --force-postprocess --force-summarize
-      # --profile-cpu --profile-mem
+      # --exceptions --profile-cpu --profile-mem
 done
