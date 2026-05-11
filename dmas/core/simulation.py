@@ -153,6 +153,8 @@ class Simulation:
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
             # t = 20_000.0 # TODO remove after testing
+            # t_check = 0.0
+            # dt_progress = 0.0
 
             if t > 0.0 and self._printouts:
                 tqdm.write(f"WARNING: Starting simulation at t={t:.2f}s (skipping for testing/debugging purposes).")
@@ -199,10 +201,14 @@ class Simulation:
                         state_action_pairs[name] = agent.decide_action(*agent_observations[name])
                     
                     # ----- memory usage checkpoint -----
-                    # if any(isinstance(action, BroadcastMessageAction) 
-                    #        for _,action in state_action_pairs.values()) and self._printouts:
+                    # if t >= t_check and dt_progress > 1e-6:
+                    #     self.__profile_current_memory(t)
+                    #     t_check += 3600.0 # check memory every hour of simulation time
+                    # # if any(isinstance(action, BroadcastMessageAction) 
+                    # #        for _,action in state_action_pairs.values()) and self._printouts:
                     #     # if any agent is broadcasting a message, check memory usage
                     #     self.__profile_current_memory(t)
+                    #     t_check = t // 1000 * 1000 + 1000
                     #     x = 1
                     # -----------------------------------
 
@@ -233,8 +239,6 @@ class Simulation:
                         iter_counter += 1
                     if iter_counter > 1000:
                         raise RuntimeError(f"ERROR: Simulation may be stuck at t={t:.2f}s. No agent actions ending after this time for {iter_counter} iterations.")
-                    # elif iter_counter > 500:
-                    #     x = 1
 
                     # reset agent percepts for next cycle
                     for *_,msgs,obs_data in agent_observations.values():
@@ -1206,8 +1210,11 @@ class Simulation:
         elif preplanner_type.lower() in ["eventannouncer", "announcer"]:
             events_path = preplanner_dict.get('eventsPath', None)
             if events_path is None: raise ValueError(f'predefined events path not specified in input file.')
-            
-            return EventAnnouncerPlanner(agent_results_dir, events_path, simulation_missions, debug, logger, printouts)
+            announce_horizon = preplanner_dict.get('announceHorizon', 3600.0)
+
+            return EventAnnouncerPlanner(agent_results_dir, events_path, simulation_missions,
+                                         announce_horizon=announce_horizon,
+                                         debug=debug, logger=logger, printouts=printouts)
 
         elif preplanner_type.lower() == 'dealer':
             # unpack preplanner parameters
