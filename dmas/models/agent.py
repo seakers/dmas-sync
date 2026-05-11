@@ -247,7 +247,7 @@ class SimulationAgent(object):
         # -------------------------------------
 
         # update known tasks and requests from incoming tasks requests
-        new_reqs,_ = self.__update_requests_and_tasks(incoming_reqs)
+        new_reqs,_ = self.__update_requests_and_tasks(curr_state, incoming_reqs)
 
         # update plan completion
         self.__update_plan_completion(completed_actions, 
@@ -483,6 +483,7 @@ class SimulationAgent(object):
         return completed_actions, aborted_actions, pending_actions
 
     def __update_requests_and_tasks(self,
+                                    state,
                                     incoming_reqs : List[MeasurementRequestMessage] = []
                                 ) -> Tuple[List[TaskRequest], List[GenericObservationTask]]:
         # ---- 1) Unique + new requests (dicts) ----
@@ -491,9 +492,21 @@ class SimulationAgent(object):
                           for msg in incoming_reqs
                           if (key := self._req_key(msg.req)) not in self._known_reqs}
 
-        # unpack unique new task requests
-        new_reqs = {key : TaskRequest.from_dict(req_dict) 
-                    for key,req_dict in unique_new_reqs.items()}
+        # unpack unique new task requests; reuse cached task object when available
+        # to avoid re-running the expensive GenericObservationTask.from_dict chain
+        new_reqs = {}
+        for key, req_dict in unique_new_reqs.items():
+            task_key = self._task_key(req_dict['task'])
+            known_task = self._known_tasks.get(task_key)
+            if known_task is not None:
+                req = TaskRequest(known_task,
+                                  req_dict['requester'],
+                                  req_dict['mission_name'],
+                                  req_dict['t_req'],
+                                  req_dict.get('id'))
+            else:
+                req = TaskRequest.from_dict(req_dict)
+            new_reqs[key] = req
         
         # add new requests to known requests
         self._known_reqs.update(new_reqs)
@@ -1012,13 +1025,23 @@ class SimulationAgent(object):
         return self._state
     
     @staticmethod
-    def _task_key(d) -> tuple:
+    def _task_key(d) -> str:
+        # # UUID is stable across serialisation; task_type/parameter/priority can differ between dict and object paths
+        # if isinstance(d, dict):
+        #     return d["id"]
+        # return d.id
+        # --- previous version (A/B reference) ---
         if isinstance(d, dict):
             return (d["task_type"], d["parameter"], round(d["priority"], 6), d["id"])
         return (d.task_type, d.parameter, round(d.priority, 6), d.id)
 
     @staticmethod
     def _req_key(d) -> tuple:
+        # # keyed on (task_id, requester); task_type/parameter/priority dropped for serialisation stability
+        # if isinstance(d, dict):
+        #     return (d["task"]["id"], d["requester"])
+        # return (d.task.id, d.requester)
+        # --- previous version (A/B reference) ---
         if isinstance(d, dict):
             return (d["task"]["task_type"], d["task"]["parameter"], round(d["task"]["priority"], 6), d["task"]["id"], d["requester"])
         return (d.task.task_type, d.task.parameter, round(d.task.priority, 6), d.task.id, d.requester)

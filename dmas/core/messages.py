@@ -193,8 +193,8 @@ class MeasurementRequestMessage(SimulationMessage):
     def __init__(self, src: str, dst: str, req : dict, id: str = None, path : list = [], **_):
         super().__init__(src, dst, SimulationMessageTypes.MEASUREMENT_REQ.value, id, path)
         
-        if not isinstance(req, dict):
-            raise AttributeError(f'`req` must be of type `dict`; is of type {type(req)}.')
+        # if not isinstance(req, dict):
+        #     raise AttributeError(f'`req` must be of type `dict`; is of type {type(req)}.')
         self.req = req
 
 class ObservationResultsMessage(SimulationMessage):

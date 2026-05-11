@@ -855,7 +855,8 @@ class AbstractPlanner(ABC):
             # update instrument-specific observation performance information
             if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
                 or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
-                spectral_bands_config = instrument_spec.spectral_config.get('bands') if instrument_spec.spectral_config is not None else []
+                # check if spectral config is a parameter of the instrument specification object; if not, assume no spectral bands are available                
+                spectral_bands_config = instrument_spec.spectral_config.get('bands', []) if hasattr(instrument_spec, 'spectral_config') else []
                 spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
                                   # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
                                   for band in spectral_bands_config] 

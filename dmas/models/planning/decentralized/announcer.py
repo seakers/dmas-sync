@@ -38,6 +38,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         Uses a rolling planning window of `announce_horizon` seconds so that only the next
         window's worth of broadcasts are scheduled at a time, keeping memory use flat.
         """
+        # announce_horizon *= 24.0 # TEMP EXTENSION, REMOVE LATER
 
         super().__init__(agent_results_dir, announce_horizon, announce_horizon, AbstractPeriodicPlanner.OPPORTUNISTIC, debug, logger, printouts)
 
@@ -144,7 +145,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                                            mission_name=mission_name,
                                            t_req=event.t_start)
                 task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
-                task_requests.append((event, task_request, task_request_msg))
+                task_requests.append((event, task_request, task_request_msg))       
 
         # group messages by event so coverage tracking is per-event
         event_requests : Dict = defaultdict(list)
@@ -156,11 +157,12 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
         n_cols = len(orbitdata.comms_target_columns)
         n_targets = len(orbitdata.comms_targets)
         col_start = orbitdata.comms_links._col["start"]
+        col_end   = orbitdata.comms_links._col["end"]
 
-        # fetch comm rows only within the current planning window
-        t_overall_start = min(max(event.availability.left, t_curr) for event in event_requests)
+        # fetch all comm rows that overlap the planning window; include_current captures
+        # contacts that started before t_curr but are still active
         all_rows = [row for _, row in orbitdata.comms_links.iter_rows_packed(
-            t_overall_start, t_window_max, include_current=True)]
+            t_curr, t_window_max, include_current=True)]
 
         # for each event, run coverage logic seeded with already-announced agents
         t_broadcasts : Dict = defaultdict(list)
@@ -189,10 +191,11 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
 
             for row in all_rows:
                 t_row_start = float(row[col_start])
+                t_row_end   = float(row[col_end])
                 if t_row_start > t_window_end:
                     break
-                if t_row_start < t_window_start:
-                    continue
+                if t_row_end < t_window_start:
+                    continue  # contact ends before this event's window opens — no usable slot
 
                 comps = row[3:]
                 u_comp = comps[u_idx]

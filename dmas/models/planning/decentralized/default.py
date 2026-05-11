@@ -69,6 +69,13 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
             self._future_tasks : Set[EventObservationTask] = set()
             self._new_task_requests : bool = False
 
+        # track task IDs seen so far to avoid replanning on already-known tasks
+        self._known_task_ids : Set[str] = {task.id for task in self._future_tasks}
+
+        # cache access opportunities by (grid_index, gp_index); reset when horizon extends
+        self._access_opportunities : dict = {}
+        self._access_horizon : float = -np.inf
+
     def _load_tasks_from_events(self, events_path : str, mission : Mission) -> Set[EventObservationTask]:
         """ Loads geophysical events from a CSV and builds EventObservationTask objects for each event x objective pair. """
         if not os.path.isfile(events_path):
@@ -120,13 +127,55 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
             my_reqs = [req for req in incoming_reqs if req.requester == state.agent_name]
             self._outbox.extend(my_reqs)
 
-            # new tasks were requested; update planning flag
-            self._new_task_requests = True
+            # only trigger replanning if at least one request carries a task ID not seen before
+            new_ids = {req.task.id for req in incoming_reqs} - self._known_task_ids
+            if new_ids:
+                self._new_task_requests = True
+                self._known_task_ids.update(new_ids)
 
     def needs_planning( self, *args, **kwargs) -> bool:
+        """ Replan if there are new task requests with previously unseen task IDs. """
         return self._new_task_requests
-        
-    def generate_plan(  self, 
+
+    def calculate_access_opportunities(self,
+                                       tasks,
+                                       planning_horizon : Interval,
+                                       orbitdata : OrbitData
+                                    ) -> dict:
+        if planning_horizon.is_empty():
+            return {}
+
+        # reset cache if planning horizon has extended to the right
+        if planning_horizon.right > self._access_horizon + 1e-3:
+            self._access_opportunities = {}
+            self._access_horizon = planning_horizon.right
+
+        # identify locations not yet cached
+        needed_locs = set()
+        for task in tasks:
+            for *__, grid_index, gp_index in task.location:
+                loc = (int(grid_index), int(gp_index))
+                if loc not in self._access_opportunities:
+                    needed_locs.add(loc)
+
+        # compute only for tasks that touch uncached locations, then merge into cache
+        if needed_locs:
+            tasks_to_compute = [task for task in tasks
+                                 if any((int(gi), int(gp)) in needed_locs
+                                        for *__, gi, gp in task.location)]
+            new_accesses = super().calculate_access_opportunities(tasks_to_compute, planning_horizon, orbitdata)
+            self._access_opportunities.update(new_accesses)
+
+        # return the cache entries relevant to the requested tasks
+        result = {}
+        for task in tasks:
+            for *__, grid_index, gp_index in task.location:
+                loc = (int(grid_index), int(gp_index))
+                if loc in self._access_opportunities:
+                    result[loc] = self._access_opportunities[loc]
+        return result
+
+    def generate_plan(  self,
                         state : SimulationAgentState,
                         specs : object,
                         current_plan : Plan,
@@ -151,7 +200,8 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                 t_horizon_end = max(task.availability.right for task in self._future_tasks)
             elif tasks:
                 t_horizon_end = max(task.availability.right for task in tasks
-                                    if isinstance(task, GenericObservationTask))
+                                    # if isinstance(task, GenericObservationTask)
+                                    )
             else:
                 t_horizon_end = t_curr
             planning_horizon = Interval(t_curr, t_horizon_end)
@@ -342,7 +392,7 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                         broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
                         # broadcasts.append(BroadcastMessageAction(bus_broadcast, t_broadcast))
 
-                # clear outbox — contents have been processed into the broadcast schedule
+                # clear outbox; contents have been processed into the broadcast schedule
                 self._outbox.clear()
 
             # actions = sorted(observations + broadcasts, key=lambda action: action.t_start)
