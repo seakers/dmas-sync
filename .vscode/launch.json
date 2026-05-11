@@ -483,10 +483,10 @@
                 // "--single-trial", "212", // None,CBBA,Interconstellation,Comprehensive,Oracle
                 
                 "-t", "full_factorial_trials_2026-05-10",
-                "--single-trial", "4",
+                "--single-trial", "19",
 
                 // "--profile-cpu",
-                // "--profile-mem",
+                "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
                 "--only-simulate",

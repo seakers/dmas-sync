@@ -24,7 +24,7 @@ from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
 from dmas.utils.orbitdata import OrbitData
-from dmas.models.actions import AgentAction
+from dmas.models.actions import AgentAction, BroadcastMessageAction
 from dmas.models.agent import SimulationAgent
 from dmas.core.environment import SimulationEnvironment
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
@@ -152,7 +152,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            t = 20_000.0 # TODO remove after testing
+            # t = 20_000.0 # TODO remove after testing
 
             if t > 0.0 and self._printouts:
                 tqdm.write(f"WARNING: Starting simulation at t={t:.2f}s (skipping for testing/debugging purposes).")
@@ -190,13 +190,7 @@ class Simulation:
                     # validate that all agents' states were updated
                     assert all(agent.name in agent_observations for agent in self._agents), \
                         "Not all agents received senses from the environment."
-                    
-                    # agent think
-                    # state_action_pairs : Dict[str, Tuple[SimulationAgentState, AgentAction]] \
-                    #     = {agent.name : agent.decide_action(*agent_observations[agent.name])
-                    #         for agent in self._agents}
-
-                    # initialize agent state-action
+                                        # initialize agent state-action
                     state_action_pairs = dict()
                     
                     # agent think
@@ -209,6 +203,7 @@ class Simulation:
                     #        for _,action in state_action_pairs.values()) and self._printouts:
                     #     # if any agent is broadcasting a message, check memory usage
                     #     self.__profile_current_memory(t)
+                    #     x = 1
                     # -----------------------------------
 
                     # validate that all agents generated actions
