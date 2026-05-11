@@ -305,7 +305,8 @@ class Simulation:
             for task in tasks
             if isinstance(task, DefaultMissionTask)
         ]
-        df = pd.DataFrame(data=data, columns=columns)         
+        df = pd.DataFrame(data=data, columns=columns)
+        os.makedirs(self._environment._results_path, exist_ok=True)
         df.to_parquet(f"{self._environment._results_path}/default_tasks.parquet", index=False)
 
         # print runtime stats
