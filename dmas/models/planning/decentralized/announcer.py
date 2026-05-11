@@ -27,7 +27,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
                  agent_results_dir : str,
                  events_path : str,
                  simulation_missions : Dict[str,Mission],
-                 announce_horizon : float = 3600.0,
+                 announce_horizon : float = 24 * 3600.0,
                  debug = False,
                  logger = None,
                  printouts : bool = True

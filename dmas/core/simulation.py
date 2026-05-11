@@ -1211,7 +1211,7 @@ class Simulation:
         elif preplanner_type.lower() in ["eventannouncer", "announcer"]:
             events_path = preplanner_dict.get('eventsPath', None)
             if events_path is None: raise ValueError(f'predefined events path not specified in input file.')
-            announce_horizon = preplanner_dict.get('announceHorizon', 3600.0)
+            announce_horizon = preplanner_dict.get('announceHorizon', 24*3600.0)
 
             return EventAnnouncerPlanner(agent_results_dir, events_path, simulation_missions,
                                          announce_horizon=announce_horizon,

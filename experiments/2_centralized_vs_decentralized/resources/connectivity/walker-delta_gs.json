@@ -193,6 +193,14 @@
         },
         {
             "action": "allow",
+            "scope": "between",
+            "targets": [
+                "relays",
+                "ground_stations"
+            ]
+        },
+        {
+            "action": "allow",
             "scope": "within",
             "targets": "ground_stations"
         },
