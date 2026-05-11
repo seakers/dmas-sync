@@ -731,13 +731,17 @@ class ObservationRecord:
     max across all actor buckets, making the operation commutative,
     associative, and idempotent — shared ancestry is never double-counted.
 
-    ``n_obs`` is a derived property (sum of all clock values) and is never
-    stored directly.
+    ``n_obs`` is maintained as a cached running total (_n_obs) to avoid
+    calling sum(clock.values()) on every merge.
     """
     clock:           VectorClock   = field(default_factory=dict)
     t_last:          float         = field(default_factory=lambda: -math.inf)
     last_actor:      Optional[str] = None
     last_instrument: Optional[str] = None
+    _n_obs:          int           = field(default=0, init=False, repr=False, compare=False)
+
+    def __post_init__(self):
+        self._n_obs = sum(self.clock.values())
 
     # ------------------------------------------------------------------
     # Derived property
@@ -746,7 +750,7 @@ class ObservationRecord:
     @property
     def n_obs(self) -> int:
         """Total observation count across all actors."""
-        return sum(self.clock.values())
+        return self._n_obs
 
     # ------------------------------------------------------------------
     # Ingest
@@ -760,6 +764,7 @@ class ObservationRecord:
         Returns True if the latest-observation fields were updated.
         """
         self.clock[actor] = self.clock.get(actor, 0) + 1
+        self._n_obs += 1
 
         if t_end >= self.t_last:
             self.t_last          = t_end
@@ -809,15 +814,16 @@ class ObservationRecord:
             f_instr  = foreign.last_instrument
 
         # ── Clock merge: element-wise max ────────────────────────────
-        old_n   = self.n_obs
+        old_n      = self._n_obs
         all_actors = set(self.clock) | set(f_clock)
         for actor in all_actors:
             local_count   = self.clock.get(actor, 0)
             foreign_count = f_clock.get(actor, 0)
             if foreign_count > local_count:
+                self._n_obs      += foreign_count - local_count
                 self.clock[actor] = foreign_count
 
-        clock_changed = self.n_obs != old_n
+        clock_changed = self._n_obs != old_n
 
         # ── t_last / last_actor / last_instrument ────────────────────
         time_changed = False

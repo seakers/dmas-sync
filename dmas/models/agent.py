@@ -486,50 +486,35 @@ class SimulationAgent(object):
                                     state,
                                     incoming_reqs : List[MeasurementRequestMessage] = []
                                 ) -> Tuple[List[TaskRequest], List[GenericObservationTask]]:
-        # ---- 1) Unique + new requests (dicts) ----
-        # find unique and new requests in incoming requests
-        unique_new_reqs = {key : msg.req
-                          for msg in incoming_reqs
-                          if (key := self._req_key(msg.req)) not in self._known_reqs}
-
-        # unpack unique new task requests; reuse cached task object when available
-        # to avoid re-running the expensive GenericObservationTask.from_dict chain
-        new_reqs = {}
-        for key, req_dict in unique_new_reqs.items():
+        # collect new request dicts and candidate new task dicts simultaneously
+        unique_new_req_dicts = {}   # req_key  → req_dict
+        candidate_task_dicts = {}   # task_key → task_dict (tasks not yet in _known_tasks)
+        for msg in incoming_reqs:
+            req_dict = msg.req
+            req_key  = self._req_key(req_dict)
             task_key = self._task_key(req_dict['task'])
-            known_task = self._known_tasks.get(task_key)
-            if known_task is not None:
-                req = TaskRequest(known_task,
-                                  req_dict['requester'],
-                                  req_dict['mission_name'],
-                                  req_dict['t_req'],
-                                  req_dict.get('id'))
-            else:
-                req = TaskRequest.from_dict(req_dict)
-            new_reqs[key] = req
-        
-        # add new requests to known requests
-        self._known_reqs.update(new_reqs)
+            if req_key not in self._known_reqs:
+                unique_new_req_dicts[req_key] = req_dict
+            if task_key not in self._known_tasks:
+                candidate_task_dicts[task_key] = req_dict['task']
 
-        # ---- 2) Unique + new tasks ----
-        # find unique and new tasks in new requests
-        new_tasks = {key : req.task
-                        for req in new_reqs.values()
-                        if (key := self._task_key(req.task)) not in self._known_tasks}
-        
-        # find unique and new tasks in incoming requests
-        new_task_dicts = {key : msg.req['task']
-                            for msg in incoming_reqs
-                            if (key := self._task_key(msg.req['task'])) not in self._known_tasks
-                            and key not in new_tasks
-                            }
-
-        # unpack unique bid tasks
-        new_tasks.update({key : GenericObservationTask.from_dict(d) 
-                            for key,d in new_task_dicts.items()})
-
-        # add tasks to task list
+        # deserialize new tasks first so every request below can hit the cache
+        new_tasks = {task_key: GenericObservationTask.from_dict(task_dict)
+                     for task_key, task_dict in candidate_task_dicts.items()}
         self._known_tasks.update(new_tasks)
+
+        # unpack new requests; task is now guaranteed to be in _known_tasks
+        new_reqs = {}
+        for req_key, req_dict in unique_new_req_dicts.items():
+            task_key = self._task_key(req_dict['task'])
+            req = TaskRequest(self._known_tasks[task_key],
+                              req_dict['requester'],
+                              req_dict['mission_name'],
+                              req_dict['t_req'],
+                              req_dict.get('id'))
+            new_reqs[req_key] = req
+
+        self._known_reqs.update(new_reqs)
 
         # register new tasks with observation tracker
         for task in new_tasks.values():
@@ -1031,20 +1016,23 @@ class SimulationAgent(object):
         #     return d["id"]
         # return d.id
         # --- previous version (A/B reference) ---
-        if isinstance(d, dict):
+        try:
             return (d["task_type"], d["parameter"], round(d["priority"], 6), d["id"])
-        return (d.task_type, d.parameter, round(d.priority, 6), d.id)
+        except KeyError:
+            return (d.task_type, d.parameter, round(d.priority, 6), d.id)
 
     @staticmethod
     def _req_key(d) -> tuple:
         # # keyed on (task_id, requester); task_type/parameter/priority dropped for serialisation stability
-        # if isinstance(d, dict):
-        #     return (d["task"]["id"], d["requester"])
-        # return (d.task.id, d.requester)
-        # --- previous version (A/B reference) ---
         if isinstance(d, dict):
-            return (d["task"]["task_type"], d["task"]["parameter"], round(d["task"]["priority"], 6), d["task"]["id"], d["requester"])
-        return (d.task.task_type, d.task.parameter, round(d.task.priority, 6), d.task.id, d.requester)
+            return (d["task"]["id"], d["requester"])
+        return (d.task.id, d.requester)
+        # --- previous version (A/B reference) ---
+        # try:
+        #     task_dict = d["task"]
+        #     return (task_dict["task_type"], task_dict["parameter"], round(task_dict["priority"], 6), task_dict["id"], d["requester"])
+        # except KeyError:
+        #     return (d.task.task_type, d.task.parameter, round(d.task.priority, 6), d.task.id, d.requester)
     
     def log(self, msg : str, level=logging.DEBUG) -> None:
         """
