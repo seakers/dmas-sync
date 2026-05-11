@@ -1028,16 +1028,24 @@ class OrbitData:
         if scenario_dict.get('duration', 0) > saved.get('duration', 0):
             return _miss(f"duration increased: {scenario_dict.get('duration')} > {saved.get('duration')}")
 
-        # spacecraft count and orbital states
-        scenario_sats = scenario_dict.get('spacecraft', [])
-        saved_sats    = saved.get('spacecraft', [])
+        # spacecraft count, orbital states, and instrument specs
+        # Sort by @id so that insertion-order differences between the live scenario dict
+        # and the saved JSON don't cause mismatched pairs in zip().
+        scenario_sats = sorted(scenario_dict.get('spacecraft', []), key=lambda s: s.get('@id', ''))
+        saved_sats    = sorted(saved.get('spacecraft', []),          key=lambda s: s.get('@id', ''))
         if len(scenario_sats) != len(saved_sats):
             return _miss(f"spacecraft count changed: {len(scenario_sats)} → {len(saved_sats)}")
+        # Only the fields that affect orbit propagation / coverage calculations.
+        # spectral_config, @notes, @comment, mass, power, etc. are intentionally ignored —
+        # they may be augmented by the pre-compute step and differ from the live scenario dict.
+        _INST_ORBIT_KEYS = ('@type', 'orientation', 'fieldOfViewGeometry', 'sceneFieldOfViewGeometry')
         for i, (s_sat, o_sat) in enumerate(zip(scenario_sats, saved_sats)):
             if s_sat.get('orbitState') != o_sat.get('orbitState'):
-                return _miss(f"spacecraft[{i}].orbitState changed")
-            if s_sat.get('instrument') != o_sat.get('instrument'):
-                return _miss(f"spacecraft[{i}].instrument changed")
+                return _miss(f"spacecraft[{i}] ({s_sat.get('@id','?')}).orbitState changed")
+            s_inst = {k: s_sat.get('instrument', {}).get(k) for k in _INST_ORBIT_KEYS}
+            o_inst = {k: o_sat.get('instrument', {}).get(k) for k in _INST_ORBIT_KEYS}
+            if s_inst != o_inst:
+                return _miss(f"spacecraft[{i}] ({s_sat.get('@id','?')}).instrument changed")
 
         # ground station count and locations
         if scenario_dict.get('groundStation') != saved.get('groundStation'):
