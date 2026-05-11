@@ -5,7 +5,7 @@
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=32G
+#SBATCH --mem=64G
 # #SBATCH --array=0-5
 
 # Overall scenario: 36 total trials
