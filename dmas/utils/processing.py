@@ -1412,11 +1412,14 @@ class ResultsProcessor:
         return accesses_per_event
     
     @staticmethod
-    def __accesses_per_task_from_df(tasks_known : List[GenericObservationTask], 
+    def __accesses_per_task_from_df(tasks : List[GenericObservationTask], 
                                     accesses_per_task_df : pd.DataFrame
                                 ) -> Dict[GenericObservationTask, List[Tuple[Interval, str, str]]]:
+        # TODO
+        raise NotImplementedError("This method is not yet implemented. Task access classification is currently only performed in the `__compile_task_accessibility` method, which returns both a dataframe and a dictionary of tasks to accesses. This method can be implemented in the future if there is a need to reconstruct the task accesses dictionary from the dataframe alone.")
+
         accesses_per_task = {}
-        for task in tasks_known:
+        for task in tasks:
             # get accesses for this task from dataframe
             accesses : pd.DataFrame = accesses_per_task_df[accesses_per_task_df['task id'] == task.id]
             
@@ -1641,6 +1644,9 @@ class ResultsProcessor:
             known_reward_primal_bound, known_reward_dual_bound \
                 = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts) \
                     if not all_tasks_known else (reward_primal_bound, reward_dual_bound)
+        # reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
+        # known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
+
 
         # Generate summary
         summary_headers = ['Metric', 'Value']

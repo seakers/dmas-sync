@@ -569,8 +569,8 @@
                 // "--only-simulate",
                 // "--only-postprocess",
                 // "--force-simulate",
-                // "--force-postprocess",
-                // "--force-summarize",
+                "--force-postprocess",
+                "--force-summarize",
                 // "--quiet",
                 // "--exceptions",
             ]

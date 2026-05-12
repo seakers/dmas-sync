@@ -198,6 +198,8 @@ class DealerMILPPlanner(DealerPlanner):
         # Run optimization on each chunk and flatten results
         if self.model == self.STATIC:
             y,t,z,obj = self.__static_milp_planner(state, schedulable_client_tasks, observation_history, indexed_clients, task_indices, A, E, t_start, d, slew_times)
+        elif self.model == self.ASSIGNMENT:
+            y,t,z,obj = self.__assignment_milp_planner(state, schedulable_client_tasks, observation_history, indexed_clients, task_indices, A, E, t_start, t_end, d, slew_times)
         elif self.model == self.LINEAR:
             y,t,z,obj = self.__linear_milp_planner(state, schedulable_client_tasks, observation_history, indexed_clients, task_indices, A, E, t_start, t_end, d, slew_times)
         elif self.model == self.REOBS:
