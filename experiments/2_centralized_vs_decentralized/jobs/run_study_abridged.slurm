@@ -6,22 +6,28 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=64G
-# #SBATCH --array=0-5
+# #SBATCH --array=0-8
 
 # Overall scenario: 36 total trials
-# 6 jobs x 6 trials each (sbatch --array=0-5)
-# Each job covers one (Connectivity, Data Processing) group.
-# Within each job, trials run fastest-first to spread wall-clock load:
-#   None+Greedy -> DP+None -> DP+Greedy -> Centralized-MILP_priority+None -> None+CBBA -> DP+CBBA
+# 9 jobs x 4 trials each (sbatch --array=0-8)
+# Each job covers one Connectivity x Planner-pair group.
+# Planner pairs balance easy+hard within each job:
+#   Pair A (jobs 0-2): None+Greedy (easy)  + Centralized-MILP_priority (hardest)
+#   Pair B (jobs 3-5): DP+None    (easy)   + DP+CBBA                   (hard)
+#   Pair C (jobs 6-8): DP+Greedy  (medium) + None+CBBA                 (medium)
+# Within each job, easier planner runs first (both DataProcessing options), then harder.
 #
-#  Job  Connectivity         Data Processing   Trial IDs (in run order)
-#  ---  -------------------  ---------------   -------------------------
-#   0   GS                   Onboard           30 18 12  0 24  6
-#   1   GS                   Oracle            31 19 13  1 25  7
-#   2   Interconstellation   Onboard           32 20 14  2 26  8
-#   3   Interconstellation   Oracle            33 21 15  3 27  9
-#   4   Intraconstellation   Onboard           34 22 16  4 28 10
-#   5   Intraconstellation   Oracle            35 23 17  5 29 11
+#  Job  Connectivity         Planners                           Trial IDs (run order)
+#  ---  -------------------  ---------------------------------  ---------------------
+#   0   GS                   None+Greedy, Centralized-MILP      30 31  0  1
+#   1   Interconstellation   None+Greedy, Centralized-MILP      32 33  2  3
+#   2   Intraconstellation   None+Greedy, Centralized-MILP      34 35  4  5
+#   3   GS                   DP+None, DP+CBBA                   18 19  6  7
+#   4   Interconstellation   DP+None, DP+CBBA                   20 21  8  9
+#   5   Intraconstellation   DP+None, DP+CBBA                   22 23 10 11
+#   6   GS                   DP+Greedy, None+CBBA               12 13 24 25
+#   7   Interconstellation   DP+Greedy, None+CBBA               14 15 26 27
+#   8   Intraconstellation   DP+Greedy, None+CBBA               16 17 28 29
 
 set -euo pipefail
 
@@ -48,12 +54,15 @@ ulimit -n 65535
 
 # --- Trial ID lists per job (fastest -> slowest) ---
 TRIAL_IDS=(
-    "30 18 12  24  6 0"   # Job 0: GS,                 Onboard
-    "31 19 13  25  7 1"   # Job 1: GS,                 Oracle
-    "32 20 14  26  8 2"   # Job 2: Interconstellation,  Onboard
-    "33 21 15  27  9 3"   # Job 3: Interconstellation,  Oracle
-    "34 22 16  28 10 4"   # Job 4: Intraconstellation,  Onboard
-    "35 23 17  29 11 5"   # Job 5: Intraconstellation,  Oracle
+    "30 31  0  1"   # Job 0: GS,                None+Greedy + Centralized-MILP
+    "32 33  2  3"   # Job 1: Interconstellation, None+Greedy + Centralized-MILP
+    "34 35  4  5"   # Job 2: Intraconstellation, None+Greedy + Centralized-MILP
+    "18 19  6  7"   # Job 3: GS,                DP+None + DP+CBBA
+    "20 21  8  9"   # Job 4: Interconstellation, DP+None + DP+CBBA
+    "22 23 10 11"   # Job 5: Intraconstellation, DP+None + DP+CBBA
+    "12 13 24 25"   # Job 6: GS,                DP+Greedy + None+CBBA
+    "14 15 26 27"   # Job 7: Interconstellation, DP+Greedy + None+CBBA
+    "16 17 28 29"   # Job 8: Intraconstellation, DP+Greedy + None+CBBA
 )
 
 # --- Run ---
