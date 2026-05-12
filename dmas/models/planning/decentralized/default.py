@@ -62,8 +62,10 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
         self._new_my_requests: bool = False
         self._next_replan_time: float = -np.inf  # fires immediately on first step
 
-        # self-generated announcements: keyed by task id, kept until the event expires
+        # self-generated announcements: keyed by task id, kept until the event expires or all targets are covered
         self._pending_announcements: Dict[str, TaskRequest] = {}
+        # per-task coverage: set of agent column indices already notified; mirrors _pending_announcements keys
+        self._announced: Dict[str, set] = {}
 
         # intra-period access cache; flushed at the start of every planning period
         self._access_opportunities: dict = {}
@@ -380,9 +382,20 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                     n_cols = len(orbitdata.comms_target_columns)
                     n_targets = len(orbitdata.comms_targets)
 
+                    # drop tasks that have already reached every target agent
+                    self._pending_announcements = {
+                        tid: req for tid, req in self._pending_announcements.items()
+                        if len(self._announced.get(tid, set())) < n_targets
+                    }
+                    # keep _announced in sync with _pending_announcements
+                    self._announced = {tid: s for tid, s in self._announced.items()
+                                       if tid in self._pending_announcements}
+
+                if self._pending_announcements:
+                    task_items = list(self._pending_announcements.items())
                     task_msgs = [
                         MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict())
-                        for req in self._pending_announcements.values()
+                        for _, req in task_items
                     ]
 
                     # bound broadcast window to the replan horizon (or event expiry, whichever comes first)
@@ -392,9 +405,17 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                         max(req.task.availability.right for req in self._pending_announcements.values())
                     )
 
+                    # seed agents_covered with the intersection of per-task coverage:
+                    # agents who have already received ALL pending tasks need no further targeting
+                    covered_sets = [self._announced.get(tid, set()) for tid, _ in task_items]
+                    covered_for_all = set.intersection(*covered_sets) if len(covered_sets) > 1 else set(covered_sets[0])
                     agents_covered = np.zeros(n_cols, dtype=bool)
-                    n_covered = 0
-                    broadcast_times = []
+                    for idx in covered_for_all:
+                        agents_covered[idx] = True
+                    n_covered = int(agents_covered.sum())
+
+                    # collect (t_broadcast, new_agents) so we can update per-task coverage after the sweep
+                    broadcast_slots: list = []
 
                     for _, row in orbitdata.comms_links.iter_rows_packed(
                             t_window_start, t_window_end, include_current=True):
@@ -406,13 +427,13 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                         new_agents = np.where(reachable & ~agents_covered)[0]
                         if new_agents.size == 0:
                             continue
-                        broadcast_times.append(max(t_row_start, t_window_start))
+                        broadcast_slots.append((max(t_row_start, t_window_start), new_agents))
                         agents_covered[new_agents] = True
                         n_covered += new_agents.size
                         if n_covered >= n_targets:
                             break
 
-                    for t_broadcast in broadcast_times:
+                    for t_broadcast, new_agents in broadcast_slots:
                         # advance past any observation that contains t_broadcast
                         while True:
                             idx = bisect.bisect_right(scheduled_t_starts, t_broadcast) - 1
@@ -421,18 +442,27 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                             else:
                                 break
 
-                        available_msgs = [
-                            msg for msg, req in zip(task_msgs, self._pending_announcements.values())
-                            if t_broadcast in req.task.availability
-                        ]
+                        available_msgs = []
+                        for msg, (tid, req) in zip(task_msgs, task_items):
+                            if t_broadcast in req.task.availability:
+                                available_msgs.append(msg)
+                                # record these agents as notified for this task
+                                self._announced.setdefault(tid, set()).update(new_agents.tolist())
+
                         if not available_msgs:
                             continue
                         bus_broadcast = BusMessage(state.agent_name, state.agent_name, available_msgs)
                         broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
 
-                    # TODO remove any broadcasts that can reach everyone in the next period (no need to rebroadcast)
+                    # remove tasks that have now reached all targets after this period's broadcasts
+                    self._pending_announcements = {
+                        tid: req for tid, req in self._pending_announcements.items()
+                        if len(self._announced.get(tid, set())) < n_targets
+                    }
+                    self._announced = {tid: s for tid, s in self._announced.items()
+                                       if tid in self._pending_announcements}
 
-                # _pending_announcements are NOT cleared here; they persist across periods until expiry
+                # _pending_announcements persist across periods; removed only on expiry or full coverage
 
             waits = self._schedule_periodic_replan(state, t_next)
 
