@@ -55,6 +55,7 @@ class ResultsProcessor:
         def _write(name: str, df: pd.DataFrame) -> None:
             if df is not None:
                 df.to_parquet(os.path.join(processed_results_path, f'{name}.parquet'), index=False)
+                if printouts: tqdm.write(f'[results processor] saved processed {name} data to parquet file')
 
         # --- load and immediately release DFs that are not needed after writing ---
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
@@ -69,7 +70,7 @@ class ResultsProcessor:
 
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path, printouts)
 
-        planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
+        planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata, printouts)
         _write('planned_rewards', planned_rewards_df)
         _write('execution_costs', execution_costs_df)
 
@@ -77,8 +78,8 @@ class ResultsProcessor:
         _write('grid_data', grid_data_df);  del grid_data_df
 
         # --- accessibility: accesses_per_gp is the largest structure; build it once and reuse ---
-        accesses_per_gp = ResultsProcessor.__classify_accesses_per_gp(compiled_orbitdata)
-        events_per_gp   = ResultsProcessor.__classify_events_per_gp(events)
+        accesses_per_gp = ResultsProcessor.__classify_accesses_per_gp(compiled_orbitdata, printouts)
+        events_per_gp   = ResultsProcessor.__classify_events_per_gp(events, printouts)
 
         accesses_per_event_df, accesses_per_event = ResultsProcessor.__compile_events_accessibility(events, compiled_orbitdata, agent_missions, accesses_per_gp, printouts)
         _write('accesses_per_event', accesses_per_event_df);  del accesses_per_event_df
@@ -90,7 +91,7 @@ class ResultsProcessor:
         _write('accesses_per_task', accesses_per_task_df);  del accesses_per_task_df
 
         # --- observations ---
-        observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df)
+        observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df, printouts)
         del observations_performed_df
 
         observations_per_event_df, observations_per_event = ResultsProcessor.__compile_events_observed(events, observations_per_gp, agent_missions, printouts)
@@ -120,7 +121,12 @@ class ResultsProcessor:
         obtained_rewards_data = []
 
         # iterate tasks and corresponding observations
-        for task, observations in observations_per_task.items():
+        for task, observations in tqdm(observations_per_task.items(),
+                                       desc="[results processor] compiling rewards obtained from observations",
+                                       leave=True,
+                                       disable=not printouts,
+                                       total=len(observations_per_task.keys())
+                                    ):
             
             # initialize previous observation time for revisit time calculation
             t_prev = np.NINF
@@ -206,13 +212,13 @@ class ResultsProcessor:
         _, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
         _, all_tasks, __, known_tasks = ResultsProcessor.__load_tasks(results_path, missions, events, task_reqs, printouts)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path, printouts)
-        planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
+        planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata, printouts)
         
         _, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
-        events_per_gp = ResultsProcessor.__classify_events_per_gp(events)
+        events_per_gp = ResultsProcessor.__classify_events_per_gp(events, printouts)
 
-        accesses_per_gp = ResultsProcessor.__classify_accesses_per_gp(compiled_orbitdata)
-        observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df)
+        accesses_per_gp = ResultsProcessor.__classify_accesses_per_gp(compiled_orbitdata, printouts)
+        observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df, printouts)
 
         # load preprocessed dataframes if they exist, otherwise raise error     
         loadable_dfs = {
@@ -258,14 +264,14 @@ class ResultsProcessor:
 
         # collect observations
         try:
+            if printouts: tqdm.write('[results processor] loading observations performed data')
             observations_performed_path = os.path.join(environment_results_path, 'measurements.parquet')
             observations_performed = pd.read_parquet(observations_performed_path)
-            if printouts: print('Loaded observations performed data successfully!')
 
         except pd.errors.EmptyDataError:
             columns = ['observer','t_img','lat','lon','range','look','incidence','zenith','instrument_name']
             observations_performed = pd.DataFrame(data=[],columns=columns)
-            if printouts: print('Loaded observations performed data successfully. No observations were performed during the simulation.')
+            if printouts: tqdm.write('[results processor] No observations were performed during the simulation.')
 
         # return observations performed        
         return observations_performed
@@ -276,23 +282,23 @@ class ResultsProcessor:
                                printouts : bool
                             ) -> Tuple[pd.DataFrame, List[GeophysicalEvent]]:
         # compile events detected
-        if printouts: print('Collecting event detection data...')
+        if printouts: tqdm.write('[results processor] loading event detection data')
         parts = []
         for agent_name in compiled_orbitdata.keys():
             events_detected_path = os.path.join(results_path, agent_name.lower(), 'events_detected.parquet')
             if not os.path.isfile(events_detected_path): continue
             parts.append(pd.read_parquet(events_detected_path))
 
-        assert parts, "Couldn't load Event Detection file for any agent."
+        assert parts, "[results processor] unable to load event detection file for any agent."
         events_detected_df = pd.concat(parts, axis=0, ignore_index=True)
         del parts
         
-        # DEBUG SECTION
+        # DEBUG SECTION-----------------------
         # get unique ids
         # unique_ids = events_detected_df['id'].unique()
         # if len(unique_ids) != len(events_detected_df):
         #     print(f"WARNING: Found duplicate event detections with the following ids: {unique_ids}.")        
-        # END OF DEBUG SECTION
+        # END OF DEBUG SECTION----------------
 
         # remove requester column if it exists (it shouldn't be relevant for event detection performance metrics and may contain duplicates if multiple agents detected the same event)
         if 'requester' in events_detected_df.columns:
@@ -302,9 +308,8 @@ class ResultsProcessor:
         events_detected_df = events_detected_df.drop_duplicates().reset_index(drop=True)
         
         # convert to list of GeophysicalEvent
-        events_detected : list[GeophysicalEvent] = []
-        for _,row in events_detected_df.iterrows():           
-            event = GeophysicalEvent(
+        events_detected = [
+            GeophysicalEvent(
                 row['event type'],
                 (row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['GP index']),
                 row['detection time [s]'],
@@ -313,7 +318,13 @@ class ResultsProcessor:
                 row['start time [s]'],
                 row['id']
             )
-            events_detected.append(event)
+            for row in tqdm(events_detected_df.to_dict('records'), 
+                            desc='[results processor] building event detection objects',
+                            disable=not printouts,
+                            leave=True,
+                            total=len(events_detected_df)
+                        )
+        ]
 
         return events_detected_df, events_detected
     
@@ -327,30 +338,51 @@ class ResultsProcessor:
         # define results path for the environment
         environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())
         
-        # compile measurement requests
-        if printouts: print('Collecting measurement request data...')
+        # compile measurement requests — stream in batches to avoid materializing the full
+        # file, which contains one row per agent-broadcast and is typically 50-100x larger
+        # than the number of unique requests after deduplication on 'id'.
+        import pyarrow.parquet as pq
+        if printouts: tqdm.write('[results processor] loading measurement request data')
+        requests_path = os.path.join(environment_results_path, 'requests.parquet')
         try:
-            task_reqs_df = pd.read_parquet((os.path.join(environment_results_path, 'requests.parquet')))
-        except pd.errors.EmptyDataError:
-            columns = ['id','requester','lat [deg]','lon [deg]','severity','t start','t end','t corr','Measurment Types']
-            task_reqs_df = pd.DataFrame(data=[],columns=columns)
-        
-        # remove duplicates
+            pf = pq.ParquetFile(requests_path)
+            seen_ids: set = set()
+            unique_parts = []
+            for batch in pf.iter_batches(batch_size=1_000):
+                chunk = batch.to_pandas()
+                new_rows = chunk[~chunk['id'].isin(seen_ids)].drop_duplicates(subset='id')
+                if not new_rows.empty:
+                    seen_ids.update(new_rows['id'].tolist())
+                    unique_parts.append(new_rows)
+                del chunk, new_rows
+            task_reqs_df = pd.concat(unique_parts, ignore_index=True) if unique_parts \
+                else pd.DataFrame(columns=['id', 'requester', 't_req', 'task'])
+            del unique_parts, seen_ids
+        except Exception:
+            if printouts: tqdm.write('[results processor] No measurement requests found.')
+            task_reqs_df = pd.DataFrame(columns=['id', 'requester', 't_req', 'task'])
+
+        # remove any leftover duplicates
         task_reqs_df = task_reqs_df.drop_duplicates(subset='id').reset_index(drop=True)
+
+        # pre-build lookup dict for O(1) event lookup by id
+        events_by_id = {event.id: event for event in events}
 
         # convert to list of TaskRequest
         task_reqs = []
-        for _,row in task_reqs_df.iterrows():
-            matching_events : list[GeophysicalEvent] = [
-                event for event in events
-                if event.id == row['task']['event']['id']
-            ]
-            assert matching_events, \
-                f"No matching event found for measurement request with event id `{row['task']['event']['id']}`"
-            
+        for _,row in tqdm(task_reqs_df.iterrows(), 
+                          desc='[results processor] building task request objects from data',
+                          disable=not printouts or len(task_reqs_df) == 0,
+                          leave=True,
+                          total=len(task_reqs_df)
+                        ):
+            event_id = row['task']['event']['id']
+            assert event_id in events_by_id, \
+                f"No matching event found for measurement request with event id `{event_id}`"
+
             # get name of agent requesting the task
             requester = row['requester']
-            
+
             # get matching `EventDrivenObjective`
             relevant_objectives = [objective for objective in agent_missions[requester]
                                     if isinstance(objective, EventDrivenObjective)
@@ -358,11 +390,11 @@ class ResultsProcessor:
             # ensure exactly one matching objective found
             assert relevant_objectives, \
                 f"No matching EventDrivenObjective found in mission for requester `{requester}` and parameter `{row['parameter']}`."
-            
-            # create event-driven task 
+
+            # create event-driven task
             task = EventObservationTask(
                 row['task']['parameter'],
-                event=matching_events[0],
+                event=events_by_id[event_id],
                 objective=relevant_objectives[0]
             )
             
@@ -387,7 +419,7 @@ class ResultsProcessor:
                     task_reqs : List[TaskRequest],
                     printouts : bool
                     ) -> Tuple[pd.DataFrame, List[GenericObservationTask]]:
-        if printouts: print('Collecting known tasks data...')
+        if printouts: tqdm.write('[results processor] loading agent-known tasks')
         # load default tasks 
         known_tasks_path = os.path.join(results_path, 'environment', 'default_tasks.parquet')
         default_tasks_df = pd.read_parquet(known_tasks_path)
@@ -399,7 +431,12 @@ class ResultsProcessor:
         # convert to list of tasks
         all_tasks : list[GenericObservationTask] = []
         known_tasks : list[GenericObservationTask] = []
-        for _,row in default_tasks_df.iterrows():
+        for _,row in tqdm(default_tasks_df.iterrows(), 
+                          desc='[results processor] building default task objects from data',
+                          disable=not printouts or len(default_tasks_df) == 0,
+                          leave=True,
+                          total=len(default_tasks_df)
+                        ):
             # get name of agent requesting the task
             task_mission = row['requester']
             if row['task type'] != GenericObservationTask.DEFAULT:
@@ -425,7 +462,8 @@ class ResultsProcessor:
             known_tasks.append(task)
 
         # supplement known with event request tasks
-        requested_tasks = {req.task for req in task_reqs 
+        requested_tasks = {req.task 
+                           for req in tqdm(task_reqs, desc='[results processor] compiling tasks from requests', disable=not printouts, leave=True)
                             if req.task not in known_tasks}
         known_tasks.extend(requested_tasks)
 
@@ -450,6 +488,7 @@ class ResultsProcessor:
                     all_tasks.append(task)
 
         # convert to dataframe
+        if printouts: tqdm.write('[results processor] building tasks dataframe from task objects')
         event_tasks = []
         for req_task in requested_tasks:
             for lat,lon,grid_index,gp_index in req_task.location:
@@ -513,8 +552,7 @@ class ResultsProcessor:
 
     @staticmethod
     def __load_broadcast_history(results_path : str, printouts : bool = True) -> pd.DataFrame:
-        if printouts:
-            print('Collecting agent broadcast history...')
+        if printouts: print('[results processor] loading agent broadcast history')
 
         # define results path for the environment
         environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())        
@@ -527,17 +565,25 @@ class ResultsProcessor:
     
     @staticmethod
     def __load_planned_utilities(results_path : str, 
-                                 compiled_orbitdata : Dict[str, OrbitData]
+                                 compiled_orbitdata : Dict[str, OrbitData],
+                                 printouts : bool
                                 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+
         # compile planned agent reward data
+        # if printouts: tqdm.write('[results processor] loading planned utilities')
         reward_parts = []
-        for agent_name in compiled_orbitdata.keys():
+        for agent_name in tqdm(compiled_orbitdata.keys(),
+                                desc='[results processor] loading planned agent utilities',
+                                disable=not printouts,
+                                leave=True,
+                                total=len(compiled_orbitdata.keys())
+                            ):
             rewards_path = os.path.join(results_path, agent_name.lower(), 'rewards.parquet')
             if not os.path.isfile(rewards_path): continue
             temp = pd.read_parquet(rewards_path)
             temp['agent'] = agent_name
             reward_parts.append(temp)
-
+        
         planned_rewards_df = pd.concat(reward_parts, axis=0, ignore_index=True) if reward_parts \
             else pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent_name', 'planned reward', 'performed reward', 'agent'])
         del reward_parts
@@ -545,7 +591,12 @@ class ResultsProcessor:
         # compile executed agent cost data (only load columns needed for cost calculation)
         alpha = 1e-6
         cost_parts = []
-        for agent_name in compiled_orbitdata.keys():
+        for agent_name in tqdm(compiled_orbitdata.keys(),
+                                desc='[results processor] loading planned execution costs',
+                                disable=not printouts,
+                                leave=True,
+                                total=len(compiled_orbitdata.keys())
+                            ):
             agent_state_path = os.path.join(results_path, agent_name.lower(), 'state_history.parquet')
             if not os.path.isfile(agent_state_path): continue
             state_temp = pd.read_parquet(agent_state_path, columns=['t', 'attitude', 'status'])
@@ -572,9 +623,10 @@ class ResultsProcessor:
         # compile grids from agent orbitdata
         grid_data = []
         for agent_orbitdata in tqdm(compiled_orbitdata.values(), 
-                                    desc='Compiling target grids from agent orbit data', 
-                                    leave=False,
-                                    disable=not printouts
+                                    desc='[results processor] loading target grids from agent orbitdata', 
+                                    leave=True,
+                                    disable=not printouts,
+                                    unit=' agents'
                                 ):
             # get set of accessible ground points
             gps_accessible_temp : list = [row for row in agent_orbitdata.grid_data]
@@ -593,8 +645,10 @@ class ResultsProcessor:
     
     @staticmethod
     def __classify_accesses_per_gp(
-            compiled_orbitdata : Dict[str, OrbitData]
+            compiled_orbitdata : Dict[str, OrbitData],
+            printouts : bool = True
         ) -> Dict[Tuple[int,int], np.ndarray]:
+        if printouts: tqdm.write('[results processor] classifying access data by ground point')
 
         # 1) Collect per-agent arrays; different instrument types may have different extra columns
         agent_arrays = []   # list of {col: np.ndarray}, one entry per non-empty agent
@@ -689,7 +743,10 @@ class ResultsProcessor:
         return out
 
     @staticmethod
-    def __classify_events_per_gp(events : List[GeophysicalEvent]) -> Dict[Tuple[int,int], List[GeophysicalEvent]]:
+    def __classify_events_per_gp(events : List[GeophysicalEvent],
+                                 printouts : bool = True
+                                ) -> Dict[Tuple[int,int], List[GeophysicalEvent]]:
+        if printouts: tqdm.write('[results processor] classifying events by ground point')
         events_per_gp : Dict[Tuple[int,int], List[GeophysicalEvent]] = defaultdict(list)
         for event in events:
             *_, grid_index, gp_index = event.location
@@ -709,37 +766,39 @@ class ResultsProcessor:
         accesses_per_event_data = []
         accesses_per_event = dict()
 
+        # pre-build instrument capability requirements by event type (avoid rebuilding per event)
+        reqs_by_event_type: Dict[str, Dict[str, set]] = {}
+        allowed_pairs_by_event_type: Dict[str, frozenset] = {}
+        for event_type_key in {e.event_type.lower() for e in events}:
+            reqs: Dict[str, set] = defaultdict(set)
+            for agent_name, mission in agent_missions.items():
+                for objective in mission:
+                    if (isinstance(objective, EventDrivenObjective)
+                            and objective.event_type.lower() == event_type_key):
+                        for req in objective:
+                            if (isinstance(req, ExplicitCapabilityRequirement)
+                                    and req.attribute == 'instrument'):
+                                reqs[agent_name].update(v.lower() for v in req.valid_values)
+            if any(len(v) == 0 for v in reqs.values()):
+                raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type_key}`. Case not yet supported.")
+            reqs_by_event_type[event_type_key] = reqs
+            allowed_pairs_by_event_type[event_type_key] = frozenset(
+                (a, i) for a, insts in reqs.items() for i in insts
+            )
+
         # look for accesses to each event for each agent
-        for event in tqdm(events, 
-                            desc='Classifying event accesses, detections, and observations', 
+        for event in tqdm(events,
+                            desc='Classifying event accesses, detections, and observations',
                             leave=False,
                             disable=not printouts):
             # unpackage event
             *_,event_grid_idx,event_gp_idx = event.location
             event_grid_idx = int(event_grid_idx)
             event_gp_idx = int(event_gp_idx)
-            event_type = event.event_type.lower()   
+            event_type = event.event_type.lower()
 
-            # compile observation requirements for this event type
-            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
-
-            # group requirements by agents to avoid double counting
-            for agent_name,mission in agent_missions.items():
-                for objective in mission:
-                    # check if objective matches event type
-                    if (isinstance(objective, EventDrivenObjective) 
-                        and objective.event_type.lower() == event_type):
-                        
-                        # collect instrument capability requirements
-                        for req in objective:
-                            # check if requirement is an instrument capability requirement
-                            if (isinstance(req, ExplicitCapabilityRequirement) 
-                                and req.attribute == 'instrument'):
-                                instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
-            
-            if any([len(instrument_capability_reqs[agent_name]) == 0 
-                        for agent_name in instrument_capability_reqs]):
-                raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type}`. Case not yet supported.")
+            instrument_capability_reqs = reqs_by_event_type[event_type]
+            allowed_pairs = allowed_pairs_by_event_type[event_type]
 
             # get matching accesses for this location
             location_key = (event_grid_idx, event_gp_idx)
@@ -762,16 +821,15 @@ class ResultsProcessor:
             idx = np.nonzero(availability_mask)[0]
 
             # Build compatibility mask only over the narrowed slice
-            compat = np.zeros(idx.shape[0], dtype=bool)
-            for j, i in enumerate(idx):
-                a = str(agent[i])
-                allowed = instrument_capability_reqs.get(a, set())
-                compat[j] = str(instr[i]).lower() in allowed
+            compat = np.fromiter(
+                ((str(agent[i]), str(instr[i]).lower()) in allowed_pairs for i in idx),
+                dtype=bool, count=idx.size
+            )
 
             combined_mask = availability_mask.copy()
             combined_mask[idx] = compat
             location_access_filtered = {col: arr[combined_mask] for col, arr in location_access.items()}
-            
+
             # iterate throufh data to map accesses by agent name and instrument
             t = np.asarray(location_access_filtered["time [s]"], dtype=np.float64)
             agent = np.asarray(location_access_filtered["agent name"])      # str or int
@@ -861,8 +919,8 @@ class ResultsProcessor:
         event_rquests_df_data = []
 
         for event in tqdm(events, 
-                            desc='Classifying event requests', 
-                            leave=False,
+                            desc='[results processor] classifying event requests', 
+                            leave=True,
                             disable=not printouts):
             
             # find measurement requests that match this event
@@ -907,20 +965,27 @@ class ResultsProcessor:
         accesses_per_task : Dict[GenericObservationTask, list] = defaultdict(list)
         accesses_per_task_df_data = []
 
-        for task in tqdm(tasks, desc="Processing task accessibility", leave=False, disable=not printouts):
-            # compile observation requirements for this task
-            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
+        # pre-build per-objective instrument capability requirements (avoid rebuilding per task)
+        obj_agent_reqs: Dict[int, Dict[str, set]] = {}
+        obj_allowed_pairs: Dict[int, frozenset] = {}
+        for agent_name, mission in agent_missions.items():
+            for objective in mission:
+                if objective not in obj_agent_reqs:
+                    obj_agent_reqs[objective] = defaultdict(set)
+                for req in objective:
+                    if (isinstance(req, ExplicitCapabilityRequirement)
+                            and req.attribute == 'instrument'):
+                        obj_agent_reqs[objective][agent_name].update(v.lower() for v in req.valid_values)
+        for objective, reqs in obj_agent_reqs.items():
+            obj_allowed_pairs[objective] = frozenset(
+                (a, i) for a, insts in reqs.items() for i in insts
+            )
 
-            for agent_name, mission in agent_missions.items():
-                # find objectives matching this task
-                if task.objective not in mission: continue # skip if objective not in mission
-
-                # collect instrument capability requirements
-                for req in task.objective:
-                    # check if requirement is an instrument capability requirement
-                    if (isinstance(req, ExplicitCapabilityRequirement) 
-                        and req.attribute == 'instrument'):
-                        instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
+        for task in tqdm(tasks, desc="[results processor] determining task accessibility", leave=True, disable=not printouts):
+            # look up pre-built instrument capability requirements for this task's objective
+            objective = task.objective
+            instrument_capability_reqs = obj_agent_reqs.get(objective, defaultdict(set))
+            allowed_pairs = obj_allowed_pairs.get(objective, frozenset())
 
             # find all accesses and observations that match this task
             task_access_windows = []
@@ -960,11 +1025,10 @@ class ResultsProcessor:
                 idx = np.nonzero(availability_mask)[0]
 
                 # Build compatibility mask only over the narrowed slice
-                compat = np.zeros(idx.shape[0], dtype=bool)
-                for j, i in enumerate(idx):
-                    a = str(agent[i])
-                    allowed = instrument_capability_reqs.get(a, set())
-                    compat[j] = str(instr[i]).lower() in allowed
+                compat = np.fromiter(
+                    ((str(agent[i]), str(instr[i]).lower()) in allowed_pairs for i in idx),
+                    dtype=bool, count=idx.size
+                )
 
                 combined_mask = availability_mask.copy()
                 combined_mask[idx] = compat
@@ -1075,12 +1139,23 @@ class ResultsProcessor:
         return accesses_per_task_df, accesses_per_task
 
     @staticmethod
-    def __classify_observations_per_gp(observations_performed_df : pd.DataFrame) -> Dict[Tuple[int,int], pd.DataFrame]:
+    def __classify_observations_per_gp(observations_performed_df : pd.DataFrame, printouts : bool) -> Dict[Tuple[int,int], pd.DataFrame]:
         # classify observations per GP 
-        observations_per_gp : Dict[Tuple[int,int], pd.DataFrame] \
-                                = {(int(group[0]), int(group[1])) : data
-                                for group,data in observations_performed_df.groupby(['grid index', 'GP index'])} \
-                                if not observations_performed_df.empty else dict() # handle empty observations case
+        # observations_per_gp : Dict[Tuple[int,int], pd.DataFrame] \
+        #                         = {(int(group[0]), int(group[1])) : data
+        #                         for group,data in observations_performed_df.groupby(['grid index', 'GP index'])} \
+        #                         if not observations_performed_df.empty else dict() # handle empty observations case
+        if observations_performed_df.empty:
+            if printouts: tqdm.write('[results processor] no observations were performed. Skipping classification of observations by ground point.')
+            observations_per_gp = dict()
+        else:
+            observations_per_gp = {}
+            for group, data in tqdm(observations_performed_df.groupby(['grid index', 'GP index']),
+                                    desc='[results processor] classifying performed observations by ground point',
+                                    leave=True,
+                                    disable=not printouts):
+                grid_idx, gp_idx = int(group[0]), int(group[1])
+                observations_per_gp[(grid_idx, gp_idx)] = data
 
         # return observations per GP and set of accessible GPs
         return observations_per_gp
@@ -1095,36 +1170,39 @@ class ResultsProcessor:
         observations_per_event = defaultdict(list)
         observations_per_event_df_data = []
 
-        for event in tqdm(events, 
-                            desc='Classifying event accesses, detections, and observations', 
-                            leave=False,
-                            disable=not printouts):
+        # pre-build instrument capability requirements by event type (avoid rebuilding per event)
+        reqs_by_event_type: Dict[str, Dict[str, set]] = {}
+        allowed_pairs_by_event_type: Dict[str, frozenset] = {}
+        for event_type_key in {e.event_type.lower() for e in events}:
+            reqs: Dict[str, set] = defaultdict(set)
+            for agent_name, mission in agent_missions.items():
+                for objective in mission:
+                    if (isinstance(objective, EventDrivenObjective)
+                            and objective.event_type.lower() == event_type_key):
+                        for req in objective:
+                            if (isinstance(req, ExplicitCapabilityRequirement)
+                                    and req.attribute == 'instrument'):
+                                reqs[agent_name].update(v.lower() for v in req.valid_values)
+            if any(len(v) == 0 for v in reqs.values()):
+                raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type_key}`. Case not yet supported.")
+            reqs_by_event_type[event_type_key] = reqs
+            allowed_pairs_by_event_type[event_type_key] = frozenset(
+                (a, i) for a, insts in reqs.items() for i in insts
+            )
+
+        for event in tqdm(events,
+                          desc='[results processor] classifying event accesses, detections, and observations',
+                          leave=True,
+                          disable=not printouts
+                        ):
             # unpackage event
             *_,event_grid_idx,event_gp_idx = event.location
             event_grid_idx = int(event_grid_idx)
             event_gp_idx = int(event_gp_idx)
-            event_type = event.event_type.lower()   
+            event_type = event.event_type.lower()
 
-            # compile observation requirements for this event type
-            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
-
-            # group requirements by agents to avoid double counting
-            for agent_name,mission in agent_missions.items():
-                for objective in mission:
-                    # check if objective matches event type
-                    if (isinstance(objective, EventDrivenObjective) 
-                        and objective.event_type.lower() == event_type):
-                        
-                        # collect instrument capability requirements
-                        for req in objective:
-                            # check if requirement is an instrument capability requirement
-                            if (isinstance(req, ExplicitCapabilityRequirement) 
-                                and req.attribute == 'instrument'):
-                                instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
-            
-            if any([len(instrument_capability_reqs[agent_name]) == 0 
-                        for agent_name in instrument_capability_reqs]):
-                raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type}`. Case not yet supported.")
+            instrument_capability_reqs = reqs_by_event_type[event_type]
+            allowed_pairs = allowed_pairs_by_event_type[event_type]
 
             # get event observations for this event's location
             if (event_grid_idx, event_gp_idx) not in observations_per_gp:
@@ -1151,26 +1229,26 @@ class ResultsProcessor:
             inst_lower = matching_observations["instrument"].str.lower()
             agents = matching_observations["agent name"]
 
-            instrument_mask = [
-                inst in instrument_capability_reqs.get(agent, [])
-                for inst, agent in zip(inst_lower, agents)
-            ]
+            instrument_mask = np.fromiter(
+                ((a, i) in allowed_pairs for a, i in zip(agents, inst_lower)),
+                dtype=bool, count=len(agents)
+            )
             matching_observations = matching_observations[instrument_mask]
 
             # check if any observations remain after filtering by time and instrument capability requirements
-            if matching_observations.empty: 
+            if matching_observations.empty:
                 # skip to next event if no matching observations found
                 continue
 
             # Response times
+            matching_observations = matching_observations.copy()
             matching_observations["resp time [s]"] = matching_observations["t_start"] - event.availability.left
 
             # Normalized
             matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / event.availability.span()
 
             # convert to list of dicts for easier handling downstream
-            matching_observations = [dict(row) for _,row in matching_observations.iterrows()]
-            matching_observations = sorted(matching_observations, key=lambda x: x['t_start']) # sort by observation start time
+            matching_observations = sorted(matching_observations.to_dict('records'), key=lambda x: x['t_start'])
 
             n_obs_data = []
             t_rev_data = []
@@ -1221,27 +1299,31 @@ class ResultsProcessor:
         tasks_observed : Dict[GenericObservationTask, list] = defaultdict(list)
         task_observations_df_data = []
 
+        # pre-build per-objective instrument capability requirements (avoid rebuilding per task)
+        obj_agent_reqs: Dict[int, Dict[str, set]] = {}
+        obj_allowed_pairs: Dict[int, frozenset] = {}
+        for agent_name, mission in agent_missions.items():
+            for objective in mission:
+                if objective not in obj_agent_reqs:
+                    obj_agent_reqs[objective] = defaultdict(set)
+                for req in objective:
+                    if (isinstance(req, ExplicitCapabilityRequirement)
+                            and req.attribute == 'instrument'):
+                        obj_agent_reqs[objective][agent_name].update(v.lower() for v in req.valid_values)
+        for objective, reqs in obj_agent_reqs.items():
+            obj_allowed_pairs[objective] = frozenset(
+                (a, i) for a, insts in reqs.items() for i in insts
+            )
+
         # itarate through tasks and find matching observations
-        for task in tqdm(known_tasks, desc="Processing task observations", leave=False, disable=not printouts):
-            # compile observation requirements for this task
-            instrument_capability_reqs : Dict[str, set] = defaultdict(set)
-
-            for agent_name, mission in agent_missions.items():
-                # find objectives matching this task
-                if task.objective not in mission: continue # skip if objective not in mission
-
-                # collect instrument capability requirements
-                for req in task.objective:
-                    # check if requirement is an instrument capability requirement
-                    if (isinstance(req, ExplicitCapabilityRequirement) 
-                        and req.attribute == 'instrument'):
-                        instrument_capability_reqs[agent_name].update({val.lower() for val in req.valid_values})
+        for task in tqdm(known_tasks, desc="[results processor] classfying observations by task", leave=True, disable=not printouts):
+            # look up pre-built instrument capability requirements for this task's objective
+            objective = task.objective
+            instrument_capability_reqs = obj_agent_reqs.get(objective, defaultdict(set))
+            allowed_pairs = obj_allowed_pairs.get(objective, frozenset())
 
             # find all accesses and observations that match this task
             task_observations = []
-
-            if "EventObservationTask-'generic parameter'@(0,2324)-EVENT-e21c2b8e" in task.id:
-                x = 1 # breakpoint
                 
             # check all task locations
             for location in task.location:
@@ -1277,26 +1359,26 @@ class ResultsProcessor:
                 inst_lower = matching_observations["instrument"].str.lower()
                 agents = matching_observations["agent name"]
 
-                instrument_mask = [
-                    inst in instrument_capability_reqs.get(agent, [])
-                    for inst, agent in zip(inst_lower, agents)
-                ]
+                instrument_mask = np.fromiter(
+                    ((a, i) in allowed_pairs for a, i in zip(agents, inst_lower)),
+                    dtype=bool, count=len(agents)
+                )
                 matching_observations = matching_observations[instrument_mask]
 
                 # check if any observations remain after filtering by time and instrument capability requirements
-                if matching_observations.empty: 
+                if matching_observations.empty:
                     # skip to next event if no matching observations found
                     continue
 
                 # Response times
+                matching_observations = matching_observations.copy()
                 matching_observations["resp time [s]"] = matching_observations["t_start"] - task.availability.left
 
                 # Normalized
                 matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / task.availability.span()
 
                 # convert matching observations to list of dicts for easier handling
-                matching_observations = [dict(row) for _,row in matching_observations.iterrows()]
-                matching_observations = sorted(matching_observations, key=lambda x: x['t_start']) # sort by observation start time
+                matching_observations = sorted(matching_observations.to_dict('records'), key=lambda x: x['t_start'])
 
                 n_obs_data = []
                 t_rev_data = []
@@ -1478,10 +1560,12 @@ class ResultsProcessor:
                         ) -> pd.DataFrame:      
 
         # classify re-observations
+        if printouts: tqdm.write('[results summary] classifying re-observations')
         events_re_observable, events_re_obs \
             = ResultsProcessor.__classify_event_reobservations(accesses_per_event, observations_per_event)
 
         # clasify co-observations
+        if printouts: tqdm.write('[results summary] classifying co-observations')
         events_co_observable, events_co_observable_fully, events_co_observable_partially, \
             events_co_obs, events_co_obs_fully, events_co_obs_partially \
                 = ResultsProcessor.__classify_event_coobservations(accesses_per_event, observations_per_event, all_tasks)
@@ -1619,6 +1703,14 @@ class ResultsProcessor:
         # reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
         # known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
 
+
+        # pre-compute per-agent aggregations once (each groupby re-scans the full DF)
+        planned_by_agent = planned_rewards_df.groupby('agent')['planned reward'].sum() \
+            if planned_rewards_df is not None else None
+        cost_by_agent = execution_costs_df.groupby('agent')['cost'].sum() \
+            if execution_costs_df is not None else None
+        obtained_by_agent = obtained_rewards_df.groupby('agent')['reward'].sum() \
+            if obtained_rewards_df is not None else None
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -1784,28 +1876,28 @@ class ResultsProcessor:
                     ['Standard Deviation of Planned Reward per Task Observation', std_planned_reward],
                     ['Median Planned Reward per Task Observation', median_planned_reward],
                     
-                    ['Average Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean(), precision) if planned_rewards_df is not None else 0.0],
-                    ['Standard Deviation of Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std(), precision) if planned_rewards_df is not None else 0.0],
-                    ['Median Planned Reward per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median(), precision) if planned_rewards_df is not None else 0.0],
+                    ['Average Planned Reward per Agent', np.round(planned_by_agent.mean(), precision) if planned_by_agent is not None else 0.0],
+                    ['Standard Deviation of Planned Reward per Agent', np.round(planned_by_agent.std(), precision) if planned_by_agent is not None else 0.0],
+                    ['Median Planned Reward per Agent', np.round(planned_by_agent.median(), precision) if planned_by_agent is not None else 0.0],
 
                     # Cost Statistics
                     ['Total Execution Cost', np.round(execution_costs_df['cost'].sum(), precision) if execution_costs_df is not None else 0.0],
-                    ['Average Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if execution_costs_df is not None else 0.0],
-                    ['Standard Deviation of Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if execution_costs_df is not None else 0.0],
-                    ['Median Execution Cost per Agent', np.round(execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if execution_costs_df is not None else 0.0],
+                    ['Average Execution Cost per Agent', np.round(cost_by_agent.mean(), precision) if cost_by_agent is not None else 0.0],
+                    ['Standard Deviation of Execution Cost per Agent', np.round(cost_by_agent.std(), precision) if cost_by_agent is not None else 0.0],
+                    ['Median Execution Cost per Agent', np.round(cost_by_agent.median(), precision) if cost_by_agent is not None else 0.0],
 
                     # Utility Statistics
                     ['Total Planned Utility', total_planned_utility],
                     # ['Normalized Total Planned Utility', total_planned_utility / total_available_utility if total_available_utility > 0 else 0.0],
-                    ['Average Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
-                    ['Standard Deviation of Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
-                    ['Median Planned Utility per Agent', np.round(planned_rewards_df.groupby('agent')['planned reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Average Planned Utility per Agent', np.round(planned_by_agent.mean() - cost_by_agent.mean(), precision) if planned_by_agent is not None and cost_by_agent is not None else 0.0],
+                    ['Standard Deviation of Planned Utility per Agent', np.round(planned_by_agent.std() - cost_by_agent.std(), precision) if planned_by_agent is not None and cost_by_agent is not None else 0.0],
+                    ['Median Planned Utility per Agent', np.round(planned_by_agent.median() - cost_by_agent.median(), precision) if planned_by_agent is not None and cost_by_agent is not None else 0.0],
 
                     ['Total Obtained Utility', total_obtained_utility],
                     # ['Normalized Total Obtained Utility', total_obtained_utility / total_available_utility if total_available_utility > 0 else 0.0],
-                    ['Average Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().mean() - execution_costs_df.groupby('agent')['cost'].sum().mean(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
-                    ['Standard Deviation of Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().std() - execution_costs_df.groupby('agent')['cost'].sum().std(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
-                    ['Median Obtained Utility per Agent', np.round(obtained_rewards_df.groupby('agent')['reward'].sum().median() - execution_costs_df.groupby('agent')['cost'].sum().median(), precision) if obtained_rewards_df is not None and execution_costs_df is not None else 0.0],
+                    ['Average Obtained Utility per Agent', np.round(obtained_by_agent.mean() - cost_by_agent.mean(), precision) if obtained_by_agent is not None and cost_by_agent is not None else 0.0],
+                    ['Standard Deviation of Obtained Utility per Agent', np.round(obtained_by_agent.std() - cost_by_agent.std(), precision) if obtained_by_agent is not None and cost_by_agent is not None else 0.0],
+                    ['Median Obtained Utility per Agent', np.round(obtained_by_agent.median() - cost_by_agent.median(), precision) if obtained_by_agent is not None and cost_by_agent is not None else 0.0],
 
                     # Available Reward and Utility Statistics
                     ['Total Task Priority Available', total_task_priority],
@@ -1839,7 +1931,8 @@ class ResultsProcessor:
             accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
             observations_per_event : Dict[GeophysicalEvent, List[Dict]],
             tasks : List[GenericObservationTask],
-            t_corr : float = 3600.0 # TODO temp solution
+            t_corr : float = 3600.0, # TODO temp solution
+            printouts : bool = True
         ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
         # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
 
@@ -2161,8 +2254,8 @@ class ResultsProcessor:
         n_gps = None
         gps_accessible_compiled = set()
         for _, agent in tqdm(orbitdata.items(), 
-                             desc='Counting total and accessible ground points',
-                             leave=False, 
+                             desc='[results summary] counting total and accessible ground points',
+                             leave=True, 
                              disable=not printouts
                             ):
 
