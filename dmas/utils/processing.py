@@ -435,8 +435,8 @@ class ResultsProcessor:
             known_tasks.append(task)
 
         # supplement known with event request tasks
-        requested_tasks = [req.task for req in task_reqs 
-                            if req.task not in known_tasks]
+        requested_tasks = {req.task for req in task_reqs 
+                            if req.task not in known_tasks}
         known_tasks.extend(requested_tasks)
 
         # map event types to missions
@@ -450,6 +450,8 @@ class ResultsProcessor:
         for event in events:           
             for relevant_mission in event_type_missions.get(event.event_type, set()):
                 for relevant_objective in relevant_mission:
+                    if not isinstance(relevant_objective, EventDrivenObjective):
+                        continue
                     task = EventObservationTask(
                         relevant_objective.parameter,
                         event=event,
@@ -1553,7 +1555,7 @@ class ResultsProcessor:
                         p_event_co_observable, p_event_co_obs, p_event_co_obs_if_co_observable, p_event_co_obs_if_detected, p_event_co_obs_if_co_observable_and_detected, \
                             p_event_co_observable_fully, p_event_co_obs_fully, p_event_co_obs_fully_if_co_observable_fully, p_event_co_obs_fully_if_detected, p_event_co_obs_fully_if_co_observable_fully_and_detected, \
                                 p_event_co_observable_partial, p_event_co_obs_partial, p_event_co_obs_partial_if_co_observable_partially, p_event_co_obs_partial_if_detected, p_event_co_obs_partial_if_co_observable_partially_and_detected, \
-                                    p_task_known, p_event_task_known,p_default_task_known, \
+                                    p_task_known, p_event_task_known,p_default_task_known, p_task_observed_if_known,\
                                         p_task_observable, p_event_task_observable, p_default_task_observable, p_task_observed, p_event_task_observed, p_default_task_observed, p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
                                             p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable\
                                                 = ResultsProcessor.__calc_event_probabilities(compiled_orbitdata, 
@@ -1740,6 +1742,7 @@ class ResultsProcessor:
                     # TODO add co-observation probabilities
                     ['P(Task Observable)', np.round(p_task_observable,precision)],
                     ['P(Task Observed)', np.round(p_task_observed,precision)],
+                    ['P(Task Observed | Task Known)', np.round(p_task_observed_if_known,precision)],
                     ['P(Task Observed | Task Observable)', np.round(p_task_observed_if_observable,precision)],
                     ['P(Task Reobserved)', np.round(p_task_reobserved,precision)],
                     ['P(Task Reobserved | Task Reobservable)', np.round(p_task_reobserved_if_reobservable,precision)],
@@ -1758,8 +1761,8 @@ class ResultsProcessor:
                     
                     # Messaging Statistics
                     ['Total Messages Broadcasted', len(agent_broadcasts_df)],
-                    ['P(Message Broadcasted | Bid Message )', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='BUS']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
-                    ['P(Message Broadcasted | Measurement Request Message )', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='MEASUREMENT_REQ']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
+                    ['P(Message Broadcasted | Bid Message)', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='BUS']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
+                    ['P(Message Broadcasted | Measurement Request Message)', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='MEASUREMENT_REQ']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
 
                     # Response Time Statistics
                     ['Average Response Time to Event [s]', t_response_to_event['mean']],
@@ -2540,6 +2543,10 @@ class ResultsProcessor:
         p_event_task_observed = n_event_tasks_observed / n_event_tasks if n_event_tasks > 0 else np.NAN
         p_default_task_observed = n_default_tasks_observed / n_default_tasks if n_default_tasks > 0 else np.NAN
 
+        n_known_tasks_observed = len( [task for task in tasks_observed if task in tasks_known] )
+        p_task_known_observed = n_known_tasks_observed / n_tasks if n_tasks > 0 else np.NAN
+        p_task_observed_if_known = p_task_known_observed / p_task_known if n_known_tasks > 0 else np.NAN
+
         p_task_observed_if_observable = n_tasks_observed / n_tasks_observable if n_tasks_observable > 0 else np.NAN
         p_event_task_observed_if_observable = n_event_tasks_observed / n_event_tasks_observable if n_event_tasks_observable > 0 else np.NAN
         p_default_task_observed_if_observable = n_default_tasks_observed / n_default_tasks_observable if n_default_tasks_observable > 0 else np.NAN
@@ -2560,7 +2567,7 @@ class ResultsProcessor:
                             p_event_co_observable, p_event_co_obs, p_event_co_obs_if_co_observable, p_event_co_obs_if_detected, p_event_co_obs_if_co_observable_and_detected, \
                                 p_event_co_observable_fully, p_event_co_obs_fully, p_event_co_obs_fully_if_co_observable_fully, p_event_co_obs_fully_if_detected, p_event_co_obs_fully_if_co_observable_fully_and_detected, \
                                     p_event_co_observable_partial, p_event_co_obs_partial, p_event_co_obs_partial_if_co_observable_partially, p_event_co_obs_partial_if_detected, p_event_co_obs_partial_if_co_observable_partially_and_detected, \
-                                        p_task_known, p_event_task_known,p_default_task_known, \
+                                        p_task_known, p_event_task_known,p_default_task_known, p_task_observed_if_known, \
                                             p_task_observable, p_event_task_observable, p_default_task_observable, p_task_observed, p_event_task_observed, p_default_task_observed, p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
                                                 p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable
 
@@ -3258,33 +3265,43 @@ class ResultsProcessor:
         dual_bound = dict()
         dual_n_obs = dict()
 
+        # Cross-task access cache: keyed by the actual inputs to get_available_accesses.
+        # The same obs_opp object can serve multiple tasks; when two tasks share the same
+        # target locations and accessibility window, the lookup result is identical.
+        # Key: (obs_opp object identity, agent_name, frozenset of (grid,gp) targets, t_start, t_end)
+        _accesses_cache: dict = {}
+
         for task, observation_opps in tqdm(
             task_observation_opps.items(),
             desc='Calculating dual bound',
             disable=not printouts or len(task_observation_opps) < 10,
             leave=False,
-        ):                       
-            # precompute accesses for all observation opportunities of this task 
+        ):
+            # precompute accesses for all observation opportunities of this task
+            task_targets = frozenset(
+                (int(gi), int(gp)) for *_, gi, gp in task.location
+            )
             precomputed_accesses = {}
-            for obs_opp,agent_name,_ in tqdm(observation_opps, 
+            for obs_opp,agent_name,_ in tqdm(observation_opps,
                                              desc=f'Precomputing accesses for task {task.id.split("-")[-1]}',
                                              disable=not printouts or len(observation_opps) < 10,
                                              leave=False):
                 th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
                 t_start = obs_opp.task_accessibility[task.id].left
                 t_end   = obs_opp.task_accessibility[task.id].right
-                
-                # Query the full window once — widest possible d_img
-                accesses = ResultsProcessor.get_available_accesses(
-                    task,
-                    obs_opp.instrument_name,
-                    th,
-                    t_start,                    # earliest possible t_img
-                    t_end - t_start,            # full window duration
-                    compiled_orbitdata[agent_name],
-                    cross_track_fovs[agent_name],
-                )
-                precomputed_accesses[(obs_opp, agent_name)] = accesses
+
+                cache_key = (id(obs_opp), agent_name, task_targets, t_start, t_end)
+                if cache_key not in _accesses_cache:
+                    _accesses_cache[cache_key] = ResultsProcessor.get_available_accesses(
+                        task,
+                        obs_opp.instrument_name,
+                        th,
+                        t_start,
+                        t_end - t_start,
+                        compiled_orbitdata[agent_name],
+                        cross_track_fovs[agent_name],
+                    )
+                precomputed_accesses[(obs_opp, agent_name)] = _accesses_cache[cache_key]
 
             # Build available_obs_times and enumerate feasible sequences
             # (identical to original)
@@ -3375,6 +3392,7 @@ class ResultsProcessor:
                 if len(feasible_sequences) > 4:
                     method = 'Exhaustive BO (Parallellized)'
                     with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+                    # with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
                         results = list(executor.map(_optimise_sequence, all_args))
                 else:
                     method = 'Exhaustive BO (Serial)'
@@ -3407,195 +3425,6 @@ class ResultsProcessor:
 
         return sum(dual_bound.values())
     
-    # ---------------------------------------------------------------------------
-    # Sequence evaluation — estimate_fn called at every t_obs
-    # ---------------------------------------------------------------------------
-
-    # @staticmethod
-    # def _evaluate_sequence_at_times(
-    #     task,
-    #     sequence: list[tuple],          # (agent_name, t_earliest_obs, look_angle, obs_opp)
-    #     times: list[tuple],
-    #     agent_missions: Dict[str,Mission],
-    #     agent_specs: dict,
-    #     cross_track_fovs: dict,
-    #     compiled_orbitdata: dict,
-    #     estimate_fn,
-    # ) -> float:
-    #     """
-    #     Score a sequence at given observation times.
-
-    #     estimate_fn is called for every observation at every BO iteration
-    #     because measurement_performance depends on t_obs (through d_obs and
-    #     any other time-dependent fields it computes internally).
-    #     """
-    #     total = 0.0
-    #     for n_obs, ((agent_name, _, th, obs_opp), time) in enumerate(
-    #         zip(sequence, times)
-    #     ):
-    #         # unpack observation time details
-    #         t_obs = time[0]
-    #         d_obs = time[1]
-    #         t_prev = times[n_obs-1][0] if n_obs > 0 else 0.0
-
-    #         # Recompute performance at the current observation time
-    #         measurement_performance : dict = estimate_fn(
-    #             task,
-    #             obs_opp.instrument_name,
-    #             th,
-    #             t_obs,
-    #             d_obs,
-    #             agent_specs[agent_name],
-    #             cross_track_fovs[agent_name],
-    #             compiled_orbitdata[agent_name],
-    #             n_obs,
-    #             t_prev,
-    #         )
-
-    #         obs_opp_utility = max(
-    #             agent_missions[agent_name].calc_task_value(task, measurement, False)
-    #             for measurement in measurement_performance.values()
-    #         ) if measurement_performance else 0.0
-
-    #         total += obs_opp_utility
-
-    #     return total
-
-    """
-    @staticmethod
-    def __calculate_dual_bound_DEPRECATED(
-                        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]],
-                        compiled_orbitdata : Dict[str, OrbitData],
-                        agent_missions: Dict[str, Mission],
-                        agent_specs: Dict[str, object],
-                        cross_track_fovs : Dict[str, float],
-                        obtained_rewards_df : pd.DataFrame,
-                        printouts : bool
-                    ) -> float:
-        # initiate bound value to 0
-        dual_bound = dict()
-        dual_n_obs = dict()
-
-        # remove any requirements that are to be ignored in the reward calculation for this bound calculation
-        ignored_requirements_for_bound_calculation = [
-            TemporalRequirementAttributes.DURATION.value,
-            TemporalRequirementAttributes.REVISIT_TIME.value,
-            TemporalRequirementAttributes.CO_OBSERVATION_TIME.value,
-            TemporalRequirementAttributes.RESPONSE_TIME.value,
-            TemporalRequirementAttributes.RESPONSE_TIME_NORM.value,
-            TemporalRequirementAttributes.OBS_TIME.value,
-
-        ]
-        for mission in agent_missions.values():
-            for obj in mission:
-                obj.requirements = {key : req for key,req in obj.requirements.items()
-                                    if req.attribute not in ignored_requirements_for_bound_calculation}
-
-        # calculate the utility for each task
-        for task, observation_opps in tqdm(task_observation_opps.items(),
-                                           desc='Calculating dual bound',
-                                           disable=not printouts or len(task_observation_opps) < 10,
-                                           leave=False,
-                                        ):
-            
-            # calculate meaurement performance for each observation opportunity for this task and calculate the utility of each observation opportunity for this task
-            measurement_performance_per_obs_opp = {}
-            for obs_opp, agent_name, obs_time in observation_opps:
-                obs_opp : ObservationOpportunity
-
-                # define observation duration, look angle for this observation opportunity, and previous observation time
-                d_obs = obs_opp.accessibility.span() - (obs_time - obs_opp.accessibility.left)
-                th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
-                t_prev = 0.0
-
-                # estimate measurement performance for this observation opportunity
-                measurement_performance \
-                        = ResultsProcessor.__estimate_task_performance_metrics(task,
-                                                                            obs_opp.instrument_name,
-                                                                            th,
-                                                                            obs_time,
-                                                                            d_obs,
-                                                                            agent_specs[agent_name],
-                                                                            cross_track_fovs[agent_name],
-                                                                            compiled_orbitdata[agent_name],
-                                                                            0,
-                                                                            0.0
-                                                                        )
-                # store measurement performance for this observation opportunity
-                measurement_performance_per_obs_opp[(obs_opp, agent_name, obs_time)] = measurement_performance
-
-            # compile observation opportunities for this task across agents and sort by observation time
-            available_obs_times = [ 
-                (obs_time, agent_name, (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2, obs_opp)
-                for obs_opp, agent_name, obs_time in observation_opps
-            ]
-
-            # generate all possible observation time opportunities
-            feasible_sequences = ResultsProcessor._find_longest_observation_sequence_for_task(available_obs_times)
-            
-            # initialize search for best observation sequence for this task to 0 utility
-            task_utility = 0.0
-            best_sequence = None
-
-            # find sequence that maximizes value for this agent
-            for obs_names,obs_times,obs_look_angles,obs_tasks in tqdm(feasible_sequences,
-                                                                      desc=f'Finding best observation sequence for task {task.id.split("-")[-1]}',
-                                                                      disable=not printouts or len(feasible_sequences) < 10,
-                                                                      leave=False
-                                                                    ):
-                # initiate sequence value tracker
-                sequence_utility = 0.0
-
-                # evaluate sequence value for this agent
-                for n_obs,(agent_name,t_obs,_,obs_opp) in enumerate(zip(obs_names,obs_times,obs_look_angles,obs_tasks)):
-                    # get matching agent mission
-                    agent_mission = agent_missions[agent_name]
-                    d_obs = obs_opp.accessibility.span() - (t_obs - obs_opp.accessibility.left)
-                    t_prev = obs_times[n_obs-1] if n_obs > 0 else 0.0
-                    
-                    # get measurement performance for this observation opportunity
-                    measurement_performance \
-                        = measurement_performance_per_obs_opp[(obs_opp, agent_name, t_obs)]
-
-                    # update observation number and previous observation time 
-                    for measurement in measurement_performance.values():
-                        measurement[ObservationRequirementAttributes.OBSERVATION_NUMBER.value] = n_obs + 1
-                        if n_obs > 0:
-                            measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = t_obs - t_prev
-                        else:
-                            measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
-
-                    # calculate utility of this observation opportunity
-                    obs_opp_utility = max([agent_mission.calc_task_value(task, measurement, False) 
-                                for measurement in measurement_performance.values()]) \
-                                    if len(measurement_performance.values()) > 0 else 0.0
-                    
-                    # add to sequence utility
-                    sequence_utility += obs_opp_utility
-
-                # check if this sequence has higher utility than the best found sequence for this task so far
-                if sequence_utility > task_utility:
-                    task_utility = sequence_utility
-                    best_sequence = (obs_names,obs_times,obs_look_angles,obs_tasks)
-            
-            # add best sequence utility for this task to the dual bound
-            dual_bound[task] = task_utility
-
-            # find observations performed for this task in the current solution
-            obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
-
-            # ensure that the best sequence utility for this task is at least as high as the reward obtained for this task in the current solution
-            if sum(obs['reward']) > task_utility:
-                x = 1
-
-        dual_bound_df = pd.DataFrame(list(dual_bound.items()), columns=['task','reward'])
-        dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
-        if printouts: print(dual_bound_df.to_string(index=False))
-            
-        # return value
-        return sum(dual_bound.values())
-    """
-
     @staticmethod
     def __estimate_task_performance_metrics( 
                                             task : GenericObservationTask, 
@@ -3696,7 +3525,8 @@ class ResultsProcessor:
             # update instrument-specific observation performance information
             if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
                 or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
-                spectral_bands_config = instrument_spec.spectral_config.get('bands') if instrument_spec.spectral_config is not None else []
+                # check if spectral config is a parameter of the instrument specification object; if not, assume no spectral bands are available                
+                spectral_bands_config = instrument_spec.spectral_config.get('bands', []) if hasattr(instrument_spec, 'spectral_config') else []
                 spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
                                   # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
                                   for band in spectral_bands_config] 

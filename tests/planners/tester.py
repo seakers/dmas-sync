@@ -323,7 +323,8 @@ class PlannerTester(ABC):
                 "coverageType": "GRID COVERAGE",
                 "outDir" : f"./tests/planners/orbit_data/{scenario_name}",
                 "saveUnprocessedCoverage": "True",
-                "calculateDual" : "False",
+                # "calculateDual" : "False",
+                "calculateDual" : "True",
             }
         return settings
     
