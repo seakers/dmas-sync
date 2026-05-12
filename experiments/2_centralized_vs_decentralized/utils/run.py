@@ -83,8 +83,8 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     t0 = time.time()
 
     # Unpack trial row
-    #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_centralization`
-    trial_id,preplanner,replanner,connectivity,scenario,data_processing,constellation,date, *_ = trial_row
+    #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_centralization,calc_dual`
+    trial_id,preplanner,replanner,connectivity,scenario,data_processing,constellation,date,*_,calc_dual = trial_row
     
     # normalize `nan` values to None
     preplanner = "none" if not isinstance(preplanner, str) and pd.isna(preplanner) else preplanner.lower()
@@ -132,7 +132,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             data_processing, constellation, date, 
             run_cfg.spacecraft_specs_template, run_cfg.instrument_specs,
             run_cfg.planner_specs, run_cfg.ground_operator_specs_template, 
-            sim_cfg.reduced,
+            sim_cfg.reduced, calc_dual
         )
 
         # random wait for staggering

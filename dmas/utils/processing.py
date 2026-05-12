@@ -1627,8 +1627,20 @@ class ResultsProcessor:
             assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
                 "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
         else:
+            # if not calculating reward bounds, set to NaN for clarity in summary
             reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
-            known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
+            
+            # extract accesses for known tasks only
+            accesses_per_known_task = {task: accesses for task, accesses in accesses_per_task.items() if task in known_tasks}
+
+            # check if all tasks are known
+            all_tasks_known = (len(accesses_per_task) == len(accesses_per_known_task)
+                               and all(task in known_tasks for task in accesses_per_known_task))
+
+            # calculate bounds for known tasks only           
+            known_reward_primal_bound, known_reward_dual_bound \
+                = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts) \
+                    if not all_tasks_known else (reward_primal_bound, reward_dual_bound)
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -1822,6 +1834,8 @@ class ResultsProcessor:
                     ['Total Observable Task Priority', total_observable_task_priority],
                     ['Task Reward Primal Bound', reward_primal_bound],
                     ['Task Reward Dual Bound', reward_dual_bound],
+                    ['Known Task Reward Primal Bound', known_reward_primal_bound],
+                    ['Known Task Reward Dual Bound', known_reward_dual_bound],
 
                     # Results dir
                     # ['Results Directory', results_path]
@@ -3265,12 +3279,6 @@ class ResultsProcessor:
         dual_bound = dict()
         dual_n_obs = dict()
 
-        # Cross-task access cache: keyed by the actual inputs to get_available_accesses.
-        # The same obs_opp object can serve multiple tasks; when two tasks share the same
-        # target locations and accessibility window, the lookup result is identical.
-        # Key: (obs_opp object identity, agent_name, frozenset of (grid,gp) targets, t_start, t_end)
-        _accesses_cache: dict = {}
-
         for task, observation_opps in tqdm(
             task_observation_opps.items(),
             desc='Calculating dual bound',
@@ -3278,9 +3286,6 @@ class ResultsProcessor:
             leave=False,
         ):
             # precompute accesses for all observation opportunities of this task
-            task_targets = frozenset(
-                (int(gi), int(gp)) for *_, gi, gp in task.location
-            )
             precomputed_accesses = {}
             for obs_opp,agent_name,_ in tqdm(observation_opps,
                                              desc=f'Precomputing accesses for task {task.id.split("-")[-1]}',
@@ -3290,21 +3295,19 @@ class ResultsProcessor:
                 t_start = obs_opp.task_accessibility[task.id].left
                 t_end   = obs_opp.task_accessibility[task.id].right
 
-                cache_key = (id(obs_opp), agent_name, task_targets, t_start, t_end)
-                if cache_key not in _accesses_cache:
-                    _accesses_cache[cache_key] = ResultsProcessor.get_available_accesses(
-                        task,
-                        obs_opp.instrument_name,
-                        th,
-                        t_start,
-                        t_end - t_start,
-                        compiled_orbitdata[agent_name],
-                        cross_track_fovs[agent_name],
-                    )
-                precomputed_accesses[(obs_opp, agent_name)] = _accesses_cache[cache_key]
+                # Query the full window once — widest possible d_img
+                accesses = ResultsProcessor.get_available_accesses(
+                    task,
+                    obs_opp.instrument_name,
+                    th,
+                    t_start,                    # earliest possible t_img
+                    t_end - t_start,            # full window duration
+                    compiled_orbitdata[agent_name],
+                    cross_track_fovs[agent_name],
+                )
+                precomputed_accesses[(obs_opp, agent_name)] = accesses
 
             # Build available_obs_times and enumerate feasible sequences
-            # (identical to original)
             available_obs_times = [
                 (obs_time, agent_name,
                 (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2,

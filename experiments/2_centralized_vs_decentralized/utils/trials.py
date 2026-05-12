@@ -129,7 +129,7 @@ if __name__ == "__main__":
     all_trials = tag_and_merge(trial_dfs, param_cols)
 
     # apply rules to filter out invalid scenarios
-    all_trials = apply_rules(all_trials, rules)
+    all_trials = apply_rules(all_trials, rules) 
 
     # 2) sort trials (optional, but can help with scheduling and analysis later)
     # # sort by date
@@ -139,6 +139,32 @@ if __name__ == "__main__":
     # 3) Trial IDs after ordering
     all_trials.insert(0, "Trial ID", all_trials.index)
     print(f" - Total number of trials: {len(all_trials)}")
+
+    # 4) Add a column that flags whether to calculate the dual for the trial based on scenario, constellation, and date
+    # initialize `calculateDual` column to `False`
+    all_trials["calculateDual"] = False
+    
+    # get combinations of scenario, constellation, and date
+    combos = all_trials[["Scenario", "Constellation", "Date"]].drop_duplicates()
+    
+    for _,combo_row in combos.iterrows():
+        # create mask for trials matching the combo
+        mask = ((all_trials["Scenario"] == combo_row["Scenario"]) &
+                (all_trials["Constellation"] == combo_row["Constellation"]) &
+                (all_trials["Date"] == combo_row["Date"]))
+        
+        # get slice of trials matching the combo
+        combo_trials = all_trials.loc[mask]
+        
+        
+        # set `calculateDual` to true only for the highest trial id among the slice 
+        if not combo_trials.empty:
+            max_trial_id = combo_trials["Trial ID"].max()
+            all_trials.loc[all_trials["Trial ID"] == max_trial_id, "calculateDual"] = True
+        else:
+            print(f"Warning: No trials found for combo {combo_row.to_dict()}")
+
+        x = 1
 
     # generate results directory
     out_dir = os.path.join('.', 'experiments','2_centralized_vs_decentralized', 'resources', 'trials')

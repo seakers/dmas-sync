@@ -482,10 +482,14 @@
                 // "--single-trial", "208", // None,CBBA,Interconstellation,Comprehensive,Onboard
                 // "--single-trial", "212", // None,CBBA,Interconstellation,Comprehensive,Oracle
                 
-                "-t", "full_factorial_trials_2026-05-10",
+                // "-t", "full_factorial_trials_2026-05-10",
                 // "--single-trial", "19",
-                "--single-trial", "20",
+                // "--single-trial", "20",
                 // "--single-trial", "21",
+
+                "-t", "full_factorial_trials_2026-05-11",
+                // "--single-trial", "34",
+                "--single-trial", "35",
 
                 // "--profile-cpu",
                 // "--profile-mem",

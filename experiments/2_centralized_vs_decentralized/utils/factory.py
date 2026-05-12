@@ -142,7 +142,8 @@ def create_propagator_settings_specifications(base_path : str,
                                               scenario : str,
                                               constellation : str,
                                               date : str,
-                                              reduced : bool) -> dict:
+                                              reduced : bool,
+                                              calc_dual : bool) -> dict:
     # define out_dir name
     scenario_name = f"{constellation.lower()}_{scenario.lower()}_{date}"
     if reduced: scenario_name += "_reduced"
@@ -158,7 +159,8 @@ def create_propagator_settings_specifications(base_path : str,
     return {
             "coverageType": "GRID COVERAGE",
             "outDir" : out_dir,
-            "saveUnprocessedCoverage" : save_unprocessed
+            "saveUnprocessedCoverage" : save_unprocessed,
+            "calculateDual" : calc_dual,
         }
     
 def create_spacecraft_specifications(
@@ -405,7 +407,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
                                     data_processing : str, constellation : str, date : str,   
                                     spacecraft_specs_template : dict, instrument_specs : dict,
                                     planner_specs : dict,
-                                    ground_operator_specs_template : dict, reduced : bool) -> dict:
+                                    ground_operator_specs_template : dict, reduced : bool, calc_dual: bool) -> dict:
     
     """ Generate mission specifications for a given scenario. """
     # create mission specifications from template
@@ -431,7 +433,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
 
     # set propagator settings
     mission_specs['settings'] \
-        = create_propagator_settings_specifications(base_path, scenario, constellation, date, reduced)
+        = create_propagator_settings_specifications(base_path, scenario, constellation, date, reduced, calc_dual)
     
     # create satellite specifications
     mission_specs['spacecraft'] \
