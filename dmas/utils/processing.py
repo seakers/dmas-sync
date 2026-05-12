@@ -46,63 +46,61 @@ class ResultsProcessor:
                         printouts: bool = True
                     ) -> Tuple:
         """ processes simulation results after execution """
-        # extract agent field of view specifications from agent specs object
-        cross_track_fovs = {agent : ResultsProcessor._collect_fov_specs(specs) 
+        cross_track_fovs = {agent : ResultsProcessor._collect_fov_specs(specs)
                             for agent,specs in agent_specs.items()}
 
-        # load results
-        observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
-        task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
-        events_detected_df, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        all_tasks_df, all_tasks, known_tasks_df, known_tasks = ResultsProcessor.__load_tasks(results_path, missions, events, task_reqs, printouts)
-        agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path, printouts)
-        planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
-        grid_data_df = ResultsProcessor.__load_grid_data(compiled_orbitdata, printouts)
-        
-        # compile accessibility information
-        ## ground points
-        accesses_per_gp = ResultsProcessor.__classify_accesses_per_gp(compiled_orbitdata)
-
-        ## events
-        events_per_gp = ResultsProcessor.__classify_events_per_gp(events)
-        accesses_per_event_df, accesses_per_event = ResultsProcessor.__compile_events_accessibility(events, compiled_orbitdata, agent_missions, accesses_per_gp, printouts)
-        events_requested_df, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
-
-        ## tasks
-        accesses_per_task_df, accesses_per_task = ResultsProcessor.__compile_task_accessibility(compiled_orbitdata, all_tasks, agent_missions, accesses_per_gp, printouts)
-
-        # compile observations
-        ## ground points
-        observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df)
-
-        ## events
-        observations_per_event_df, observations_per_event = ResultsProcessor.__compile_events_observed(events, observations_per_gp, agent_missions, printouts)
-
-        ## tasks
-        observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(all_tasks, observations_per_gp, agent_missions, printouts)
-        obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, agent_specs, cross_track_fovs, compiled_orbitdata, printouts)
-
-        # print compiled data
         processed_results_path = os.path.join(results_path)
         os.makedirs(processed_results_path, exist_ok=True)
 
-        printable_dfs : Dict[str, pd.DataFrame] = {
-            'grid_data' : grid_data_df,
-            'events_detected' : events_detected_df,
-            'events_requested' : events_requested_df,
-            'all_tasks' : all_tasks_df,
-            'known_tasks' : known_tasks_df,
-            'accesses_per_event': accesses_per_event_df,
-            'accesses_per_task' : accesses_per_task_df,
-            'observations_per_event' : observations_per_event_df,            
-            'observations_per_task' : observations_per_task_df,
-            'planned_rewards' : planned_rewards_df,
-            'obtained_rewards' : obtained_rewards_df,
-            'execution_costs' : execution_costs_df,
-        }
+        def _write(name: str, df: pd.DataFrame) -> None:
+            if df is not None:
+                df.to_parquet(os.path.join(processed_results_path, f'{name}.parquet'), index=False)
 
-        for filename,df in printable_dfs.items():
-            df.to_parquet(os.path.join(processed_results_path, f'{filename}.parquet'), index=False)
+        # --- load and immediately release DFs that are not needed after writing ---
+        observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
+        task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
+
+        events_detected_df, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
+        _write('events_detected', events_detected_df);  del events_detected_df
+
+        all_tasks_df, all_tasks, known_tasks_df, known_tasks = ResultsProcessor.__load_tasks(results_path, missions, events, task_reqs, printouts)
+        _write('all_tasks', all_tasks_df);    del all_tasks_df
+        _write('known_tasks', known_tasks_df); del known_tasks_df
+
+        agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path, printouts)
+
+        planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
+        _write('planned_rewards', planned_rewards_df)
+        _write('execution_costs', execution_costs_df)
+
+        grid_data_df = ResultsProcessor.__load_grid_data(compiled_orbitdata, printouts)
+        _write('grid_data', grid_data_df);  del grid_data_df
+
+        # --- accessibility: accesses_per_gp is the largest structure; build it once and reuse ---
+        accesses_per_gp = ResultsProcessor.__classify_accesses_per_gp(compiled_orbitdata)
+        events_per_gp   = ResultsProcessor.__classify_events_per_gp(events)
+
+        accesses_per_event_df, accesses_per_event = ResultsProcessor.__compile_events_accessibility(events, compiled_orbitdata, agent_missions, accesses_per_gp, printouts)
+        _write('accesses_per_event', accesses_per_event_df);  del accesses_per_event_df
+
+        events_requested_df, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
+        _write('events_requested', events_requested_df);  del events_requested_df
+
+        accesses_per_task_df, accesses_per_task = ResultsProcessor.__compile_task_accessibility(compiled_orbitdata, all_tasks, agent_missions, accesses_per_gp, printouts)
+        _write('accesses_per_task', accesses_per_task_df);  del accesses_per_task_df
+
+        # --- observations ---
+        observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df)
+        del observations_performed_df
+
+        observations_per_event_df, observations_per_event = ResultsProcessor.__compile_events_observed(events, observations_per_gp, agent_missions, printouts)
+        _write('observations_per_event', observations_per_event_df);  del observations_per_event_df
+
+        observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(all_tasks, observations_per_gp, agent_missions, printouts)
+        _write('observations_per_task', observations_per_task_df);  del observations_per_task_df
+
+        obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, agent_specs, cross_track_fovs, compiled_orbitdata, printouts)
+        _write('obtained_rewards', obtained_rewards_df)
 
         # return compiled data for summary generation
         return task_reqs, all_tasks, known_tasks, events_per_gp, events_detected, events_requested, \
@@ -145,7 +143,7 @@ class ResultsProcessor:
                 measurement_performance \
                         = ResultsProcessor.__estimate_task_performance_metrics(task,
                                                                             instrument_name,
-                                                                            obs_perf['look angle [deg]'],
+                                                                            obs_perf['off-nadir axis angle [deg]'],
                                                                             t_img,
                                                                             d_img,
                                                                             agent_specs[observing_agent],
@@ -279,23 +277,15 @@ class ResultsProcessor:
                             ) -> Tuple[pd.DataFrame, List[GeophysicalEvent]]:
         # compile events detected
         if printouts: print('Collecting event detection data...')
-        events_detected_df : pd.DataFrame = None
-        for agent_name in compiled_orbitdata.keys():            
-            # define path to agent's detected events file
+        parts = []
+        for agent_name in compiled_orbitdata.keys():
             events_detected_path = os.path.join(results_path, agent_name.lower(), 'events_detected.parquet')
-            
-            # skip if file doesn't exist
             if not os.path.isfile(events_detected_path): continue
+            parts.append(pd.read_parquet(events_detected_path))
 
-            # load detected events            
-            events_detected_temp = pd.read_parquet(events_detected_path)
-
-            # concatenate to main dataframe
-            events_detected_df = pd.concat([events_detected_df, events_detected_temp], axis=0) \
-                if events_detected_df is not None else events_detected_temp
-
-        assert events_detected_df is not None, \
-            "Couldn't load Event Detection file for any agent."
+        assert parts, "Couldn't load Event Detection file for any agent."
+        events_detected_df = pd.concat(parts, axis=0, ignore_index=True)
+        del parts
         
         # DEBUG SECTION
         # get unique ids
@@ -540,56 +530,38 @@ class ResultsProcessor:
                                  compiled_orbitdata : Dict[str, OrbitData]
                                 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
         # compile planned agent reward data
-        planned_rewards_df = None
+        reward_parts = []
         for agent_name in compiled_orbitdata.keys():
             rewards_path = os.path.join(results_path, agent_name.lower(), 'rewards.parquet')
             if not os.path.isfile(rewards_path): continue
-            
-            # load rewards data
-            rewards_temp = pd.read_parquet(rewards_path)
+            temp = pd.read_parquet(rewards_path)
+            temp['agent'] = agent_name
+            reward_parts.append(temp)
 
-            # add agent name column
-            rewards_temp['agent'] = agent_name
+        planned_rewards_df = pd.concat(reward_parts, axis=0, ignore_index=True) if reward_parts \
+            else pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent_name', 'planned reward', 'performed reward', 'agent'])
+        del reward_parts
 
-            # concatenate to main dataframe
-            if planned_rewards_df is None:
-                planned_rewards_df = rewards_temp   
-            else:
-                planned_rewards_df = pd.concat([planned_rewards_df, rewards_temp], axis=0)
-
-        # handle case where no rewards data was printed
-        if planned_rewards_df is None:
-            # generate empty dataframe with appropriate columns
-            planned_rewards_df = pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent_name', 'planned reward', 'performed reward', 'agent'])
-
-        # compile executed agent cost data
-        execution_costs_df = None
+        # compile executed agent cost data (only load columns needed for cost calculation)
         alpha = 1e-6
+        cost_parts = []
         for agent_name in compiled_orbitdata.keys():
             agent_state_path = os.path.join(results_path, agent_name.lower(), 'state_history.parquet')
             if not os.path.isfile(agent_state_path): continue
-            
-            # load costs data
-            state_temp = pd.read_parquet(agent_state_path)            
-            
-            A = np.vstack(state_temp["attitude"].to_numpy())          # shape (N, 3)
-            dA = np.abs(np.diff(A, axis=0))              # shape (N-1, 3)
-            
-            cost_temp = pd.DataFrame({
-                'time [s]': state_temp['t'][:-1],               # shape (N-1,)
-                'agent' : [agent_name] * (len(state_temp)-1),   # shape (N-1,)                            
-                'status' : state_temp['status'][:-1],           # shape (N-1,)
-                'attitude [deg]' : state_temp['attitude'][:-1], # shape (N-1,) 
-                'cost': alpha * np.linalg.norm(dA, axis=1),     # shape (N-1,)
-            })
+            state_temp = pd.read_parquet(agent_state_path, columns=['t', 'attitude', 'status'])
+            A  = np.vstack(state_temp['attitude'].to_numpy())   # (N, 3)
+            dA = np.abs(np.diff(A, axis=0))                     # (N-1, 3)
+            cost_parts.append(pd.DataFrame({
+                'time [s]':       state_temp['t'].iloc[:-1].values,
+                'agent':          [agent_name] * (len(state_temp) - 1),
+                'status':         state_temp['status'].iloc[:-1].values,
+                'attitude [deg]': state_temp['attitude'].iloc[:-1].values,
+                'cost':           alpha * np.linalg.norm(dA, axis=1),
+            }))
 
-            # concatenate to main dataframe
-            if execution_costs_df is None:
-                execution_costs_df = cost_temp   
-            else:
-                execution_costs_df = pd.concat([execution_costs_df, cost_temp], axis=0)
+        execution_costs_df = pd.concat(cost_parts, axis=0, ignore_index=True) if cost_parts else None
+        del cost_parts
 
-        # return planned rewards and execution costs dataframes
         return planned_rewards_df, execution_costs_df
 
     """

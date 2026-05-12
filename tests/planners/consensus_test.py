@@ -260,11 +260,12 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
 
         # setup scenario parameters
         duration = 12.0 / 24.0
-        grid_name = 'toy_1'
-        scenario_name = f'toy_1-{self.planner_name()}'
+        i = 1
+        grid_name = 'toy_{i}'
+        scenario_name = f'toy_{i}-{self.planner_name()}'
         connectivity = 'LOS'
-        event_name = 'toy_1'
-        mission_database = 'toy_missions'
+        event_name = f'toy_{i}'
+        mission_database = f'toy_mission_{i}'
 
         # SAT1 : reactive satellite with narrow swath instrument
         ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
@@ -352,7 +353,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_2-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_2'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_2'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -456,7 +457,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_3-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_3'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_3'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -574,7 +575,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_4-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_4'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_4'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -689,7 +690,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_5-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_5'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_5'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -796,7 +797,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_6-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_6'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_6'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -908,7 +909,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_7-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_7'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_7'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -989,7 +990,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_8-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_8'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_8'
 
         # SAT1 : reactive satellite with narrow swath instrument
         ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
@@ -1045,7 +1046,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_9-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_9'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_9'
 
         # SAT1 : reactive satellite with narrow swath instrument
         ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
@@ -1114,7 +1115,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_10-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_10'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_10'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -1184,7 +1185,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_11-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_11'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_11'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -1266,7 +1267,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_12-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_12'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_12'
 
         # SAT1 : reactive satellite with narrow swath instrument
         ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
@@ -1322,7 +1323,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_13-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_13'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_13'
 
         # SAT1 : reactive satellite with narrow swath instrument
         ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
@@ -1390,7 +1391,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_14-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_14'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_14'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -1456,7 +1457,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_15-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_15'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_15'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -1534,7 +1535,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_16-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_16'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_16'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -1704,7 +1705,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_17-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_17'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_17'
 
         # SAT1 : reactive satellite with narrow swath instrument
         ractive_spacecraft_1 : dict = copy.deepcopy(self.spacecraft_template)
@@ -1817,7 +1818,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_18-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_18'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_18'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -1914,7 +1915,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_19-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_19'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_19'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -1982,7 +1983,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_20-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_20'
-        mission_name = 'toy_missions'
+        mission_name = 'toy_mission_20'
 
         # SAT0 : announcer satellite 
         announcer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
@@ -2068,7 +2069,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_21-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_21'
-        mission_filename = 'toy_missions'
+        mission_filename = 'toy_mission_21'
         mission_name = 'toy_mission_21'
         gs_network = 'gs_toy_21'
 
@@ -2139,7 +2140,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_22-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_22'
-        mission_filename = 'toy_missions'
+        mission_filename = 'toy_mission_22'
         mission_name = 'toy_mission_22'
         gs_network = 'gs_toy_22'
 
@@ -2261,7 +2262,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_23-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_23'
-        mission_filename = 'toy_missions'
+        mission_filename = 'toy_mission_23'
         mission_name = 'toy_mission_23'
         gs_network = 'gs_toy_23'
 
@@ -2436,7 +2437,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_24-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_24'
-        mission_filename = 'toy_missions'
+        mission_filename = 'toy_mission_24'
         mission_name = 'toy_mission_24'
         gs_network = 'gs_toy_24'
 
@@ -2527,7 +2528,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_{n_case}-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = f'toy_{n_case}'
-        mission_filename = 'toy_missions'
+        mission_filename = f'toy_mission_{n_case}'
         mission_name = f'toy_mission_{n_case}'
         gs_network = f'gs_toy_{n_case}'
 
@@ -2595,7 +2596,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_{n_case}-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = f'toy_{n_case}'
-        mission_filename = 'toy_missions'
+        mission_filename = f'toy_mission_{n_case}'
         mission_name = f'toy_mission_{n_case}'
         gs_network = f'gs_toy_{n_case}'
 
@@ -2681,7 +2682,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_27-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_27'
-        mission_filename = 'toy_missions'
+        mission_filename = 'toy_mission_27'
         mission_name = 'toy_mission_27'
         gs_network = 'gs_toy_27'
 
@@ -2774,7 +2775,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_28-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_28'
-        mission_filename = 'toy_missions'
+        mission_filename = 'toy_mission_28'
         mission_name = 'toy_mission_28'
 
         # SAT0 : announcer satellite 
@@ -2850,7 +2851,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_29-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_29'
-        mission_filename = 'toy_missions'
+        mission_filename = 'toy_mission_29'
         mission_name = 'toy_mission_29'
         gs_network = 'gs_toy_29'
 
@@ -2928,7 +2929,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         scenario_name = f'toy_30-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_30'
-        mission_filename = 'toy_missions'
+        mission_filename = 'toy_mission_30'
         mission_name = 'toy_mission_30'
         gs_network = 'gs_toy_30'
 

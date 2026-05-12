@@ -561,10 +561,10 @@
             },
             "args": [
                 "-t", "full_factorial_trials_2026-05-11",
-                "--trial-range", "1:6",
+                // "--trial-range", "1:6",
                 // "--trial-range", "6:36",
                 // "-i", "18",
-                // "--single-trial", "48",
+                "--single-trial", "1",
                 "--single-thread",
                 // "--only-precompute",
                 // "--only-simulate",

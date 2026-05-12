@@ -2091,7 +2091,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                      level=logging.DEBUG, 
                      n_tasks : int = 20) -> None:
         out = f'\nT{np.round(state.get_time(),3)}[s]:\t\'{state.agent_name}\'\n{dsc}\n'
-        line = 'Task ID\t n_obs\tins\t\twinner\tbid\tt_img\tt_bid\tv_opt\tperformed\n'
+        line = 'Task ID\t\tn_obs\tins\t\twinner\tbid\tt_img\tt_bid\tv_opt\tperformed\n'
         
         # count characters in line for formatting
         L_LINE = len(line)
