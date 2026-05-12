@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=64G
-#SBATCH --array=1-11
+# #SBATCH --array=1-11
 
 set -euo pipefail
 
@@ -42,5 +42,5 @@ python ./experiments/2_centralized_vs_decentralized/study.py \
       -t full_factorial_trials_2026-05-11 \
       --trial-range "${start}:${end}" \
       --single-thread --quiet \
-      --force-simulate # --force-postprocess --force-summarize
+      --only-simulate --force-simulate # --force-postprocess --force-summarize
       # --exceptions --profile-cpu --profile-mem
