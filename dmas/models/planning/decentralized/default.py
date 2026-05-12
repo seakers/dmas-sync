@@ -7,7 +7,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from dmas.core.messages import BusMessage, MeasurementRequestMessage, SimulationMessage
-from dmas.models.actions import AgentAction, BroadcastMessageAction, ObservationAction
+from dmas.models.actions import AgentAction, BroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.requests import TaskRequest
@@ -249,8 +249,10 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                 # fix initialized flag 
                 self._initialized = True
 
-            # --- flush intra-period access cache ---
-            self._access_opportunities = {}
+            # flush access cache only at period boundaries; mid-period replans (triggered by
+            # new incoming requests) keep the warm cache and only add missing locations
+            if t_curr >= self._plan.t_next:
+                self._access_opportunities = {}
 
             # ==================================================
             # PROCESS TASK REQUESTS
@@ -260,9 +262,9 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                                    if not task.availability.is_before(t_curr)}
 
             # bound planning horizon to the rolling replan window
-            t_next = self._plan.t_next 
-            while t_next <= t_curr:
-                t_next+=self._replan_horizon
+            t_next = self._plan.t_next
+            if t_next <= t_curr:
+                t_next += self._replan_horizon
             planning_horizon = Interval(t_curr, t_next)
 
             # access opportunities for future tasks within this window
@@ -332,26 +334,26 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
                 idx_prev = bisect.bisect_right(scheduled_t_ends, obs.accessibility.right + 1e-6) - 1
                 if idx_prev >= 0:
-                    t_prev = scheduled_actions[idx_prev].t_end
+                    t_prev_obs = scheduled_actions[idx_prev].t_end
                 else:
-                    t_prev = t_curr
+                    t_prev_obs = t_curr
 
                 idx_next = bisect.bisect_left(scheduled_t_starts, obs.accessibility.left - 1e-6)
                 if idx_next < len(scheduled_actions):
-                    t_next = scheduled_actions[idx_next].t_start
+                    t_next_obs = scheduled_actions[idx_next].t_start
                 else:
-                    t_next = obs.accessibility.right
+                    t_next_obs = obs.accessibility.right
 
                 th_img = np.average((obs.slew_angles.left, obs.slew_angles.right))
-                t_img = max(t_prev, obs.accessibility.left)
+                t_img = max(t_prev_obs, obs.accessibility.left)
                 d_img = obs.min_duration
 
                 if t_img + d_img not in obs.accessibility:
                     continue
 
-                prev_action_feasible: bool = (t_prev <= t_img - 1e-6)
+                prev_action_feasible: bool = (t_prev_obs <= t_img - 1e-6)
                 curr_action_feasible: bool = (abs(th_img) <= self._cross_track_fovs[obs.instrument_name] / 2.0)
-                next_action_feasible: bool = (t_img + d_img <= t_next - 1e-6)
+                next_action_feasible: bool = (t_img + d_img <= t_next_obs - 1e-6)
 
                 if prev_action_feasible and curr_action_feasible and next_action_feasible:
                     action = ObservationAction(obs.instrument_name, th_img, t_img, d_img, obs)
@@ -386,7 +388,7 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                     # bound broadcast window to the replan horizon (or event expiry, whichever comes first)
                     t_window_start = t_curr
                     t_window_end = min(
-                        t_curr + self._replan_horizon,
+                        t_next,
                         max(req.task.availability.right for req in self._pending_announcements.values())
                     )
 
@@ -428,16 +430,26 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                         bus_broadcast = BusMessage(state.agent_name, state.agent_name, available_msgs)
                         broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
 
+                    # TODO remove any broadcasts that can reach everyone in the next period (no need to rebroadcast)
+
                 # _pending_announcements are NOT cleared here; they persist across periods until expiry
 
+            waits = self._schedule_periodic_replan(state, t_next)
+
             self._plan = ReactivePlan([], t=t_curr, t_next=t_next)
-            return ReactivePlan(observations, broadcasts, t=t_curr, t_next=t_next)
+            return ReactivePlan(observations, broadcasts, waits, t=t_curr, t_next=t_next)
 
         finally:
             # reset planning flags and advance the periodic replan timer
             self._new_task_requests = False
             self._new_my_requests = False
-            self._next_replan_time = t_curr + self._replan_horizon
+
+    def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:
+        """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
+        # ensure next planning time is in the future
+        assert state.get_time() <= t_next, "Next planning time must be in the future."
+        # schedule wait action for next planning time
+        return [WaitAction(t_next,t_next)] if not np.isinf(t_next) else []
 
     def print_results(self):
         return super().print_results()

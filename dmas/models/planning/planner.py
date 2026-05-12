@@ -244,7 +244,7 @@ class AbstractPlanner(ABC):
                          desc="Calculating access times to known tasks", 
                          leave=False,
                          mininterval=0.5,
-                         disable=not self._printouts or len(available_tasks)<10
+                         disable=not self._printouts or len(available_tasks)<100
                         ):
 
             # extract minimum duration requirement for this task
@@ -498,7 +498,7 @@ class AbstractPlanner(ABC):
         with tqdm(total=len(v), 
                   desc="Merging overlapping observation opportunities", 
                   leave=False, 
-                  disable=not self._printouts or len(v)<10
+                  disable=not self._printouts or len(v)<100
                   ) as pbar:
             while len(v) > 0:
                 # pop first observation opportunity from the list of observation opportunities to be scheduled
