@@ -285,7 +285,7 @@
         //        EXPERIMENT 1 : CBBA VALIDATION
         //=============================================
         {
-            "name": "EXPERIMENT 1: PREP - Connectivity Analysis",
+            "name": "EXPERIMENT 1 (PREP): Connectivity Analysis",
             "type": "debugpy",
             "request": "launch",
             "python": "${workspaceFolder}/.venv/bin/python",
@@ -562,9 +562,9 @@
                 // "--only-precompute",
                 // "--only-simulate",
                 // "--only-postprocess",
-                // "--force-simulate",
-                // "--force-postprocess",
-                // "--force-summarize",
+                "--force-simulate",
+                "--force-postprocess",
+                "--force-summarize",
                 // "--quiet",
                 // "--exceptions",
             ]

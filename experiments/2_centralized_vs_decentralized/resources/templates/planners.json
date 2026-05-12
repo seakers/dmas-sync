@@ -39,7 +39,8 @@
         },
         "announcer": {
             "@type": "eventAnnouncer",
-            "debug": "False",                        
+            "debug": "False",          
+            "announceHorizon": 3600.0,
             "eventsPath" : "PATH/TO/EVENTS"
         }
     },
