@@ -42,5 +42,6 @@ python ./experiments/2_centralized_vs_decentralized/study.py \
       -t full_factorial_trials_2026-05-11 \
       --trial-range "${start}:${end}" \
       --single-thread --quiet \
-      --only-simulate --force-simulate # --force-postprocess --force-summarize
+      --force-postprocess --force-summarize
+      # --only-simulate --force-simulate 
       # --exceptions --profile-cpu --profile-mem
