@@ -65,9 +65,11 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
         if events_path is not None and mission is not None:
             self._future_tasks : Set[EventObservationTask] = self._load_tasks_from_events(events_path, mission)
             self._new_task_requests : bool = True
+            self._new_my_requests : bool = True
         else:
             self._future_tasks : Set[EventObservationTask] = set()
             self._new_task_requests : bool = False
+            self._new_my_requests : bool = False
 
         # track task IDs seen so far to avoid replanning on already-known tasks
         self._known_task_ids : Set[str] = {task.id for task in self._future_tasks}
@@ -127,15 +129,19 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
             my_reqs = [req for req in incoming_reqs if req.requester == state.agent_name]
             self._outbox.extend(my_reqs)
 
-            # only trigger replanning if at least one request carries a task ID not seen before
+            # trigger replanning if at least one request carries a task ID not seen before
             new_ids = {req.task.id for req in incoming_reqs} - self._known_task_ids
             if new_ids:
                 self._new_task_requests = True
                 self._known_task_ids.update(new_ids)
 
+            # trigger replanning if there are any self-generated requests
+            if my_reqs:
+                self._new_my_requests = True
+
     def needs_planning( self, *args, **kwargs) -> bool:
         """ Replan if there are new task requests with previously unseen task IDs. """
-        return self._new_task_requests
+        return self._new_task_requests or self._new_my_requests
 
     def calculate_access_opportunities(self,
                                        tasks,
@@ -404,6 +410,7 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
         finally:
             # reset planning flag
             self._new_task_requests = False
+            self._new_my_requests = False
     
 
     def print_results(self):

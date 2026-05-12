@@ -54,7 +54,7 @@ class ResultsProcessor:
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         events_detected_df, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        known_tasks_df, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs, printouts)
+        all_tasks_df, all_tasks, known_tasks_df, known_tasks = ResultsProcessor.__load_tasks(results_path, missions, events, task_reqs, printouts)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path, printouts)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         grid_data_df = ResultsProcessor.__load_grid_data(compiled_orbitdata, printouts)
@@ -69,7 +69,7 @@ class ResultsProcessor:
         events_requested_df, events_requested = ResultsProcessor.__compile_events_requested(events, task_reqs, printouts)
 
         ## tasks
-        accesses_per_task_df, accesses_per_task = ResultsProcessor.__compile_task_accessibility(compiled_orbitdata, known_tasks, agent_missions, accesses_per_gp, printouts)
+        accesses_per_task_df, accesses_per_task = ResultsProcessor.__compile_task_accessibility(compiled_orbitdata, all_tasks, agent_missions, accesses_per_gp, printouts)
 
         # compile observations
         ## ground points
@@ -79,7 +79,7 @@ class ResultsProcessor:
         observations_per_event_df, observations_per_event = ResultsProcessor.__compile_events_observed(events, observations_per_gp, agent_missions, printouts)
 
         ## tasks
-        observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(known_tasks, observations_per_gp, agent_missions, printouts)
+        observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(all_tasks, observations_per_gp, agent_missions, printouts)
         obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, agent_specs, cross_track_fovs, compiled_orbitdata, printouts)
 
         # print compiled data
@@ -90,6 +90,7 @@ class ResultsProcessor:
             'grid_data' : grid_data_df,
             'events_detected' : events_detected_df,
             'events_requested' : events_requested_df,
+            'all_tasks' : all_tasks_df,
             'known_tasks' : known_tasks_df,
             'accesses_per_event': accesses_per_event_df,
             'accesses_per_task' : accesses_per_task_df,
@@ -104,7 +105,7 @@ class ResultsProcessor:
             df.to_parquet(os.path.join(processed_results_path, f'{filename}.parquet'), index=False)
 
         # return compiled data for summary generation
-        return task_reqs, known_tasks, events_per_gp, events_detected, events_requested, \
+        return task_reqs, all_tasks, known_tasks, events_per_gp, events_detected, events_requested, \
             agent_broadcasts_df, planned_rewards_df, obtained_rewards_df, execution_costs_df, \
                 accesses_per_gp, accesses_per_event, accesses_per_task, \
                     observations_per_gp, observations_per_event, observations_per_task
@@ -205,7 +206,7 @@ class ResultsProcessor:
         observations_performed_df = ResultsProcessor.__load_observations_performed(results_path, printouts)
         task_reqs = ResultsProcessor.__load_task_requests(results_path, agent_missions, events, printouts)
         _, events_detected = ResultsProcessor.__load_events_detected(results_path, compiled_orbitdata, printouts)
-        _, known_tasks = ResultsProcessor.__load_known_tasks(results_path, missions, task_reqs, printouts)
+        _, all_tasks, __, known_tasks = ResultsProcessor.__load_tasks(results_path, missions, events, task_reqs, printouts)
         agent_broadcasts_df = ResultsProcessor.__load_broadcast_history(results_path, printouts)
         planned_rewards_df, execution_costs_df = ResultsProcessor.__load_planned_utilities(results_path, compiled_orbitdata)
         
@@ -239,12 +240,12 @@ class ResultsProcessor:
 
         # TODO convert dataframes to lists and dictionaries as needed for summary generation
         accesses_per_event = ResultsProcessor.__accesses_per_event_from_df(events, accesses_per_event_df)
-        accesses_per_task = ResultsProcessor.__accesses_per_task_from_df(known_tasks, accesses_per_task_df)
+        accesses_per_task = ResultsProcessor.__accesses_per_task_from_df(all_tasks, accesses_per_task_df)
         observations_per_event = ResultsProcessor.__observations_per_event_from_df(events, observations_per_event_df)
-        observations_per_task = ResultsProcessor.__observations_per_task_from_df(known_tasks, observations_per_task_df)
+        observations_per_task = ResultsProcessor.__observations_per_task_from_df(all_tasks, observations_per_task_df)
 
         # return compiled data for summary generation
-        return task_reqs, known_tasks, events_per_gp, events_detected, events_requested, \
+        return task_reqs, all_tasks, known_tasks, events_per_gp, events_detected, events_requested, \
             agent_broadcasts_df, planned_rewards_df, obtained_rewards_df, execution_costs_df, \
                 accesses_per_gp, accesses_per_event, accesses_per_task, \
                     observations_per_gp, observations_per_event, observations_per_task
@@ -296,6 +297,17 @@ class ResultsProcessor:
         assert events_detected_df is not None, \
             "Couldn't load Event Detection file for any agent."
         
+        # DEBUG SECTION
+        # get unique ids
+        # unique_ids = events_detected_df['id'].unique()
+        # if len(unique_ids) != len(events_detected_df):
+        #     print(f"WARNING: Found duplicate event detections with the following ids: {unique_ids}.")        
+        # END OF DEBUG SECTION
+
+        # remove requester column if it exists (it shouldn't be relevant for event detection performance metrics and may contain duplicates if multiple agents detected the same event)
+        if 'requester' in events_detected_df.columns:
+            events_detected_df = events_detected_df.drop(columns=['requester'])
+
         # remove duplicates
         events_detected_df = events_detected_df.drop_duplicates().reset_index(drop=True)
         
@@ -379,11 +391,12 @@ class ResultsProcessor:
         return task_reqs
     
     @staticmethod
-    def __load_known_tasks(results_path : str,
-                           missions : Dict[str, Mission],
-                           task_reqs : List[TaskRequest],
-                           printouts : bool
-                           ) -> Tuple[pd.DataFrame, List[GenericObservationTask]]:
+    def __load_tasks(results_path : str,
+                    missions : Dict[str, Mission],
+                    events : List[GeophysicalEvent],
+                    task_reqs : List[TaskRequest],
+                    printouts : bool
+                    ) -> Tuple[pd.DataFrame, List[GenericObservationTask]]:
         if printouts: print('Collecting known tasks data...')
         # load default tasks 
         known_tasks_path = os.path.join(results_path, 'environment', 'default_tasks.parquet')
@@ -394,6 +407,7 @@ class ResultsProcessor:
             if default_tasks_df is not None else pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])
         
         # convert to list of tasks
+        all_tasks : list[GenericObservationTask] = []
         known_tasks : list[GenericObservationTask] = []
         for _,row in default_tasks_df.iterrows():
             # get name of agent requesting the task
@@ -417,13 +431,33 @@ class ResultsProcessor:
                 relevant_objectives[0],
                 row['id']
             )
+            all_tasks.append(task)
             known_tasks.append(task)
 
-        # suplement with event request tasks
+        # supplement known with event request tasks
         requested_tasks = [req.task for req in task_reqs 
                             if req.task not in known_tasks]
         known_tasks.extend(requested_tasks)
 
+        # map event types to missions
+        event_type_missions = defaultdict(set)
+        for mission in missions.values():
+            for objective in mission:
+                if isinstance(objective, EventDrivenObjective):
+                    event_type_missions[objective.event_type].add(mission)
+
+        # supplement all tasks with all possible event request tasks
+        for event in events:           
+            for relevant_mission in event_type_missions.get(event.event_type, set()):
+                for relevant_objective in relevant_mission:
+                    task = EventObservationTask(
+                        relevant_objective.parameter,
+                        event=event,
+                        objective=relevant_objective
+                    )
+                    all_tasks.append(task)
+
+        # convert to dataframe
         event_tasks = []
         for req_task in requested_tasks:
             for lat,lon,grid_index,gp_index in req_task.location:
@@ -444,6 +478,27 @@ class ResultsProcessor:
             event_tasks_df = pd.DataFrame(event_tasks)
         else:
             event_tasks_df = pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])
+        
+        all_tasks_data = []
+        for task in all_tasks:
+            for lat,lon,grid_index,gp_index in task.location:
+                row = {
+                    'id' : task.id,
+                    'task type' : task.task_type,
+                    'parameter' : task.parameter,
+                    'lat [deg]' : lat,
+                    'lon [deg]' : lon,
+                    'grid index' : grid_index,
+                    'gp index' : gp_index,
+                    't start' : task.availability.left,
+                    't end' : task.availability.right,
+                    'priority' : task.priority,
+                }
+                all_tasks_data.append(row)
+        if all_tasks_data:
+            all_tasks_df = pd.DataFrame(all_tasks_data)
+        else:
+            all_tasks_df = pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])
 
         # merge default tasks and event observation tasks into known tasks dataframe
         known_tasks_df = pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])
@@ -457,8 +512,12 @@ class ResultsProcessor:
         known_tasks_df = known_tasks_df.drop_duplicates(subset='id').reset_index(drop=True) \
             if not known_tasks_df.empty else pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])  
         
+        all_tasks = list(set(all_tasks))
+        all_tasks_df = all_tasks_df.drop_duplicates(subset='id').reset_index(drop=True) \
+            if not all_tasks_df.empty else pd.DataFrame(columns=['id','task type','parameter','lat [deg]','lon [deg]','grid index','gp index','t start','t end','priority'])  
+        
         # return known tasks dataframe and list of known tasks
-        return known_tasks_df, known_tasks
+        return all_tasks_df, all_tasks, known_tasks_df, known_tasks
 
     @staticmethod
     def __load_broadcast_history(results_path : str, printouts : bool = True) -> pd.DataFrame:
@@ -865,7 +924,7 @@ class ResultsProcessor:
 
     @staticmethod
     def __compile_task_accessibility(compiled_orbitdata : Dict[str, OrbitData], 
-                                     known_tasks: List[GenericObservationTask], 
+                                     tasks: List[GenericObservationTask], 
                                      agent_missions: Dict[str, Mission], 
                                      accesses_per_gp : Dict[Tuple[int,int], Dict[str, np.ndarray]],
                                      printouts: bool
@@ -874,7 +933,7 @@ class ResultsProcessor:
         accesses_per_task : Dict[GenericObservationTask, list] = defaultdict(list)
         accesses_per_task_df_data = []
 
-        for task in tqdm(known_tasks, desc="Processing task accessibility", leave=False, disable=not printouts):
+        for task in tqdm(tasks, desc="Processing task accessibility", leave=False, disable=not printouts):
             # compile observation requirements for this task
             instrument_capability_reqs : Dict[str, set] = defaultdict(set)
 
@@ -1421,6 +1480,7 @@ class ResultsProcessor:
                           agent_specs : Dict[str, object],
                           agent_missions : Dict[str, Mission],
                           task_reqs : List[TaskRequest],
+                          all_tasks : List[GenericObservationTask],
                           known_tasks : List[GenericObservationTask],
                           events_per_gp : Dict[Tuple[int,int], List[GeophysicalEvent]],
                           events_detected : List[GeophysicalEvent], 
@@ -1437,7 +1497,7 @@ class ResultsProcessor:
                           observations_per_task : Dict[GenericObservationTask, list],
                           precision : int = 5,
                           printouts : bool = True,
-                          calc_dual : bool = True,
+                          calc_reward_bounds : bool = True,
                         ) -> pd.DataFrame:      
 
         # classify re-observations
@@ -1447,7 +1507,7 @@ class ResultsProcessor:
         # clasify co-observations
         events_co_observable, events_co_observable_fully, events_co_observable_partially, \
             events_co_obs, events_co_obs_fully, events_co_obs_partially \
-                = ResultsProcessor.__classify_event_coobservations(accesses_per_event, observations_per_event, known_tasks)            
+                = ResultsProcessor.__classify_event_coobservations(accesses_per_event, observations_per_event, all_tasks)
 
         # count observations performed
         # n_events, n_unique_event_obs, n_total_event_obs,
@@ -1458,10 +1518,11 @@ class ResultsProcessor:
                         n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                             n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
                                 n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
-                                    n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
-                                        n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
-                                            n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
-                                                n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
+                                    n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
+                                        n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
+                                            n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
+                                                n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
+                                                    n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
                                                     = ResultsProcessor.__count_observations(compiled_orbitdata, 
                                                                                             observations_per_gp,
                                                                                             events, 
@@ -1478,6 +1539,7 @@ class ResultsProcessor:
                                                                                             events_co_obs_fully, 
                                                                                             events_co_observable_partially,
                                                                                             events_co_obs_partially,
+                                                                                            all_tasks,
                                                                                             known_tasks,
                                                                                             accesses_per_task,
                                                                                             observations_per_task,
@@ -1491,31 +1553,31 @@ class ResultsProcessor:
                         p_event_co_observable, p_event_co_obs, p_event_co_obs_if_co_observable, p_event_co_obs_if_detected, p_event_co_obs_if_co_observable_and_detected, \
                             p_event_co_observable_fully, p_event_co_obs_fully, p_event_co_obs_fully_if_co_observable_fully, p_event_co_obs_fully_if_detected, p_event_co_obs_fully_if_co_observable_fully_and_detected, \
                                 p_event_co_observable_partial, p_event_co_obs_partial, p_event_co_obs_partial_if_co_observable_partially, p_event_co_obs_partial_if_detected, p_event_co_obs_partial_if_co_observable_partially_and_detected, \
-                                    p_task_observable, p_event_task_observable, p_default_task_observable, p_task_observed, p_event_task_observed, p_default_task_observed, \
-                                        p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
-                                            p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, \
-                                                p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable \
-                                                    = ResultsProcessor.__calc_event_probabilities(compiled_orbitdata, 
-                                                                                                  accesses_per_gp,
-                                                                                                  observations_per_gp,
-                                                                                                  events, 
-                                                                                                  events_per_gp,
-                                                                                                  accesses_per_event,
-                                                                                                  events_detected, 
-                                                                                                  events_requested,
-                                                                                                  observations_per_event, 
-                                                                                                  events_re_observable,
-                                                                                                  events_re_obs, 
-                                                                                                  events_co_observable,
-                                                                                                  events_co_obs, 
-                                                                                                  events_co_observable_fully,
-                                                                                                  events_co_obs_fully, 
-                                                                                                  events_co_observable_partially,
-                                                                                                  events_co_obs_partially,
-                                                                                                  known_tasks,
-                                                                                                  accesses_per_task,
-                                                                                                  observations_per_task,
-                                                                                                  printouts)
+                                    p_task_known, p_event_task_known,p_default_task_known, \
+                                        p_task_observable, p_event_task_observable, p_default_task_observable, p_task_observed, p_event_task_observed, p_default_task_observed, p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
+                                            p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable\
+                                                = ResultsProcessor.__calc_event_probabilities(compiled_orbitdata, 
+                                                                                                accesses_per_gp,
+                                                                                                observations_per_gp,
+                                                                                                events, 
+                                                                                                events_per_gp,
+                                                                                                accesses_per_event,
+                                                                                                events_detected, 
+                                                                                                events_requested,
+                                                                                                observations_per_event, 
+                                                                                                events_re_observable,
+                                                                                                events_re_obs, 
+                                                                                                events_co_observable,
+                                                                                                events_co_obs, 
+                                                                                                events_co_observable_fully,
+                                                                                                events_co_obs_fully, 
+                                                                                                events_co_observable_partially,
+                                                                                                events_co_obs_partially,
+                                                                                                all_tasks,
+                                                                                                known_tasks,
+                                                                                                accesses_per_task,
+                                                                                                observations_per_task,
+                                                                                                printouts)
         
         # calculate event revisit times
         t_gp_reobservation = ResultsProcessor.__calc_groundpoint_reobservation_metrics(observations_per_gp)
@@ -1540,9 +1602,23 @@ class ResultsProcessor:
         total_task_priority, total_observable_task_priority \
             = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
 
-        if calc_dual:
+        if calc_reward_bounds:
+            # calculate bounds for all tasks
             reward_primal_bound, reward_dual_bound \
                 = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
+
+            # extract accesses for known tasks only
+            accesses_per_known_task = {task: accesses for task, accesses in accesses_per_task.items() if task in known_tasks}
+
+            # check if all tasks are known
+            all_tasks_known = (len(accesses_per_task) == len(accesses_per_known_task)
+                               and all(task in known_tasks for task in accesses_per_known_task))
+
+            # calculate bounds for known tasks only           
+            known_reward_primal_bound, known_reward_dual_bound \
+                = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts) \
+                    if not all_tasks_known else (reward_primal_bound, reward_dual_bound)
+            
             # validate reward values
             assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-6, \
                 "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
@@ -1550,6 +1626,7 @@ class ResultsProcessor:
                 "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
         else:
             reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
+            known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
 
         # Generate summary
         summary_headers = ['Metric', 'Value']
@@ -1656,6 +1733,10 @@ class ResultsProcessor:
                     ['P(Event Co-observed Partially | Event Partially Co-observable and Detected)', np.round(p_event_co_obs_partial_if_detected,precision)],
 
                     # Task Observation Probabilities
+                    ['P(Task Known)', np.round(p_task_known,precision)],
+                    ['P(Event-Driven Task Known)', np.round(p_event_task_known,precision)],
+                    ['P(Default Mission Task Known)', np.round(p_default_task_known,precision)],
+
                     # TODO add co-observation probabilities
                     ['P(Task Observable)', np.round(p_task_observable,precision)],
                     ['P(Task Observed)', np.round(p_task_observed,precision)],
@@ -1762,14 +1843,14 @@ class ResultsProcessor:
     def __classify_event_coobservations(
             accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
             observations_per_event : Dict[GeophysicalEvent, List[Dict]],
-            known_tasks : List[GenericObservationTask],
+            tasks : List[GenericObservationTask],
             t_corr : float = 3600.0 # TODO temp solution
         ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
         # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
 
         # map events to tasks that observe them
         event_to_tasks : Dict[GeophysicalEvent, GenericObservationTask] = defaultdict(list)
-        for task in known_tasks:
+        for task in tasks:
             if isinstance(task, EventObservationTask):
                 event = task.event
                 event_to_tasks[event].append(task)
@@ -2072,6 +2153,7 @@ class ResultsProcessor:
                             events_co_obs_fully : dict, 
                             events_co_observable_partially : dict,
                             events_co_obs_partially : dict,
+                            all_tasks : list,
                             tasks_known : list,
                             tasks_observable : dict,
                             tasks_observed : dict,
@@ -2174,12 +2256,19 @@ class ResultsProcessor:
         # assert n_total_event_co_obs == n_total_event_fully_co_obs + n_total_event_partially_co_obs
 
         # count observations per task
-        n_tasks = len(tasks_known)
+        n_tasks = len(all_tasks)
+        n_event_tasks = len([task for task in all_tasks if isinstance(task, EventObservationTask)])
+        n_default_tasks = len([task for task in all_tasks if isinstance(task, DefaultMissionTask)]) 
         n_total_task_obs = sum(len(observations) for observations in tasks_observed.values())
-        n_event_tasks = len([task for task in tasks_known if isinstance(task, EventObservationTask)])
-        n_default_tasks = len([task for task in tasks_known if isinstance(task, DefaultMissionTask)]) 
 
         assert n_event_tasks + n_default_tasks <= n_tasks
+
+        # count observations per task
+        n_known_tasks = len(tasks_known)
+        n_known_event_tasks = len([task for task in tasks_known if isinstance(task, EventObservationTask)])
+        n_known_default_tasks = len([task for task in tasks_known if isinstance(task, DefaultMissionTask)]) 
+
+        assert n_known_event_tasks + n_known_default_tasks <= n_known_tasks
 
         n_tasks_observable = len(tasks_observable)
         n_event_tasks_observable = len([task for task in tasks_observable if isinstance(task, EventObservationTask)])
@@ -2222,14 +2311,13 @@ class ResultsProcessor:
                                         and len(tasks_observed[task]) > 1])
         
         # --- DEBUG BREAKPOINTS ---
-        for task in tasks_observable:
-            task_accesses = tasks_observable[task]
-            task_observations = tasks_observed[task] if task in tasks_observed else []
+        # for task in tasks_observable:
+        #     task_accesses = tasks_observable[task]
+        #     task_observations = tasks_observed[task] if task in tasks_observed else []
 
-            if len(task_accesses) < len(task_observations):
-                x = 1
+        #     if len(task_accesses) < len(task_observations):
+        #         x = 1
         # -------------------------
-
 
         assert n_tasks_reobserved <= n_tasks_reobservable 
         assert n_tasks_reobserved <= n_tasks_observed
@@ -2243,10 +2331,11 @@ class ResultsProcessor:
                             n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                                 n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
                                     n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
-                                        n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
-                                            n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
-                                                n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
-                                                    n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved
+                                        n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
+                                            n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
+                                                n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
+                                                    n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
+                                                        n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved
 
     @staticmethod
     def __calc_event_probabilities(
@@ -2267,6 +2356,7 @@ class ResultsProcessor:
                                     events_co_obs_fully : set, 
                                     events_co_observable_partially : set,
                                     events_co_obs_partially : set,
+                                    all_tasks : list,
                                     tasks_known : list,
                                     tasks_observable : dict,
                                     tasks_observed : dict,
@@ -2281,30 +2371,32 @@ class ResultsProcessor:
                         n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                             n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
                                 n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
-                                    n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
-                                        n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
-                                            n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
-                                                n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
-                                                    = ResultsProcessor.__count_observations( orbitdata,                                                                                 
-                                                                                observations_per_gp,
-                                                                                events, 
-                                                                                events_per_gp,
-                                                                                events_observable,
-                                                                                events_detected, 
-                                                                                events_requested,
-                                                                                events_observed, 
-                                                                                events_re_observable,
-                                                                                events_re_obs, 
-                                                                                events_co_observable,
-                                                                                events_co_obs, 
-                                                                                events_co_observable_fully,
-                                                                                events_co_obs_fully, 
-                                                                                events_co_observable_partially,
-                                                                                events_co_obs_partially,
-                                                                                tasks_known,
-                                                                                tasks_observable,
-                                                                                tasks_observed,
-                                                                                printouts)
+                                    n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
+                                        n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
+                                            n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
+                                                n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
+                                                    n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
+                                                        = ResultsProcessor.__count_observations( orbitdata,                                                                                 
+                                                                                    observations_per_gp,
+                                                                                    events, 
+                                                                                    events_per_gp,
+                                                                                    events_observable,
+                                                                                    events_detected, 
+                                                                                    events_requested,
+                                                                                    events_observed, 
+                                                                                    events_re_observable,
+                                                                                    events_re_obs, 
+                                                                                    events_co_observable,
+                                                                                    events_co_obs, 
+                                                                                    events_co_observable_fully,
+                                                                                    events_co_obs_fully, 
+                                                                                    events_co_observable_partially,
+                                                                                    events_co_obs_partially,
+                                                                                    all_tasks,
+                                                                                    tasks_known,
+                                                                                    tasks_observable,
+                                                                                    tasks_observed,
+                                                                                    printouts)
                     
         # count number of ground points accessible and observed 
         n_gps_observed_and_accessible = len(observations_per_gp)
@@ -2436,6 +2528,10 @@ class ResultsProcessor:
         p_event_co_obs_partial_if_co_observable_partially_and_detected = p_event_partially_co_obs_and_partially_co_observable_and_detected / p_event_partially_co_observable_and_detected if p_event_partially_co_observable_and_detected > 0 else np.NAN
 
         # calculate task propabilites
+        p_task_known = n_known_tasks / n_tasks if n_tasks > 0 else np.NAN
+        p_event_task_known = n_known_event_tasks / n_event_tasks if n_event_tasks > 0 else np.NAN
+        p_default_task_known = n_known_default_tasks / n_default_tasks if n_default_tasks > 0 else np.NAN
+        
         p_task_observable = n_tasks_observable / n_tasks if n_tasks > 0 else np.NAN
         p_event_task_observable = n_event_tasks_observable / n_event_tasks if n_event_tasks > 0 else np.NAN
         p_default_task_observable = n_default_tasks_observable / n_default_tasks if n_default_tasks > 0 else np.NAN
@@ -2464,8 +2560,9 @@ class ResultsProcessor:
                             p_event_co_observable, p_event_co_obs, p_event_co_obs_if_co_observable, p_event_co_obs_if_detected, p_event_co_obs_if_co_observable_and_detected, \
                                 p_event_co_observable_fully, p_event_co_obs_fully, p_event_co_obs_fully_if_co_observable_fully, p_event_co_obs_fully_if_detected, p_event_co_obs_fully_if_co_observable_fully_and_detected, \
                                     p_event_co_observable_partial, p_event_co_obs_partial, p_event_co_obs_partial_if_co_observable_partially, p_event_co_obs_partial_if_detected, p_event_co_obs_partial_if_co_observable_partially_and_detected, \
-                                        p_task_observable, p_event_task_observable, p_default_task_observable, p_task_observed, p_event_task_observed, p_default_task_observed, p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
-                                            p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable
+                                        p_task_known, p_event_task_known,p_default_task_known, \
+                                            p_task_observable, p_event_task_observable, p_default_task_observable, p_task_observed, p_event_task_observed, p_default_task_observed, p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
+                                                p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable
 
     @staticmethod
     def __calc_groundpoint_reobservation_metrics(observations_per_gp: Dict[tuple, pd.DataFrame]) -> tuple:

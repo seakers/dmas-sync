@@ -64,7 +64,7 @@ class Simulation:
                  level : int,
                  time_step : float = None,
                  printouts : bool = True,
-                 calc_dual : bool = True
+                 calc_reward_bounds : bool = True
             ) -> None:
         """ 
         Initializes simulation instance 
@@ -121,7 +121,7 @@ class Simulation:
         self._default_mission_tasks : Dict[str, List[DefaultMissionTask]] = default_mission_tasks
         self._level = level
         self._printouts : bool = printouts
-        self._calc_dual : bool = calc_dual
+        self._calc_reward_bounds : bool = calc_reward_bounds
 
         # initialize simulation runtime trackers
         self._t_0 = np.NAN
@@ -152,12 +152,9 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            # t = 20_000.0 # TODO remove after testing
+            t = 18_000.0 # TODO remove after testing
             # t_check = 0.0
             # dt_progress = 0.0
-
-            if t > 0.0 and self._printouts:
-                tqdm.write(f"WARNING: Starting simulation at t={t:.2f}s (skipping for testing/debugging purposes).")
             
             # initialize state-action pairs
             state_action_pairs = {
@@ -180,7 +177,9 @@ class Simulation:
                     ) as pbar:
                 
                 # update progress bar if starting time is greater than 0 (e.g. for testing or debugging purposes)
-                if t > 0.0: pbar.update(t)
+                if t > 0.0: 
+                    pbar.update(t)
+                    tqdm.write(f"\nWARNING: Simulation starting at non-zero time t={t:.2f}s.")
                 
                 # ----- main event-driven simulation loop -----
                 while t < tf:
@@ -466,7 +465,7 @@ class Simulation:
                                                         *processed_results, 
                                                         precision=precision, 
                                                         printouts=printouts,
-                                                        calc_dual=self._calc_dual)
+                                                        calc_reward_bounds=self._calc_reward_bounds)
         else:                        
             # process results and generate summary
             processed_results = self.process_results(printouts=printouts)
@@ -480,7 +479,7 @@ class Simulation:
                                                      *processed_results, 
                                                      precision=precision, 
                                                      printouts=printouts,
-                                                     calc_dual=self._calc_dual
+                                                     calc_reward_bounds=self._calc_reward_bounds
                                                     )
             
             
@@ -706,7 +705,7 @@ class Simulation:
                           default_mission_tasks,
                           level,
                           printouts=printouts,
-                          calc_dual=calc_dual)
+                          calc_reward_bounds=calc_dual)
 
     @staticmethod
     def __setup_results_directory(scenario_path : str, scenario_name : str, agent_names : List[str], overwrite : bool = True) -> str:
