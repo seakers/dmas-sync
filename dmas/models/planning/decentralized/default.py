@@ -113,7 +113,7 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                     tasks.add(EventObservationTask(objective.parameter, event=event, objective=objective))
 
         # drop tasks that have already expired
-        tasks = {task for task in tasks if not task.availability.is_before(t_curr)}
+        tasks = {task for task in tasks if not task.availability.ends_before(t_curr)}
         if not tasks:
             return
 
@@ -261,7 +261,7 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
             # expire tasks that are no longer available
             self._future_tasks = {task for task in self._future_tasks
-                                   if not task.availability.is_before(t_curr)}
+                                   if not task.availability.ends_before(t_curr)}
 
             # bound planning horizon to the rolling replan window
             t_next = self._plan.t_next
@@ -374,7 +374,7 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                 # expire announcements for events that are no longer active
                 self._pending_announcements = {
                     tid: req for tid, req in self._pending_announcements.items()
-                    if not req.task.availability.is_before(t_curr)
+                    if not req.task.availability.ends_before(t_curr)
                 }
 
                 if self._pending_announcements:

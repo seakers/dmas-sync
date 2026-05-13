@@ -37,6 +37,16 @@
             "maxTasks": 100,
             "debug" : "False"
         },
+        "centralized-milp_assignment" : {
+            "@type": "dealer",
+            "@mode": "milp",
+            "model": "assignment",
+            "licensePath": "./gurobi.lic",            
+            "period" : 250,
+            "horizon" : 3600,
+            "maxTasks": 100,
+            "debug" : "False"
+        },
         "announcer": {
             "@type": "eventAnnouncer",
             "debug": "False",          

@@ -197,7 +197,7 @@ class DealerMILPPlanner(DealerPlanner):
 
         # Run optimization on each chunk and flatten results
         if self.model == self.STATIC:
-            y,t,z,obj = self.__static_milp_planner(state, schedulable_client_tasks, observation_history, indexed_clients, task_indices, A, E, t_start, d, slew_times)
+            y,t,z,obj = self.__static_milp_planner(state, schedulable_client_tasks, observation_history, indexed_clients, task_indices, A, E, t_start, t_end, d, slew_times)
         elif self.model == self.ASSIGNMENT:
             y,t,z,obj = self.__assignment_milp_planner(state, schedulable_client_tasks, observation_history, indexed_clients, task_indices, A, E, t_start, t_end, d, slew_times)
         elif self.model == self.LINEAR:
@@ -329,6 +329,7 @@ class DealerMILPPlanner(DealerPlanner):
                               A : List[Tuple[int,int,int]],
                               E : List[Tuple[int,int,int]],
                               t_start : np.ndarray,
+                              t_end : np.ndarray,
                               d : np.ndarray,
                               slew_times : np.ndarray
                             ) -> Tuple:
@@ -360,6 +361,10 @@ class DealerMILPPlanner(DealerPlanner):
             if j == 0: continue # skip dummy task
             j_p_predecessors = [j_p for a,j_p,b in A if a == s and b == j]
             if not j_p_predecessors: model.addConstr(y[s,j] == 0, name=f"unreachable_task_client{s}_task{j}")
+
+            if t_start[s][j] + d[s][j] > t_end[s][j]:
+                # unreachable task, force y=0
+                model.addConstr(y[s,j] == 0, name=f"unreachable_task_client{s}_task{j}")                
 
         ## Enforce exclusivity
         for s,j,j_p in tqdm(E, desc=f"{state.agent_name}/PREPLANNER: Adding mutual exclusivity constraints", unit='task pairs', leave=False, disable=(len(E) < 10) or not self._printouts):
@@ -471,9 +476,14 @@ class DealerMILPPlanner(DealerPlanner):
 
         ## Observation time and accessibility constraints
         for s,j in tqdm(y.keys(), desc=f"{state.agent_name}/PREPLANNER: Adding observation time constraints", unit='tasks', leave=False, disable=(len(y) < 10) or not self._printouts):
-            # Enforce task scheduling within visibility window
-            t[s,j].LB = t_start[s][j]
-            t[s,j].UB = t_end[s][j] - d[s][j]
+            # check if task is reachable
+            if t_start[s][j] + d[s][j] > t_end[s][j] and j > 0:
+                # unreachable task, force y=0
+                model.addConstr(y[s,j] == 0, name=f"unreachable_task_client{s}_task{j}")                
+            else:
+                # reachable task, enforce task scheduling within visibility window
+                t[s,j].LB = t_start[s][j]
+                t[s,j].UB = t_end[s][j] - d[s][j]
 
             # If task is not assigned (y[s,j] == 0), force tau to LB (or any fixed value in the feasible interval)
             model.addGenConstrIndicator(y[s,j], 0, t[s,j] == float(t_start[s][j]))

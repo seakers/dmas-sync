@@ -12,9 +12,10 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         super().setUp()
 
         self.single_sat_toy : bool = False
-        self.multiple_sat_toy : bool = False
         self.single_sat_lakes : bool = False
-        self.multiple_sat_lakes : bool = True
+
+        self.multiple_sat_toy : bool = True
+        self.multiple_sat_lakes : bool = False
 
     def planner_name(self) -> str:
         return "dealer-worker"
@@ -24,7 +25,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
             "preplanner": {
                 "@type": "dealer",
                 "@mode": "milp",
-                "model": "linear",
+                "model": "assignment",
                 "licensePath": "./gurobi.lic",
                 # "horizon": 500,
                 "period" : 250,
@@ -65,14 +66,14 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         scenario_name = f'multiple_sat_toy_scenario-{self.planner_name()}'
         connectivity = 'LOS'
         event_name = 'toy_events'
-        mission_name = 'toy_missions'
+        mission_name = 'algal_bloom_comprehensive'
 
         dealer_spacecraft : dict = copy.deepcopy(self.spacecraft_template)
         dealer_spacecraft['name'] = 'dealer-sat'
         dealer_spacecraft['@id'] = 'dealer-sat_0'
         dealer_spacecraft['planner'] = self.toy_planner_config()
         dealer_spacecraft['orbitState']['state']['inc'] = 0.0
-        dealer_spacecraft['instrument'] = []
+        dealer_spacecraft.pop('instrument')
         dealer_spacecraft['science'] = {
                         "@type": "lookup", 
                         "eventsPath" : f"./tests/planners/resources/events/{event_name}.csv"
@@ -87,7 +88,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
             "dealerName": "dealer-sat"
         }
         worker_spacecraft_1['orbitState']['state']['inc'] = 0.0         # equatorial
-        worker_spacecraft_1['instrument'] = self.instruments['VNIR hyper']  # thermal infrared instrument
+        worker_spacecraft_1['instrument'] = self.instruments['VNIR hyp'].copy()  # thermal infrared instrument
 
         worker_spacecraft_2 : dict = copy.deepcopy(self.spacecraft_template)
         worker_spacecraft_2['name'] = 'worker_sat_2'
@@ -99,7 +100,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         }
         worker_spacecraft_2['orbitState']['state']['inc'] = 0.0     # equatorial
         worker_spacecraft_2['orbitState']['state']['ta'] = 90.0     # 5 deg before worker 1
-        worker_spacecraft_2['instrument'] = self.instruments['VNIR hyper'] # hyperspectral imager instrument
+        worker_spacecraft_2['instrument'] = self.instruments['VNIR hyp'].copy() # hyperspectral imager instrument
         
         # terminal welcome message
         print_scenario_banner(f'`{scenario_name}` PLANNER TEST')
@@ -142,7 +143,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         dealer_spacecraft['name'] = 'dealer-sat'
         dealer_spacecraft['@id'] = 'dealer-sat_0'
         dealer_spacecraft['planner'] = self.lakes_planner_config()
-        dealer_spacecraft['instrument'] = []
+        dealer_spacecraft.pop('instrument')
         dealer_spacecraft['orbitState']['state']['ta'] = np.average([95,93])  # between both workers
         dealer_spacecraft['science'] = {
                         "@type": "lookup", 
@@ -156,7 +157,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         worker_spacecraft_1['planner']['preplanner'] = \
             {"@type": "worker", "dealerName": "dealer-sat"}
         worker_spacecraft_1['orbitState']['state']['ta'] = 95.0     
-        worker_spacecraft_1['instrument'] = self.instruments['VNIR hyper']  # thermal infrared instrument
+        worker_spacecraft_1['instrument'] = self.instruments['VNIR hyp']  # thermal infrared instrument
         
         worker_spacecraft_2 : dict = copy.deepcopy(self.spacecraft_template)
         worker_spacecraft_2['name'] = 'worker_sat_2'
@@ -165,7 +166,7 @@ class TestDealerWorker(PlannerTester, unittest.TestCase):
         worker_spacecraft_2['planner']['preplanner'] = \
             {"@type": "worker", "dealerName": "dealer-sat"}
         worker_spacecraft_2['orbitState']['state']['ta'] = 93.0     # 3 [deg] before worker 1
-        worker_spacecraft_2['instrument'] = self.instruments['VNIR hyper'] # hyperspectral imager instrument
+        worker_spacecraft_2['instrument'] = self.instruments['VNIR hyp'] # hyperspectral imager instrument
         
         # terminal welcome message
         print_scenario_banner(f'`{scenario_name}` PLANNER TEST')

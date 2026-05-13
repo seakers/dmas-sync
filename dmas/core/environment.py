@@ -110,9 +110,6 @@ class SimulationEnvironment(object):
 
         # check if connectivity needs to be update
         if t not in self._current_connectivity_interval:
-            if t >= 1000.0:
-                x = 1 # breakpoint
-
             # update current connectivity matrix and components
             self._current_connectivity_interval, \
                 self._current_connectivity_components, \
@@ -169,7 +166,7 @@ class SimulationEnvironment(object):
                 states[agent_name],
                 actions[agent_name],
                 action_statuses[agent_name],
-                msgs[OrbitData.safe_name(agent_name)], # msgs[agent_name],
+                msgs[OrbitData.safe_name(agent_name)], 
                 measurements.get(agent_name, [])
             )
 

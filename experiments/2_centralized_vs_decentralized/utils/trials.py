@@ -56,7 +56,7 @@ def apply_rules(df: pd.DataFrame, rules: List[Callable[[pd.DataFrame], pd.Series
 
 if __name__ == "__main__":
     # print welcome
-    print_scenario_banner('Experiment generator for Planner Comparative Study')
+    print_scenario_banner('Trial generator for Centralized vs Decentralized Planning Study')
     
     # define experiment parameters
     test_params = {
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             "None",
             "DP",
             "Centralized-MILP_priority",
-            # "Centralized-MILP_assignments" 
+            # "Centralized-MILP_assignment" 
             # "Centralized-Metaheuristics" # TODO
         ],
         "Replanner": [
@@ -74,18 +74,18 @@ if __name__ == "__main__":
             # "Metaheuristic"
         ],
         "Connectivity": [
-            "GS",                   # sats can only talk to ground station (no inter-sat comms)
-            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
             "Interconstellation"    # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
+            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
+            "GS",                   # sats can only talk to ground station (no inter-sat comms)
         ],
         "Scenario": [
             # "Water-Quality",        # water quality monitoring (algal blooms + high-flow events = water quality)
             "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
         ],
         "Data Processing" : [
-            "Onboard",              # sats must discover events using default mission tasks
-            # "Ground", #TODO       # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
             "Oracle",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
+            # "Ground", #TODO       # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
+            "Onboard",              # sats must discover events using default mission tasks
         ],
         "Constellation" : [
             # "Commercial",
@@ -111,7 +111,7 @@ if __name__ == "__main__":
     rules = [        
         # centralized preplanners must have `none` replanenrs (i.e. replanning is only relevant for decentralized strategies)
         lambda d: (d["Preplanner"] != "Centralized-MILP_priority") | (d["Replanner"] == "None"),
-        lambda d: (d["Preplanner"] != "Centralized-MILP_assignments") | (d["Replanner"] == "None"),
+        lambda d: (d["Preplanner"] != "Centralized-MILP_assignment") | (d["Replanner"] == "None"),
         # None preplanner cannot have a none replanner (i.e. if no initial plan, must have some kind of replanning strategy)
         lambda d: (d["Preplanner"] != "None") | (d["Replanner"] != "None"),
         
