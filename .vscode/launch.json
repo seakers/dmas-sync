@@ -508,6 +508,35 @@
             ]
         },
         {
+            "name": "EXPERIMENT 2: Abridged",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "program": "${workspaceRoot}/experiments/2_centralized_vs_decentralized/study.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            },
+            "args": [
+                "-t", "full_factorial_trials_2026-05-11",
+                // "--trial-range", "1:6",
+                "--trial-range", "35:36",
+                // "-i", "18",
+                // "--single-trial", "1",
+                "--single-thread",
+                // "--only-precompute",
+                // "--only-simulate",
+                // "--only-postprocess",
+                // "--force-simulate",
+                "--force-postprocess",
+                "--force-summarize",
+                // "--quiet",
+                // "--exceptions",
+            ]
+        },
+        {
             "name": "EXPERIMENT 2: Full",
             "type": "debugpy",
             "request": "launch",
@@ -536,35 +565,6 @@
                 // "--only-postprocess",
                 "--force-simulate",
                 "--force-postprocess",
-                "--force-summarize",
-                // "--quiet",
-                // "--exceptions",
-            ]
-        },
-        {
-            "name": "EXPERIMENT 2: Abridged",
-            "type": "debugpy",
-            "request": "launch",
-            "python": "${workspaceFolder}/.venv/bin/python",
-            "program": "${workspaceRoot}/experiments/2_centralized_vs_decentralized/study.py",
-            "console": "integratedTerminal",
-            "justMyCode": true,
-            "cwd": "${workspaceRoot}",
-            "env": {
-                "PYTHONPATH": "${workspaceRoot}"
-            },
-            "args": [
-                "-t", "full_factorial_trials_2026-05-11",
-                // "--trial-range", "1:6",
-                "--trial-range", "35:36",
-                // "-i", "18",
-                // "--single-trial", "1",
-                "--single-thread",
-                // "--only-precompute",
-                // "--only-simulate",
-                // "--only-postprocess",
-                // "--force-simulate",
-                // "--force-postprocess",
                 "--force-summarize",
                 // "--quiet",
                 // "--exceptions",

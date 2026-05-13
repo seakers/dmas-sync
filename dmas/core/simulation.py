@@ -352,20 +352,17 @@ class Simulation:
                         printouts : bool = True) -> List[pd.DataFrame]:
         """ processes simulation results after execution """
         # print divider
-        if printouts: print(f"\n\n{'='*25} PROCESSING SIMULATION DATA {'='*25}\n")
+        if printouts: tqdm.write(f"\n\n{'='*25} PROCESSING SIMULATION DATA {'='*25}\n")
 
-        # validate simulation execution
-        if not self.is_executed(printouts): 
-            raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
-        
+        # validate simulation execution        
         # map agent names to their respective missions
         agent_missions : Dict[str, Mission] = {agent.name : agent._mission
                                     for agent in self._agents}
-            
+           
 
         # check if results have already been processed
         if self.__is_processed(printouts) and not force_process:
-            if printouts: print("Simulation results have already been processed. Skipping processing step.")
+            if printouts: tqdm.write("Simulation results have already been processed. Skipping processing step.")
             
             # collect name of processed results files
             self.__processed_results = ResultsProcessor.load_processed_results(self._results_path,
@@ -377,7 +374,7 @@ class Simulation:
                                                                             )
 
         else:            
-            if printouts: print("Processing simulation results...")
+            if printouts: tqdm.write("[results processor] processing simulation results...")
 
             # map agent names to their respective specifications and missions
             agent_specs : Dict[str, object] = {agent.name : agent._specs
@@ -401,10 +398,10 @@ class Simulation:
         """ Checks if simulation results have already been processed. """
         # check if this instance of the simnulation has been executed or if results files already exist
         if not self.__executed and printouts:
-            print('WARNING: Simulation instance has not been executed yet. Evaluating pre-existing scenario data...\n')
+            tqdm.write('WARNING: Simulation instance has not been executed yet. Evaluating pre-existing scenario data...\n')
         
         if self.__processed_results:
-            if printouts: print("Processed results already stored in this simulation instance.")
+            if printouts: tqdm.write("Processed results already stored in this simulation instance.")
             return True
 
         # check if data processing output files already exist
@@ -417,10 +414,10 @@ class Simulation:
 
         if missing_processed_files:
             # no processed data files found
-            if printouts: print(f"Missing processed results files: {missing_processed_files}")
+            if printouts: tqdm.write(f"[results processor] missing processed results files: {missing_processed_files}")
             return False
         
-        if printouts: print("All required processed results files found.")
+        if printouts: tqdm.write("[results processor] All required processed results files found.")
         return True
     
     def summarize_results(self,
@@ -432,7 +429,7 @@ class Simulation:
         """ Loads processed data and generates a summary dataframe without reprocessing raw results files. """        
         
         # print divider
-        if printouts: print(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
+        if printouts: tqdm.write(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
 
         # define results summary filename
         summary_path = os.path.join(f"{self._results_path}","summary.csv")
@@ -450,7 +447,7 @@ class Simulation:
         # check if results summary file exists 
         if prev_summary_exists and not force_summarize:
             # file exists and reevaluate is False; skip results summary generation
-            print(f"Results summary already exists at: `{summary_path}`")
+            tqdm.write(f"[results processor] results summary already exists at: `{summary_path}`")
             results_summary : pd.DataFrame = pd.read_csv(summary_path)
 
         # results summary does not exist or must be regenerated; check status of processed results
@@ -506,14 +503,14 @@ class Simulation:
 
         # log results summary
         if printouts:
-            print(f"\n\n{'-'*80}\n")
-            print(f"\nSIMULATION RESULTS SUMMARY:\n")
-            print(results_summary.to_string(index=False))
-            print(f"\n{'='*80}\n")
+            tqdm.write(f"\n\n{'-'*80}\n")
+            tqdm.write(f"\nSIMULATION RESULTS SUMMARY:\n")
+            tqdm.write(results_summary.to_string(index=False))
+            tqdm.write(f"\n{'='*80}\n")
 
         # save summary to csv if needed
         if print_to_csv: results_summary.to_csv(summary_path, index=False)
-        if printouts: print(f" - Results summary saved to: `{summary_path}`")
+        if printouts: tqdm.write(f" - Results summary saved to: `{summary_path}`")
 
         # return results summary
         return results_summary
@@ -530,7 +527,7 @@ class Simulation:
         """ checks if the simulation has been executed by looking for result files """
         # check for existence of result files for all agents
         if not self.__executed and printouts:
-            print('WARNING: Simulation instance has not been executed yet. Evaluating pre-existing scenario data...\n')
+            tqdm.write('WARNING: Simulation instance has not been executed yet. Evaluating pre-existing scenario data...\n')
 
         # ensure all simulation elements have populated their results directories
         results_dirs = [os.path.join(self._results_path, agent.name.lower()) 
