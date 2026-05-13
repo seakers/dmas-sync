@@ -398,12 +398,18 @@ class SimulationAgent(object):
         # del curr_state    # TODO check if needed
         # del action        # TODO check if needed
         
+        # ---------------------------------------
         # --- FOR DEBUGGING PURPOSES ONLY: ---        
-        # if True:
-        # # if curr_state._t > 83_000.00 and "imager_c_sat_40" in curr_state.agent_name and not isinstance(next_action, WaitAction):
-        #     self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
-        #     self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
+        # failing_agent_id = 'fl_vnir-fl-t_8'
+        # if ((curr_state.agent_id == failing_agent_id or 'planner' in curr_state.agent_id)
+        #     and curr_state._t >= 44_500.0
+        #     and not isinstance(next_action, WaitAction)
+        # ):
         #     x = 1 # breakpoint
+        # # if curr_state._t > 83_000.00 and "imager_c_sat_40" in curr_state.agent_name and not isinstance(next_action, WaitAction):
+            # self.__log_plan(self._plan, "CURRENT PLAN", logging.WARNING)
+            # self.__log_plan([next_action], "NEXT ACTION", logging.WARNING)
+            # x = 1 # breakpoint
         # -------------------------------------        
         
         # return next initial state and next actions to perform
@@ -952,7 +958,7 @@ class SimulationAgent(object):
                             next_action : AgentAction,
                             t : float
                         ) -> SimulationAgentState:
-        """ Update the agent state based on the next actions to perform. """
+        """ Update the agent state based on the next actions to perform. """               
         # create copy of current state
         next_state : SimulationAgentState = curr_state.copy()
         # next_state : SimulationAgentState = copy.copy(curr_state)

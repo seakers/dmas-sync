@@ -714,7 +714,7 @@ class OrbitData:
             # if no target specified, consider all future access intervals with any agent that shares component with this agent
             
             # get column index of this agent in the comms links table
-            u_idx = self.comms_target_indices[self.agent_name]
+            u_idx = self.comms_target_indices[self.agent_name_safe]
 
             # filter for intervals where this agent and the target are in the same component (i.e. have access to each other) and compile list of target access intervals
             target_intervals = [

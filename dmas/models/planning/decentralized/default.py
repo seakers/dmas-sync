@@ -265,7 +265,7 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
             # bound planning horizon to the rolling replan window
             t_next = self._plan.t_next
-            if t_next <= t_curr:
+            while t_next <= t_curr:
                 t_next += self._replan_horizon
             planning_horizon = Interval(t_curr, t_next)
 

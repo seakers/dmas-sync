@@ -634,9 +634,16 @@ class IntervalTable(AbstractTable):
 
                 # adjust time interval to start at time `t` if needed
                 t_start = max(float(self._start[i]), t) if include_current else float(self._start[i])
+                t_end = float(self._end[i])
                 
+                # if adjusted time is invalid (end before or at start), skip this interval
+                if t_start > t_end - 1e-6:
+                    continue
+                if abs(t_start - t_end) < 1e-6:
+                    continue
+
                 # package interval data 
-                interval = (Interval(t_start, float(self._end[i])), *row[2:])
+                interval = (Interval(t_start, t_end, right_open=True), *row[2:])
                 
                 # add to list of intervals to return
                 intervals.append(interval)
@@ -687,7 +694,7 @@ class IntervalTable(AbstractTable):
                 t_start = max(float(self._start[i]), t) if include_current else float(self._start[i])
                 
                 # package and return interval data 
-                return (Interval(t_start, float(self._end[i])), *row[2:])
+                return (Interval(t_start, float(self._end[i]), right_open=True), *row[2:])
 
         # fallback, return None
         return tuple([None] * (2 + len(self._extras)))       

@@ -12,6 +12,7 @@ from execsatm.mission import Mission
 from execsatm.objectives import DefaultMissionObjective
 from execsatm.requirements import GridSpatialRequirement, SpatialCoverageRequirement, SinglePointSpatialRequirement, MultiPointSpatialRequirement
 from execsatm.utils import Interval
+from tqdm import tqdm
 
 from dmas.models.actions import AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
 from dmas.models.planning.plan import Plan, PeriodicPlan
@@ -176,7 +177,8 @@ class DealerPlanner(AbstractPeriodicPlanner):
                                             # Original approach: any task started after last known state
                                             # and self.client_states[client]._t <= action.t_start <= state._t
                                             # New approach: only actions that are still in progress at `t_curr` or that start between last known state and `t_curr`
-                                            self.client_states[client]._t <= action.t_end and action.t_start <= t_curr
+                                            (self.client_states[client]._t < action.t_end or abs(self.client_states[client]._t - action.t_end) < 1e-6)
+                                            and (action.t_start < t_curr or abs(action.t_start - t_curr) < 1e-6)
                                             ],
                                            key=lambda a: a.t_start)
 
@@ -191,13 +193,13 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     # re-propagates attitude using self.attitude_rates (zeroed by the last projection),
                     # causing the satellite to appear stuck at its pre-maneuver attitude and then
                     # triggering the t>=t_end ABORTED branch with the wrong final attitude
-                    t_eval = min(state._t, last_action.t_end)
+                    t_eval = min(t_curr, last_action.t_end)
                     dt_maneuver = t_eval - last_action.t_start
                     attitude = [last_action.initial_attitude[i] + last_action.attitude_rates[i] * dt_maneuver
                                 for i in range(len(last_action.initial_attitude))]
                     # propagate pos/vel first (same pattern as _generate_client_plans) to avoid
                     # double-counting: kinematic_model would re-apply rates*dt on top of our value
-                    self.client_states[client] = self.client_states[client].propagate(state._t)
+                    self.client_states[client] = self.client_states[client].propagate(t_curr)
                     self.client_states[client].attitude = attitude
                     self.client_states[client].attitude_rates = (
                         [0.0, 0.0, 0.0] if t_eval >= last_action.t_end - 1e-6
@@ -213,10 +215,9 @@ class DealerPlanner(AbstractPeriodicPlanner):
             # propagate position and velocity for clients not yet handled above
             self.client_states = {
                 client: (client_state if client in already_propagated
-                         else client_state.propagate(state._t))
+                         else client_state.propagate(t_curr))
                 for client, client_state in self.client_states.items()
             }
-
     
     def generate_plan(  self, 
                         state : SimulationAgentState,
@@ -236,7 +237,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
         # update executing plans only for clients that will actually receive their new plan this period;
         # a client that is unreachable continues executing its last received plan, not the new empty one
-        _next_accesses = self._calculate_accesses(state, orbitdata)
+        _next_accesses = self._calculate_agent_accesses(state, orbitdata)
         for client, _next_access in _next_accesses.items():
             if _next_access is None:
                 continue
@@ -270,15 +271,25 @@ class DealerPlanner(AbstractPeriodicPlanner):
         planning_horizons : Dict[str,Interval] = self._calculate_horizons(state)
 
         # Calculate next access to each client within the replanning period
-        next_accesses : Dict[str, Interval] = self._calculate_accesses(state, orbitdata)
+        next_accesses : Dict[str, Interval] = self._calculate_agent_accesses(state, orbitdata)
+
+        # get current time and next replanning time
+        t_curr = state.get_time()
+
+        # DEBUT SECTION ---------------
+        # failing_agent_name = 'Flood Monitoring - Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T) Sat 8'
+        # failing_agent_id = 'fl_vnir-fl-t_8'
+        # if 45500.0 in planning_horizons[failing_agent_name]:
+        #     tqdm.write(f'[dealer t={t_curr:.2f}s] next accesses to failing agent {failing_agent_id}: {next_accesses[failing_agent_name]}s')
+        #     x = 1 # DEBUG BREAKPOINT
+        # ------------------------------
 
         # check if there are clients reachable in the planning period
         if all(next_access is None for next_access in next_accesses.values()):
             # all clients are unreachable within the planning period; 
             # generate empty plans with only a wait action until the next planning period
             
-            # get current time and next replanning time
-            t_curr = state.get_time()
+            # get next replanning time
             t_next = t_curr + self._period
             horizon = self._horizon if self._horizon != np.Inf else self._period
 
@@ -396,9 +407,16 @@ class DealerPlanner(AbstractPeriodicPlanner):
         client_plans : Dict[str, PeriodicPlan] = {client: PeriodicPlan(client_observations[client], 
                                                             client_maneuvers[client], 
                                                             client_broadcasts[client], 
-                                                            t=state._t, horizon=planning_horizons[client].right, t_next=state._t+self._horizon)
+                                                            t=state._t, horizon=planning_horizons[client].right, t_next=state._t+self._period)
                                                 for client in self.client_orbitdata
                                             }
+
+        # DEBUT SECTION ---------------
+        # if 45500.0 in planning_horizons[failing_agent_name]:
+        #     tqdm.write(f'[dealer t={t_curr:.2f}s] current state for failing agent {failing_agent_id}: \n\tattitude={self.client_states[failing_agent_name].attitude}\n\tattitude_rates={self.client_states[failing_agent_name].attitude_rates}')
+        #     tqdm.write(f'[dealer t={t_curr:.2f}s] new plan for failing agent {failing_agent_id}: {client_plans[failing_agent_name]}')
+        #     x = 1 # DEBUG BREAKPOINT
+        # ------------------------------
 
         # return plans
         return client_plans
@@ -421,7 +439,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
         # return horizons
         return horizons
     
-    def _calculate_accesses(self, state : SimulationAgentState, orbitdata : OrbitData) -> Dict[str, List[Tuple[Interval, str]]]:
+    def _calculate_agent_accesses(self, state : SimulationAgentState, orbitdata : OrbitData) -> Dict[str, List[Tuple[Interval, str]]]:
         # get current simulation time
         t_curr = state.get_time()
 
@@ -729,11 +747,6 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
                 # calculate broadcast time
                 t_broadcast : float = max(next_access.left, t_curr)
-                # t_broadcast : float = max(
-                #                         min(next_access.left + 5*self.EPS,    # give buffer time for access to start
-                #                             next_access.right),               # ensure broadcast is before access ends
-                #                     state._t)                                # ensure broadcast is not in the past
-
 
                 # if broadcast time is beyond the next planning period, skip scheduling
                 if t_broadcast >= state._t + self._period: continue

@@ -220,7 +220,7 @@ class SimulationEnvironment(object):
                              state : SimulationAgentState,
                              action : AgentAction,
                              t_curr : float) -> Tuple[SimulationAgentState, str, list, list]:
-        """ Performs the given action on the agent state at time `t_curr` """        
+        """ Performs the given action on the agent state at time `t_curr` """                
         # update agent state
         action.status,_ = state.perform_action(action, t_curr)
 
