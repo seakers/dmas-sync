@@ -166,13 +166,18 @@ class DealerPlanner(AbstractPeriodicPlanner):
             # client_plans (the most recently generated plan, which may be empty for periods when
             # the client was unreachable even though it was still executing a previous multi-period plan)
             already_propagated = set()
+            t_curr = state.get_time()
 
             for client in self.client_orbitdata:
                 plan = self.client_executing_plans[client]
                 # get actions performed in between last known client state; ignore broadcast and wait actions
                 filtered_actions = sorted([action for action in plan.actions
-                                            if isinstance(action, (ManeuverAction, ObservationAction))
-                                            and self.client_states[client]._t <= action.t_start <= state._t],
+                                            if isinstance(action, (ManeuverAction, ObservationAction)) and
+                                            # Original approach: any task started after last known state
+                                            # and self.client_states[client]._t <= action.t_start <= state._t
+                                            # New approach: only actions that are still in progress at `t_curr` or that start between last known state and `t_curr`
+                                            self.client_states[client]._t <= action.t_end and action.t_start <= t_curr
+                                            ],
                                            key=lambda a: a.t_start)
 
                 if not filtered_actions:
