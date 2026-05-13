@@ -395,7 +395,8 @@ class ResultsProcessor:
             task = EventObservationTask(
                 row['task']['parameter'],
                 event=events_by_id[event_id],
-                objective=relevant_objectives[0]
+                objective=relevant_objectives[0],
+                id=row['task']['id']
             )
             
             # create task request
@@ -404,7 +405,7 @@ class ResultsProcessor:
                 row['requester'],
                 agent_missions[requester].name,
                 row['t_req'],
-                row['task']['event']['id']
+                row['id']
             )
 
             # add to list of task requests
@@ -465,7 +466,13 @@ class ResultsProcessor:
         requested_tasks = {req.task 
                            for req in tqdm(task_reqs, desc='[results processor] compiling tasks from requests', disable=not printouts, leave=True)
                             if req.task not in known_tasks}
+        all_tasks.extend(requested_tasks)
         known_tasks.extend(requested_tasks)
+
+        tasks_per_event = defaultdict(set)
+        for req in task_reqs:
+            if req.task.event is not None:
+                tasks_per_event[req.task.event].add(req.task)
 
         # map event types to missions
         event_type_missions = defaultdict(set)
@@ -480,6 +487,12 @@ class ResultsProcessor:
                 for relevant_objective in relevant_mission:
                     if not isinstance(relevant_objective, EventDrivenObjective):
                         continue
+                    relevant_req_tasks = [task for task in tasks_per_event[event]
+                                          if task.parameter == relevant_objective.parameter]
+                    if not relevant_req_tasks:
+                        # task for this event-objective pair was already generated via task rquests
+                        continue
+
                     task = EventObservationTask(
                         relevant_objective.parameter,
                         event=event,
@@ -1470,7 +1483,7 @@ class ResultsProcessor:
                                     accesses_per_task_df : pd.DataFrame
                                 ) -> Dict[GenericObservationTask, List[Tuple[Interval, str, str]]]:
         # TODO
-        raise NotImplementedError("This method is not yet implemented. Task access classification is currently only performed in the `__compile_task_accessibility` method, which returns both a dataframe and a dictionary of tasks to accesses. This method can be implemented in the future if there is a need to reconstruct the task accesses dictionary from the dataframe alone.")
+        # raise NotImplementedError("This method is not yet implemented. Task access classification is currently only performed in the `__compile_task_accessibility` method, which returns both a dataframe and a dictionary of tasks to accesses. This method can be implemented in the future if there is a need to reconstruct the task accesses dictionary from the dataframe alone.")
 
         accesses_per_task = {}
         for task in tasks:
@@ -1558,6 +1571,12 @@ class ResultsProcessor:
                           printouts : bool = True,
                           calc_reward_bounds : bool = True,
                         ) -> pd.DataFrame:      
+
+        # DEBUG -----------------
+        # calculate bounds for all tasks
+        reward_primal_bound, reward_dual_bound \
+            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
+        # -----------------------
 
         # classify re-observations
         if printouts: tqdm.write('[results summary] classifying re-observations')
@@ -1700,8 +1719,6 @@ class ResultsProcessor:
             known_reward_primal_bound, known_reward_dual_bound \
                 = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts) \
                     if not all_tasks_known else (reward_primal_bound, reward_dual_bound)
-        # reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
-        # known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
 
 
         # pre-compute per-agent aggregations once (each groupby re-scans the full DF)
