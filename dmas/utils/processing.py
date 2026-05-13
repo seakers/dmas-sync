@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+import gc
+import itertools
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import reduce
 import os
@@ -404,7 +406,7 @@ class ResultsProcessor:
                 row['requester'],
                 agent_missions[requester].name,
                 row['t_req'],
-                row['task']['event']['id']
+                row['id']
             )
 
             # add to list of task requests
@@ -1473,20 +1475,34 @@ class ResultsProcessor:
         raise NotImplementedError("This method is not yet implemented. Task access classification is currently only performed in the `__compile_task_accessibility` method, which returns both a dataframe and a dictionary of tasks to accesses. This method can be implemented in the future if there is a need to reconstruct the task accesses dictionary from the dataframe alone.")
 
         accesses_per_task = {}
+
+        # task.id is a volatile uuid1() regenerated each instantiation — match on
+        # stable physical attributes instead
+        df_type  = accesses_per_task_df['task type']
+        df_param = accesses_per_task_df['parameter']
+        df_grid  = accesses_per_task_df['grid index'].astype(int)
+        df_gp    = accesses_per_task_df['GP index'].astype(int)
+
         for task in tasks:
-            # get accesses for this task from dataframe
-            accesses : pd.DataFrame = accesses_per_task_df[accesses_per_task_df['task id'] == task.id]
-            
-            # compile information for all matching accesses into proper format
-            access_tuples= [] # (interval,agent_name,instrument) 
-            for _, access in accesses.iterrows():                
+            task_loc_set = frozenset((int(loc[2]), int(loc[3])) for loc in task.location)
+            loc_mask = pd.Series(
+                [(g, p) in task_loc_set for g, p in zip(df_grid, df_gp)],
+                index=accesses_per_task_df.index
+            )
+            accesses : pd.DataFrame = accesses_per_task_df[
+                (df_type  == task.task_type) &
+                (df_param == task.parameter) &
+                loc_mask
+            ]
+
+            access_tuples = []  # (interval, agent_name, instrument)
+            for _, access in accesses.iterrows():
                 interval = Interval(access['t start'], access['t end'])
                 access_tuples.append((interval, access['agent name'], access['instrument']))
 
-            # add to map of tasks to accesses
-            if access_tuples: accesses_per_task[task] = access_tuples
+            if access_tuples:
+                accesses_per_task[task] = access_tuples
 
-        # return map of tasks to accesses
         return accesses_per_task
 
     @staticmethod
@@ -1558,6 +1574,14 @@ class ResultsProcessor:
                           printouts : bool = True,
                           calc_reward_bounds : bool = True,
                         ) -> pd.DataFrame:      
+
+        # DEBUG -------------
+        # calculate bounds for all tasks
+        reward_primal_bound, reward_dual_bound \
+            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
+        X = 1
+        raise NotImplementedError("[results summary] still undergoing testing")
+        # -------------------
 
         # classify re-observations
         if printouts: tqdm.write('[results summary] classifying re-observations')
@@ -1700,9 +1724,6 @@ class ResultsProcessor:
             known_reward_primal_bound, known_reward_dual_bound \
                 = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts) \
                     if not all_tasks_known else (reward_primal_bound, reward_dual_bound)
-        # reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
-        # known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
-
 
         # pre-compute per-agent aggregations once (each groupby re-scans the full DF)
         planned_by_agent = planned_rewards_df.groupby('agent')['planned reward'].sum() \
@@ -2815,21 +2836,16 @@ class ResultsProcessor:
                         for obs in clustered_opps]), \
                 f"Observation opportunities have slew angles larger than the maximum allowed field of view."
         
-        # merge task across agents
-        merged_observation_opps : Dict[str, List[ObservationOpportunity]] = {}
-        for agent_name in clustered_observation_opps.keys():
-            merged = list(atomic_observation_opps[agent_name])
-            merged.extend(clustered_observation_opps[agent_name])
-            merged_observation_opps[agent_name] = merged
-
-        # group observation opportunities by tasks
-        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] = defaultdict(list)
-        for agent_name, observation_opps in merged_observation_opps.items():
-            for obs_opp in observation_opps:
+        # group observation opportunities by tasks (atomic + clustered, without building a merged intermediate)
+        task_observation_opps : Dict[GenericObservationTask, List[ObservationOpportunity]] = {}
+        for agent_name in atomic_observation_opps:
+            for obs_opp in itertools.chain(atomic_observation_opps[agent_name],
+                                           clustered_observation_opps[agent_name]):
                 for task in obs_opp.tasks:
                     if task not in task_observation_opps:
                         task_observation_opps[task] = []
                     task_observation_opps[task].append((obs_opp, agent_name))
+        del atomic_observation_opps, clustered_observation_opps
 
         # sort observation opportunities for each task by observation time
         for task, obs_opp_agent_list in task_observation_opps.items():
@@ -2848,15 +2864,16 @@ class ResultsProcessor:
             task_observation_opps[task] = [(obs_opp, agent_name, obs_time) 
                                            for obs_opp, agent_name, obs_time in sorted_obs_time_pairs]
         
-        # TODO calculate primal bound using greedy oracle
-        primal_bound = 0.0
+        # calculate primal bound: best achievable with nadir-only observations (no maneuvers)
+        primal_bound = ResultsProcessor.__calculate_primal_bound(
+            task_observation_opps, compiled_orbitdata, agent_missions, agent_specs, cross_track_fovs, obtained_rewards_df, printouts
+        )
 
-        # calculate dual bound using a relaxed version of the problem         
+        # calculate dual bound using a relaxed version of the problem
         dual_bound = ResultsProcessor.__calculate_dual_bound(
-                task_observation_opps, compiled_orbitdata, agent_missions, agent_specs, cross_track_fovs, obtained_rewards_df, printouts
-            )
+            task_observation_opps, compiled_orbitdata, agent_missions, agent_specs, cross_track_fovs, obtained_rewards_df, printouts
+        )
 
-        # return bound values
         return primal_bound, dual_bound
             
     @staticmethod
@@ -3053,19 +3070,19 @@ class ResultsProcessor:
                     return False
             return True
         
-        _eval_cache: dict[frozenset, tuple] = {}
         
+        _CACHE_MAX = 200
+        _eval_cache: dict[tuple, tuple] = {}
+        _eval_cache_order: list[tuple] = []
+
         def _canonical_key(indices: list[int]) -> tuple:
-            # sort by the actual observation time of each window
             return tuple(sorted(indices, key=lambda i: available_obs[i][0]))
-        
+
         def evaluate_cheap(indices):
-            # key = tuple(indices)    # preserves order
-            key = _canonical_key(indices)  # order-invariant key
+            key = _canonical_key(indices)
             if key in _eval_cache:
                 return _eval_cache[key]
-            
-            # ... run BO ...
+
             sequence = [
                 (available_obs[i][1], available_obs[i][0],
                 available_obs[i][2], available_obs[i][3])
@@ -3079,30 +3096,39 @@ class ResultsProcessor:
                 available_obs[i][3].task_accessibility[task.id].right
                 for i in indices
             ]
-            d_min = [
-                # available_obs[i][3].task_accessibility[task.id].span()
-                0.0
-                for i in indices
-            ]
-    
+            d_min = [0.0 for _ in indices]
+
             def objective(times: list[tuple]) -> float:
                 return ResultsProcessor._evaluate_sequence_at_times(
                     task, sequence, times,
                     agent_missions, agent_specs,
                     cross_track_fovs, compiled_orbitdata,
-                    estimate_fn, precomputed_accesses, 
+                    estimate_fn, precomputed_accesses,
                     precomputed_obj_relevances
                 )
 
+            nd = len(indices)
+            if nd == 1:
+                n_init, n_iters = 20, 0
+            elif nd == 2:
+                n_init, n_iters = 10, 10
+            else:
+                n_init, n_iters = 5, 8
             opt = _SequenceTimeOptimiser(
-                n_dims=len(indices),
-                n_initial=3,        # was bo_n_initial (8)
-                n_iterations=5,     # was bo_n_iterations (20)
-                n_acq_candidates=50 # was 300
+                n_dims=nd,
+                n_initial=n_init,
+                n_iterations=n_iters,
+                n_acq_candidates=50,
             )
 
             best_times, reward = opt.optimise(t_starts, t_ends, d_min, objective)
+
+            # cap cache size to avoid unbounded growth for large-window tasks
+            if len(_eval_cache) >= _CACHE_MAX:
+                oldest = _eval_cache_order.pop(0)
+                _eval_cache.pop(oldest, None)
             _eval_cache[key] = (best_times, reward)
+            _eval_cache_order.append(key)
             return best_times, reward
 
         def evaluate_full(indices):
@@ -3166,7 +3192,7 @@ class ResultsProcessor:
         n_iter_approx = int(np.log(sa_t_final / sa_t_initial) / np.log(sa_cooling) * sa_steps_per_temp)
 
         with tqdm(total=n_iter_approx, 
-                  desc=f'Optimizing observation sequence for task {task.id.split("-")[-1]}', 
+                  desc=f'[results summary] optimizing obs sequence for task {task.id.split("-")[-1]}', 
                   disable=not printouts or n_iter_approx < 100,
                   leave=False
                   ) as pbar:
@@ -3344,18 +3370,31 @@ class ResultsProcessor:
         printouts: bool,
         bo_n_initial: int = 8,
         bo_n_iterations: int = 20,
+        opp_filter: str = None,
     ) -> float:
         estimate_fn = ResultsProcessor.__estimate_task_performance_metrics
 
         dual_bound = dict()
-        dual_n_obs = dict()
 
+        desc = '[results summary] calculating primal bound' if opp_filter == 'nadir' else '[results summary] calculating dual bound'
         for task, observation_opps in tqdm(
-            task_observation_opps.items(),
-            desc='Calculating dual bound',
+            sorted(task_observation_opps.items(), key=lambda kv: kv[0].id),
+            desc=desc,
             disable=not printouts or len(task_observation_opps) < 10,
-            leave=False,
+            leave=True,
         ):
+            # filter to nadir-accessible opportunities only (slew window overlaps [-FOV/2, +FOV/2])
+            if opp_filter == 'nadir':
+                observation_opps = [
+                    (obs_opp, agent_name, obs_time)
+                    for obs_opp, agent_name, obs_time in observation_opps
+                    if (obs_opp.slew_angles.left  <= cross_track_fovs[agent_name][obs_opp.instrument_name] / 2 and
+                        obs_opp.slew_angles.right >= -cross_track_fovs[agent_name][obs_opp.instrument_name] / 2)
+                ]
+                if not observation_opps:
+                    dual_bound[task] = 0.0
+                    continue
+
             # precompute accesses for all observation opportunities of this task
             precomputed_accesses = {}
             for obs_opp,agent_name,_ in tqdm(observation_opps,
@@ -3366,13 +3405,12 @@ class ResultsProcessor:
                 t_start = obs_opp.task_accessibility[task.id].left
                 t_end   = obs_opp.task_accessibility[task.id].right
 
-                # Query the full window once — widest possible d_img
                 accesses = ResultsProcessor.get_available_accesses(
                     task,
                     obs_opp.instrument_name,
                     th,
-                    t_start,                    # earliest possible t_img
-                    t_end - t_start,            # full window duration
+                    t_start,
+                    t_end - t_start,
                     compiled_orbitdata[agent_name],
                     cross_track_fovs[agent_name],
                 )
@@ -3386,22 +3424,18 @@ class ResultsProcessor:
                 for obs_opp, agent_name, obs_time in observation_opps
             ]
 
-            # get all feasible sequences of observations for this task 
             feasible_sequences = ResultsProcessor._find_all_maximal_sequences(
                 available_obs_times
             )
 
-            # Precompute objective to task relevance for each (task, agent) pair 
             precomputed_obj_relevances = {
                 agent_name: mission.relate_objectives_to_task(task)
                 for agent_name, mission in agent_missions.items()
             }
 
             t0 = time.time()
-            if len(feasible_sequences) > 16:  # heuristic threshold for when to switch to SA
-                # Simulated Annealing over sequences (outer loop) + BO for optimising observation times (inner loop)
+            if len(feasible_sequences) > 16:
                 method = 'SA'
-        
                 _, best_times, task_utility = ResultsProcessor.__sa_best_sequence(
                     task,
                     available_obs_times,
@@ -3418,13 +3452,11 @@ class ResultsProcessor:
                     None,
                     precomputed_accesses = precomputed_accesses,
                     precomputed_obj_relevances = precomputed_obj_relevances,
-                    printouts = printouts                    
+                    printouts = printouts
                 )
-                
+
             else:
-                # Parallelised exhaustive sequence optimisation 
                 def _optimise_sequence(args):
-                    """Top-level function (must be picklable — no lambda, no closure)."""
                     (task, sequence, t_starts, t_ends, d_min,
                     agent_missions, agent_specs, cross_track_fovs,
                     compiled_orbitdata, estimate_fn,
@@ -3435,72 +3467,97 @@ class ResultsProcessor:
                             task, sequence, times,
                             agent_missions, agent_specs,
                             cross_track_fovs, compiled_orbitdata,
-                            estimate_fn, 
+                            estimate_fn,
                             precomputed_accesses=precomputed_accesses,
                             precomputed_obj_relevances=precomputed_obj_relevances
                         )
 
+                    n = len(sequence)
+                    if n == 1:
+                        n_init, n_iters = 60, 0
+                    elif n == 2:
+                        n_init, n_iters = 30, 30
+                    else:
+                        n_init, n_iters = bo_n_initial, bo_n_iterations
                     opt = _SequenceTimeOptimiser(
-                        n_dims=len(sequence),
-                        n_initial=bo_n_initial,
-                        n_iterations=bo_n_iterations,
-                        # n_acq_candidates=bo_n_acq_candidates,
+                        n_dims=n,
+                        n_initial=n_init,
+                        n_iterations=n_iters,
                     )
                     return opt.optimise(t_starts, t_ends, d_min, objective)
 
-                all_args = []
-                for obs_names, obs_times, obs_look_angles, obs_opps in feasible_sequences:
-                    sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
-                    t_starts = [o.task_accessibility[task.id].left  for o in obs_opps]
-                    t_ends   = [o.task_accessibility[task.id].right for o in obs_opps]
-                    d_min    = [0.0 for o in obs_opps]
-                    # d_min    = [o.task_accessibility[task.id].span() for o in obs_opps]
-
-                    all_args.append((
-                        task, sequence, t_starts, t_ends, d_min,
-                        agent_missions, agent_specs, cross_track_fovs,
-                        compiled_orbitdata, estimate_fn,
-                        bo_n_initial, bo_n_iterations, precomputed_accesses, precomputed_obj_relevances
-                    ))
+                def _iter_args():
+                    for obs_names, obs_times, obs_look_angles, obs_opps in feasible_sequences:
+                        sequence = list(zip(obs_names, obs_times, obs_look_angles, obs_opps))
+                        t_starts = [o.task_accessibility[task.id].left  for o in obs_opps]
+                        t_ends   = [o.task_accessibility[task.id].right for o in obs_opps]
+                        d_min    = [0.0 for _ in obs_opps]
+                        yield (
+                            task, sequence, t_starts, t_ends, d_min,
+                            agent_missions, agent_specs, cross_track_fovs,
+                            compiled_orbitdata, estimate_fn,
+                            bo_n_initial, bo_n_iterations, precomputed_accesses, precomputed_obj_relevances
+                        )
 
                 if len(feasible_sequences) > 4:
                     method = 'Exhaustive BO (Parallellized)'
-                    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-                    # with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
-                        results = list(executor.map(_optimise_sequence, all_args))
+                    with ThreadPoolExecutor(max_workers=min(4, len(feasible_sequences))) as executor:
+                        results = list(executor.map(_optimise_sequence, _iter_args()))
                 else:
                     method = 'Exhaustive BO (Serial)'
-                    results = [_optimise_sequence(args) for args in all_args]
+                    results = [_optimise_sequence(args) for args in _iter_args()]
 
                 task_utility = max(r[1] for r in results)
-            
+
             elapsed = time.time() - t0
+            method_short = 'SA' if method == 'SA' else ('BO-par' if 'Parallel' in method else 'BO-ser')
             if printouts:
-                tqdm.write(f"Task {task.id.split('-')[-1]}: {len(feasible_sequences)} sequences, "
-                        f"{len(available_obs_times)} windows -> {method} in {elapsed:.2f}s")
+                tqdm.write(f" - Task {task.id.split('-')[-1]}: {len(feasible_sequences)} sequences, "
+                        f"{len(available_obs_times)} windows -> {method_short} in {elapsed:.2f}s (r={task_utility:.6f})")
 
             dual_bound[task] = task_utility
+            del precomputed_accesses, available_obs_times, feasible_sequences
+            gc.collect()
 
             # Sanity check (preserved from original)
             obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
-            if sum(obs['reward']) - 1e-6 > task_utility:
-                if printouts: tqdm.write(f"Warning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}. Please check for bugs in the dual bound calculation.")
+            if sum(obs['reward']) - 1e-6 > task_utility and opp_filter != 'nadir':
+                if printouts: tqdm.write(f"\tWarning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}.")
                 x = 1  # set breakpoint here when debugging bound violations
-                # a = ResultsProcessor._find_longest_observation_sequence_for_task(
-                #     available_obs_times
-                # )
-                # y = 1  # set breakpoint here when debugging bound violations
 
         dual_bound_df = pd.DataFrame(
             list(dual_bound.items()), columns=['task', 'reward']
         )
-        # dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
         if printouts: print(dual_bound_df.to_string(index=False))
 
         return sum(dual_bound.values())
-    
+
     @staticmethod
-    def __estimate_task_performance_metrics( 
+    def __calculate_primal_bound(
+        task_observation_opps: Dict,
+        compiled_orbitdata: Dict,
+        agent_missions: Dict[str, Mission],
+        agent_specs: Dict,
+        cross_track_fovs: Dict,
+        obtained_rewards_df: pd.DataFrame,
+        printouts: bool,
+        bo_n_initial: int = 8,
+        bo_n_iterations: int = 20,
+    ) -> float:
+        """
+        Lower bound: best reward attainable using only nadir-facing observations
+        (slew-angle window overlaps [-FOV/2, +FOV/2]). All other optimisation
+        logic is identical to the dual bound.
+        """
+        return ResultsProcessor.__calculate_dual_bound(
+            task_observation_opps, compiled_orbitdata, agent_missions, agent_specs,
+            cross_track_fovs, obtained_rewards_df, printouts,
+            bo_n_initial=bo_n_initial, bo_n_iterations=bo_n_iterations,
+            opp_filter='nadir',
+        )
+
+    @staticmethod
+    def __estimate_task_performance_metrics(
                                             task : GenericObservationTask, 
                                             instrument_name : str,
                                             th_img : float,
@@ -4397,7 +4454,7 @@ class _SequenceTimeOptimiser:
         n_initial: int = 8,
         n_iterations: int = 20, # 8,
         n_acq_candidates: int = 30, # 300,
-        kappa: float = 2.576,
+        kappa: float = 1.645,
         noise: float = 1e-6,
         length_scale: float = 0.3,
     ):
@@ -4681,13 +4738,18 @@ class _SequenceTimeOptimiser:
         _try(np.zeros(self.n_dims))         # earliest times
         _try(np.ones(self.n_dims))          # latest times
 
-        # mixed boundary anchors — one per dimension
-        for i in range(self.n_dims):
-            d = np.full(self.n_dims, 0.5)
-            d[i] = 0.0
-            _try(d)
-            d[i] = 1.0
-            _try(d)
+        # all 2^n corners for small problems; mixed anchors otherwise
+        if self.n_dims <= 6:
+            for bits in range(1, 2**self.n_dims - 1):  # skip all-0 and all-1 (done above)
+                corner = np.array([(bits >> i) & 1 for i in range(self.n_dims)], dtype=float)
+                _try(corner)
+        else:
+            for i in range(self.n_dims):
+                d = np.full(self.n_dims, 0.5)
+                d[i] = 0.0
+                _try(d)
+                d[i] = 1.0
+                _try(d)
 
         # --- Random initial samples ---
         for _ in range(self.n_initial):
