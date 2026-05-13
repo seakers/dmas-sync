@@ -101,9 +101,9 @@ if __name__ == "__main__":
             
             # 2019 dates 
             "2019-02-15",   # Winter NH
-            # "2019-05-15",   # Spring NH
-            # "2019-08-10",   # Summer NH / peak fire season
-            # "2019-11-10"    # Fall NH
+            "2019-05-15",   # Spring NH
+            "2019-08-10",   # Summer NH / peak fire season
+            "2019-11-10"    # Fall NH
         ], 
     }    
 

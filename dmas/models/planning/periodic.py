@@ -254,17 +254,18 @@ class AbstractPeriodicPlanner(AbstractPlanner):
             #     f'Broadcasts not scheduled correctly. Is of type `{type(broadcasts)}`.'
 
     def __generate_future_broadcasts(self, t_broadcast : float) -> list:
-        # generate plan message to share state
-        state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
+        # # generate plan message to share state
+        # state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
 
-        # generate plan message to share completed observations
-        observations_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.OBSERVATIONS, t_broadcast)
+        # # generate plan message to share completed observations
+        # observations_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.OBSERVATIONS, t_broadcast)
         
         # generate plan message to share latest reward grid information
         reward_grid_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REWARD_GRID, t_broadcast)
 
         # generate plan message to share any task requests generated
-        task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast, only_own_info=False)
+        # task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast, only_own_info=False)
+        task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast, only_own_info=True)
 
         # compile and return broadcast list
         return [
