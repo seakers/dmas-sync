@@ -3268,96 +3268,97 @@ class ResultsProcessor:
     # Main dual bound calculator
     # ---------------------------------------------------------------------------
     
-    @staticmethod
-    def __calculate_dual_bound_SA(
-        task_observation_opps: Dict,
-        compiled_orbitdata: Dict,
-        agent_missions: Dict,
-        agent_specs: Dict,
-        cross_track_fovs: Dict,
-        obtained_rewards_df: pd.DataFrame,
-        printouts: bool,
-        bo_n_initial: int = 8,
-        bo_n_iterations: int = 20,
-        bo_n_acq_candidates: int = 300,
-        sa_t_initial: float = 1.0,
-        sa_t_final: float = 1e-3,
-        sa_cooling: float = 0.95,
-        sa_steps_per_temp: int = 15,
-        sa_seed: int | None = None,
-    ) -> float:
-        estimate_fn = ResultsProcessor.__estimate_task_performance_metrics
+    # @staticmethod
+    # def __calculate_dual_bound_SA(
+    #     task_observation_opps: Dict,
+    #     compiled_orbitdata: Dict,
+    #     agent_missions: Dict,
+    #     agent_specs: Dict,
+    #     cross_track_fovs: Dict,
+    #     obtained_rewards_df: pd.DataFrame,
+    #     printouts: bool,
+    #     bo_n_initial: int = 8,
+    #     bo_n_iterations: int = 20,
+    #     bo_n_acq_candidates: int = 300,
+    #     sa_t_initial: float = 1.0,
+    #     sa_t_final: float = 1e-3,
+    #     sa_cooling: float = 0.95,
+    #     sa_steps_per_temp: int = 15,
+    #     sa_seed: int | None = None,
+    # ) -> float:
+    #     estimate_fn = ResultsProcessor.__estimate_task_performance_metrics
     
-        dual_bound = dict()
-        dual_n_obs = dict()
+    #     dual_bound = dict()
+    #     dual_n_obs = dict()
     
-        for task, observation_opps in tqdm(
-            task_observation_opps.items(),
-            desc='Calculating dual bound',
-            disable=not printouts or len(task_observation_opps) < 10,
-            leave=False,
-        ):
-            precomputed_accesses = {}
-            for obs_opp,agent_name,_ in tqdm(observation_opps, 
-                                             desc=f'Precomputing accesses for task {task.id.split("-")[-1]}',
-                                             disable=not printouts or len(observation_opps) < 10,
-                                             leave=False):
-                th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
-                t_start = obs_opp.task_accessibility[task.id].left
-                t_end   = obs_opp.task_accessibility[task.id].right
+    #     for task, observation_opps in tqdm(
+    #         task_observation_opps.items(),
+    #         desc='[results summary] calculating dual bound',
+    #         disable=not printouts or len(task_observation_opps) < 10,
+    #         leave=False,
+    #     ):
+    #         precomputed_accesses = {}
+    #         for obs_opp,agent_name,_ in tqdm(observation_opps, 
+    #                                          desc=f'Precomputing accesses for task {task.id.split("-")[-1]}',
+    #                                          disable=not printouts or len(observation_opps) < 10,
+    #                                          leave=False):
+    #             th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
+    #             t_start = obs_opp.task_accessibility[task.id].left
+    #             t_end   = obs_opp.task_accessibility[task.id].right
                 
-                # Query the full window once — widest possible d_img
-                accesses = ResultsProcessor.get_available_accesses(
-                    task,
-                    obs_opp.instrument_name,
-                    th,
-                    t_start,                    # earliest possible t_img
-                    t_end - t_start,            # full window duration
-                    compiled_orbitdata[agent_name],
-                    cross_track_fovs[agent_name],
-                )
-                precomputed_accesses[(obs_opp, agent_name)] = accesses
+    #             # Query the full window once — widest possible d_img
+    #             accesses = ResultsProcessor.get_available_accesses(
+    #                 task,
+    #                 obs_opp.instrument_name,
+    #                 th,
+    #                 t_start,                    # earliest possible t_img
+    #                 t_end - t_start,            # full window duration
+    #                 compiled_orbitdata[agent_name],
+    #                 cross_track_fovs[agent_name],
+    #             )
+    #             precomputed_accesses[(obs_opp, agent_name)] = accesses
             
-            available_obs_times = [
-                (obs_time, agent_name,
-                (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2,
-                obs_opp)
-                for obs_opp, agent_name, obs_time in observation_opps
-            ]
+    #         available_obs_times = [
+    #             (obs_time, agent_name,
+    #             (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2,
+    #             obs_opp)
+    #             for obs_opp, agent_name, obs_time in observation_opps
+    #         ]
     
-            _, best_times, task_utility = ResultsProcessor.__sa_best_sequence(
-                task,
-                available_obs_times,
-                agent_missions,
-                agent_specs,
-                cross_track_fovs,
-                compiled_orbitdata,
-                estimate_fn,
-                bo_n_initial        = bo_n_initial,
-                bo_n_iterations     = bo_n_iterations,
-                bo_n_acq_candidates = bo_n_acq_candidates,
-                sa_t_initial        = sa_t_initial,
-                sa_t_final          = sa_t_final,
-                # sa_cooling          = sa_cooling,
-                # sa_steps_per_temp   = sa_steps_per_temp,
-                seed                = sa_seed,
-                precomputed_accesses = precomputed_accesses
-            )
+    #         _, best_times, task_utility = ResultsProcessor.__sa_best_sequence(
+    #             task,
+    #             available_obs_times,
+    #             agent_missions,
+    #             agent_specs,
+    #             cross_track_fovs,
+    #             compiled_orbitdata,
+    #             estimate_fn,
+    #             bo_n_initial        = bo_n_initial,
+    #             bo_n_iterations     = bo_n_iterations,
+    #             bo_n_acq_candidates = bo_n_acq_candidates,
+    #             sa_t_initial        = sa_t_initial,
+    #             sa_t_final          = sa_t_final,
+    #             # sa_cooling          = sa_cooling,
+    #             # sa_steps_per_temp   = sa_steps_per_temp,
+    #             seed                = sa_seed,
+    #             precomputed_accesses = precomputed_accesses
+    #         )
     
-            dual_bound[task] = task_utility
+    #         dual_bound[task] = task_utility
+    #         dual_n_obs[task] = len(best_times)
     
-            obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
-            if sum(obs['reward']) - 1e-6 > task_utility:
-                x = 1  # set breakpoint here when debugging bound violations
+    #         obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
+    #         if sum(obs['reward']) - 1e-6 > task_utility:
+    #             x = 1  # set breakpoint here when debugging bound violations
     
-        dual_bound_df = pd.DataFrame(
-            list(dual_bound.items()), columns=['task', 'reward']
-        )
-        dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
-        if printouts:
-            print(dual_bound_df.to_string(index=False))
+    #     dual_bound_df = pd.DataFrame(
+    #         list(dual_bound.items()), columns=['task', 'reward']
+    #     )
+    #     dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
+    #     if printouts:
+    #         print(dual_bound_df.to_string(index=False))
     
-        return sum(dual_bound.values())
+    #     return sum(dual_bound.values())
 
     @staticmethod
     def __calculate_dual_bound(
