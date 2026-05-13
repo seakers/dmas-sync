@@ -5,13 +5,8 @@
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=32G
-
-# #SBATCH --array=0-35
-# Overal scenario : 288 total trials
-# Option 1: 4 trials per job -> 72 jobs  (sbatch --array=0-71)
-# Option 2: 8 trials per job -> 36 jobs  (sbatch --array=0-35)  <-- current
-# Option 3: 16 trials per job -> 18 jobs (sbatch --array=0-17)
+#SBATCH --mem=64G
+# #SBATCH --array=4-24
 
 set -euo pipefail
 
@@ -36,15 +31,17 @@ conda activate ./.venv
 # --- Set ulimit for maximum number of open files ---
 ulimit -n 65535
 
-# --- Determine trial range based on SLURM_ARRAY_TASK_ID ---
+# --- Trial ID lists per job (fastest -> slowest) ---
 i=$SLURM_ARRAY_TASK_ID
-start=$((i * 8))
-end=$((start + 8))
+start=$((i * 4))
+end=$((start + 4))
+
 
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
-  -t full_factorial_trials_2026-05-13 \
-  --trial-range "${start}:${end}" \
-  --single-thread --quiet --exceptions \
-  # --force-simulate --force-postprocess --force-summarize # \
-  # --profile-cpu --profile-mem 
+      -t full_factorial_trials_2026-05-13 \
+      --trial-range "${start}:${end}" \
+      --single-thread --quiet \
+      --force-simulate --force-postprocess --force-summarize
+      # --only-simulate --force-simulate 
+      # --exceptions --profile-cpu --profile-mem

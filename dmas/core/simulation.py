@@ -152,7 +152,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            t = 7_000.0 # TODO remove after testing
+            # t = 7_000.0 # TODO remove after testing
             # t_check = 0.0
             # dt_progress = 0.0
             
@@ -351,6 +351,9 @@ class Simulation:
                         force_process : bool = False,
                         printouts : bool = True) -> List[pd.DataFrame]:
         """ processes simulation results after execution """
+        # print divider
+        if printouts: print(f"\n\n{'='*25} PROCESSING SIMULATION DATA {'='*25}\n")
+
         # validate simulation execution
         if not self.is_executed(printouts): 
             raise RuntimeError("Simulation has not been executed yet. Cannot process results.")
