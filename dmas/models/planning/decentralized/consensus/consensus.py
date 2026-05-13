@@ -1914,8 +1914,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         s_arr = cl._start[i_start:]
         e_arr = cl._end[i_start:]
 
-        # 2. Build boolean mask for rows in [t_curr, t_next] in one vectorized op
-        in_window = (s_arr <= t_next + 1e-6) & (e_arr >= t_curr - 1e-6)
+        # 2. Build boolean mask for rows in [t_curr, t_next) in one vectorized op
+        in_window = (s_arr <= t_next + 1e-6) & (t_curr < e_arr + 1e-6)
         if not participating:
             # exclude intervals already in progress — only take future ones
             in_window &= (s_arr > t_curr + 1e-6) # exclude current if not participating
