@@ -135,12 +135,14 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # DEBUG PRINTOUTS
         # debug_case = state._t >= 19_999.00 and ("(VNIR-FR-T) Sat 4" in state.agent_name)
         # if debug_case and incoming_bids:
-        if self._debug and incoming_bids:
-        # if incoming_bids:
+        # if self._debug and incoming_bids:
+        if incoming_reqs:
+            x = 1
+        if incoming_bids:
             self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
-            print(f'`{state.agent_name}` - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
-            self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
-            self._log_path('CONSENSUS PHASE - PATH (BEFORE)', state, self._path)
+            print(f'[{state.agent_id}] - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
+            # self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
+            # self._log_path('CONSENSUS PHASE - PATH (BEFORE)', state, self._path)
         # -------------------------------
 
         # perform consensus phase for incoming task bids
@@ -158,19 +160,20 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # DEBUG PRINTOUTS        
         # if (task_updates or results_updates or bundle_updates) and debug_case:
         # if (task_updates or results_updates or bundle_updates) and self._path:
-        if (task_updates or results_updates or bundle_updates) and self._debug:
+        # if (task_updates or results_updates or bundle_updates) and self._debug:
+        if (task_updates or results_updates or bundle_updates) and (incoming_bids or incoming_reqs):
             self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
-            print(f'`{state.agent_name}` - Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
+            tqdm.write(f'[{state.agent_id}] Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
             if any([
                 len(task_updates) > 0,
                 len(results_updates) > 0, 
                 len(bundle_updates) > 0
             ]):
-                print(f'`{state.agent_name}` - Relevant updates detected; replanning is required.')
+                tqdm.write(f'[{state.agent_id}] Relevant updates detected; replanning is required.')
             else:
-                print(f'`{state.agent_name}` - No relevant updates detected; no replanning required.')
-            self._log_bundle('CONSENSUS PHASE - BUNDLE (AFTER)', state, self._bundle)
-            self._log_path('CONSENSUS PHASE - PATH (AFTER)', state, self._path)
+                tqdm.write(f'[{state.agent_id}] No relevant updates detected; no replanning required.')
+            # self._log_bundle('CONSENSUS PHASE - BUNDLE (AFTER)', state, self._bundle)
+            # self._log_path('CONSENSUS PHASE - PATH (AFTER)', state, self._path)
         # -------------------------------
 
         # set replanning flags
@@ -1169,8 +1172,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # DEBUG PRINTOUTS----------------
         # if self._debug:
-        #     self._log_results('PLANNING PHASE - RESULTS (BEFORE)', state, self.results)
-        #     self._log_bundle('PLANNING PHASE - BUNDLE (BEFORE)', state, self.bundle)
+        # if self._results:
+        #     self._log_results('PLANNING PHASE - RESULTS (BEFORE)', state, self._results)
+        #     self._log_bundle('PLANNING PHASE - BUNDLE (BEFORE)', state, self._bundle)
         #     x = 1 # breakpoint
         # -------------------------------
 
@@ -1228,12 +1232,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # DEBUG PRINTOUTS
         # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
         # if debug_case and new_bids:
-        if self._debug and new_bids:
+        # if self._debug and new_bids:
         # if new_bids:
-            self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
-            self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
-            print(f'`{state.agent_name}` - New bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
-            x = 1 # breakpoint
+        #     self._log_results('PLANNING PHASE - RESULTS (AFTER)', state, self._results)
+        #     self._log_bundle('PLANNING PHASE - BUNDLE (AFTER)', state, self._bundle)
+        #     print(f'[{state.agent_id}] new bundle built with {len(new_bids)} new entries ({len(self._bundle)} total) and {len(self._path)} scheduled observations.')
+        #     x = 1 # breakpoint
         # -------------------------------
 
         return self._bundle, self._path, new_bids
@@ -1740,6 +1744,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         """ Calculate total expected cost of observation path. """
 
         # TODO implement realistic path cost calculation using agility specs to calculate power consumption between maneuvers.
+        # return 0.0
 
         # initiate previus observation action with dummy action representing the current state
         prev_obs = None
@@ -2089,7 +2094,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
                      state : SimulationAgentState, 
                      results : Dict[GenericObservationTask, List[Bid]],
                      level=logging.DEBUG, 
-                     n_tasks : int = 20) -> None:
+                     n_tasks : int = 20,
+                     no_empty : bool = False 
+                     ) -> None:
         out = f'\nT{np.round(state.get_time(),3)}[s]:\t\'{state.agent_name}\'\n{dsc}\n'
         line = 'Task ID\t\tn_obs\tins\t\twinner\tbid\tt_img\tt_bid\tv_opt\tperformed\n'
         
@@ -2137,8 +2144,14 @@ class ConsensusPlanner(AbstractReactivePlanner):
             else:
                 raise TypeError("Bids in results must be either a list or a dictionary.")   
            
+            if no_empty and all(bid.winner == bid.NONE for bid in printed_bids):
+                continue
+
             for i_bid,bid in enumerate(printed_bids):
                 bid : Bid
+
+                if bid.winner == bid.NONE and no_empty:
+                    continue
                     
                 if bid.winner != bid.NONE: 
                     bid_winner = bid.winner.split('_')
@@ -2151,6 +2164,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     instrument = bid.main_measurement
                     if len(instrument) < 5: 
                         instrument = instrument + '\t'  # pad short instrument names for formatting
+                    else:
+                        instrument = instrument.split(' ')[-1]
                     if bid.winner != bid.NONE:
                         line = f'{req_id_short} {bid.n_obs}\t{instrument}\t{bid_winner.lower()}\t{np.round(bid.winning_bid,4)}\t{np.round(bid.t_img,1)}\t{np.round(bid.t_bid,1)}\t{self._optimistic_bidding_counters[bid.task][bid.n_obs]}\t{(bid.performed)}\n'
                     else:
@@ -2174,7 +2189,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         out += f'Total tasks in results: {len(results)}\n'
 
-        print(out)
+        tqdm.write(out)
 
     def _log_path(self, 
                   dsc : str, 
@@ -2231,7 +2246,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 out += '\n'
                 break
 
-        print(out)
+        tqdm.write(out)
 
     def _log_bundle(self, 
                     dsc : str, 
@@ -2289,4 +2304,4 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # stats
         out += f'Bundle size: {len(bundle)} observations\n'
 
-        print(out)
+        tqdm.write(out)

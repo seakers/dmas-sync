@@ -1700,6 +1700,7 @@ class ResultsProcessor:
         else:
             # if not calculating reward bounds, set to NaN for clarity in summary
             reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
+            known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
 
             # extract accesses for known tasks only
             accesses_per_known_task = {task: accesses for task, accesses in accesses_per_task.items() if task in known_tasks}
@@ -3526,7 +3527,7 @@ class ResultsProcessor:
             obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
             if sum(obs['reward']) - 1e-6 > task_utility and opp_filter != 'nadir':
                 if printouts: tqdm.write(f"\tWarning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}.")
-                x = 1  # set breakpoint here when debugging bound violations
+                # x = 1  # set breakpoint here when debugging bound violations
 
         dual_bound_df = pd.DataFrame(
             list(dual_bound.items()), columns=['task', 'reward']

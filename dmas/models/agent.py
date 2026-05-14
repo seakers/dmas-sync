@@ -366,9 +366,9 @@ class SimulationAgent(object):
                 # if True:
                 # if curr_state._t > 27_879.00 and ("imager_b_sat_29" in curr_state.agent_name or "imager_b_sat_62" in curr_state.agent_name):
                 # if "imager_c_sat_0" in curr_state.agent_name and curr_state._t > 48_648.0 and self._plan.actions:
-                # if len(self._plan.actions) > 0:
-                    # self.__log_plan(self._plan, "REPLAN", logging.WARNING)
-                    # x = 1 # breakpoint
+                # if len(self._plan.actions) > 1:
+                #     self.__log_plan(self._plan, "REPLAN", logging.WARNING)
+                #     x = 1 # breakpoint
                 # -------------------------------------
 
         # get next actions to perform from current plan

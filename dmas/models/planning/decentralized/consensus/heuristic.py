@@ -494,6 +494,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # -------------------------------
         # DEBUG PRINTOUTS
         # if self._debug:
+        # if sorted_observation_opportunities:
         #     self._log_results('PROPOSED BIDS (DURING BUNDLE-BUILDING PHASE)', state, proposed_bids)
             # self._log_path('CURRENT PATH (DURING BUNDLE-BUILDING PHASE)', state, proposed_path)
             # self._log_bundle('BUNDLE (DURING BUNDLE-BUILDING PHASE)', state, proposed_bundle)

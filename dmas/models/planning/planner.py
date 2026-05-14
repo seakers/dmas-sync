@@ -757,10 +757,23 @@ class AbstractPlanner(ABC):
                                                                                  orbitdata, 
                                                                                  n_obs, 
                                                                                  t_prev)
+        # TODO DEBUG SECTION----------
+        values = [mission.calc_task_value(task, measurement) 
+                    for measurement in measurement_performance.values()] \
+                        if len(measurement_performance.values()) > 0 else [0.0]
+        value = sum(values)
+        if value == 0.0 and len(measurement_performance.values()) > 0:
+            values = [mission.calc_task_value(task, measurement) 
+                    for measurement in measurement_performance.values()] \
+                        if len(measurement_performance.values()) > 0 else [0.0]
+        return value
 
-        return max([mission.calc_task_value(task, measurement) 
-                    for measurement in measurement_performance.values()]) \
-                        if len(measurement_performance.values()) > 0 else 0.0
+        # -----------------------------
+
+
+        # return max([mission.calc_task_value(task, measurement) 
+        #             for measurement in measurement_performance.values()]) \
+        #                 if len(measurement_performance.values()) > 0 else 0.0
         
     def __estimate_task_performance_metrics(self, 
                                             task : GenericObservationTask, 
