@@ -522,7 +522,7 @@
             "args": [
                 "-t", "full_factorial_trials_2026-05-11",
                 // "--trial-range", "1:6",
-                "--trial-range", "35:36",
+                "--trial-range", "0:35",
                 // "-i", "18",
                 // "--single-trial", "1",
                 "--single-thread",
