@@ -135,12 +135,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # DEBUG PRINTOUTS
         # debug_case = state._t >= 19_999.00 and ("(VNIR-FR-T) Sat 4" in state.agent_name)
         # if debug_case and incoming_bids:
-        # if self._debug and incoming_bids:
         # if incoming_bids:
-        #     self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
-        #     print(f'[{state.agent_id}] - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
-            # self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
-            # self._log_path('CONSENSUS PHASE - PATH (BEFORE)', state, self._path)
+        if self._debug and incoming_bids:
+            self._log_results('CONSENSUS PHASE - RESULTS (BEFORE)', state, self._results)
+            print(f'[{state.agent_id}] - Received {len(incoming_bids)} incoming bids and {len(incoming_reqs)} task requests.')
+            self._log_bundle('CONSENSUS PHASE - BUNDLE (BEFORE)', state, self._bundle)
+            self._log_path('CONSENSUS PHASE - PATH (BEFORE)', state, self._path)
         # -------------------------------
 
         # perform consensus phase for incoming task bids
@@ -158,20 +158,20 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # DEBUG PRINTOUTS        
         # if (task_updates or results_updates or bundle_updates) and debug_case:
         # if (task_updates or results_updates or bundle_updates) and self._path:
-        # if (task_updates or results_updates or bundle_updates) and self._debug:
         # if (task_updates or results_updates or bundle_updates) and (incoming_bids or incoming_reqs):
-        #     self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
-        #     tqdm.write(f'[{state.agent_id}] Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
-        #     if any([
-        #         len(task_updates) > 0,
-        #         len(results_updates) > 0, 
-        #         len(bundle_updates) > 0
-        #     ]):
-        #         tqdm.write(f'[{state.agent_id}] Relevant updates detected; replanning is required.')
-        #     else:
-        #         tqdm.write(f'[{state.agent_id}] No relevant updates detected; no replanning required.')
-            # self._log_bundle('CONSENSUS PHASE - BUNDLE (AFTER)', state, self._bundle)
-            # self._log_path('CONSENSUS PHASE - PATH (AFTER)', state, self._path)
+        if (task_updates or results_updates or bundle_updates) and self._debug:
+            self._log_results('CONSENSUS PHASE - RESULTS (AFTER)', state, self._results)
+            tqdm.write(f'[{state.agent_id}] Performed {len(task_updates)} task updates, {len(results_updates)} results updates, and {len(bundle_updates)} bundle updates.')
+            if any([
+                len(task_updates) > 0,
+                len(results_updates) > 0, 
+                len(bundle_updates) > 0
+            ]):
+                tqdm.write(f'[{state.agent_id}] Relevant updates detected; replanning is required.')
+            else:
+                tqdm.write(f'[{state.agent_id}] No relevant updates detected; no replanning required.')
+            self._log_bundle('CONSENSUS PHASE - BUNDLE (AFTER)', state, self._bundle)
+            self._log_path('CONSENSUS PHASE - PATH (AFTER)', state, self._path)
         # -------------------------------
 
         # set replanning flags
