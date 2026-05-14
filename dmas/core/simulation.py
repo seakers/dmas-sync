@@ -424,6 +424,7 @@ class Simulation:
                           force_summarize : bool = False,
                           printouts : bool = True,
                           print_to_csv : bool = True,
+                          calc_bounds_opt : int = ResultsProcessor.ALL_TASKS,
                           precision : int = 5
                         ) -> pd.DataFrame:
         """ Loads processed data and generates a summary dataframe without reprocessing raw results files. """        
@@ -465,7 +466,7 @@ class Simulation:
                                                         *processed_results, 
                                                         precision=precision, 
                                                         printouts=printouts,
-                                                        calc_reward_bounds=self._calc_reward_bounds)
+                                                        calc_bounds_opt=calc_bounds_opt)
         else:                        
             # process results and generate summary
             processed_results = self.process_results(printouts=printouts)
@@ -479,7 +480,7 @@ class Simulation:
                                                      *processed_results, 
                                                      precision=precision, 
                                                      printouts=printouts,
-                                                     calc_reward_bounds=self._calc_reward_bounds
+                                                     calc_bounds_opt=calc_bounds_opt
                                                     )
             
             

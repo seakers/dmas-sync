@@ -34,7 +34,13 @@ from dmas.models.science.requests import TaskRequest
 from dmas.utils.orbitdata import OrbitData
 from dmas.utils.tools import SimulationRoles
 
-class ResultsProcessor:
+class DualBoundCalcOptions(Enum):
+    # dual bound calc options
+    NO_TASKS = 0
+    KNOWN_TASKS = 1
+    ALL_TASKS = 2
+
+class ResultsProcessor:  
     """
     PROCESSING METHODS
     """
@@ -1572,7 +1578,7 @@ class ResultsProcessor:
                           observations_per_task : Dict[GenericObservationTask, list],
                           precision : int = 5,
                           printouts : bool = True,
-                          calc_reward_bounds : bool = True,
+                          calc_bounds_opt : int = ALL_TASKS,
                         ) -> pd.DataFrame:      
 
         # classify re-observations
@@ -1679,7 +1685,7 @@ class ResultsProcessor:
         total_task_priority, total_observable_task_priority \
             = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
 
-        if calc_reward_bounds:
+        if calc_bounds_opt == ResultsProcessor.ALL_TASKS:
             # calculate per-task bounds once for all tasks
             primal_per_task, dual_per_task = ResultsProcessor.__calculate_reward_bounds(
                 compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts
@@ -1697,7 +1703,7 @@ class ResultsProcessor:
                 "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
             assert total_obtained_utility < reward_dual_bound or abs(total_obtained_utility - reward_dual_bound) <= 1e-6, \
                 "Total obtained utility exceeds calculated reward dual bound. Please check reward and cost calculations for errors."
-        else:
+        elif calc_bounds_opt == ResultsProcessor.KNOWN_TASKS:
             # if not calculating reward bounds, set to NaN for clarity in summary
             reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
             known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
@@ -1718,6 +1724,11 @@ class ResultsProcessor:
                 known_reward_dual_bound   = sum(known_dual_per_task.values())
             else:
                 known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
+        elif calc_bounds_opt == ResultsProcessor.NO_TASKS:
+            reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
+            known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
+        else:
+            raise ValueError(f"Invalid option for `reward_bounds_opt`: {calc_bounds_opt}. Valid options are: ResultsProcessor.ALL_TASKS, ResultsProcessor.KNOWN_TASKS, ResultsProcessor.NO_TASKS.")
 
         # pre-compute per-agent aggregations once (each groupby re-scans the full DF)
         planned_by_agent = planned_rewards_df.groupby('agent')['planned reward'].sum() \

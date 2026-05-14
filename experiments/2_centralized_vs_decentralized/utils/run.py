@@ -9,6 +9,8 @@ import tracemalloc
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+
+from dmas.utils.processing import DualBoundCalcOptions
 from .config import RunConfig, SimulationConfig
 import os
 import logging
@@ -248,9 +250,17 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             # ensure we summarize if we just ran or postprocessed the sim
             force_summarize = sim_cfg.force_summarize or should_run_sim
 
+            if calc_dual and data_processing.lower() == 'oracle':
+                calc_bounds_opt = DualBoundCalcOptions.NO_TASKS
+            elif calc_dual:
+                calc_bounds_opt = DualBoundCalcOptions.ALL_TASKS
+            else:
+                calc_bounds_opt = DualBoundCalcOptions.KNOWN_TASKS
+
             # summarize results 
             mission.summarize_results(force_summarize=force_summarize, 
-                                      printouts=not sim_cfg.quiet)
+                                      printouts=not sim_cfg.quiet,
+                                      calc_bounds_opt=calc_bounds_opt)
             
             # set summarize status for return summary
             sum_status = "summarized"
