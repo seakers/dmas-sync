@@ -465,12 +465,17 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [                
-                "-t", "full_factorial_trials_2026-05-11",
+                // "-t", "full_factorial_trials_2026-05-11",
+                
                 // "--single-trial", "9", // DP+CBBA
                 // "--single-trial", "15", // DP+Greedy
-                "--single-trial", "27", // None+CBBA
-
+                // "--single-trial", "27", // None+CBBA
+                
                 // "-t", "full_factorial_trials_2026-05-13",
+                
+                "-t", "full_factorial_trials_2026-05-14",
+                "--single-trial", "52", // Ground Processor, None+Greedy 
+                "--single-trial", "53", // Oracle, None+Greedy
 
                 "--profile-cpu",
                 "--profile-mem",

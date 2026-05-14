@@ -1077,6 +1077,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             - t_prev_best : Dict[int, Dict[GenericObservationTask, float]] - Best previous observation times for each observation in the proposed path.
         """
 
+        # get current time
+        t_curr = state.get_time()
+
         # extract modified task observation opportunities from path changes
         added_tasks : Set[GenericObservationTask] =\
             {task for obs_act in obs_added for task in obs_act.obs_opp.tasks}
@@ -1318,22 +1321,52 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         t_prev_candidate = [dict() for _ in candidate_path]
         
         # assign best observation numbers and previous observation times to observations in candidate path
-        for obs_idx,obs in enumerate(candidate_path):
+        for obs_idx,obs_act in enumerate(candidate_path):
             # get earliest task observation times for this observation
-            obs_t_img = obs.obs_opp.get_earliest_starts(obs.t_start)
+            obs_t_img = obs_act.obs_opp.get_earliest_starts(obs_act.t_start)
 
             # iterate through matching tasks of this observation
-            for task in obs.obs_opp.tasks:
+            for task in obs_act.obs_opp.tasks:
                 # get observation time for this task in this observation opportunity
                 t_start = obs_t_img[task]
 
                 # check if observation would have been performed before the current time step based on minimum task duration
-                if t_start + obs.obs_opp.task_min_duration[task.id] < state.get_time():
-                    # if so, skip assignment since it cannot be modified by path changes
+                # if t_start + obs_act.obs_opp.task_min_duration[task.id] < state.get_time():
+                #     continue
+                
+                # check if observation is ongoing or in the past based on proposed observation time
+                if t_start < t_curr:
+                    # check if observation would have been completed before the current time
+                    if t_start + obs_act.obs_opp.task_min_duration[task.id] < state.get_time():
+                        # observation completed; does not contribute to current path value; skip assignment of observation number and previous observation time
+                        continue
+
+                    # TEMP: assume ongoing actions do not contribute to path value; skip assignment of observation number and previous observation time
                     continue
 
+                    # TODO tests following section:
+                    # find matching bids for this observation task that started during this access
+                    matching_bids = [bid for bid in self._results[task] 
+                                     if bid.t_img in obs_act.obs_opp.accessibility
+                                     and bid.winner == state.agent_name
+                                     and abs(bid.t_img - t_start) <= self.EPS
+                                    #  and bid.was_performed()
+                                     ]
+                    assert matching_bids, \
+                        f"No matching bids found for task {task} during current observation opportunity accessibility. Cannot assign observation number and previous observation time."
+                    
+                    matching_bid = matching_bids[0]
+                    prev_bid = self._results[task][matching_bid.n_obs - 1] if matching_bid.n_obs > 0 else None
+                    
+                    # update previous observation counts
+                    n_obs_candidate[obs_idx][task] = matching_bid.n_obs
+                    t_prev_candidate[obs_idx][task] = prev_bid.t_img if prev_bid else np.NINF
+
+                    assert matching_bid.n_obs == 0, \
+                        "Previous bids should exist for observation numbers greater than zero."
+
                 # check if sequence was modified for this parent task
-                if task in n_obs_best:
+                elif task in n_obs_best:
                     # extract observation time and revisit time from best sequences
                     n_obs = n_obs_best[task].pop(0)
                     t_prev = t_prev_best[task].pop(0)
@@ -1344,8 +1377,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         "Previous observation time is not defined for observation number greater than zero."
 
                     # generate new bids for this observation if it is part of path changes
-                    new_bid = Bid(task, state.agent_name, n_obs, val, val, state.agent_name, t_img, state._t, None, obs.instrument_name)
-                    new_bids[obs.obs_opp][task] = new_bid
+                    new_bid = Bid(task, state.agent_name, n_obs, val, val, state.agent_name, t_img, state._t, None, obs_act.instrument_name)
+                    new_bids[obs_act.obs_opp][task] = new_bid
 
                     # assign best observation number and previous observation time
                     n_obs_candidate[obs_idx][task] = n_obs
@@ -1392,10 +1425,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
                     if matching_bid.n_obs > 0: assert t_prev_candidate[obs_idx][task] >= 0.0, \
                         "Previous observation time is not defined for observation number greater than zero."
-                elif state.get_time() in obs.obs_opp.accessibility:
+                elif t_curr in obs_act.obs_opp.accessibility:
                     # this observation window is in progress; check if any bids were performed during this access
                     matching_bids = [bid for bid in self._results[task] 
-                                     if bid.t_img in obs.obs_opp.accessibility
+                                     if bid.t_img in obs_act.obs_opp.accessibility
                                      and bid.winner == state.agent_name
                                      and bid.was_performed()]
                     if not matching_bids:

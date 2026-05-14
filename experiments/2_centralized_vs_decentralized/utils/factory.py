@@ -367,7 +367,7 @@ def create_ground_operator_specifications(
     for announcer_type in announcer_types:
         # skip announcer creation if data processing type is onboard; only announce wildfires
         # skip_announcer = bool(data_processing.lower() == 'onboard' and announcer_type in ['algal_bloom', 'high_flow_river'])
-        skip_announcer = data_processing.lower() == 'onboard'
+        skip_announcer = data_processing.lower() == 'onboard'        
 
         # create event announcer ground operator
         announcer_specs = copy.deepcopy(ground_operator_specs_template['announcer'])
@@ -376,6 +376,12 @@ def create_ground_operator_specifications(
         file_name = f"{announcer_type}_{event_date}.csv" if not skip_announcer else "no_events.csv"
         announcer_events_path = os.path.join(*event_dir_path, file_name)
         announcer_specs['planner']['preplanner']['eventsPath'] = announcer_events_path
+
+        # set announcer mode based on data processing type
+        if data_processing.lower() in ['oracle', 'onboard']:
+            announcer_specs['planner']['preplanner']['@mode'] = 'oracle'
+        else:
+            announcer_specs['planner']['preplanner']['@mode'] = 'groundProcessor'
 
         # update name of announcer based on event type
         announcer_type_name = announcer_type.replace('_', ' ').title()

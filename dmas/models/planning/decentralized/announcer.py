@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
+from abc import abstractmethod
 
 from execsatm.tasks import EventObservationTask
 from execsatm.events import GeophysicalEvent
@@ -22,7 +23,7 @@ from dmas.core.messages import BusMessage, MeasurementRequestMessage
 from dmas.utils.orbitdata import OrbitData
 
 
-class EventAnnouncerPlanner(AbstractPeriodicPlanner):
+class AbstractEventAnnouncerPlanner(AbstractPeriodicPlanner):
     def __init__(self,
                  agent_results_dir : str,
                  events_path : str,
@@ -72,8 +73,7 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
             events.append(event)
 
         return events
-    
-    
+        
     def generate_plan(  self, 
                         state : SimulationAgentState,
                         _ : object,
@@ -102,6 +102,11 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
     def _schedule_observations(self, *_) -> list:
         return [] # No scheduling, only announcing events
     
+    @abstractmethod
+    def _schedule_broadcasts(self, state : SimulationAgentState, _, orbitdata : OrbitData, __ = None) -> List[BroadcastMessageAction]:
+        pass
+
+class OracleEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
     def _schedule_broadcasts(self, state : SimulationAgentState, _, orbitdata : OrbitData, __ = None) -> List[BroadcastMessageAction]:
         # initialzie list of broadcasts to be performed in this planning period
         broadcasts : List[BroadcastMessageAction] = []
@@ -225,9 +230,25 @@ class EventAnnouncerPlanner(AbstractPeriodicPlanner):
             broadcasts.append(BroadcastMessageAction(bus_broadcast.to_dict(), t_broadcast))
 
         # return sorted list of broadcasts by time
-        return sorted(broadcasts, key=lambda action: action.t_start)
+        return sorted(broadcasts, key=lambda action: action.t_start)    
     
     def print_results(self):
         return super().print_results()
-    
         # TODO print out list of announcements and how many events were announced, etc.
+    
+class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
+    def __init__(self,
+                 agent_results_dir : str,
+                 events_path : str,
+                 simulation_missions : Dict[str,Mission],
+                 simulation_orbitdata : Dict[str,OrbitData],
+                 announce_horizon : float = 3600.0,
+                 debug = False,
+                 logger = None,
+                 printouts : bool = True
+                ) -> None:
+        # initialzie parent class with appropriate horizon and period for rolling announcements
+        super().__init__(agent_results_dir, events_path, simulation_missions, announce_horizon, debug, logger, printouts)
+
+        # store orbitdata for use in scheduling broadcasts
+        self._simulation_orbitdata = simulation_orbitdata

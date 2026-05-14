@@ -47,8 +47,16 @@
             "maxTasks": 100,
             "debug" : "False"
         },
-        "announcer": {
+        "oracle_announcer": {
             "@type": "eventAnnouncer",
+            "@mode" : "oracle",
+            "debug": "False",          
+            "announceHorizon": 3600.0,
+            "eventsPath" : "PATH/TO/EVENTS"
+        },
+        "ground_processor_announcer": {
+            "@type": "eventAnnouncer",
+            "@mode" : "groundProcessor",
             "debug": "False",          
             "announceHorizon": 3600.0,
             "eventsPath" : "PATH/TO/EVENTS"

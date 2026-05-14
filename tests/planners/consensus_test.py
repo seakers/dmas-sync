@@ -47,7 +47,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_19 = False # single sat    default mission     multiple targets    two events           preplan w/short horizon + replan
         self.toy_20 = False # two sats      default mission     multiple targets    two events           preplan w/short horizon + replan
         self.toy_21 = False # single sat    no default mission     multiple targets    two events announced by GS  replan
-        self.toy_22 = True # two sats      no default mission     multiple targets    two events announced by GS   replan
+        self.toy_22 = False # two sats      no default mission     multiple targets    two events announced by GS   replan
 
         self.toy_23 = False # single satellite bidding against a gs agent; announcer sat
         self.toy_24 = False # two satellites bidding against a gs agent; announcer sat
@@ -57,7 +57,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_27 = False # string of pearls with onboard event detection
         self.toy_28 = False # sequence reset case
         self.toy_29 = False # real vs planned reward comparison
-        self.toy_30 = False # interrupted observations from external broadcast
+        self.toy_30 = True # interrupted observations from external broadcast
 
     def toy_planner_config(self):
         return {

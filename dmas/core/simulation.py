@@ -31,7 +31,7 @@ from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, Si
 from dmas.models.planning.centralized.dealer import DealerPlanner, TestingDealer
 from dmas.models.planning.centralized.milp import DealerMILPPlanner
 from dmas.models.planning.centralized.worker import WorkerPlanner
-from dmas.models.planning.decentralized.announcer import EventAnnouncerPlanner
+from dmas.models.planning.decentralized.announcer import AbstractEventAnnouncerPlanner, GroundProcessorEventAnnouncerPlanner, OracleEventAnnouncerPlanner
 from dmas.models.planning.decentralized.blank import BlankPlanner
 from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInsertionConsensusPlanner
 from dmas.models.planning.decentralized.dynamic import DynamicProgrammingPlanner
@@ -42,7 +42,7 @@ from dmas.models.planning.decentralized.default import FixedPointingDefaultPlann
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.science.processing import ObservationDataProcessor, LookupProcessor
-from dmas.utils.processing import ResultsProcessor
+from dmas.utils.processing import DualBoundCalcOptions, ResultsProcessor
 from dmas.utils.tools import SimulationRoles
 
 class SimulationClockType(Enum):
@@ -152,7 +152,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            # t = 7_000.0 # TODO remove after testing
+            t = 50_000.0 # TODO remove after testing
             # t_check = 0.0
             # dt_progress = 0.0
             
@@ -424,7 +424,7 @@ class Simulation:
                           force_summarize : bool = False,
                           printouts : bool = True,
                           print_to_csv : bool = True,
-                          calc_bounds_opt : int = ResultsProcessor.ALL_TASKS,
+                          calc_bounds_opt : int = DualBoundCalcOptions.ALL_TASKS,
                           precision : int = 5
                         ) -> pd.DataFrame:
         """ Loads processed data and generates a summary dataframe without reprocessing raw results files. """        
@@ -1212,10 +1212,21 @@ class Simulation:
             events_path = preplanner_dict.get('eventsPath', None)
             if events_path is None: raise ValueError(f'predefined events path not specified in input file.')
             announce_horizon = preplanner_dict.get('announceHorizon', 3600.0)
+            announcer_mode = preplanner_dict.get('@mode', 'oracle').lower()
 
-            return EventAnnouncerPlanner(agent_results_dir, events_path, simulation_missions,
-                                         announce_horizon=announce_horizon,
-                                         debug=debug, logger=logger, printouts=printouts)
+            if announcer_mode in ['oracle']:
+                return OracleEventAnnouncerPlanner(
+                    agent_results_dir, events_path, simulation_missions,
+                    announce_horizon=announce_horizon,
+                    debug=debug, logger=logger, printouts=printouts)
+            elif announcer_mode in ['groundprocessor']:
+                return GroundProcessorEventAnnouncerPlanner(
+                    agent_results_dir, events_path, simulation_missions, simulation_orbitdata,
+                    announce_horizon=announce_horizon,
+                    debug=debug, logger=logger, printouts=printouts)
+            else:
+                raise ValueError(f'Unsupported event announcer mode `{announcer_mode}` specified in input file.')
+
 
         elif preplanner_type.lower() == 'dealer':
             # unpack preplanner parameters
