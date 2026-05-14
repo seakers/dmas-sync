@@ -1575,14 +1575,6 @@ class ResultsProcessor:
                           calc_reward_bounds : bool = True,
                         ) -> pd.DataFrame:      
 
-        # DEBUG -------------
-        # calculate bounds for all tasks
-        reward_primal_bound, reward_dual_bound \
-            = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
-        X = 1
-        raise NotImplementedError("[results summary] still undergoing testing")
-        # -------------------
-
         # classify re-observations
         if printouts: tqdm.write('[results summary] classifying re-observations')
         events_re_observable, events_re_obs \
@@ -3425,9 +3417,17 @@ class ResultsProcessor:
                 for obs_opp, agent_name, obs_time in observation_opps
             ]
 
-            feasible_sequences = ResultsProcessor._find_all_maximal_sequences(
-                available_obs_times
-            )
+            # Collect up to SA_THRESHOLD sequences lazily; stop early if exceeded
+            _SA_THRESHOLD = 16
+            _seq_gen = ResultsProcessor._iter_maximal_sequences(available_obs_times)
+            feasible_sequences = []
+            too_many = False
+            for _seq in _seq_gen:
+                feasible_sequences.append(_seq)
+                if len(feasible_sequences) > _SA_THRESHOLD:
+                    too_many = True
+                    _seq_gen.close()  # discard remainder of DFS — no memory leak
+                    break
 
             precomputed_obj_relevances = {
                 agent_name: mission.relate_objectives_to_task(task)
@@ -3435,7 +3435,7 @@ class ResultsProcessor:
             }
 
             t0 = time.time()
-            if len(feasible_sequences) > 16:
+            if too_many or len(feasible_sequences) > 16:
                 method = 'SA'
                 _, best_times, task_utility = ResultsProcessor.__sa_best_sequence(
                     task,
@@ -3512,8 +3512,9 @@ class ResultsProcessor:
 
             elapsed = time.time() - t0
             method_short = 'SA' if method == 'SA' else ('BO-par' if 'Parallel' in method else 'BO-ser')
+            n_seqs_str = '>16' if too_many else str(len(feasible_sequences))
             if printouts:
-                tqdm.write(f" - Task {task.id.split('-')[-1]}: {len(feasible_sequences)} sequences, "
+                tqdm.write(f" - Task {task.id.split('-')[-1]}: {n_seqs_str} sequences, "
                         f"{len(available_obs_times)} windows -> {method_short} in {elapsed:.2f}s (r={task_utility:.6f})")
 
             dual_bound[task] = task_utility
@@ -4232,74 +4233,44 @@ class ResultsProcessor:
                     )
 
     @staticmethod
-    def _find_all_maximal_sequences(
-        available_obs: List[tuple],
-    ) -> List[Tuple[List[str], List[float], List[float], List]]:
+    def _iter_maximal_sequences(available_obs: List[tuple]):
         """
-        Returns all maximal feasible ordered sequences regardless of length.
-        A sequence is maximal if no further observation can be appended.
+        Generator that lazily yields maximal feasible ordered sequences one at a time.
+
+        Each stack entry carries its own path tuple (path-copying DFS) so the
+        generator can be stopped at any point without leaking memory from a global
+        node_info table.  The caller collects up to SA_THRESHOLD+1 sequences; if
+        it reaches that limit it closes the generator and routes to SA, keeping
+        peak memory O(n²) regardless of how many sequences the task actually has.
         """
         n = len(available_obs)
         if not n:
-            return []
-    
-        mx_mask = [0] * n
-        # for i in range(n):
-        #     for j in range(i + 1, n):
-        #         if available_obs[i][3].is_mutually_exclusive(available_obs[j][3]):
-        #             mx_mask[i] |= (1 << j)
-        #             mx_mask[j] |= (1 << i)
-    
+            return
+
         successors = [[] for _ in range(n)]
         for i in range(n):
             t_i = available_obs[i][0]
             for j in range(i + 1, n):
                 if available_obs[j][0] >= t_i:
                     successors[i].append(j)
-    
-        node_info = []
-        stack = []
-        for i in range(n):
-            node_id = len(node_info)
-            node_info.append((i, -1))
-            stack.append((i, node_id, mx_mask[i] | (1 << i), 1))
-    
-        leaf_nodes = []
+
+        # stack entries: (last_obs_idx, path_as_tuple_of_indices, excluded_bitmask)
+        stack = [(i, (i,), 1 << i) for i in range(n)]
+
         while stack:
-            obs_idx, node_id, excluded, depth = stack.pop()
-            valid_succs = [j for j in successors[obs_idx]
-                        if not (excluded & (1 << j))]
+            obs_idx, path_idx, excluded = stack.pop()
+            valid_succs = [j for j in successors[obs_idx] if not (excluded & (1 << j))]
             if not valid_succs:
-                leaf_nodes.append((depth, node_id))
+                path = [available_obs[i] for i in path_idx]
+                yield (
+                    [s[1] for s in path],   # agent names
+                    [s[0] for s in path],   # obs times
+                    [s[2] for s in path],   # look angles
+                    [s[3] for s in path],   # obs_opp objects
+                )
             else:
                 for j in valid_succs:
-                    new_node_id = len(node_info)
-                    node_info.append((j, node_id))
-                    stack.append((j, new_node_id,
-                                excluded | mx_mask[j] | (1 << j),
-                                depth + 1))
-    
-        def reconstruct(node_id):
-            path = []
-            while node_id != -1:
-                obs_idx, parent = node_info[node_id]
-                path.append(available_obs[obs_idx])
-                node_id = parent
-            path.reverse()
-            return path
-    
-        results = []
-        for _, node_id in leaf_nodes:
-            seq = reconstruct(node_id)
-            results.append((
-                [s[1] for s in seq],
-                [s[0] for s in seq],
-                [s[2] for s in seq],
-                [s[3] for s in seq],
-            ))
-    
-        results.sort(key=lambda x: (*x[1],))
-        return results
+                    stack.append((j, path_idx + (j,), excluded | (1 << j)))
     
     @staticmethod
     def _find_longest_observation_sequence_for_task(
