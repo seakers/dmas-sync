@@ -1680,22 +1680,18 @@ class ResultsProcessor:
             = ResultsProcessor.__calculate_task_priorities(accesses_per_task)
 
         if calc_reward_bounds:
-            # calculate bounds for all tasks
-            reward_primal_bound, reward_dual_bound \
-                = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts)
+            # calculate per-task bounds once for all tasks
+            primal_per_task, dual_per_task = ResultsProcessor.__calculate_reward_bounds(
+                compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts
+            )
+            reward_primal_bound = sum(primal_per_task.values())
+            reward_dual_bound   = sum(dual_per_task.values())
 
-            # extract accesses for known tasks only
-            accesses_per_known_task = {task: accesses for task, accesses in accesses_per_task.items() if task in known_tasks}
+            # known bounds: filter per-task dicts to known tasks only (no second computation needed)
+            known_tasks_set = set(known_tasks)
+            known_reward_primal_bound = sum(v for t, v in primal_per_task.items() if t in known_tasks_set)
+            known_reward_dual_bound   = sum(v for t, v in dual_per_task.items()   if t in known_tasks_set)
 
-            # check if all tasks are known
-            all_tasks_known = (len(accesses_per_task) == len(accesses_per_known_task)
-                               and all(task in known_tasks for task in accesses_per_known_task))
-
-            # calculate bounds for known tasks only           
-            known_reward_primal_bound, known_reward_dual_bound \
-                = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts) \
-                    if not all_tasks_known else (reward_primal_bound, reward_dual_bound)
-            
             # validate reward values
             assert total_obtained_reward < reward_dual_bound or abs(total_obtained_reward - reward_dual_bound) <= 1e-6, \
                 "Total obtained reward exceeds calculated reward dual bound. Please check reward calculations for errors."
@@ -1704,7 +1700,7 @@ class ResultsProcessor:
         else:
             # if not calculating reward bounds, set to NaN for clarity in summary
             reward_primal_bound, reward_dual_bound = np.NAN, np.NAN
-            
+
             # extract accesses for known tasks only
             accesses_per_known_task = {task: accesses for task, accesses in accesses_per_task.items() if task in known_tasks}
 
@@ -1712,10 +1708,15 @@ class ResultsProcessor:
             all_tasks_known = (len(accesses_per_task) == len(accesses_per_known_task)
                                and all(task in known_tasks for task in accesses_per_known_task))
 
-            # calculate bounds for known tasks only           
-            known_reward_primal_bound, known_reward_dual_bound \
-                = ResultsProcessor.__calculate_reward_bounds(compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts) \
-                    if not all_tasks_known else (reward_primal_bound, reward_dual_bound)
+            # calculate bounds for known tasks only
+            if not all_tasks_known:
+                known_primal_per_task, known_dual_per_task = ResultsProcessor.__calculate_reward_bounds(
+                    compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts
+                )
+                known_reward_primal_bound = sum(known_primal_per_task.values())
+                known_reward_dual_bound   = sum(known_dual_per_task.values())
+            else:
+                known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
 
         # pre-compute per-agent aggregations once (each groupby re-scans the full DF)
         planned_by_agent = planned_rewards_df.groupby('agent')['planned reward'].sum() \
@@ -2795,9 +2796,9 @@ class ResultsProcessor:
                                   agent_missions: Dict[str, Mission],
                                   obtained_rewards_df : pd.DataFrame,
                                   printouts : bool
-                                ) -> Tuple[float, float]:
+                                ) -> Tuple[Dict, Dict]:
         # extract agent field of view specifications from agent specs object
-        cross_track_fovs = {agent : ResultsProcessor._collect_fov_specs(specs) 
+        cross_track_fovs = {agent : ResultsProcessor._collect_fov_specs(specs)
                             for agent,specs in agent_specs.items()}
 
         # calculate observation opportunities from accesses
@@ -3364,7 +3365,7 @@ class ResultsProcessor:
         bo_n_initial: int = 8,
         bo_n_iterations: int = 20,
         opp_filter: str = None,
-    ) -> float:
+    ) -> Dict:
         estimate_fn = ResultsProcessor.__estimate_task_performance_metrics
 
         dual_bound = dict()
@@ -3530,9 +3531,9 @@ class ResultsProcessor:
         dual_bound_df = pd.DataFrame(
             list(dual_bound.items()), columns=['task', 'reward']
         )
-        if printouts: print(dual_bound_df.to_string(index=False))
+        if printouts: tqdm.write(dual_bound_df.to_string(index=False))
 
-        return sum(dual_bound.values())
+        return dual_bound
 
     @staticmethod
     def __calculate_primal_bound(
