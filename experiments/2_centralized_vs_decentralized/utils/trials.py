@@ -59,7 +59,41 @@ if __name__ == "__main__":
     print_scenario_banner('Trial generator for Centralized vs Decentralized Planning Study')
     
     # define experiment parameters
-    test_params = {
+    abridged_params = {
+        "Preplanner" : [
+            "None",
+            "DP",
+            "Centralized-MILP_priority",
+            # "Centralized-MILP_assignment" 
+            # "Centralized-Metaheuristics" # TODO
+        ],
+        "Replanner": [
+            "None",
+            "Greedy", 
+            "CBBA", 
+        ],
+        "Connectivity": [
+            "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
+            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
+            "GS",                   # sats can only talk to ground station (no inter-sat comms)
+        ],
+        "Scenario": [
+            "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
+        ],
+        "Data Processing" : [
+            "Oracle",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
+            "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
+            "Onboard",              # sats must discover events using default mission tasks
+        ],
+        "Constellation" : [
+            "Walker-Delta",
+        ],
+        "Date" : [            
+            # 2019 dates 
+            "2019-02-15",   # Winter NH
+        ], 
+    }    
+    full_params = {
         "Preplanner" : [
             "None",
             "DP",
@@ -74,7 +108,7 @@ if __name__ == "__main__":
             # "Metaheuristic"
         ],
         "Connectivity": [
-            "Interconstellation"    # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
+            "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
             "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
             "GS",                   # sats can only talk to ground station (no inter-sat comms)
         ],
@@ -84,7 +118,7 @@ if __name__ == "__main__":
         ],
         "Data Processing" : [
             "Oracle",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
-            # "Ground", #TODO       # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
+            "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
             "Onboard",              # sats must discover events using default mission tasks
         ],
         "Constellation" : [
@@ -118,23 +152,33 @@ if __name__ == "__main__":
     ]
 
     # 1) generate full enumeration of trials per experiment
-    test_trials = generate_full_tactorial_trials(test_params)
+    abridged_trials = generate_full_tactorial_trials(abridged_params)
+    full_trials = generate_full_tactorial_trials(full_params)
 
     trial_dfs = {
-        "centralization": test_trials
+        "abridged": abridged_trials,
+        "full": full_trials
     }
 
     # merge trials, tagging which experiment(s) they belong to
-    param_cols = list(test_params.keys())  
+    param_cols = list(abridged_trials.keys())  
     all_trials = tag_and_merge(trial_dfs, param_cols)
 
     # apply rules to filter out invalid scenarios
     all_trials = apply_rules(all_trials, rules) 
 
-    # 2) sort trials (optional, but can help with scheduling and analysis later)
-    # # sort by date
-    # all_trials["Date"] = pd.to_datetime(all_trials["Date"])
-    # all_trials = all_trials.sort_values("Date").reset_index(drop=True)
+    # 2) sort trials by experiment membership and then by parameters
+    #    (abridged first, then full)
+    phase = np.select(
+        [
+            all_trials["in_abridged"],
+            all_trials["in_full"],
+        ],
+        [0, 1],
+        default=2,   # should be rare / indicates "belongs to none"
+    )
+    all_trials["Phase"] = phase
+    all_trials = all_trials.sort_values(by=["Phase"] + param_cols).drop(columns=['Phase']).reset_index(drop=True)
 
     # 3) Trial IDs after ordering
     all_trials.insert(0, "Trial ID", all_trials.index)
@@ -145,13 +189,15 @@ if __name__ == "__main__":
     all_trials["calculateDual"] = False
     
     # get combinations of scenario, constellation, and date
-    combos = all_trials[["Scenario", "Constellation", "Date"]].drop_duplicates()
+    combos = all_trials[["Scenario", "Constellation", "Date", "in_abridged", "in_full"]].drop_duplicates()
     
     for _,combo_row in combos.iterrows():
         # create mask for trials matching the combo
         mask = ((all_trials["Scenario"] == combo_row["Scenario"]) &
                 (all_trials["Constellation"] == combo_row["Constellation"]) &
-                (all_trials["Date"] == combo_row["Date"]))
+                (all_trials["Date"] == combo_row["Date"]) &
+                (all_trials["in_abridged"] == combo_row["in_abridged"]) &
+                (all_trials["in_full"] == combo_row["in_full"]))
         
         # get slice of trials matching the combo
         combo_trials = all_trials.loc[mask]

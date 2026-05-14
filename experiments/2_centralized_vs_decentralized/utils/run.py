@@ -250,10 +250,10 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             # ensure we summarize if we just ran or postprocessed the sim
             force_summarize = sim_cfg.force_summarize or should_run_sim
 
-            if calc_dual and data_processing.lower() == 'oracle':
-                calc_bounds_opt = DualBoundCalcOptions.NO_TASKS
-            elif calc_dual:
+            if calc_dual:
                 calc_bounds_opt = DualBoundCalcOptions.ALL_TASKS
+            elif data_processing.lower() == 'oracle':
+                calc_bounds_opt = DualBoundCalcOptions.NO_TASKS
             else:
                 calc_bounds_opt = DualBoundCalcOptions.KNOWN_TASKS
 
