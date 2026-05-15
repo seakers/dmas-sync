@@ -281,6 +281,19 @@
                 "PYTHONPATH": "${workspaceRoot}"
             }
         },
+        {
+            "name": "PLANNER TEST: Augmented Consensus Replanner",
+            "type": "debugpy",
+            "request": "launch",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "program": "${workspaceRoot}/tests/planners/augmented_consensus_test.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceRoot}",
+            "env": {
+                "PYTHONPATH": "${workspaceRoot}"
+            }
+        },
         //=============================================
         //        EXPERIMENT 1 : CBBA VALIDATION
         //=============================================
