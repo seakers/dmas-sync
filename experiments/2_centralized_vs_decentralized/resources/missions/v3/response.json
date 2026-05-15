@@ -113,7 +113,21 @@
                                 1.0
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -231,7 +245,21 @@
                                 1.0
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -337,7 +365,21 @@
                                 }
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -405,7 +447,21 @@
                                 0.0
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -530,7 +586,21 @@
                                 1.0
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -598,7 +668,21 @@
                                 0.0
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -695,7 +779,21 @@
                                 }
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -786,7 +884,21 @@
                                 }
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -935,7 +1047,21 @@
                                 1.0
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -1068,7 +1194,21 @@
                                 1.0
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",
@@ -1112,7 +1252,21 @@
                                 0.0
                             ]
                         },
-
+                        {
+                            "req_type": "performance",
+                            "attribute": "revisit_time [s]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                60,
+                                3600
+                            ],
+                            "scores": [
+                                0.1,
+                                1.0,
+                                0.1
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "n_obs",

@@ -981,20 +981,21 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # DEBUG PRINTOUTS --------
         # if self._debug and total_bundle_entries != total_won_bids:
-        #     print(f'ERROR: Mismatch between winning bids ({total_won_bids}) and bundle entries ({total_bundle_entries}):')
-        #     self._log_results('CONSENSUS PHASE - RESULTS (INVALID)', state, self.results)
-        #     self._log_bundle('CONSENSUS PHASE - BUNDLE (INVALID)', state, revised_bundle)        
+        if total_bundle_entries != total_won_bids:
+            tqdm.write(f'ERROR: Mismatch between winning bids ({total_won_bids}) and bundle entries ({total_bundle_entries}):')
+            self._log_results('CONSENSUS PHASE - RESULTS (INVALID)', state, self._results)
+            self._log_bundle('CONSENSUS PHASE - BUNDLE (INVALID)', state, revised_bundle)        
 
-        #     if total_bundle_entries < total_won_bids:                
-        #         missing_bids : Set[Bid] = set(winning_bids) - set(bids_in_bundle)
-        #         out = f'Bids in results but not in bundle ({len(missing_bids)}):\n'
-        #     else:
-        #         missing_bids : Set[Bid] = set(bids_in_bundle) - set(winning_bids)
-        #         out = f'Bids in bundle but not in results ({len(missing_bids)}):\n'
+            if total_bundle_entries < total_won_bids:                
+                missing_bids : Set[Bid] = set(winning_bids) - set(bids_in_bundle)
+                out = f'Bids in results but not in bundle ({len(missing_bids)}):\n'
+            else:
+                missing_bids : Set[Bid] = set(bids_in_bundle) - set(winning_bids)
+                out = f'Bids in bundle but not in results ({len(missing_bids)}):\n'
 
-        #     for bid in missing_bids:
-        #         out += f' - {repr(bid)}\n'
-        #     print(out)
+            for bid in missing_bids:
+                out += f' - {repr(bid)}\n'
+            tqdm.write(out)
         #-------------------------
 
         assert total_won_bids == total_bundle_entries, \

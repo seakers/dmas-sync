@@ -784,9 +784,9 @@ class ResultsProcessor:
                     if (isinstance(objective, EventDrivenObjective)
                             and objective.event_type.lower() == event_type_key):
                         for req in objective:
-                            if (isinstance(req, ExplicitCapabilityRequirement)
+                            if (isinstance(req, CapabilityRequirement)
                                     and req.attribute == 'instrument'):
-                                reqs[agent_name].update(v.lower() for v in req.valid_values)
+                                reqs[agent_name].update({v.lower() for v in req.valid_values})
             if any(len(v) == 0 for v in reqs.values()):
                 raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type_key}`. Case not yet supported.")
             reqs_by_event_type[event_type_key] = reqs
@@ -981,7 +981,7 @@ class ResultsProcessor:
                 if objective not in obj_agent_reqs:
                     obj_agent_reqs[objective] = defaultdict(set)
                 for req in objective:
-                    if (isinstance(req, ExplicitCapabilityRequirement)
+                    if (isinstance(req, CapabilityRequirement)
                             and req.attribute == 'instrument'):
                         obj_agent_reqs[objective][agent_name].update(v.lower() for v in req.valid_values)
         for objective, reqs in obj_agent_reqs.items():
@@ -1188,7 +1188,7 @@ class ResultsProcessor:
                     if (isinstance(objective, EventDrivenObjective)
                             and objective.event_type.lower() == event_type_key):
                         for req in objective:
-                            if (isinstance(req, ExplicitCapabilityRequirement)
+                            if (isinstance(req, CapabilityRequirement)
                                     and req.attribute == 'instrument'):
                                 reqs[agent_name].update(v.lower() for v in req.valid_values)
             if any(len(v) == 0 for v in reqs.values()):
@@ -1315,7 +1315,7 @@ class ResultsProcessor:
                 if objective not in obj_agent_reqs:
                     obj_agent_reqs[objective] = defaultdict(set)
                 for req in objective:
-                    if (isinstance(req, ExplicitCapabilityRequirement)
+                    if (isinstance(req, CapabilityRequirement)
                             and req.attribute == 'instrument'):
                         obj_agent_reqs[objective][agent_name].update(v.lower() for v in req.valid_values)
         for objective, reqs in obj_agent_reqs.items():
@@ -1978,7 +1978,7 @@ class ResultsProcessor:
             for task in tasks:
                 for req in task.objective:
                     # check for instrument capability requirements
-                    if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
+                    if isinstance(req, CapabilityRequirement) and req.attribute == 'instrument':
                         for val in req.valid_values: required_observations[task.objective.parameter].add(val)
                     # TODO include other capability requirements that define a co-observation here
 
@@ -2132,7 +2132,7 @@ class ResultsProcessor:
 
         #     for req in task.objective:
         #         # check for instrument capability requirements
-        #         if isinstance(req, ExplicitCapabilityRequirement) and req.attribute == 'instrument':
+        #         if isinstance(req, CapabilityRequirement) and req.attribute == 'instrument':
         #             for val in req.valid_values: required_observations.add(val)
         #         # TODO include other capability requirements that define a co-observation here
 

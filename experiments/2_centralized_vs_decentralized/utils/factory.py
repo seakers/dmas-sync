@@ -63,7 +63,7 @@ def load_templates(base_path : str) -> Tuple[dict, dict, dict, dict]:
         spacecraft_specs_template : dict = json.load(spacecraft_template_file)
 
     # load available instrument specifications 
-    instrument_specs_file = os.path.join(base_path, 'resources','instruments','instruments.json')
+    instrument_specs_file = os.path.join(base_path, 'resources','instruments','instruments.json')    
     with open(instrument_specs_file, 'r') as instrument_specs_file:
         instrument_specs : dict = json.load(instrument_specs_file)
 
@@ -90,7 +90,8 @@ def create_scenario_specifications(base_path : str,
     #     mission_filename = "response.json"
     # else:
     #     mission_filename = "monitoring.json"
-    mission_filename = "response.json"    
+    # mission_filename = "response.json"    
+    mission_filename = "response_simplified.json"
     
     return {
             "events": {

@@ -55,9 +55,9 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_26 = False # two satellites bidding against a gs agent; gs announcer
 
         self.toy_27 = False # string of pearls with onboard event detection
-        self.toy_28 = False # sequence reset case
+        self.toy_28 = True # sequence reset case
         self.toy_29 = False # real vs planned reward comparison
-        self.toy_30 = True # interrupted observations from external broadcast
+        self.toy_30 = False # interrupted observations from external broadcast
 
     def toy_planner_config(self):
         return {

@@ -987,7 +987,72 @@
                                 0.0
                             ]
                         },
-                        
+                        {
+                            "req_type": "spectral",
+                            "attribute": "spectral_bands",
+                            "strategy": "tiered",
+                            "tiers": [
+                                {
+                                    "score": 1.0,
+                                    "requirements": [
+                                        {
+                                            "req_type": "spectral",
+                                            "attribute": "spectral_bands",
+                                            "strategy": "spectral_resolution",
+                                            "wavelength_range": [
+                                                600,
+                                                750
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
+                                        },
+                                        {
+                                            "req_type": "spectral",
+                                            "attribute": "spectral_bands",
+                                            "strategy": "spectral_resolution",
+                                            "wavelength_range": [
+                                                840,
+                                                880
+                                            ],
+                                            "thresholds": [
+                                                20,
+                                                50,
+                                                100
+                                            ],
+                                            "scores": [
+                                                1.0,
+                                                0.7,
+                                                0.4,
+                                                0.1
+                                            ]
+                                        },
+                                        {
+                                            "req_type": "spectral",
+                                            "attribute": "spectral_bands",
+                                            "strategy": "spectral_range",
+                                            "required_min_nm": 600,
+                                            "required_max_nm": 750
+                                        },
+                                        {
+                                            "req_type": "spectral",
+                                            "attribute": "spectral_bands",
+                                            "strategy": "spectral_range",
+                                            "required_min_nm": 840,
+                                            "required_max_nm": 880
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
                         {
                             "req_type": "performance",
                             "attribute": "swath width [km]",

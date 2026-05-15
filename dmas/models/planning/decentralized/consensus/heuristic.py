@@ -1330,60 +1330,75 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 # get observation time for this task in this observation opportunity
                 t_start = obs_t_img[task]
 
-                # check if observation would have been performed before the current time step based on minimum task duration
-                # if t_start + obs_act.obs_opp.task_min_duration[task.id] < state.get_time():
-                #     continue
-                
-                # check if observation is ongoing or in the past based on proposed observation time
+                if t_start + obs_act.obs_opp.task_min_duration[task.id] <= t_curr:
+                    x = 1
                 if t_start < t_curr:
-                    # check if observation would have been completed before the current time
-                    if t_start + obs_act.obs_opp.task_min_duration[task.id] < state.get_time():
-                        # observation completed; does not contribute to current path value; skip assignment of observation number and previous observation time
-                        continue
+                    x = 1
 
-                    # TEMP: assume ongoing actions do not contribute to path value; skip assignment of observation number and previous observation time
-                    continue
-
-                    # TODO tests following section:
-                    # find matching bids for this observation task that started during this access
-                    matching_bids = [bid for bid in self._results[task] 
-                                     if bid.t_img in obs_act.obs_opp.accessibility
-                                     and bid.winner == state.agent_name
-                                     and abs(bid.t_img - t_start) <= self.EPS
-                                    #  and bid.was_performed()
-                                     ]
-                    assert matching_bids, \
-                        f"No matching bids found for task {task} during current observation opportunity accessibility. Cannot assign observation number and previous observation time."
-                    
-                    matching_bid = matching_bids[0]
-                    prev_bid = self._results[task][matching_bid.n_obs - 1] if matching_bid.n_obs > 0 else None
-                    
-                    # update previous observation counts
-                    n_obs_candidate[obs_idx][task] = matching_bid.n_obs
-                    t_prev_candidate[obs_idx][task] = prev_bid.t_img if prev_bid else np.NINF
-
-                    assert matching_bid.n_obs == 0, \
-                        "Previous bids should exist for observation numbers greater than zero."
-
-                # check if sequence was modified for this parent task
-                elif task in n_obs_best:
+                # a) check if a sequence was modified for this task
+                if task in n_obs_best:
                     # extract observation time and revisit time from best sequences
                     n_obs = n_obs_best[task].pop(0)
                     t_prev = t_prev_best[task].pop(0)
                     val = vals_best[task].pop(0)
                     t_img = t_img_best[task].pop(0)
 
-                    if n_obs > 0: assert t_prev >= 0.0, \
-                        "Previous observation time is not defined for observation number greater than zero."
+                    if (t_img + obs_act.obs_opp.task_min_duration[task.id] < t_curr
+                        or abs(t_img + obs_act.obs_opp.task_min_duration[task.id] - t_curr) < 1e-6):
+                        # task observation should have been completed by this time
+                        continue # skip
+                    if t_img < t_curr:
+                        # find matching bid for this task
+                        matching_bids = [bid for bid in proposed_bids[task].values()
+                                        # if abs(bid.t_img - obs.t_start) <= self.EPS
+                                        if abs(bid.t_img - t_start) <= self.EPS
+                                        and bid.owner == state.agent_name]
+                        
+                        assert matching_bids, \
+                            "Matching bid for observation in path not found in results. Was assigned without updating results."
+                        assert len(matching_bids) <= 1, \
+                            "There should be at most one matching bid for the current time step."
 
-                    # generate new bids for this observation if it is part of path changes
-                    new_bid = Bid(task, state.agent_name, n_obs, val, val, state.agent_name, t_img, state._t, None, obs_act.instrument_name)
-                    new_bids[obs_act.obs_opp][task] = new_bid
+                        matching_bid : Bid = matching_bids.pop()
 
-                    # assign best observation number and previous observation time
-                    n_obs_candidate[obs_idx][task] = n_obs
-                    t_prev_candidate[obs_idx][task] = t_prev
+                        # get previous matching observations for this task
+                        prev_bids_self = [bid for bid in proposed_bids[task].values()
+                                            if bid.t_img < t_start
+                                            ]
+                        previous_bids_other = [bid for bid in self._results[task]
+                                            if (bid.winner != state.agent_name)
+                                            and bid.t_img < t_start
+                                            ]
+                        previous_bids_perf = [bid for bid in self._results[task]
+                                            if bid.was_performed()
+                                            and bid.t_img < t_start
+                                            ]
+                        prev_bids = prev_bids_self + previous_bids_other + previous_bids_perf
 
+                        assert matching_bid.n_obs == 0 or prev_bids, \
+                            "Previous bids should exist for observation numbers greater than zero."
+
+                        # update previous observation counts
+                        n_obs_candidate[obs_idx][task] = matching_bid.n_obs
+                        t_prev_candidate[obs_idx][task] = max((bid.t_img for bid in prev_bids), default=np.NINF)
+
+                        if matching_bid.n_obs > 0: assert t_prev_candidate[obs_idx][task] >= 0.0, \
+                            "Previous observation time is not defined for observation number greater than zero."
+
+                    else:
+                        # generate new bid using best observation number and previous observation time
+                        if n_obs > 0: assert t_prev >= 0.0, \
+                            "Previous observation time is not defined for observation number greater than zero."
+
+                        # generate new bids for this observation if it is part of path changes
+                        new_bid = Bid(task, state.agent_name, n_obs, val, val, state.agent_name, t_img, t_curr, None, obs_act.instrument_name)
+                        new_bids[obs_act.obs_opp][task] = new_bid
+
+                        # assign best observation number and previous observation time
+                        n_obs_candidate[obs_idx][task] = n_obs
+                        t_prev_candidate[obs_idx][task] = t_prev
+
+                # b) check if bid is being proposed for this task but not modified in this path
                 elif task in proposed_bids:
                     # no best sequence found for this parent task; use existing bids from results
                     # get matching bid for this observation task
@@ -1438,6 +1453,115 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 
                 else:
                     raise ValueError(f"Task {task} in proposed path does not have a best sequence or existing bid to assign observation number and previous observation time from.")
+
+                # check if observation would have been performed before the current time step based on minimum task duration
+                # if t_start + obs_act.obs_opp.task_min_duration[task.id] < state.get_time():
+                #     continue
+                
+                # # check if observation is ongoing or in the past based on proposed observation time
+                # if t_start < t_curr:
+                #     # check if observation would have been completed before the current time
+                #     if t_start + obs_act.obs_opp.task_min_duration[task.id] < t_curr:
+                #         # observation completed; does not contribute to current path value; skip assignment of observation number and previous observation time
+                #         continue
+
+                #     # TEMP: assume ongoing actions do not contribute to path value; skip assignment of observation number and previous observation time
+                #     # continue
+
+                #     # TODO tests following section:
+                #     # find matching bids for this observation task that started during this access
+                #     matching_bids = [bid for bid in self._results[task] 
+                #                      if bid.t_img in obs_act.obs_opp.accessibility
+                #                      and bid.winner == state.agent_name
+                #                      and abs(bid.t_img - t_start) <= self.EPS
+                #                     #  and bid.was_performed()
+                #                      ]
+                #     assert matching_bids, \
+                #         f"No matching bids found for task {task} during current observation opportunity accessibility. Cannot assign observation number and previous observation time."
+                    
+                #     matching_bid = matching_bids[0]
+                #     prev_bid = self._results[task][matching_bid.n_obs - 1] if matching_bid.n_obs > 0 else None
+                    
+                #     # update previous observation counts
+                #     n_obs_candidate[obs_idx][task] = matching_bid.n_obs
+                #     t_prev_candidate[obs_idx][task] = prev_bid.t_img if prev_bid else np.NINF
+
+                #     assert matching_bid.n_obs == 0, \
+                #         "Previous bids should exist for observation numbers greater than zero."
+
+                # # check if sequence was modified for this parent task
+                # elif task in n_obs_best:
+                #     # extract observation time and revisit time from best sequences
+                #     n_obs = n_obs_best[task].pop(0)
+                #     t_prev = t_prev_best[task].pop(0)
+                #     val = vals_best[task].pop(0)
+                #     t_img = t_img_best[task].pop(0)
+
+                #     if n_obs > 0: assert t_prev >= 0.0, \
+                #         "Previous observation time is not defined for observation number greater than zero."
+
+                #     # generate new bids for this observation if it is part of path changes
+                #     new_bid = Bid(task, state.agent_name, n_obs, val, val, state.agent_name, t_img, state._t, None, obs_act.instrument_name)
+                #     new_bids[obs_act.obs_opp][task] = new_bid
+
+                #     # assign best observation number and previous observation time
+                #     n_obs_candidate[obs_idx][task] = n_obs
+                #     t_prev_candidate[obs_idx][task] = t_prev
+
+                # elif task in proposed_bids:
+                #     # no best sequence found for this parent task; use existing bids from results
+                #     # get matching bid for this observation task
+                #     matching_bids = [bid for bid in proposed_bids[task].values()
+                #                     # if abs(bid.t_img - obs.t_start) <= self.EPS
+                #                     if abs(bid.t_img - t_start) <= self.EPS
+                #                     and bid.owner == state.agent_name]
+                    
+                #     assert matching_bids, \
+                #         "Matching bid for observation in path not found in results. Was assigned without updating results."
+                #     assert len(matching_bids) <= 1, \
+                #         "There should be at most one matching bid for the current time step."
+
+                #     matching_bid : Bid = matching_bids.pop()
+
+                #     # get previous matching observations for this task
+                #     prev_bids_self = [bid for bid in proposed_bids[task].values()
+                #                         # if bid.t_img < obs.t_start
+                #                         if bid.t_img < t_start
+                #                         ]
+                #     previous_bids_other = [bid for bid in self._results[task]
+                #                         if (bid.winner != state.agent_name)
+                #                         # and bid.t_img < obs.t_start
+                #                         and bid.t_img < t_start
+                #                         ]
+                #     previous_bids_perf = [bid for bid in self._results[task]
+                #                         if bid.was_performed()
+                #                         # and bid.t_img < obs.t_start
+                #                         and bid.t_img < t_start
+                #                         ]
+                #     prev_bids = prev_bids_self + previous_bids_other + previous_bids_perf
+
+                #     assert matching_bid.n_obs == 0 or prev_bids, \
+                #         "Previous bids should exist for observation numbers greater than zero."
+
+                #     # update previous observation counts
+                #     n_obs_candidate[obs_idx][task] = matching_bid.n_obs
+                #     t_prev_candidate[obs_idx][task] = max((bid.t_img for bid in prev_bids), default=np.NINF)
+
+                #     if matching_bid.n_obs > 0: assert t_prev_candidate[obs_idx][task] >= 0.0, \
+                #         "Previous observation time is not defined for observation number greater than zero."
+                # elif t_curr in obs_act.obs_opp.accessibility:
+                #     # this observation window is in progress; check if any bids were performed during this access
+                #     matching_bids = [bid for bid in self._results[task] 
+                #                      if bid.t_img in obs_act.obs_opp.accessibility
+                #                      and bid.winner == state.agent_name
+                #                      and bid.was_performed()]
+                #     if not matching_bids:
+                #         raise ValueError(f"No matching performed bids found for task {task} during current observation opportunity accessibility. Cannot assign observation number and previous observation time.")
+
+                #     continue
+                
+                # else:
+                #     raise ValueError(f"Task {task} in proposed path does not have a best sequence or existing bid to assign observation number and previous observation time from.")
         
         # TODO assure all best observation numbers have been assigned
         

@@ -1,0 +1,589 @@
+{
+    "missions": [
+        {
+            "name": "algal bloom response",
+            "objectives": [
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Chlorophyll-a concentration [mg/m^3]",
+                    "weight": 0.25,
+                    "event_type": "algal_bloom",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "HawkEye-class Ocean Color Imager (VNIR-WQ-U)" : 1.0,
+                                "Planet SuperDove-class Wide VNIR (VNIR-FL-U)" : 0.5,
+                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)" : 0.75,
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 0.75
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                30,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                },
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Temperature [K]",
+                    "weight": 0.25,
+                    "event_type": "algal_bloom",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "HawkEye-class Ocean Color Imager (VNIR-WQ-U)" : 1.0,
+                                "Planet SuperDove-class Wide VNIR (VNIR-FL-U)" : 0.5,
+                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)" : 0.75,
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 0.75
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                30,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                },
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Temperature [K]",
+                    "weight": 0.25,
+                    "event_type": "algal_bloom",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "constellr HiVE TIR Imager (TIR-WQ-T)" : 1.0,
+                                "constellr HiVE TIR Imager (TIR-FR-T)" : 0.75
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                30,
+                                60,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.5,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                },
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Water Level",
+                    "weight": 0.25,
+                    "event_type": "algal_bloom",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "SMASH Ka-band Nadir Altimeter (ALT-WQ-U)" : 1.0,
+                                "SMASH Ka-band Nadir Altimeter (ALT-FL-U)" : 0.75
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                30,
+                                60,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.5,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "high flow river response",
+            "objectives": [
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Turbidity",
+                    "weight": 0.5,
+                    "event_type": "high_flow_river",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "HawkEye-class Ocean Color Imager (VNIR-WQ-U)" : 0.5,
+                                "Planet SuperDove-class Wide VNIR (VNIR-FL-U)" : 1.0,
+                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)" : 1.0,
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 0.75
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                10,
+                                30,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                },
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Water Level",
+                    "weight": 0.5,
+                    "event_type": "high_flow_river",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "SMASH Ka-band Nadir Altimeter (ALT-WQ-U)" : 0.5,
+                                "SMASH Ka-band Nadir Altimeter (ALT-FL-U)" : 1.0
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                30,
+                                60,
+                                100
+                            ],
+                            "scores": [
+                                1.0,
+                                0.5,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "wildfire response",
+            "objectives": [
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Temperature [K]",
+                    "weight": 0.25,
+                    "event_type": "wildfire",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "constellr HiVE TIR Imager (TIR-WQ-T)" : 0.75,
+                                "constellr HiVE TIR Imager (TIR-FR-T)" : 1.0
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                200,
+                                1000,
+                                1500
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                },
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Temperature [K]",
+                    "weight": 0.25,
+                    "event_type": "wildfire",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "OroraTech OTC-P1 SAFIRE Thermal Camera (MIR-FR-U)" : 1.0
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                200,
+                                1000,
+                                1500
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                },
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Fire Extent",
+                    "weight": 0.25,
+                    "event_type": "wildfire",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "HawkEye-class Ocean Color Imager (VNIR-WQ-U)" : 0.50,
+                                "Planet SuperDove-class Wide VNIR (VNIR-FL-U)" : 0.50,
+                                "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)" : 0.75,
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 1.0
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                100,
+                                250,
+                                300
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                },
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "Fire Extent",
+                    "weight": 0.25,
+                    "event_type": "wildfire",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "Capella X-SAR (SAR-FR-T)": 1.0
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "ground pixel cross-track resolution [m]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                100,
+                                250,
+                                300
+                            ],
+                            "scores": [
+                                1.0,
+                                0.7,
+                                0.1
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "none",
+            "objectives": [
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "generic parameter",
+                    "weight": 1.0,
+                    "event_type": "generic event",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "explicit",
+                            "valid_values": [
+                                "IMG_A",
+                                "IMG_B",
+                                "IMG_C"
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

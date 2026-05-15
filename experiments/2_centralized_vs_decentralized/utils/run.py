@@ -126,7 +126,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             }
 
         # generate scenario specifications from templates and trial parameters
-        if printouts: tqdm.write(f" - Generated mission specifications for scenario {trial_id}")
+        if printouts: tqdm.write(f" [simulation] generated mission specifications for scenario {trial_id}")
         mission_specs : dict = generate_scenario_mission_specs(
             run_cfg.mission_specs_template, run_cfg.duration, run_cfg.step_size,
             run_cfg.base_path, trial_stem, trial_id,

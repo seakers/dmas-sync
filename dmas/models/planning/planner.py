@@ -318,6 +318,7 @@ class AbstractPlanner(ABC):
         # check if task has any objectives
         if task.objective is None:
             return orbitdata.time_step # no objectives assigned to this task; assume default minimum duration requirement
+            # return 0.0 # no objectives assigned to this task; assume 0 as default minimum duration requirement
 
         # extract any duration requirements from the task objective
         duration_reqs = [req for req in task.objective
@@ -325,6 +326,7 @@ class AbstractPlanner(ABC):
         
         # check if any duration requirements were found
         if not duration_reqs: return orbitdata.time_step # no duration requirement found; return default minimum duration requirement
+        # if not duration_reqs: return 0.0 # no duration requirement found; return 0 as default minimum duration requirement
 
         # get duration requirement
         duration_req : PerformanceRequirement = duration_reqs[0]
@@ -883,6 +885,21 @@ class AbstractPlanner(ABC):
                     ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
                     ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
                 })
+            elif ('sar' in instrument_name.lower() or 'sar' in instrument_spec._type.lower()):
+                # TODO implement SAR observation performance metrics                                       
+                obs_perf.update({
+                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
+                    ObservationRequirementAttributes.ACCURACY.value : np.Inf,
+                })
+                if hasattr(instrument_spec, 'spectral_config'):
+                    swath_config = instrument_spec.spectral_config.get('swath_km', None)
+                    if swath_config is not None:
+                        obs_perf[ObservationRequirementAttributes.SWATH_WIDTH.value] = swath_config.get('spotlight', 30) 
+                        obs_perf[ObservationRequirementAttributes.SNR.value] = swath_config.get('nesz_db', -18) 
+                    else:
+                        obs_perf[ObservationRequirementAttributes.SWATH_WIDTH.value] = 30 # default swath width for SAR instruments in km
+                        obs_perf[ObservationRequirementAttributes.SNR.value] = -18 # default NESZ for SAR instruments in dB
+
             else:
                 raise NotImplementedError(f'Calculation of task reward not yet supported for instruments of type `{instrument_name.lower()}`.')
 

@@ -368,12 +368,13 @@ class SimulationEnvironment(object):
             # expand mask for every instrument model onboard
             for instrument_model in instrument_dict['mode']:
                 # get observation FOV from instrument model
-                if instrument_model['@type'] == 'Basic Sensor':
-                    instrument_off_axis_fov = instrument_model['fieldOfViewGeometry']['angleWidth'] / 2.0
-                elif instrument_model['@type'] == 'Passive Optical Scanner':
-                    instrument_off_axis_fov = instrument_model['fieldOfViewGeometry']['angleWidth'] / 2.0
-                else:
-                    raise NotImplementedError(f"measurement data query not yet suported for sensor models of type {instrument_model['model_type']}.")
+                instrument_off_axis_fov = instrument_model['fieldOfViewGeometry']['angleWidth'] / 2.0
+                # if instrument_model['@type'] == 'Basic Sensor':
+                #     instrument_off_axis_fov = instrument_model['fieldOfViewGeometry']['angleWidth'] / 2.0
+                # elif instrument_model['@type'] == 'Passive Optical Scanner':
+                #     instrument_off_axis_fov = instrument_model['fieldOfViewGeometry']['angleWidth'] / 2.0
+                # else:
+                #     raise NotImplementedError(f"measurement data query not yet suported for sensor models of type {instrument_model['model_type']}.")
 
                 # query coverage data of everything that is within the field of view of the agent
                 cross_track_mask = np.abs(safe_access_data["off-nadir axis angle [deg]"] - satellite_off_axis_angle) <= instrument_off_axis_fov
