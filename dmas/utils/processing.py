@@ -2869,6 +2869,11 @@ class ResultsProcessor:
             task_observation_opps[task] = [(obs_opp, agent_name, obs_time) 
                                            for obs_opp, agent_name, obs_time in sorted_obs_time_pairs]
         
+        # DEBUG SECTION -----------------
+        # # comment-out when done testing
+        # return {task : 0.0 for task in accesses_per_task.keys()},{task : 0.0 for task in accesses_per_task.keys()}
+        # ------------------------------
+
         # calculate primal bound: best achievable with nadir-only observations (no maneuvers)
         primal_bound = ResultsProcessor.__calculate_primal_bound(
             task_observation_opps, compiled_orbitdata, agent_missions, agent_specs, cross_track_fovs, obtained_rewards_df, printouts

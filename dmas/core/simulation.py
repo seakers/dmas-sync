@@ -152,7 +152,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            t = 50_000.0 # TODO remove after testing
+            # t = 50_000.0 # TODO remove after testing
             # t_check = 0.0
             # dt_progress = 0.0
             
@@ -1219,9 +1219,9 @@ class Simulation:
                     agent_results_dir, events_path, simulation_missions,
                     announce_horizon=announce_horizon,
                     debug=debug, logger=logger, printouts=printouts)
-            elif announcer_mode in ['groundprocessor']:
+            elif announcer_mode in ['groundprocessor']:               
                 return GroundProcessorEventAnnouncerPlanner(
-                    agent_results_dir, events_path, simulation_missions, simulation_orbitdata,
+                    agent_results_dir, events_path, space_segment, simulation_missions, simulation_orbitdata,
                     announce_horizon=announce_horizon,
                     debug=debug, logger=logger, printouts=printouts)
             else:
