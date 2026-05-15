@@ -308,10 +308,10 @@ class SimulationAgent(object):
                 # if self._preplanner._debug: 
                 # if len(self._plan.actions) > 1:
                 # if 'worker' in curr_state.agent_name:
-                # if 'GS' in curr_state.agent_name:
+                if 'GS' in curr_state.agent_name:
                 # if True:
-                    # self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
-                    # x = 1 # breakpoint
+                    self.__log_plan(self._plan, "PRE-PLAN", logging.WARNING)
+                    x = 1 # breakpoint
                 # -------------------------------------
 
         # --- Modify plan ---
