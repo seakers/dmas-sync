@@ -3545,10 +3545,10 @@ class ResultsProcessor:
                 if printouts: tqdm.write(f"\tWarning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}.")
                 # x = 1  # set breakpoint here when debugging bound violations
 
-        dual_bound_df = pd.DataFrame(
-            list(dual_bound.items()), columns=['task', 'reward']
-        )
-        if printouts: tqdm.write(dual_bound_df.to_string(index=False))
+        # dual_bound_df = pd.DataFrame(
+        #     list(dual_bound.items()), columns=['task', 'reward']
+        # )
+        # if printouts: tqdm.write(dual_bound_df.to_string(index=False))
 
         return dual_bound
 
