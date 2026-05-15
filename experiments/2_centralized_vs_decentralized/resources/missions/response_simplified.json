@@ -22,21 +22,6 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                10,
-                                30,
-                                100
-                            ],
-                            "scores": [
-                                1.0,
-                                0.7,
-                                0.1
-                            ]
-                        },
-                        {
-                            "req_type": "performance",
                             "attribute": "response_time [normalized]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
@@ -73,19 +58,6 @@
                                 "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)" : 0.75,
                                 "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 0.75
                             }
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                30,
-                                100
-                            ],
-                            "scores": [
-                                1.0,
-                                0.1
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -126,21 +98,6 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                30,
-                                60,
-                                100
-                            ],
-                            "scores": [
-                                1.0,
-                                0.5,
-                                0.1
-                            ]
-                        },
-                        {
-                            "req_type": "performance",
                             "attribute": "response_time [normalized]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
@@ -175,21 +132,6 @@
                                 "SMASH Ka-band Nadir Altimeter (ALT-WQ-U)" : 1.0,
                                 "SMASH Ka-band Nadir Altimeter (ALT-FL-U)" : 0.75
                             }
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                30,
-                                60,
-                                100
-                            ],
-                            "scores": [
-                                1.0,
-                                0.5,
-                                0.1
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -238,21 +180,6 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                10,
-                                30,
-                                100
-                            ],
-                            "scores": [
-                                1.0,
-                                0.7,
-                                0.1
-                            ]
-                        },
-                        {
-                            "req_type": "performance",
                             "attribute": "response_time [normalized]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
@@ -287,21 +214,6 @@
                                 "SMASH Ka-band Nadir Altimeter (ALT-WQ-U)" : 0.5,
                                 "SMASH Ka-band Nadir Altimeter (ALT-FL-U)" : 1.0
                             }
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                30,
-                                60,
-                                100
-                            ],
-                            "scores": [
-                                1.0,
-                                0.5,
-                                0.1
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -348,21 +260,6 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                200,
-                                1000,
-                                1500
-                            ],
-                            "scores": [
-                                1.0,
-                                0.7,
-                                0.1
-                            ]
-                        },
-                        {
-                            "req_type": "performance",
                             "attribute": "response_time [normalized]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
@@ -396,21 +293,6 @@
                             "valid_values": {
                                 "OroraTech OTC-P1 SAFIRE Thermal Camera (MIR-FR-U)" : 1.0
                             }
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                200,
-                                1000,
-                                1500
-                            ],
-                            "scores": [
-                                1.0,
-                                0.7,
-                                0.1
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -453,21 +335,6 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                100,
-                                250,
-                                300
-                            ],
-                            "scores": [
-                                1.0,
-                                0.7,
-                                0.1
-                            ]
-                        },
-                        {
-                            "req_type": "performance",
                             "attribute": "response_time [normalized]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
@@ -501,21 +368,6 @@
                             "valid_values": {
                                 "Capella X-SAR (SAR-FR-T)": 1.0
                             }
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "ground pixel cross-track resolution [m]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                100,
-                                250,
-                                300
-                            ],
-                            "scores": [
-                                1.0,
-                                0.7,
-                                0.1
-                            ]
                         },
                         {
                             "req_type": "performance",
