@@ -38,4 +38,4 @@ python ./experiments/2_centralized_vs_decentralized/study.py \
       --single-thread --quiet \
       --force-simulate --force-postprocess --force-summarize \
       --profile-cpu --profile-mem
-      # --only-simulate --force-simulate --exceptions
+      # --only-simulate --force-simulate  --exceptions

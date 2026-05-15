@@ -503,7 +503,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         # Add tasks to path iteratively based on heuristic
         for proposed_observation in tqdm(sorted_observation_opportunities, 
-                                         desc=f'{state.agent_name}-REPLANNER: Building bundle', 
+                                         desc=f'{state.agent_id}-REPLANNER: Building bundle', 
                                          leave=False,
                                          disable=(len(sorted_observation_opportunities) < 10) or not self._printouts
                                         ):
@@ -518,11 +518,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             #         else:
             #             req_id_short += f'Default({int(task.location[0][-2])},{int(task.location[0][-1])}),'
                 
-            #     out = f'\nT{np.round(state.t,3)}[s]:\t\'{state.agent_name}\'\n'
+            #     out = f'\nT{np.round(state.t,3)}[s]:\t\'{state.agent_id}\'\n'
             #     out += f'OBSERVATION OPPORTUNITY BEING CONSIDERED FOR BUNDLE ADDITION: \nt={proposed_observation.accessibility} (ParentID(s): [{req_id_short[:-1]}])\n'
             #     print(out)
 
-            # if "imager_b_sat_9" in state.agent_name and state._t >= 4840.0:
+            # if "imager_b_sat_9" in state.agent_id and state._t >= 4840.0:
             #     x= 1 # debug breakpoint for specific agent and time
             # ------------------------------- 
 
@@ -538,7 +538,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
             # Find best placement in path   
             for candidate_path, obs_added, obs_removed in tqdm(candidate_paths, 
-                                                               desc=f'{state.agent_name}-REPLANNER: Evaluating placements for observation {proposed_observation.id.split("-")[0]}', 
+                                                               desc=f'{state.agent_id}-REPLANNER: Evaluating placements for observation {proposed_observation.id.split("-")[0]}', 
                                                                leave=False,
                                                                disable=(len(candidate_paths) < 10) or not self._printouts
                                                             ):
