@@ -1,7 +1,7 @@
 
 from collections import defaultdict
 import os
-from typing import List, Tuple
+from typing import List, Set, Tuple
 import numpy as np
 import pandas as pd
 
@@ -56,6 +56,7 @@ class AbstractEventAnnouncerPlanner(AbstractPeriodicPlanner):
 
         # load predefined events
         self._events : list[GeophysicalEvent] = self.load_events(events_path)
+        self._event_ids : Dict[str, GeophysicalEvent]= {event.id : event for event in self._events}
         # tracks which comms-column indices have already been covered per event id
         self._announced : Dict[str, set] = {}
     
@@ -249,6 +250,7 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
                  agent_results_dir : str,
                  events_path : str,
                  simulation_missions : Dict[str,Mission],
+                 agent_missions : Dict[str,Mission],
                  simulation_orbitdata : Dict[str,OrbitData],
                  announce_horizon : float = 3600.0,
                  debug = False,
@@ -263,9 +265,16 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
                                  for agent_name, agent_orbitdata in simulation_orbitdata.items()
                                  if '-U)' in agent_name # <- only keep orbitdata for non-taskable agents
                                 } 
+
+        # map event types to list of relevant agents based on their missions
+        self._event_type_agents : Dict[str, Set[str]] = defaultdict(set)
+        for agent_name, agent_mission in agent_missions.items():
+            for objective in agent_mission:
+                if isinstance(objective, EventDrivenObjective):
+                    self._event_type_agents[objective.event_type].add(agent_name)
         
         # initialize properties
-        self._detected_events : List[GeophysicalEvent] = []   # events for which data has been received
+        self._detected_events : Set[GeophysicalEvent] = set() # events for which data has been received
         self._detection_times : Dict[str, float] = {}         # event_id -> t_announce when first detected
 
     def _schedule_broadcasts(self, state : SimulationAgentState, _, orbitdata : OrbitData, __ = None) -> List[BroadcastMessageAction]:
@@ -384,6 +393,10 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
                 t_detect = np.inf
 
                 for agent_name in self._agent_orbitdata:
+                    # check if agent's mission matches this type of event
+                    if agent_name not in self._event_type_agents[event.event_type]:
+                        continue
+
                     gp = agent_gp_accesses[agent_name]
                     mask = ((gp['grids'] == grid_idx) &
                             (gp['gps']   == gp_idx)   &
@@ -411,8 +424,8 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
 
                 # cache so future periods skip the search
                 self._detection_times[event.id] = t_detect
-                if event not in self._detected_events:
-                    self._detected_events.append(event)
+                # if event not in self._detected_events:
+                #     self._detected_events.append(event)
 
             if t_detect >= t_window_end:
                 continue  # earliest data arrival falls outside this planning window
@@ -479,6 +492,14 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
 
         return sorted(broadcasts, key=lambda action: action.t_start)
         
+    def update_percepts(self, state : SimulationAgentState, *args, **kwargs) -> None:
+        # update list of detected events based on current time
+        t_curr = state.get_time()
+        for event_id, t_detect in self._detection_times.items():
+            if t_detect <= t_curr:
+                event = self._event_ids.get(event_id, None)
+                if event:
+                    self._detected_events.add(event)
 
     def print_results(self):
         # log known and generated requests
