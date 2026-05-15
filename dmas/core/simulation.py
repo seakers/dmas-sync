@@ -1219,12 +1219,9 @@ class Simulation:
                     agent_results_dir, events_path, simulation_missions,
                     announce_horizon=announce_horizon,
                     debug=debug, logger=logger, printouts=printouts)
-            elif announcer_mode in ['groundprocessor']:
-                agent_missions : Dict[str, Mission] = {d['name'] : simulation_missions[d['mission'].lower()] 
-                                                       for d in space_segment}
-
+            elif announcer_mode in ['groundprocessor']:               
                 return GroundProcessorEventAnnouncerPlanner(
-                    agent_results_dir, events_path, simulation_missions, agent_missions, simulation_orbitdata,
+                    agent_results_dir, events_path, space_segment, simulation_missions, simulation_orbitdata,
                     announce_horizon=announce_horizon,
                     debug=debug, logger=logger, printouts=printouts)
             else:

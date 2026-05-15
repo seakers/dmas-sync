@@ -249,8 +249,8 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
     def __init__(self,
                  agent_results_dir : str,
                  events_path : str,
+                 space_segment : List[Dict],
                  simulation_missions : Dict[str,Mission],
-                 agent_missions : Dict[str,Mission],
                  simulation_orbitdata : Dict[str,OrbitData],
                  announce_horizon : float = 3600.0,
                  debug = False,
@@ -259,13 +259,34 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
                 ) -> None:
         # initialzie parent class with appropriate horizon and period for rolling announcements
         super().__init__(agent_results_dir, events_path, simulation_missions, announce_horizon, debug, logger, printouts)
+        
+        # def is_taskable(agent_name : str) -> bool:
+        #     # if not a satellite, assume taskable (e.g. ground station or processor); only satellites have orbitdata and require access checks for announcements
+        #     if agent_name not in space_segment: return False
+
+        #     satellite_spec = next((d for d in space_segment if d['name'] == agent_name), None)
+        #     if satellite_spec is None:
+        #         raise ValueError(f"Agent {agent_name} not found in space segment.")
+            
+        #     agent_is_maneuverable = 'maneuver' in satellite_spec['instrument']
+
+        #     return agent_is_maneuverable
 
         # store orbitdata for use in scheduling broadcasts
         self._agent_orbitdata = {agent_name : agent_orbitdata
                                  for agent_name, agent_orbitdata in simulation_orbitdata.items()
                                  if '-U)' in agent_name # <- only keep orbitdata for non-taskable agents
+                                #  if not is_taskable(agent_name) # TODO refine this logic based on actual space segment definitions; for now, assume non-taskable agents are those whose names contain '-U)' as in the provided orbitdata files
                                 } 
-
+        
+        # assert all('-U)' in agent_name for agent_name in self._agent_orbitdata.keys()), \
+        #     "OrbitData must be provided for non-taskable agents only." # <- sanity check 
+        
+        # map agent name to its mission 
+        agent_missions : Dict[str, Mission] \
+            = {d['name'] : simulation_missions[d['mission'].lower()] 
+                for d in space_segment}
+        
         # map event types to list of relevant agents based on their missions
         self._event_type_agents : Dict[str, Set[str]] = defaultdict(set)
         for agent_name, agent_mission in agent_missions.items():
