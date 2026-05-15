@@ -504,17 +504,16 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                "-t", "full_factorial_trials_2026-05-11",
-                // "--trial-range", "0:3",
-                // "--trial-range", "3:6",
-                // "--trial-range", "0:35",
+                "-t", "full_factorial_trials_2026-05-14",
+                "--trial-range", "0:9",
+                // "--trial-range", "0:54",
                 // "-i", "18",
-                "--single-trial", "6",
+                // "--single-trial", "6",
                 "--single-thread",
                 // "--only-precompute",
                 // "--only-simulate",
                 // "--only-postprocess",
-                "--force-simulate",
+                // "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
                 // "--quiet",
@@ -534,7 +533,7 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                "-t", "full_factorial_trials_2026-05-13",
+                "-t", "full_factorial_trials_2026-05-14",
                 "--trial-range", "0:8",
                 // "--trial-range", "8:16",
                 // "--trial-range", "16:24",
