@@ -7,7 +7,7 @@
                     "objective_type": "event_driven",
                     "parameter": "PARAM_A",
                     "weight": 0.50,
-                    "event_type": "generic_event-type-a",
+                    "event_type": "algal bloom",
                     "requirements": [
                         {
                             "req_type": "capability",
@@ -58,7 +58,7 @@
                     "objective_type": "event_driven",
                     "parameter": "PARAM_B",
                     "weight": 0.50,
-                    "event_type": "generic_event-type-a",
+                    "event_type": "algal bloom",
                     "requirements": [
                         {
                             "req_type": "capability",

@@ -517,6 +517,14 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # split bundle at first updated task
         revised_bundle = self._bundle[:bundle_idx_to_remove]
 
+        # protect (task, n_obs) pairs still valid in revised_bundle (same reason
+        # as in __update_bundle_from_results: insertion order != observation order)
+        revised_bundle_pairs = {
+            (task, n_obs)
+            for _, obs_tasks in revised_bundle
+            for task, n_obs in obs_tasks.items()
+        }
+
         # iterate through remaining bundle to update bids
         for _, obs_tasks in self._bundle[bundle_idx_to_remove:]:
             # reset subsequent bids for all tasks in bundle if the bidder is still listed as the winner
@@ -524,9 +532,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # initiate list of bids being reset for this task
                 bids_reset = []
 
-                # reset invalid bid along with all subsequent bids  
+                # reset invalid bid along with all subsequent bids
                 for bid_idx in range(n_obs, len(self._results[task])):
-                    
+
+                    # do not reset bids still referenced by the valid revised bundle
+                    if (task, bid_idx) in revised_bundle_pairs:
+                        continue
+
                     # check if this agent is still listed as the winning bidder
                     if not self._results[task][bid_idx].is_bidder_winning():
                         continue # another agent is winning this bid; skip
@@ -917,6 +929,17 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # split bundle at first updated task
         revised_bundle = self._bundle[:min_updated_idx]
 
+        # collect (task, n_obs) pairs still valid in revised_bundle so the reset
+        # loop below does not clobber them. The bundle is in insertion order, not
+        # observation-number order, so a removed entry can have a lower n_obs than
+        # a kept entry for the same task, causing range(n_obs, ...) to overwrite
+        # bids that revised_bundle still points to.
+        revised_bundle_pairs = {
+            (task, n_obs)
+            for _, obs_tasks in revised_bundle
+            for task, n_obs in obs_tasks.items()
+        }
+
         # get current time
         t_curr = state.get_time()
 
@@ -927,9 +950,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # initiate list of bids being reset for this task
                 bids_reset = []
 
-                # reset invalid bid along with all subsequent bids  
+                # reset invalid bid along with all subsequent bids
                 for bid_idx in range(n_obs, len(self._results[task])):
-                    
+
+                    # do not reset bids that are still referenced by the valid revised bundle
+                    if (task, bid_idx) in revised_bundle_pairs:
+                        continue
+
                     # check if this agent is still listed as the winning bidder
                     if not self._results[task][bid_idx].is_bidder_winning():
                         continue # another agent is winning this bid; skip
@@ -983,8 +1010,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # if self._debug and total_bundle_entries != total_won_bids:
         if total_bundle_entries != total_won_bids:
             tqdm.write(f'ERROR: Mismatch between winning bids ({total_won_bids}) and bundle entries ({total_bundle_entries}):')
-            self._log_results('CONSENSUS PHASE - RESULTS (INVALID)', state, self._results)
-            self._log_bundle('CONSENSUS PHASE - BUNDLE (INVALID)', state, revised_bundle)        
 
             if total_bundle_entries < total_won_bids:                
                 missing_bids : Set[Bid] = set(winning_bids) - set(bids_in_bundle)
@@ -992,6 +1017,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
             else:
                 missing_bids : Set[Bid] = set(bids_in_bundle) - set(winning_bids)
                 out = f'Bids in bundle but not in results ({len(missing_bids)}):\n'
+            
+            affected_tasks = set([bid.task for bid in missing_bids])
+            self._log_results('CONSENSUS PHASE - RESULTS (INVALID)', state, { k:v for k,v in self._results.items() if k in affected_tasks})
+            self._log_bundle('CONSENSUS PHASE - BUNDLE (INVALID)', state, revised_bundle)        
 
             for bid in missing_bids:
                 out += f' - {repr(bid)}\n'
