@@ -591,7 +591,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         t_curr = state.get_time()          
 
         # iterate through performed bundle to mark bids as performed
-        for bundle_idx, obs_opp, obs_tasks in performed_bundle_tasks:     
+        for bundle_idx, obs_opp, obs_tasks in reversed(performed_bundle_tasks):     
                        
             # imaging time has passed for task bids; assume tasks were performed by parent agent
             assert any([self._results[task][n_obs].winner == state.agent_name for task,n_obs in obs_tasks.items()]), \

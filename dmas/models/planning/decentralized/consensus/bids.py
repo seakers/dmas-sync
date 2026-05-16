@@ -399,6 +399,7 @@ class Bid:
         """ Compares this bid with another bid in dictionary form and indicates whether the bid should be updated, left, or reset. """
         # extract relevant information from other bid dict
         other_winner = other['winner']
+        other_owner = other['owner']
         
         # 0. Sending agent claims the bid has been performed.
         if other['performed']:
@@ -450,7 +451,7 @@ class Bid:
             return BidComparisonResults.LEAVE
 
         # 1. Sending agent claims itself as winner of this bid.
-        elif other_winner == other['owner']:
+        elif other_winner == other_owner:
             # return self.__case_other_dict_thinks_is_winner(other)
             # preload bid info for efficiency
             my_winner = self.winner
@@ -461,19 +462,22 @@ class Bid:
             # if self.believes_i_am_winning():
             if my_winner == self.owner:
                 if other > self:  
-                    if other_t_img > my_t_img and self.t_stamps.get(other['owner'], np.NINF) < self.t_bid:
+                    if other_t_img > my_t_img and self.t_stamps.get(other_owner, np.NINF) < self.t_bid:
                         # Sender is winning but has not considered receiving agent's bid yet → leave info as is and wait for sender to update
                         return BidComparisonResults.LEAVE
 
                     # Sending agent's bid is higher → update info
                     return BidComparisonResults.UPDATE
                 elif other_t_img < my_t_img:
-                    # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                    if self.t_stamps.get(other_owner, np.NINF) < self.t_bid:
+                        # Sender has not yet seen receiver's current bid → leave and wait for sender to update first
+                        return BidComparisonResults.LEAVE
+                    # Sending agent is bidding for an earlier observation → update info
                     return BidComparisonResults.UPDATE
                 elif other == self and abs(other_t_img - my_t_img) < self.EPS and not self.__wins_tie_breaker(other):
                     # Both bids are tied and sending agent wins tie-breaker → update info
                     return BidComparisonResults.UPDATE
-            
+
             # 2. Receiving agent believes other is the winner already.
             # if self.believes_other_is_winning(other):
             if my_winner == other['owner']:
@@ -491,12 +495,15 @@ class Bid:
                     # Sending agent's bid is higher → update info
                     return BidComparisonResults.UPDATE
                 elif other_t_img < my_t_img:
-                    # Sending agent is bidding for an earlier observation → bidder must be optimistic in its bidding; update info
+                    if self.t_stamps.get(other_owner, np.NINF) < self.t_bid:
+                        # Sender has not yet seen receiver's current bid → leave and wait for sender to update first
+                        return BidComparisonResults.LEAVE
+                    # Sending agent is bidding for an earlier observation → update info
                     return BidComparisonResults.UPDATE
                 elif other == self and abs(other_t_img - my_t_img) < self.EPS and not self.__wins_tie_breaker(other):
                     # Both bids are tied and sending agent wins tie-breaker → update info
                     return BidComparisonResults.UPDATE
-                
+
             # 4. Receiving agent bid has no winner.
             # if self.believes_no_winner():
             if my_winner == self.NONE:

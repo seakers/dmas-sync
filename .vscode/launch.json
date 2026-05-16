@@ -491,8 +491,8 @@
                 // "--single-trial", "45", // Ground Processor, None+Greedy 
                 // "--single-trial", "47", // Oracle, None+Greedy
 
-                "--profile-cpu",
-                "--profile-mem",
+                // "--profile-cpu",
+                // "--profile-mem",
                 "--single-thread",
                 // "--only-precompute",
                 // "--only-simulate",
@@ -500,7 +500,7 @@
                 "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
-                "--reduced",
+                // "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]

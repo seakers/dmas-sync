@@ -405,7 +405,8 @@ class PlannerTester(ABC):
                 "preplanner": {
                     "@type": "eventAnnouncer",
                     "debug": str(self.planner_debug),                        
-                    "eventsPath" : f"./tests/planners/resources/events/{event_name}.csv"
+                    "eventsPath" : f"./tests/planners/resources/events/{event_name}.csv",
+                    "period" : 24.0 * 3600.0, # look for events within 1 hour horizon
                 }
             }
     
