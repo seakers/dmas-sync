@@ -739,7 +739,8 @@ class AbstractPlanner(ABC):
                             orbitdata : OrbitData,
                             mission : Mission,
                             n_obs : int = 0,
-                            t_prev : float = np.NINF
+                            t_prev : float = np.NINF,
+                            co_obs : dict = None
                         ) -> float:
         
         assert isinstance(n_obs, int) and n_obs >= 0, \
@@ -758,7 +759,8 @@ class AbstractPlanner(ABC):
                                                                                  cross_track_fovs, 
                                                                                  orbitdata, 
                                                                                  n_obs, 
-                                                                                 t_prev)
+                                                                                 t_prev,
+                                                                                 co_obs)
         # TODO DEBUG SECTION----------
         values = [mission.calc_task_value(task, measurement) 
                     for measurement in measurement_performance.values()] \
@@ -788,6 +790,7 @@ class AbstractPlanner(ABC):
                                             orbitdata : OrbitData,
                                             n_obs : int,
                                             t_prev : float,  
+                                            co_obs : dict = None
                                         ) -> dict:
 
         # validate inputs
@@ -855,7 +858,8 @@ class AbstractPlanner(ABC):
                 SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
                 TemporalRequirementAttributes.DURATION.value : d_img,
                 TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
-                #TODO Co-observation time
+                TemporalRequirementAttributes.CO_OBSERVATIONS.value : co_obs if co_obs is not None else dict(),
+                
                 TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
                 TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
                 TemporalRequirementAttributes.OBS_TIME.value : t_img,

@@ -487,9 +487,13 @@
                 // "-t", "full_factorial_trials_2026-05-13",
                 
                 "-t", "full_factorial_trials_2026-05-14",
-                "--single-trial", "36", // Ground Processor, None+CBBA 
+                // "--single-trial", "36", // Ground Processor, None+CBBA 
                 // "--single-trial", "45", // Ground Processor, None+Greedy 
                 // "--single-trial", "47", // Oracle, None+Greedy
+                "--single-trial", "37",
+
+                // "-t", "full_factorial_trials_2026-05-16",
+                // "--single-trial", "54", // Oracle, None+CBBA (Augmented) 
 
                 // "--profile-cpu",
                 // "--profile-mem",
