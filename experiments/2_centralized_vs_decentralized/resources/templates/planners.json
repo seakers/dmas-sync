@@ -71,6 +71,14 @@
             "optimisticBiddingThreshold": 1,
             "debug": "False"
         },
+        "cbba (augmented)" : {
+            "@type": "augmented consensus",
+            "model": "heuristicInsertion",
+            "heuristic" : "taskPriority",
+            "replanThreshold": 1,
+            "optimisticBiddingThreshold": 1,
+            "debug": "False"
+        },
         "greedy" : {
             "@type": "earliest",
             "debug": "False",
