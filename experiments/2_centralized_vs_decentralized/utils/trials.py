@@ -185,8 +185,8 @@ if __name__ == "__main__":
     print(f" - Total number of trials: {len(all_trials)}")
 
     # 4) Add a column that flags whether to calculate the dual for the trial based on scenario, constellation, and date
-    # initialize `calculateDual` column to `False`
-    all_trials["calculateDual"] = False
+    # initialize `dualCalcOpt` column to `0`
+    all_trials["dualCalcOpt"] = 0
     
     # get combinations of scenario, constellation, and date
     combos = all_trials[["Scenario", "Constellation", "Date", "in_abridged", "in_full"]].drop_duplicates()
@@ -202,14 +202,22 @@ if __name__ == "__main__":
         # get slice of trials matching the combo
         combo_trials = all_trials.loc[mask]
         
-        
-        # set `calculateDual` to true only for the highest trial id among the slice 
+        # set `dualCalcOpt` to non-zero only for the highest trial ids among the slice 
         if not combo_trials.empty:
-            max_trial_id = combo_trials["Trial ID"].max()
-            all_trials.loc[all_trials["Trial ID"] == max_trial_id, "calculateDual"] = True
-        else:
-            print(f"Warning: No trials found for combo {combo_row.to_dict()}")
-
+            # get the max trial id for each data processing type in the combo
+            n_data_processing_types = len(combo_trials["Data Processing"].unique())
+            
+            # set `dualCalcOpt` to 1 for the max trial id of each data processing type in the combo
+            # and to 2 if the data processing type is "Oracle"
+            for dp_type in combo_trials["Data Processing"].unique():
+                dp_trials = combo_trials[combo_trials["Data Processing"] == dp_type]
+                if not dp_trials.empty:
+                    max_dp_trial_id = dp_trials["Trial ID"].max()
+                    if dp_type == "Oracle":
+                        all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "dualCalcOpt"] = 2
+                    else:
+                        all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "dualCalcOpt"] = 1
+                x=1 # breakpoint
         x = 1
 
     # generate results directory

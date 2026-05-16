@@ -430,6 +430,13 @@ class Simulation:
                         ) -> pd.DataFrame:
         """ Loads processed data and generates a summary dataframe without reprocessing raw results files. """        
         
+        # map `calc_bounds_opt` from integer to DualBoundCalcOptions enum if needed
+        if isinstance(calc_bounds_opt, int):
+            try:
+                calc_bounds_opt = DualBoundCalcOptions(calc_bounds_opt)
+            except ValueError:
+                raise ValueError(f"Invalid value for `calc_bounds_opt`: {calc_bounds_opt}. Must be an integer corresponding to a DualBoundCalcOptions enum value.")
+
         # print divider
         if printouts: tqdm.write(f"\n\n{'='*30} SIMULATION RESULTS {'='*30}\n")
 

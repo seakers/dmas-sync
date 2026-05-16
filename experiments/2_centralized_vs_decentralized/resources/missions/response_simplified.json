@@ -6,7 +6,7 @@
                 {
                     "objective_type": "event_driven",
                     "parameter": "Chlorophyll-a concentration [mg/m^3]",
-                    "weight": 0.25,
+                    "weight": 0.30,
                     "event_type": "algal_bloom",
                     "requirements": [
                         {
@@ -45,7 +45,7 @@
                 {
                     "objective_type": "event_driven",
                     "parameter": "Temperature [K]",
-                    "weight": 0.25,
+                    "weight": 0.40,
                     "event_type": "algal_bloom",
                     "requirements": [
                         {
@@ -56,42 +56,7 @@
                                 "HawkEye-class Ocean Color Imager (VNIR-WQ-U)" : 1.0,
                                 "Planet SuperDove-class Wide VNIR (VNIR-FL-U)" : 0.5,
                                 "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)" : 0.75,
-                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 0.75
-                            }
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "n_obs",
-                            "strategy": "diminishing_returns",
-                            "slope": 0.5,
-                            "threshold": 5
-                        }
-                    ]
-                },
-                {
-                    "objective_type": "event_driven",
-                    "parameter": "Temperature [K]",
-                    "weight": 0.25,
-                    "event_type": "algal_bloom",
-                    "requirements": [
-                        {
-                            "req_type": "capability",
-                            "attribute": "instrument",
-                            "strategy": "categorical",
-                            "valid_values": {
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 0.75,
                                 "constellr HiVE TIR Imager (TIR-WQ-T)" : 1.0,
                                 "constellr HiVE TIR Imager (TIR-FR-T)" : 0.75
                             }
@@ -121,7 +86,7 @@
                 {
                     "objective_type": "event_driven",
                     "parameter": "Water Level",
-                    "weight": 0.25,
+                    "weight": 0.30,
                     "event_type": "algal_bloom",
                     "requirements": [
                         {
@@ -255,7 +220,8 @@
                             "strategy": "categorical",
                             "valid_values": {
                                 "constellr HiVE TIR Imager (TIR-WQ-T)" : 0.75,
-                                "constellr HiVE TIR Imager (TIR-FR-T)" : 1.0
+                                "constellr HiVE TIR Imager (TIR-FR-T)" : 1.0,
+                                "OroraTech OTC-P1 SAFIRE Thermal Camera (MIR-FR-U)" : 1.0
                             }
                         },
                         {

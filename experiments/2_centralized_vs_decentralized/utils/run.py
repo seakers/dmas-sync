@@ -86,7 +86,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
 
     # Unpack trial row
     #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_centralization,calc_dual`
-    trial_id,preplanner,replanner,connectivity,scenario,data_processing,constellation,date,*_,calc_dual = trial_row
+    trial_id,preplanner,replanner,connectivity,scenario,data_processing,constellation,date,*_,calc_dual_opt = trial_row
     
     # normalize `nan` values to None
     preplanner = "none" if not isinstance(preplanner, str) and pd.isna(preplanner) else preplanner.lower()
@@ -134,7 +134,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             data_processing, constellation, date, 
             run_cfg.spacecraft_specs_template, run_cfg.instrument_specs,
             run_cfg.planner_specs, run_cfg.ground_operator_specs_template, 
-            sim_cfg.reduced, calc_dual
+            sim_cfg.reduced, calc_dual_opt
         )
 
         # random wait for staggering
@@ -250,17 +250,10 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             # ensure we summarize if we just ran or postprocessed the sim
             force_summarize = sim_cfg.force_summarize or should_run_sim
 
-            if calc_dual:
-                calc_bounds_opt = DualBoundCalcOptions.ALL_TASKS
-            elif data_processing.lower() == 'oracle':
-                calc_bounds_opt = DualBoundCalcOptions.NO_TASKS
-            else:
-                calc_bounds_opt = DualBoundCalcOptions.KNOWN_TASKS
-
             # summarize results 
             mission.summarize_results(force_summarize=force_summarize, 
                                       printouts=not sim_cfg.quiet,
-                                      calc_bounds_opt=calc_bounds_opt)
+                                      calc_bounds_opt=calc_dual_opt)
             
             # set summarize status for return summary
             sum_status = "summarized"
