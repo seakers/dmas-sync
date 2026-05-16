@@ -1228,26 +1228,46 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                 existing_bid : Bid = self._results[task][n_obs]
                             except KeyError:
                                 existing_bid : Bid = proposed_bids[task][n_obs]
-                                
-                            # get mutex bids for this observation
-                            following_bids = [
-                                                mutex_bid
-                                                for mutex_bid in self._results[task]
-                                                if mutex_bid.n_obs > n_obs
-                                                and mutex_bid.winner != state.agent_name
-                                            ]
-                            mutex_bids = [existing_bid] + following_bids
 
-                            # determine if bid is accepted
+                            beats_current = task_value > existing_bid.winning_bid
+
+                            # Only the immediately following bid needs to be checked upfront.
+                            immediate_next = next(
+                                (b for b in self._results[task]
+                                if b.n_obs == n_obs + 1 and b.winner != state.agent_name),
+                                None
+                            )
+                            beats_immediate_next = immediate_next is None or task_value > immediate_next.winning_bid
+
                             accept_bid = [
                                 # 1) I am the current bid winner and proposed observation value is positive
                                 existing_bid.winner == state.agent_name and task_value > 0.0,
-                                # 2) or if proposed observation value outperforms existing winning bids for all mutex bids
-                                all(task_value > mutex_bid.winning_bid for mutex_bid in mutex_bids),
-                                # 3) or if proposed earlier observation time and optimistic bidding counter allows it
-                                t_obs < existing_bid.t_img 
-                                    and self._optimistic_bidding_counters[task][n_obs] > 0
+                                # 2) I outperform the current bid and the immediately following bid for this task, 
+                                beats_current and beats_immediate_next,
+                                # 3) I propose an earlier observation time and have a positive optimistic bidding counter
+                                t_obs < existing_bid.t_img and self._optimistic_bidding_counters[task][n_obs] > 0
                             ]
+
+                            # LEGACY APPROACH - check proposed observation value against all mutex bids for this observation number
+                            # # get mutex bids for this observation
+                            # following_bids = [
+                            #                     mutex_bid
+                            #                     for mutex_bid in self._results[task]
+                            #                     if mutex_bid.n_obs > n_obs
+                            #                     and mutex_bid.winner != state.agent_name
+                            #                 ]
+                            # mutex_bids = [existing_bid] + following_bids
+
+                            # # determine if bid is accepted
+                            # accept_bid = [
+                            #     # 1) I am the current bid winner and proposed observation value is positive
+                            #     existing_bid.winner == state.agent_name and task_value > 0.0,
+                            #     # 2) or if proposed observation value outperforms existing winning bids for all mutex bids
+                            #     all(task_value > mutex_bid.winning_bid for mutex_bid in mutex_bids),
+                            #     # 3) or if proposed earlier observation time and optimistic bidding counter allows it
+                            #     t_obs < existing_bid.t_img 
+                            #         and self._optimistic_bidding_counters[task][n_obs] > 0
+                            # ]
 
                         # check if bid is accepted
                         if not any(accept_bid):

@@ -500,7 +500,7 @@
                 "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
-                // "--reduced",
+                "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]
