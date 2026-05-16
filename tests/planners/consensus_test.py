@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from dmas.core.simulation import Simulation
+from dmas.utils.processing import DualBoundCalcOptions
 from dmas.utils.tools import print_scenario_banner
 from tests.planners.tester import PlannerTester
 
@@ -52,10 +53,10 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.toy_23 = False # single satellite bidding against a gs agent; announcer sat
         self.toy_24 = False # two satellites bidding against a gs agent; announcer sat
         self.toy_25 = False # single satellite bidding against a gs agent; gs announcer
-        self.toy_26 = False # two satellites bidding against a gs agent; gs announcer
+        self.toy_26 = True # two satellites bidding against a gs agent; gs announcer
 
         self.toy_27 = False # string of pearls with onboard event detection
-        self.toy_28 = True # sequence reset case
+        self.toy_28 = False # sequence reset case
         self.toy_29 = False # real vs planned reward comparison
         self.toy_30 = False # interrupted observations from external broadcast
 
@@ -302,7 +303,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -399,7 +400,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -515,7 +516,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -632,7 +633,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -748,7 +749,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -857,7 +858,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -971,7 +972,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
     
@@ -1028,7 +1029,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -1096,7 +1097,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
         
@@ -1305,7 +1306,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -1373,7 +1374,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -1439,7 +1440,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -1517,7 +1518,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -1583,7 +1584,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -1798,7 +1799,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -1897,7 +1898,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -1965,7 +1966,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -2048,7 +2049,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -2318,7 +2319,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
     
@@ -2507,7 +2508,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -2575,7 +2576,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -2656,7 +2657,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -2753,7 +2754,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -2838,7 +2839,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")
 
@@ -2908,7 +2909,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        results_summary = self.simulation.summarize_results(force_summarize=True)
+        results_summary = self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         # verify results
         planned_reward = results_summary.loc[results_summary['Metric']=='Total Planned Reward'].values[0][1]
@@ -2973,7 +2974,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print(f"{scenario_name}: DONE")       
 
@@ -3056,7 +3057,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         self.simulation.process_results(force_process=True)
 
         # print results summary
-        self.simulation.summarize_results(force_summarize=True)
+        self.simulation.summarize_results(force_summarize=True, calc_bounds_opt=DualBoundCalcOptions.NO_TASKS)
 
         print('DONE')
 

@@ -85,5 +85,27 @@
             "A_rollMin": -50,
             "A_rollMax": 50
         }
+    },
+    "IMG_A" : {
+        "name": "IMG_A",
+        "@id" : "img_a",
+        "@type" : "VNIR",
+        "detectorWidth": 6.6e-6,
+        "focalLength": 3.6,  
+        "orientation": {
+            "referenceFrame": "NADIR_POINTING",
+            "convention": "REF_FRAME_ALIGNED"
+        },
+        "fieldOfViewGeometry": { 
+            "shape": "RECTANGULAR", 
+            "angleHeight": 2.5, 
+            "angleWidth": 45.0
+        },
+        "maneuver" : {
+            "maneuverType":"SINGLE_ROLL_ONLY",
+            "A_rollMin": -50,
+            "A_rollMax": 50
+        },
+        "spectral_resolution" : "Hyperspectral"
     }
 }

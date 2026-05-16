@@ -23,6 +23,7 @@ from execsatm.requirements import SpatialCoverageRequirement, SinglePointSpatial
 from execsatm.events import GeophysicalEvent
 
 from dmas.core.messages import SimulationRoles
+from dmas.models.planning.decentralized.consensus.augmented.heuristic import AugmentedHeuristicInsertionConsensusPlanner
 from dmas.utils.orbitdata import OrbitData
 from dmas.models.actions import AgentAction, BroadcastMessageAction
 from dmas.models.agent import SimulationAgent
@@ -1347,16 +1348,22 @@ class Simulation:
         debug = bool(replanner_dict.get('debug', 'false').lower() in ['true', 't'])
         replan_threshold = replanner_dict.get('replanThreshold', 1)
         
-        if replanner_type.lower() in ['consensus', 'cbba']:
+        if any(p in replanner_type.lower() for p in ['consensus', 'cbba']):
             model = replanner_dict.get('model', 'heuristicInsertion')
             optimistic_bidding_threshold = replanner_dict.get('optimisticBiddingThreshold', 1)
             periodic_overwrite = bool(replanner_dict.get('periodicOverwrite', 'false').lower() in ['true', 't'])
-
-            if 'heuristic' in model:
-                heuristic = replanner_dict.get('heuristic', 'earliestAccess')
-                return HeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
+            if 'augmented' in replanner_type.lower():
+                if 'heuristic' in model:
+                    heuristic = replanner_dict.get('heuristic', 'earliestAccess')
+                    return AugmentedHeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
+                else:
+                    raise NotImplementedError(f'replanner model `{model}` not yet supported.')
             else:
-                raise NotImplementedError(f'replanner model `{model}` not yet supported.')
+                if 'heuristic' in model:
+                    heuristic = replanner_dict.get('heuristic', 'earliestAccess')
+                    return HeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
+                else:
+                    raise NotImplementedError(f'replanner model `{model}` not yet supported.')
         
         elif replanner_type.lower() in ['heuristic']:
             return HeuristicInsertionReactivePlanner(replan_threshold, debug, logger, printouts)

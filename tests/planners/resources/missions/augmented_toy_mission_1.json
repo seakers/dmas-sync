@@ -1,0 +1,111 @@
+{
+    "missions": [
+        {
+            "name": "toy_mission",
+            "objectives": [
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "PARAM_A",
+                    "weight": 0.50,
+                    "event_type": "algal bloom",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "VNIR hyp" : 1.0,
+                                "VNIR multi" : 0.75
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        },
+                        {
+                            "req_type": "coordination",
+                            "attribute": "co_observations",
+                            "strategy": "discrete_intervals",
+                            "decorrelation_time [s]": 3600,
+                            "thresholds": [
+                                0,
+                                3
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "objective_type": "event_driven",
+                    "parameter": "PARAM_B",
+                    "weight": 0.50,
+                    "event_type": "algal bloom",
+                    "requirements": [
+                        {
+                            "req_type": "capability",
+                            "attribute": "instrument",
+                            "strategy": "categorical",
+                            "valid_values": {
+                                "VNIR multi" : 1.0,
+                                "TIR" : 0.75
+                            }
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "response_time [normalized]",
+                            "strategy": "discrete_intervals",
+                            "thresholds": [
+                                0,
+                                1.0
+                            ],
+                            "scores": [
+                                1.0,
+                                0.0
+                            ]
+                        },
+                        {
+                            "req_type": "performance",
+                            "attribute": "n_obs",
+                            "strategy": "diminishing_returns",
+                            "slope": 0.5,
+                            "threshold": 5
+                        },
+                        {
+                            "req_type": "coordination",
+                            "attribute": "co_observations",
+                            "strategy": "discrete_intervals",
+                            "decorrelation_time [s]": 3600,
+                            "thresholds": [
+                                0,
+                                3
+                            ],
+                            "scores": [
+                                0.5,
+                                1.0
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
