@@ -34,14 +34,15 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
     def __init__(self,
                  agent_results_dir : str,
                  heuristic : str = EARLIEST_ACCESS,
-                 replan_threshold : int = 1, 
+                 replan_threshold : int = 1,
                  optimistic_bidding_threshold : int = 1,
                  periodic_overwrite : bool = False,
-                 debug : bool = False, 
+                 debug : bool = False,
                  logger : bool = None,
-                 printouts : bool = True
+                 printouts : bool = True,
+                 contested_reset_threshold : int = 3
                 ):
-        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, agent_results_dir, debug, logger, printouts)
+        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, agent_results_dir, debug, logger, printouts, contested_reset_threshold)
 
         # validate inputs
         assert heuristic in self.HEURISTICS, f"Invalid heuristic '{heuristic}'. Must be one of {self.HEURISTICS}."
