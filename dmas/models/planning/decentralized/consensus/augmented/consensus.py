@@ -45,12 +45,22 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                          current_plan: Plan,
                          performed_observations: List[ObservationAction]
                         ) -> Tuple[List[Bid], List[Bid], List[Bid], List[ObservationAction]]:
-        """Run base consensus phase, then refresh the co-obs event index."""
-        result = super()._consensus_phase(
+        """Run base consensus phase, then conditionally refresh the co-obs event index.
+
+        The index is rebuilt only when the task registry changes — i.e., when
+        new tasks are announced (task_updates non-empty) or when tasks are
+        expired and removed from self._results (detected by a change in the
+        result count). Most timesteps neither condition is true, so the index
+        is left unchanged at zero cost.
+        """
+        prev_task_count = len(self._results)
+        consensus_results = super()._consensus_phase(
             state, incoming_reqs, incoming_bids, tasks, current_plan, performed_observations
         )
-        self._rebuild_event_index()
-        return result
+        task_updates = consensus_results[0]
+        if task_updates or len(self._results) != prev_task_count:
+            self._rebuild_event_index()
+        return consensus_results
 
     # ------------------------------------------------------------------
     # CO-OBS INDEX MANAGEMENT
@@ -101,15 +111,3 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                         partners.append(bid)
         return partners
 
-    def _compute_coalition_value(self,
-                                  task: GenericObservationTask,
-                                  t_img: float,
-                                  co_obs_window: float
-                                 ) -> float:
-        """Sum of winning bid values from co-obs partner instruments within the time window.
-
-        Represents the system-level value at stake when this task's observation
-        time changes: displacing an existing bid may break a co-obs coalition,
-        losing the aggregate partner value this method returns.
-        """
-        return sum(bid.winning_bid for bid in self._get_co_obs_partners(task, t_img, co_obs_window))
