@@ -1,4 +1,4 @@
-Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_abridged,in_full,dualCalcOpt
+Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_abridged,in_full,calcBoundsOpt
 0,Centralized-MILP_priority,None,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
 1,Centralized-MILP_priority,None,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
 2,Centralized-MILP_priority,None,GS,Comprehensive,Oracle,Walker-Delta,2019-02-15,True,True,0
