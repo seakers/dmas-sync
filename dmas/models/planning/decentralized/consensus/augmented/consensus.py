@@ -77,21 +77,27 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                          current_plan: Plan,
                          performed_observations: List[ObservationAction]
                         ) -> Tuple[List[Bid], List[Bid], List[Bid], List[ObservationAction]]:
-        """Run base consensus phase, then conditionally refresh the co-obs event index.
+        """Run base consensus phase, then incrementally maintain the co-obs event index.
 
-        The index is rebuilt only when the task registry changes — i.e., when
-        new tasks are announced (task_updates non-empty) or when tasks are
-        expired and removed from self._results (detected by a change in the
-        result count). Most timesteps neither condition is true, so the index
-        is left unchanged at zero cost.
+        Both additions and removals are handled in O(|changed tasks|) using the
+        explicit task lists surfaced by the extended _consensus_phase return:
+          - task_updates    (index 0): bid dicts for newly announced tasks
+          - expired_tasks   (index 4): task objects removed from _results
+
+        The common case (no change) is zero cost.
         """
-        prev_task_count = len(self._results)
         consensus_results = super()._consensus_phase(
             state, incoming_reqs, incoming_bids, tasks, current_plan, performed_observations
         )
-        task_updates = consensus_results[0]
-        if task_updates or len(self._results) != prev_task_count:
-            self._rebuild_event_index()
+        # consensus_results <- task_updates, results_updates, bundle_updates, performed_bundle_observations, expired_tasks
+        task_updates          = consensus_results[0]
+        expired_tasks  = consensus_results[4]
+
+        if expired_tasks:
+            self._remove_from_event_index(expired_tasks)
+        if task_updates:
+            self._update_event_index(task_updates)
+
         return consensus_results
 
     # ------------------------------------------------------------------
@@ -233,6 +239,53 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
     # ------------------------------------------------------------------
     # CO-OBS INDEX MANAGEMENT
     # ------------------------------------------------------------------
+
+    def _remove_from_event_index(self,
+                                  expired_tasks: List[GenericObservationTask]
+                                 ) -> None:
+        """Remove expired EventObservationTasks from the event index.
+
+        Called when tasks are removed from _results by __remove_expired_tasks.
+        Receives the task objects directly (captured before they are popped
+        from _results and _id_to_tasks), so no dict reconstruction or registry
+        lookup is needed.
+        """
+        for task in expired_tasks:
+            if not isinstance(task, EventObservationTask) or task.event is None:
+                continue
+            param_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+            bucket = param_tasks.get(task.parameter)
+            if bucket is None:
+                continue
+            try:
+                bucket.remove(task)
+            except ValueError:
+                pass
+            if not bucket:
+                param_tasks.pop(task.parameter, None)
+            if not param_tasks:
+                self._event_to_tasks_by_instrument.pop(task.event.id, None)
+
+    def _update_event_index(self, task_updates: list) -> None:
+        """Incrementally insert newly announced EventObservationTasks into the index.
+
+        Parses the task object from each bid dict in task_updates using
+        _id_to_tasks (the canonical task registry) so no reconstruction from
+        dict is needed for already-known tasks.  Skips tasks not yet in the
+        registry (they will be caught on the next full rebuild if needed).
+        Avoids duplicate entries under the same parameter key.
+        """
+        for bid_dict in task_updates:
+            task_id = bid_dict.get('task', {}).get('id')
+            if task_id is None:
+                continue
+            task = self._id_to_tasks.get(task_id)
+            if task is None:
+                continue
+            if isinstance(task, EventObservationTask) and task.event is not None:
+                param_list = self._event_to_tasks_by_instrument[task.event.id][task.parameter]
+                if task not in param_list:
+                    param_list.append(task)
 
     def _rebuild_event_index(self) -> None:
         """Rebuild the event-instrument index from the current results table.

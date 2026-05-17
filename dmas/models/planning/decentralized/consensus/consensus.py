@@ -151,7 +151,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
 
         # perform consensus phase for incoming task bids
-        task_updates, results_updates, bundle_updates, performed_bundle_observations \
+        task_updates, results_updates, bundle_updates, performed_bundle_observations, _ \
               = self._consensus_phase(state, incoming_reqs, incoming_bids, tasks, current_plan, performed_observations)
 
         # update latest observations performed 
@@ -259,7 +259,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         comparison_updates = self.__compare_incoming_bids(state, incoming_bids)
 
         # check if planned tasks expired
-        expired_tasks, self._bundle, expired_bundle_updates \
+        expired_tasks, expired_bids, self._bundle, expired_bundle_updates \
               = self.__remove_expired_tasks(state)
 
         # TODO make sure this is not needed:
@@ -274,7 +274,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         results_updates = list(chain.from_iterable([
                                                     # new_default_tasks,
                                                     # new_urgent_task_added, 
-                                                    expired_tasks, 
+                                                    expired_bids, 
                                                     preplan_obs,
                                                     performed_bundle_updates,
                                                     comparison_updates, 
@@ -307,8 +307,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         performed_bundle_observations : List[ObservationOpportunity] \
             = [obs_opp for obs_opp,_ in performed_bundle_updates]
                 
-        # return lists of updates
-        return task_updates, results_updates, bundle_updates, performed_bundle_observations   
+        # return lists of updates; expired_task_objects allows subclasses to do
+        # incremental index maintenance without a full _results scan
+        return task_updates, results_updates, bundle_updates, performed_bundle_observations, expired_tasks
 
     def __update_bundle_from_preplan(self, 
                                      state : SimulationAgentState, 
@@ -402,14 +403,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                        incoming_bids : List[dict]
                                        ) -> List[Bid]:
         """ Processes new urgent task requests and updates results accordingly. """
-        
+        # get current time
+        t_curr = state.get_time()
+
         # initialize list of newly added bids from new tasks
-        new_task_added = []
+        new_task_added = set()
 
         # get new and active incoming tasks from requests
         active_req_tasks = set([req.task for req in incoming_reqs 
                                 # check if task is still available 
-                                if req.task.is_available(state.get_time())
+                                if req.task.is_available(t_curr)
                                 # and not already in results
                                 and req.task not in self._results])
         
@@ -425,7 +428,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         ## filter active bid tasks
         active_bid_tasks = set([task for task in incoming_bid_tasks
                                 # check if task is still available
-                                if task.is_available(state.get_time())
+                                if task.is_available(t_curr)
                                 #  and not already in results
                                 and task not in self._results])
         
@@ -436,18 +439,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._known_event_tasks.update(active_tasks)
         self._incoming_event_tasks.extend(active_tasks)
                 
-        # remove unavailable tasks from known task lists
-        # if any([not task.is_available(state.t) for task in self.known_event_tasks]):
-        #     raise NotImplementedError("Removal of unavailable urgent tasks not yet implemented.")
-        # self.known_event_tasks = {task for task in self.known_event_tasks if task.is_available(state.t)}
-        
-        # identify new urgent tasks
-        # new_event_tasks = [task for task in self.incoming_event_tasks 
-        #                    if task not in self.results]
-
         # check if new tasks exceed threshold
         if len(self._incoming_event_tasks) < self._replan_threshold: 
-            return new_task_added # threshold not met; skip processing and allow for more tasks to accumulate
+            return list(new_task_added) # threshold not met; skip processing and allow for more tasks to accumulate
 
         # DEBUG PRINTOUTS --------
         # if self._debug and self.incoming_event_tasks:
@@ -459,7 +453,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # check if task is already in results
             if task in self._results: continue # already processed; skip
 
-            # initialize results for new event tasks
+            # initialize results for new event tasks with an empty bid
             self._results[task].append(Bid.make_empty_bid(task, state.agent_name, 0))
 
             # initialize optimistic bidding counter for new task
@@ -471,11 +465,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # add task to known tasks
             self._id_to_tasks[task.id] = task
 
-            # # create empty bid for new task and add to list of changes
-            # new_task_added.append(Bid(task, state.agent_name, t_bid=state.get_time()))
-
             # add new task to list of changes
-            new_task_added.append(task.to_dict())
+            new_task_added.add(task)
 
         # DEBUG PRINTOUTS --------
         #     if self._debug:
@@ -486,9 +477,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------
 
         # return list of new task bids added to results
-        return new_task_added
+        return list(new_task_added)
     
-    def __remove_expired_tasks(self, state : SimulationAgentState) -> Tuple[list, list, list]:
+    def __remove_expired_tasks(self, state : SimulationAgentState) -> Tuple[list, list, list, list]:
         """ Remove expired tasks from results. """
         # get current time 
         t_curr = state.get_time()
@@ -529,7 +520,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # check if no expired task exists in bundle
         if bundle_idx_to_remove is None:
             # return expired bids and do not modify bundle
-            return expired_bids, self._bundle, []
+            return expired_tasks, expired_bids, self._bundle, []
 
         # TODO ensure that the following section is not needed. Bids should not 
         #   be placed for tasks that will expire before they are performed.
@@ -584,8 +575,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # add to violations list
                 bundle_updates.append(bids_reset)
 
-        # return list of removed bids
-        return expired_bids, revised_bundle, bundle_updates
+        # return list of removed bids and the expired task objects
+        return expired_tasks, expired_bids, revised_bundle, bundle_updates
     
     def __update_performed_bundle_observations(self, 
                                                state : SimulationAgentState, 
