@@ -362,6 +362,7 @@ class TestConsensusPlanner(PlannerTester, unittest.TestCase):
         announcer_spacecraft['name'] = 'sat0'
         announcer_spacecraft['planner'] = self.setup_announcer_config(event_name)
         announcer_spacecraft['instrument'] = self.instruments['TIR'] # wide swath instrument
+        # announcer_spacecraft.pop('instrument', None)
         announcer_spacecraft['orbitState']['state']['inc'] = 0.0
         announcer_spacecraft['mission'] = "toy_mission"
 
