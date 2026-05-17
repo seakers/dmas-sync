@@ -14,7 +14,7 @@
                             "attribute": "instrument",
                             "strategy": "categorical",
                             "valid_values": {
-                                "VNIR hyp" : 1.0,
+                                "VNIR hyper" : 1.0,
                                 "VNIR multi" : 0.75
                             }
                         },
@@ -65,7 +65,7 @@
                             "attribute": "instrument",
                             "strategy": "categorical",
                             "valid_values": {
-                                "VNIR multi" : 1.0,
+                                "VNIR hyper" : 1.0,
                                 "TIR" : 0.75
                             }
                         },
