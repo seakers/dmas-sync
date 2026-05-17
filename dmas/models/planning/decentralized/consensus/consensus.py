@@ -43,7 +43,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                  debug : bool = False,
                  logger: logging.Logger = None,
                  printouts : bool = True,
-                 contested_reset_threshold : int = 3
+                 contested_reset_threshold : int = 1  # pass None to disable cascade freezing
                 ) -> None:
         super().__init__(debug, logger, printouts)
         """
@@ -93,7 +93,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._replan_threshold = replan_threshold
         self._optimistic_bidding_threshold = optimistic_bidding_threshold
         self._periodic_overwrite = periodic_overwrite
-        self._contested_reset_threshold = contested_reset_threshold
+        # None disables cascade freezing entirely (counters never reach inf)
+        self._contested_reset_threshold = float('inf') if contested_reset_threshold is None \
+            else contested_reset_threshold
         self._last_consensus_time : float = np.NINF
 
         # replanning flags
@@ -288,10 +290,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
         while True:
             # update bundle from results updates
             self._bundle, self._path, results_bundle_updates \
-                = self.__update_bundle_from_results(state)
+                = self._update_bundle_from_results(state)
 
             # enforce constraints in results
-            constraint_violations = self.__check_results_constraints(state)
+            constraint_violations = self._check_results_constraints(state)
 
             # append updates to compiling lists
             bundle_updates.extend(results_bundle_updates)
@@ -909,7 +911,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         return grouped_bids
          
-    def __update_bundle_from_results(self,
+    def _update_bundle_from_results(self,
                                      state : SimulationAgentState
                                     ) -> Tuple[list, List[List[Bid]]]:
         """ Update bundle according to latest results. """
@@ -1102,7 +1104,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return updated bundle and list of updates
         return revised_bundle, revised_path, bundle_updates
     
-    def __check_results_constraints(self, state : SimulationAgentState) -> List[Bid]:
+    def _check_results_constraints(self, state : SimulationAgentState) -> List[Bid]:
         """ Check results for constraint violations and return list of affected bids. """
         # get current time 
         t_curr = state.get_time()
@@ -1299,7 +1301,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             self.__validate_new_bundle(state, specs, new_bids)
 
             # update results with initial periodic plan bundle
-            self.__update_results_from_bundle(state, new_bids)
+            self._update_results_from_bundle(state, new_bids)
 
              # -------------------------------
             # DEBUG PRINTOUTS
@@ -1321,7 +1323,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self.__validate_new_bundle(state, specs, new_bids)
 
         # update results
-        self.__update_results_from_bundle(state, new_bids)
+        self._update_results_from_bundle(state, new_bids)
 
         # -------------------------------
         # DEBUG PRINTOUTS
@@ -1398,7 +1400,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         """
     
-    def __update_results_from_bundle(self, 
+    def _update_results_from_bundle(self, 
                                      state : SimulationAgentState,
                                      new_bids : Dict[GenericObservationTask, Dict[int, Bid]]
                                     ) -> None:
