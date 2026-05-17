@@ -147,6 +147,10 @@ class Bid:
                 'task_type' : self.task.task_type,
                 'parameter' : self.task.parameter,
                 'priority' : self.task.priority,
+                'availability' : {
+                    "left" : self.task.availability.left,
+                    "right" : self.task.availability.right
+                },
                 'id' : self.task.id
             } if reduced else self.task.to_dict()
 
