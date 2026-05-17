@@ -267,10 +267,10 @@ def generate_plots(trial_name: str,
     # ------------------------------------------------------------------
     df = pd.read_csv(compiled_results_path)
 
-    if 'in_centralization' not in df.columns:
-        raise ValueError(
-            f"Column `in_centralization` not found. "
-            f"Available columns: {df.columns.tolist()}")
+    # if 'in_centralization' not in df.columns:
+    #     raise ValueError(
+    #         f"Column `in_centralization` not found. "
+    #         f"Available columns: {df.columns.tolist()}")
 
     if df.empty:
         print(f"No results found for trial `{trial_name}`.")
@@ -322,6 +322,24 @@ def generate_plots(trial_name: str,
     ]
     agg = aggregate_cells(df, cell_metrics, group_cols)
 
+    # # ------------------------------------------------------------------
+    # #  TEST PLOTS
+    # # ------------------------------------------------------------------
+    # plot_metric(
+    #     df, agg,
+    #     metrics='Tasks Observed',
+    #     titles='Tasks Observed by Algorithm',
+    #     ylabels='Tasks Observed',
+    #     suptitle='Tasks Observed by Algorithm',
+    #     algo_order=algo_order, algo_palette=algo_palette,
+    #     group_vars=group_vars,
+    #     base_dir=base_dir, local_base_dir=local_base_dir,
+    #     save_dir=save_dir, local_save_dir=local_save_dir,
+    #     filename_stem='TestPlot1-Tasks_Observed',
+    #     # lower_bound_col='Task Reward Primal Bound',
+    #     # upper_bound_col='Task Reward Dual Bound',
+    # )
+
     # ------------------------------------------------------------------
     #  PLOT 1a — Mission Reward
     #  Figure A: 1 panel.   Figure B: 1x2.
@@ -358,42 +376,42 @@ def generate_plots(trial_name: str,
         filename_stem='Plot1b-Mission_Reward_Normalized',
     )
 
-    # ------------------------------------------------------------------
-    #  PLOT 2 — Reward vs Design Variables
-    #  Panel 1: reward vs Connectivity (ordered categorical)
-    #  Panel 2: reward vs Data Processing
-    # ------------------------------------------------------------------
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
+    # # ------------------------------------------------------------------
+    # #  PLOT 2 — Reward vs Design Variables
+    # #  Panel 1: reward vs Connectivity (ordered categorical)
+    # #  Panel 2: reward vs Data Processing
+    # # ------------------------------------------------------------------
+    # fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
 
-    for ax, (x_col, xlabel, x_order) in zip(axes, [
-        ('Connectivity',    'Connectivity Type',      connectivity_order),
-        ('Data Processing', 'Data Processing Mode',   data_proc_order),
-    ]):
-        sns.lineplot(
-            data=df,
-            x=x_col, y='Total Obtained Reward [norm]',
-            hue='Algorithm', style='Algorithm',
-            hue_order=algo_order, style_order=algo_order,
-            palette=algo_palette, dashes=linestyles,
-            errorbar=None, ax=ax,
-        )
+    # for ax, (x_col, xlabel, x_order) in zip(axes, [
+    #     ('Connectivity',    'Connectivity Type',      connectivity_order),
+    #     ('Data Processing', 'Data Processing Mode',   data_proc_order),
+    # ]):
+    #     sns.lineplot(
+    #         data=df,
+    #         x=x_col, y='Total Obtained Reward [norm]',
+    #         hue='Algorithm', style='Algorithm',
+    #         hue_order=algo_order, style_order=algo_order,
+    #         palette=algo_palette, dashes=linestyles,
+    #         errorbar=None, ax=ax,
+    #     )
 
-        ax.axhline(1.0, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel('Total Obtained Reward (normalized)')
-        ax.grid(True, linestyle='--', linewidth=0.4)
+    #     ax.axhline(1.0, color='gray', linestyle='--', linewidth=0.8, alpha=0.5)
+    #     ax.set_xlabel(xlabel)
+    #     ax.set_ylabel('Total Obtained Reward (normalized)')
+    #     ax.grid(True, linestyle='--', linewidth=0.4)
 
-        # legend only on the right panel
-        if ax is axes[0]:
-            ax.get_legend().remove()
-        else:
-            ax.legend(title='Algorithm')
+    #     # legend only on the right panel
+    #     if ax is axes[0]:
+    #         ax.get_legend().remove()
+    #     else:
+    #         ax.legend(title='Algorithm')
 
-    plt.suptitle('Reward vs Design Variables', fontsize=13)
-    plt.tight_layout()
-    save_plot(base_dir, local_base_dir, save_dir, local_save_dir,
-              'Plot2-Reward_vs_Design_Variables.png')
-    plt.close()
+    # plt.suptitle('Reward vs Design Variables', fontsize=13)
+    # plt.tight_layout()
+    # save_plot(base_dir, local_base_dir, save_dir, local_save_dir,
+    #           'Plot2-Reward_vs_Design_Variables.png')
+    # plt.close()
 
     # ------------------------------------------------------------------
     #  PLOT 3 — Task Observation Probability
@@ -589,7 +607,7 @@ def generate_plots(trial_name: str,
 # ----------------------------------------------------------------------
 
 if __name__ == '__main__':
-    trial_name = 'full_factorial_trials_2026-05-11'
+    trial_name = 'full_factorial_trials_2026-05-14'
 
     generate_plots(trial_name)
 

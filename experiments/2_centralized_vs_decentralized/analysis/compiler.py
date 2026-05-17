@@ -66,10 +66,6 @@ def compile_results_summaries(trial_name : str,
     trial_definitions_path = os.path.join('experiments','2_centralized_vs_decentralized','resources', 'trials', f'{trial_name}.csv')
     trials_df = pd.read_csv(trial_definitions_path)
 
-    # fill missing parameter values in trial definitions to None
-    results_df["Preplanner"] = results_df["Prelanner"].fillna("None")
-    results_df["Replanner"] = results_df["Replanner"].fillna("None")
-
     # merge summary data with trial definitions
     results_df : pd.DataFrame = summary_df.merge(
         trials_df,
@@ -77,6 +73,10 @@ def compile_results_summaries(trial_name : str,
         how="left",          # keep all results; attach params if found
         validate="many_to_one"  # each Scenario ID should map to one row in trials_df
     )
+
+    # fill missing parameter values in trial definitions to None
+    results_df["Preplanner"] = results_df["Preplanner"].fillna("None")
+    results_df["Replanner"] = results_df["Replanner"].fillna("None")
     
     # # fill in missing values for Ground Segment with "None (In-Orbit Requester)" to indicate no ground segment 
     # results_df["Ground Segment"] = results_df["Ground Segment"].fillna("None (In-Orbit Requester)")
