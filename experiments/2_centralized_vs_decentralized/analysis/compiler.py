@@ -34,15 +34,15 @@ def compile_results_summaries(trial_name : str,
 
             # check if summary.csv exists
             if not os.path.exists(results_summary_path):
-                # print(f"Summary file not found at: `{results_summary_path}`. Skipping.")
+                print(f"[results compiler] summary file not found at: `{results_summary_path}`. Skipping.")
                 continue
 
             # load summary.csv
             try:
                 summary_temp_df = pd.read_csv(results_summary_path)
-                # print(f"Loaded summary from `{results_summary_path}` with {len(summary_temp_df)} rows.")
+                print(f"[results compiler] Loaded summary from `{results_summary_path}` with {len(summary_temp_df)} rows.")
             except Exception as e:
-                # print(f"Error loading `{results_summary_path}`: {e}. Skipping.")
+                print(f"[results compiler] error loading `{results_summary_path}`: {e}. Skipping.")
                 continue
 
             # convert to dict 
@@ -65,6 +65,10 @@ def compile_results_summaries(trial_name : str,
     # load trial definition data
     trial_definitions_path = os.path.join('experiments','2_centralized_vs_decentralized','resources', 'trials', f'{trial_name}.csv')
     trials_df = pd.read_csv(trial_definitions_path)
+
+    # fill missing parameter values in trial definitions to None
+    results_df["Preplanner"] = results_df["Prelanner"].fillna("None")
+    results_df["Replanner"] = results_df["Replanner"].fillna("None")
 
     # merge summary data with trial definitions
     results_df : pd.DataFrame = summary_df.merge(
@@ -124,6 +128,35 @@ def compile_results_summaries(trial_name : str,
                 results_df.loc[group_mask, 'Task Reward Dual Bound'].fillna('NaN', inplace=True)
                 results_df.loc[group_mask, 'Task Reward Primal Bound'].fillna('NaN', inplace=True)
 
+            # define subgroups based on Data Processing and fill missing values within each subgroup
+            for subgroup_key,subgroup_data in group_data.groupby('Data Processing'):
+                # unpack key
+                subgroup_processor = subgroup_key
+
+                # define subgroup mask
+                subgroup_mask = group_mask & (results_df['Data Processing'] == subgroup_processor)
+
+                # find if any value in the subgroup has real dual and primal bouds
+                has_real_dual_bound_subgroup =  subgroup_data['Known Task Reward Dual Bound'].notna()
+                has_real_primal_bound_subgroup = subgroup_data['Known Task Reward Primal Bound'].notna()
+                real_values_slice_subgroup = subgroup_data[has_real_dual_bound_subgroup & has_real_primal_bound_subgroup]
+
+                # check if data was found for this subgroup
+                if not real_values_slice_subgroup.empty:
+                    # get the dual bound value from the first row of the slice (should be the same for all rows in the slice)
+                    dual_bound_value_subgroup = real_values_slice_subgroup['Known Task Reward Dual Bound'].iloc[0]
+                    primal_bound_value_subgroup = real_values_slice_subgroup['Known Task Reward Primal Bound'].iloc[0]
+
+                    # fill missing dual bound values in the subgroup with this value
+                    results_df.loc[subgroup_mask, 'Known Task Reward Dual Bound'] = dual_bound_value_subgroup
+
+                    # fill missing primal bound values in the subgroup with this value
+                    results_df.loc[subgroup_mask, 'Known Task Reward Primal Bound'] = primal_bound_value_subgroup
+                else:
+                    # no real data found for this subgroup, fill with string `NaN`
+                    results_df.loc[subgroup_mask, 'Known Task Reward Dual Bound'].fillna('NaN', inplace=True)
+                    results_df.loc[subgroup_mask, 'Known Task Reward Primal Bound'].fillna('NaN', inplace=True)
+
     # perform normalization of metrics if desired (e.g. normalize rewards by number of tasks)
     if 'Total Obtained Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
         results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Task Reward Dual Bound']
@@ -166,9 +199,10 @@ def compile_results_summaries(trial_name : str,
 
 if __name__ == "__main__":
     # define trial parameters
-    base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-11_archive"
+    base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-14_archive"
 
-    trial_name = "full_factorial_trials_2026-05-11"
+    # trial_name = "full_factorial_trials_2026-05-11"
+    trial_name = "full_factorial_trials_2026-05-14"
     
     # compile and save compiled results summaries for this trial
     compile_results_summaries(trial_name, 

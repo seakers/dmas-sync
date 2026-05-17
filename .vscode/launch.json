@@ -527,7 +527,7 @@
                 // "--trial-range", "4:9",
                 // "--trial-range", "0:54",
                 // "-i", "18",
-                "--single-trial", "36",
+                "--single-trial", "53",
                 "--single-thread",
                 // "--only-precompute",
                 // "--only-simulate",
