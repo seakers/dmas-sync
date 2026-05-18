@@ -865,6 +865,11 @@ class ResultsProcessor:
 
                     # handle agent_name for dt lookup
                     agent_name = str(a0) if not isinstance(a0, (str, np.str_)) else a0
+                    
+                    # determine if agent can be tasked to observe this event type (if no explicit requirement found, assume can be tasked)
+                    # TODO currently assumes naming convention to determine taskability of an agent
+                    tasked = '-U)' not in agent_name
+
                     dt = float(compiled_orbitdata[agent_name].time_step)
 
                     # start a new merged interval at this group's first time
@@ -882,19 +887,19 @@ class ResultsProcessor:
                                 right = nr
                         else:
                             # close current interval and start a new one
-                            access_intervals.append((Interval(left, right), agent_name, i0))
+                            access_intervals.append((Interval(left, right), agent_name, tasked, i0))
                             left = tt
                             right = tt + dt
                         idx += 1
 
                     # close last interval for this group
-                    access_intervals.append((Interval(left, right), agent_name, i0))
+                    access_intervals.append((Interval(left, right), agent_name, tasked, i0))
 
                 # sort final intervals by start time
                 access_intervals.sort(key=lambda x: x[0].left)                
             
             # add to compiled event access data 
-            for interval, agent_name, instrument in access_intervals:
+            for interval, agent_name, instrument, tasked in access_intervals:
                 accesses_per_event_data.append({
                     'event id' : event.id,
                     'event type' : event.event_type,
@@ -904,8 +909,9 @@ class ResultsProcessor:
                     'GP index' : event.location[3],
                     'access start [s]' : interval.left,
                     'access end [s]' : interval.right,
-                    'instrument' : instrument,  
-                    'agent name' : agent_name
+                    'instrument' : instrument,
+                    'agent name' : agent_name,
+                    'tasked' : tasked
                 })
                 
             # add to compiled event accessibility list
@@ -915,7 +921,7 @@ class ResultsProcessor:
         if accesses_per_event_data:
             accesses_per_event_df = pd.DataFrame(accesses_per_event_data)
         else:
-            accesses_per_event_df = pd.DataFrame(columns=['event id','event type','lat [deg]','lon [deg]','grid index','GP index','access start [s]','access end [s]','instrument','agent name'])
+            accesses_per_event_df = pd.DataFrame(columns=['event id','event type','lat [deg]','lon [deg]','grid index','GP index','access start [s]','access end [s]','instrument','agent name','tasked'])
         
         # return compiled event accessibility information
         return accesses_per_event_df, accesses_per_event
@@ -1627,17 +1633,18 @@ class ResultsProcessor:
         # count observations performed
         # n_events, n_unique_event_obs, n_total_event_obs,
         n_observations, n_gps, n_gps_accessible, n_gps_reobserved, n_gps_observed, n_gps_with_events, \
-            n_events, n_events_observable, n_events_detected, n_events_requested, n_events_observed, n_total_event_obs, \
-                n_events_reobservable, n_events_reobserved, n_total_event_re_obs, \
-                    n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
-                        n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
-                            n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
-                                    n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
-                                        n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
-                                            n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
-                                                n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
-                                                    n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
+            n_events, n_events_observable, n_events_detected, n_events_requested, n_events_observed, \
+                n_total_event_obs, n_tasked_event_obs, n_passive_event_obs, \
+                    n_events_reobservable, n_events_reobserved, n_total_event_re_obs, \
+                        n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
+                            n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
+                                n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
+                                    n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
+                                        n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
+                                            n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
+                                                n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
+                                                    n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
+                                                        n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
                                                     = ResultsProcessor.__count_observations(compiled_orbitdata, 
                                                                                             observations_per_gp,
                                                                                             events, 
@@ -1661,16 +1668,16 @@ class ResultsProcessor:
                                                                                             printouts)
             
         # count probabilities of observations performed
-        p_gp_accessible, p_gp_observed, p_gp_observed_if_accessible, p_event_at_gp, p_event_detected, \
-            p_event_obs_if_obs, p_event_re_obs_if_obs, p_event_co_obs_if_obs, p_event_co_obs_fully_if_obs, p_event_co_obs_partially_if_obs, \
+        p_gp_accessible, p_gp_observed, p_gp_observed_if_accessible, p_event_at_gp, p_event_detected, p_event_requested, \
+            p_event_obs_if_obs, p_tasked_event_obs, p_passive_event_obs, p_event_re_obs_if_obs, p_event_co_obs_if_obs, p_event_co_obs_fully_if_obs, p_event_co_obs_partially_if_obs, \
                 p_event_observable, p_event_observed, p_event_observed_if_observable, p_event_observed_if_detected, p_event_observed_if_observable_and_detected, \
                     p_event_re_observable, p_event_re_obs, p_event_re_obs_if_re_observable, p_event_re_obs_if_detected, p_event_re_obs_if_reobservable_and_detected, \
                         p_event_co_observable, p_event_co_obs, p_event_co_obs_if_co_observable, p_event_co_obs_if_detected, p_event_co_obs_if_co_observable_and_detected, \
                             p_event_co_observable_fully, p_event_co_obs_fully, p_event_co_obs_fully_if_co_observable_fully, p_event_co_obs_fully_if_detected, p_event_co_obs_fully_if_co_observable_fully_and_detected, \
                                 p_event_co_observable_partial, p_event_co_obs_partial, p_event_co_obs_partial_if_co_observable_partially, p_event_co_obs_partial_if_detected, p_event_co_obs_partial_if_co_observable_partially_and_detected, \
-                                    p_task_known, p_event_task_known,p_default_task_known, p_task_observed_if_known,\
+                                    p_task_known, p_event_task_known,p_default_task_known, p_task_observed_if_known, \
                                         p_task_observable, p_event_task_observable, p_default_task_observable, p_task_observed, p_event_task_observed, p_default_task_observed, p_task_observed_if_observable, p_event_task_observed_if_observable, p_default_task_observed_if_observable, \
-                                            p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable\
+                                            p_task_reobserved, p_event_task_reobserved, p_default_task_reobserved, p_task_reobserved_if_reobservable, p_event_task_reobserved_if_reobservable, p_default_task_reobserved_if_reobservable \
                                                 = ResultsProcessor.__calc_event_probabilities(compiled_orbitdata, 
                                                                                                 accesses_per_gp,
                                                                                                 observations_per_gp,
@@ -1698,14 +1705,25 @@ class ResultsProcessor:
         t_gp_reobservation = ResultsProcessor.__calc_groundpoint_reobservation_metrics(observations_per_gp)
         
         t_event_reobservation = ResultsProcessor.__calc_event_reobservation_metrics(observations_per_event)
-        t_event_to_image = ResultsProcessor.__calc_time_to_image_metrics(observations_per_event)
-        t_event_to_image_norm = ResultsProcessor.__calc_time_to_image_metrics_normalized(observations_per_event)
-        t_response_to_event = ResultsProcessor.__calc_response_time_metrics(observations_per_event)
-        t_response_to_event_norm = ResultsProcessor.__calc_response_time_metrics_normalized(observations_per_event)
+        t_event_announced = ResultsProcessor.__calc_event_announcement_metrics(events_requested)
+        t_event_announced_norm = ResultsProcessor.__calc_event_announcement_metrics_normalized(events_requested)
+        t_earliest_response_to_event, t_latest_response_to_event, t_response_to_event \
+            = ResultsProcessor.__calc_response_time_metrics(observations_per_event)
+        t_earliest_response_to_event_norm, t_latest_response_to_event_norm,t_response_to_event_norm \
+            = ResultsProcessor.__calc_response_time_metrics_normalized(observations_per_event)
+        n_obs_per_event = ResultsProcessor.__calc_n_observations(observations_per_event)
+
+        t_earliest_event_to_image, t_latest_event_to_image, t_event_to_image \
+            = ResultsProcessor.__calc_time_to_image_metrics(observations_per_event)
+        t_earliest_event_to_image_norm, t_latest_event_to_image_norm, t_event_to_image_norm \
+            = ResultsProcessor.__calc_time_to_image_metrics_normalized(observations_per_event)
 
         t_task_reobservation = ResultsProcessor.__calc_task_reobservation_metrics(observations_per_task) 
-        t_response_to_task = ResultsProcessor.__calc_response_time_metrics(observations_per_task)
-        t_response_to_task_norm = ResultsProcessor.__calc_response_time_metrics_normalized(observations_per_task)
+        t_earliest_response_to_task, t_latest_response_to_task, t_response_to_task \
+            = ResultsProcessor.__calc_response_time_metrics(observations_per_task)
+        t_earliest_response_to_task_norm, t_latest_response_to_task_norm, t_response_to_task_norm \
+            = ResultsProcessor.__calc_response_time_metrics_normalized(observations_per_task)
+        n_obs_per_task = ResultsProcessor.__calc_n_observations(observations_per_task)
 
         # calculate utility metrics
         total_planned_reward = np.round(planned_rewards_df['planned reward'].sum(), precision) if planned_rewards_df is not None else 0.0
@@ -1782,7 +1800,7 @@ class ResultsProcessor:
                     ['Events Observable', n_events_observable],
                     ['Events Observed', n_events_observed],
                     ['Events Detected', n_events_detected],
-                    ['Events Requested', n_events_requested],
+                    ['Events Announced', n_events_requested],
 
                     ['Event Observations', n_total_event_obs],
                     
@@ -1813,7 +1831,7 @@ class ResultsProcessor:
                     ['Event-Driven Tasks Observed', n_event_tasks_observed],
                     ['Default Mission Tasks Observed', n_default_tasks_observed],
 
-                    # Coverage Metrics #TODO add more
+                    # Coverage Metrics 
                     ['Ground Points', n_gps],
                     ['Ground Points Accessible', n_gps_accessible],
                     ['Ground Points Observed', n_gps_observed],
@@ -1847,8 +1865,9 @@ class ResultsProcessor:
                     ['P(Event Fully Co-observable)', np.round(p_event_co_observable_fully,precision)],
                     ['P(Event Partially Co-observable)', np.round(p_event_co_observable_partial,precision)],
                     
-                    ['P(Event Detected)', np.round(p_event_detected,precision)],
                     ['P(Event Observed)', np.round(p_event_observed,precision)],
+                    ['P(Event Detected)', np.round(p_event_detected,precision)],
+                    ['P(Event Announced)', np.round(p_event_requested,precision)],
                     ['P(Event Re-observed)', np.round(p_event_re_obs,precision)],
                     ['P(Event Co-observed)', np.round(p_event_co_obs,precision)],
                     ['P(Event Fully Co-observed)', np.round(p_event_co_obs_fully,precision)],
@@ -1856,6 +1875,8 @@ class ResultsProcessor:
 
                     ['P(Event Observation | Observation)', np.round(p_event_obs_if_obs,precision)],
                     ['P(Event Re-observation | Observation)', np.round(p_event_re_obs_if_obs,precision)],
+                    ['P(Tasked Event Observation | Event Observation)', np.round(p_tasked_event_obs,precision)],
+                    ['P(Passive Event Observation | Event Observation)', np.round(p_passive_event_obs,precision)],
                     # ['P(Event Co-observation | Observation)', np.round(p_event_co_obs_if_obs,precision)],
                     # ['P(Event Full Co-observation | Observation)', np.round(p_event_co_obs_partially_if_obs,precision)],
                     # ['P(Event Partial Co-observation | Observation)', np.round(p_event_co_obs_fully_if_obs,precision)],
@@ -1908,7 +1929,34 @@ class ResultsProcessor:
                     ['P(Message Broadcasted | Bid Message)', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='BUS']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
                     ['P(Message Broadcasted | Measurement Request Message)', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='MEASUREMENT_REQ']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
 
-                    # Event Observation Time Statistics                    
+                    # Event Observation Time Statistics    
+                    ['Average Event Announcement Time [s]', t_event_announced['mean']],
+                    ['Standard Deviation of Event Announcement Time [s]', t_event_announced['std']],
+                    ['Median Event Announcement Time [s]', t_event_announced['median']],
+
+                    ['Average Event Announcement Time [norm]', t_event_announced_norm['mean']],
+                    ['Standard Deviation of Event Announcement Time [norm]', t_event_announced_norm['std']],
+                    ['Median Event Announcement Time [norm]', t_event_announced_norm['median']],
+
+                    
+                    ['Average Earliest Time to Image Event [s]', t_earliest_event_to_image['mean']],
+                    ['Standard Deviation of Earliest Time to Image Event [s]', t_earliest_event_to_image['std']],
+                    ['Median Earliest Time to Image Event [s]', t_earliest_event_to_image['median']],
+
+                    ['Average Normalized Earliest Time to Image Event', t_earliest_event_to_image_norm['mean']],
+                    ['Standard Deviation of Normalized Earliest Time to Image Event', t_earliest_event_to_image_norm['std']],
+                    ['Median Normalized Earliest Time to Image Event', t_earliest_event_to_image_norm['median']],
+
+
+                    ['Average Latest Time to Image Event [s]', t_latest_event_to_image['mean']],
+                    ['Standard Deviation of Latest Time to Image Event [s]', t_latest_event_to_image['std']],
+                    ['Median Latest Time to Image Event [s]', t_latest_event_to_image['median']],
+
+                    ['Average Normalized Latest Time to Image Event', t_latest_event_to_image_norm['mean']],
+                    ['Standard Deviation of Normalized Latest Time to Image Event', t_latest_event_to_image_norm['std']],
+                    ['Median Normalized Latest Time to Image Event', t_latest_event_to_image_norm['median']],
+
+
                     ['Average Time to Image Event [s]', t_event_to_image['mean']],
                     ['Standard Deviation of Time to Image Event [s]', t_event_to_image['std']],
                     ['Median Time to Image Event [s]', t_event_to_image['median']],
@@ -1917,6 +1965,25 @@ class ResultsProcessor:
                     ['Standard Deviation of Normalized Time to Image Event', t_event_to_image_norm['std']],
                     ['Median Normalized Time to Image Event', t_event_to_image_norm['median']],
 
+
+                    ['Average Earliest Response Time to Event [s]', t_earliest_response_to_event['mean']],
+                    ['Standard Deviation of Earliest Response Time to Event [s]', t_earliest_response_to_event['std']],
+                    ['Median Earliest Response Time to Event [s]', t_earliest_response_to_event['median']],
+
+                    ['Average Normalized Earliest Response Time to Event', t_earliest_response_to_event_norm['mean']],
+                    ['Standard Deviation of Earliest Normalized Response Time to Event', t_earliest_response_to_event_norm['std']],
+                    ['Median Normalized Earliest Response Time to Event', t_earliest_response_to_event_norm['median']],
+
+
+                    ['Average Latest Response Time to Event [s]', t_latest_response_to_event['mean']],
+                    ['Standard Deviation of Latest Response Time to Event [s]', t_latest_response_to_event['std']],
+                    ['Median Latest Response Time to Event [s]', t_latest_response_to_event['median']],
+
+                    ['Average Normalized Latest Response Time to Event', t_latest_response_to_event_norm['mean']],
+                    ['Standard Deviation of Normalized Latest Response Time to Event', t_latest_response_to_event_norm['std']],
+                    ['Median Normalized Latest Response Time to Event', t_latest_response_to_event_norm['median']],
+
+
                     ['Average Response Time to Event [s]', t_response_to_event['mean']],
                     ['Standard Deviation of Response Time to Event [s]', t_response_to_event['std']],
                     ['Median Response Time to Event [s]', t_response_to_event['median']],
@@ -1924,8 +1991,32 @@ class ResultsProcessor:
                     ['Average Normalized Response Time to Event', t_response_to_event_norm['mean']],
                     ['Standard Deviation of Normalized Response Time to Event', t_response_to_event_norm['std']],
                     ['Median Normalized Response Time to Event', t_response_to_event_norm['median']],
+
+
+                    ['Average Observations per Event', n_obs_per_event['mean']],
+                    ['Standard Deviation of Observations per Event', n_obs_per_event['std']],
+                    ['Median Observations per Event', n_obs_per_event['median']],
+
                     
                     # Task Observation Time Statistics
+                    ['Average Earliest Response Time to Task [s]', t_earliest_response_to_task['mean']],
+                    ['Standard Deviation of Earliest Response Time to Task [s]', t_earliest_response_to_task['std']],
+                    ['Median Earliest Response Time to Task [s]', t_earliest_response_to_task['median']],
+
+                    ['Average Normalized Earliest Response Time to Task', t_earliest_response_to_task_norm['mean']],
+                    ['Standard Deviation of Normalized Earliest Response Time to Task', t_earliest_response_to_task_norm['std']],
+                    ['Median Normalized Earliest Response Time to Task', t_earliest_response_to_task_norm['median']],
+
+
+                    ['Average Latest Response Time to Task [s]', t_latest_response_to_task['mean']],
+                    ['Standard Deviation of Latest Response Time to Task [s]', t_latest_response_to_task['std']],
+                    ['Median Latest Response Time to Task [s]', t_latest_response_to_task['median']],
+
+                    ['Average Normalized Latest Response Time to Task', t_latest_response_to_task_norm['mean']],
+                    ['Standard Deviation of Normalized Latest Response Time to Task', t_latest_response_to_task_norm['std']],
+                    ['Median Normalized Latest Response Time to Task', t_latest_response_to_task_norm['median']],
+
+
                     ['Average Response Time to Task [s]', t_response_to_task['mean']],
                     ['Standard Deviation of Response Time to Task [s]', t_response_to_task['std']],
                     ['Median Response Time to Task [s]', t_response_to_task['median']],
@@ -1933,6 +2024,12 @@ class ResultsProcessor:
                     ['Average Normalized Response Time to Task', t_response_to_task_norm['mean']],
                     ['Standard Deviation of Normalized Response Time to Task', t_response_to_task_norm['std']],
                     ['Median Normalized Response Time to Task', t_response_to_task_norm['median']],
+
+
+                    ['Average Observations per Task', n_obs_per_task['mean']],
+                    ['Standard Deviation of Observations per Task', n_obs_per_task['std']],
+                    ['Median Observations per Task', n_obs_per_task['median']],
+
 
                     # Reward Statistics 
                     ['Total Planned Reward', total_planned_reward],
@@ -2486,17 +2583,18 @@ class ResultsProcessor:
 
         # return values
         return n_observations, n_gps, n_gps_accessible, n_gps_reobserved, n_gps_observed, n_gps_with_events, \
-                n_events, n_events_observable, n_events_detected, n_events_requested, n_events_observed, n_total_event_obs, \
-                    n_events_reobservable, n_events_reobserved, n_total_event_re_obs, \
-                        n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
-                            n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
-                                n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                    n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
-                                        n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
-                                            n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
-                                                n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
-                                                    n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
-                                                        n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved
+                n_events, n_events_observable, n_events_detected, n_events_requested, n_events_observed, \
+                    n_total_event_obs, n_tasked_event_obs, n_passive_event_obs, \
+                        n_events_reobservable, n_events_reobserved, n_total_event_re_obs, \
+                            n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
+                                n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
+                                    n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
+                                        n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
+                                            n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
+                                                n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
+                                                    n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
+                                                        n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
+                                                            n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved
 
     @staticmethod
     def __calc_event_probabilities(
@@ -2526,17 +2624,18 @@ class ResultsProcessor:
 
         # count observations by type
         n_observations, n_gps, n_gps_accessible, n_gps_reobserved, n_gps_observed, n_gps_with_events, \
-            n_events, n_events_observable, n_events_detected, n_events_requested, n_events_observed, n_total_event_obs, \
-                n_events_reobservable, n_events_reobserved, n_total_event_re_obs, \
-                    n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
-                        n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
-                            n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
-                                    n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
-                                        n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
-                                            n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
-                                                n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
-                                                    n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
+            n_events, n_events_observable, n_events_detected, n_events_requested, n_events_observed, \
+                n_total_event_obs, n_tasked_event_obs, n_passive_event_obs, \
+                    n_events_reobservable, n_events_reobserved, n_total_event_re_obs, \
+                        n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
+                            n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
+                                n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
+                                    n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
+                                        n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
+                                            n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
+                                                n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
+                                                    n_tasks_reobservable, n_event_tasks_reobservable, n_default_tasks_reobservable, \
+                                                        n_tasks_reobserved, n_event_tasks_reobserved, n_default_tasks_reobserved \
                                                         = ResultsProcessor.__count_observations( orbitdata,                                                                                 
                                                                                     observations_per_gp,
                                                                                     events, 
@@ -2621,6 +2720,7 @@ class ResultsProcessor:
         p_event_at_gp = n_gps_with_events / n_gps if n_gps > 0 else np.NAN
         p_event_observable = n_events_observable / n_events if n_events > 0 else np.NAN
         p_event_detected = n_events_detected / n_events if n_events > 0 else np.NAN
+        p_event_requested = n_events_requested / n_events if n_events > 0 else np.NAN
         p_event_observed = n_events_observed / n_events if n_events > 0 else np.NAN
         p_event_re_observable = n_events_reobservable / n_events if n_events > 0 else np.NAN
         p_event_re_obs = n_events_reobserved / n_events if n_events > 0 else np.NAN
@@ -2663,6 +2763,8 @@ class ResultsProcessor:
         p_gp_observed_if_accessible = p_gp_observed_and_accessible / p_gp_accessible if p_gp_accessible > 0.0 else np.NAN
 
         p_event_obs_if_obs = n_total_event_obs / n_observations if n_observations > 0 else np.NAN
+        p_tasked_event_obs = n_tasked_event_obs / n_total_event_obs if n_total_event_obs > 0 else np.NAN
+        p_passive_event_obs = n_passive_event_obs / n_total_event_obs if n_total_event_obs > 0 else np.NAN
         p_event_re_obs_if_obs = n_total_event_re_obs / n_observations if n_observations > 0 else np.NAN
         p_event_co_obs_if_obs = n_total_event_co_obs / n_observations if n_observations > 0 else np.NAN
         p_event_co_obs_fully_if_obs = n_total_event_fully_co_obs / n_observations if n_observations > 0 else np.NAN
@@ -2718,8 +2820,8 @@ class ResultsProcessor:
         p_event_task_reobserved_if_reobservable = n_event_tasks_reobserved / n_event_tasks_reobservable if n_event_tasks_reobservable > 0 else np.NAN
         p_default_task_reobserved_if_reobservable = n_default_tasks_reobserved / n_default_tasks_reobservable if n_default_tasks_reobservable > 0 else np.NAN
 
-        return p_gp_accessible, p_gp_observed, p_gp_observed_if_accessible, p_event_at_gp, p_event_detected, \
-                p_event_obs_if_obs, p_event_re_obs_if_obs, p_event_co_obs_if_obs, p_event_co_obs_fully_if_obs, p_event_co_obs_partially_if_obs, \
+        return p_gp_accessible, p_gp_observed, p_gp_observed_if_accessible, p_event_at_gp, p_event_detected, p_event_requested, \
+                p_event_obs_if_obs, p_tasked_event_obs, p_passive_event_obs, p_event_re_obs_if_obs, p_event_co_obs_if_obs, p_event_co_obs_fully_if_obs, p_event_co_obs_partially_if_obs, \
                     p_event_observable, p_event_observed, p_event_observed_if_observable, p_event_observed_if_detected, p_event_observed_if_observable_and_detected, \
                         p_event_re_observable, p_event_re_obs, p_event_re_obs_if_re_observable, p_event_re_obs_if_detected, p_event_re_obs_if_reobservable_and_detected, \
                             p_event_co_observable, p_event_co_obs, p_event_co_obs_if_co_observable, p_event_co_obs_if_detected, p_event_co_obs_if_co_observable_and_detected, \
@@ -2806,85 +2908,266 @@ class ResultsProcessor:
 
         return t_reobservation
 
+    # @staticmethod
+    # def __calc_task_response_time_metrics(observations_map: dict) -> dict:
+    #     t_reobservations : list = []
+    #     for observations in observations_map.values():
+    #         for observation in observations[1:]:
+    #             t_reobservation = observation['resp time [s]']
+    #             if not (isinstance(t_reobservation, float) and np.isnan(t_reobservation)):
+    #                 t_reobservations.append(t_reobservation)
+
+    #     # compile statistical data
+    #     t_reobservation : dict = {
+    #         'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
+    #         'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
+    #         'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
+    #         'data' : t_reobservations
+    #     }
+
+    #     return t_reobservation
+    
+    # @staticmethod
+    # def __calc_task_response_time_metrics_normalized(observations_map: dict) -> dict:
+    #     t_reobservations : list = []
+    #     for observations in observations_map.values():
+    #         for observation in observations[1:]:
+    #             t_reobservation = observation['resp time [norm]']
+    #             if not (isinstance(t_reobservation, float) and np.isnan(t_reobservation)):
+    #                 t_reobservations.append(t_reobservation)
+
+    #     # compile statistical data
+    #     t_reobservation : dict = {
+    #         'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
+    #         'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
+    #         'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
+    #         'data' : t_reobservations
+    #     }
+
+    #     return t_reobservation  
+
+    @staticmethod
+    def __calc_event_announcement_metrics(events_requested : dict) -> dict:
+        t_to_announcements : list = []
+        for event,event_requests in events_requested.items():
+            t_announcement = min([req.t_req - event.t_start for req in event_requests], default=np.Inf)
+            t_to_announcements.append(t_announcement)
+            
+        # compile statistical data
+        t_to_announcement : dict = {
+            'mean' : np.average(t_to_announcements) if t_to_announcements else np.NAN,
+            'std' : np.std(t_to_announcements) if t_to_announcements else np.NAN,
+            'median' : np.median(t_to_announcements) if t_to_announcements else np.NAN,
+            'data' : t_to_announcements
+        }        
+
+        return t_to_announcement
+
+    @staticmethod
+    def __calc_event_announcement_metrics_normalized(events_requested : dict) -> dict:
+        t_to_announcements : list = []
+        for event,event_requests in events_requested.items():
+            t_announcement = min([req.t_req - event.t_start for req in event_requests], default=np.Inf)
+            t_announcement /= event.d_exp if event.d_exp > 0 else 1.0
+            t_to_announcements.append(t_announcement)
+            
+        # compile statistical data
+        t_to_announcement : dict = {
+            'mean' : np.average(t_to_announcements) if t_to_announcements else np.NAN,
+            'std' : np.std(t_to_announcements) if t_to_announcements else np.NAN,
+            'median' : np.median(t_to_announcements) if t_to_announcements else np.NAN,
+            'data' : t_to_announcements
+        }        
+
+        return t_to_announcement
+
     @staticmethod
     def __calc_response_time_metrics(observations_map: dict) -> dict:
-        t_reobservations : list = []
-        for observations in observations_map.values():
-            for observation in observations[1:]:
-                t_reobservation = observation['resp time [s]']
-                if not (isinstance(t_reobservation, float) and np.isnan(t_reobservation)):
-                    t_reobservations.append(t_reobservation)
+        t_to_first_images : list = []
+        t_to_last_images : list = []
+        t_response : list = []
+        for observations in observations_map.values():            
+            t_earliest = min([observation['resp time [s]'] 
+                              for observation in observations 
+                              if not (isinstance(observation['resp time [s]'], float) 
+                                      and np.isnan(observation['resp time [s]']))
+                            ], default=np.NAN)
+            t_latest = max([observation['resp time [s]']
+                              for observation in observations
+                              if not (isinstance(observation['resp time [s]'], float)
+                                      and np.isnan(observation['resp time [s]']))
+                            ], default=np.NAN)
+            t_to_first_images.append(t_earliest)
+            t_to_last_images.append(t_latest)
+            t_response.extend([observation['resp time [s]'] for observation in observations
+                                if not (isinstance(observation['resp time [s]'], float)
+                                        and np.isnan(observation['resp time [s]']))])
 
         # compile statistical data
-        t_reobservation : dict = {
-            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
-            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
-            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
-            'data' : t_reobservations
+        t_to_first : dict = {
+            'mean' : np.average(t_to_first_images) if t_to_first_images else np.NAN,
+            'std' : np.std(t_to_first_images) if t_to_first_images else np.NAN,
+            'median' : np.median(t_to_first_images) if t_to_first_images else np.NAN,
+            'data' : t_to_first_images
+        }        
+        t_to_last : dict = {
+            'mean' : np.average(t_to_last_images) if t_to_last_images else np.NAN,
+            'std' : np.std(t_to_last_images) if t_to_last_images else np.NAN,
+            'median' : np.median(t_to_last_images) if t_to_last_images else np.NAN,
+            'data' : t_to_last_images
+        }        
+        t_all : dict = {
+            'mean' : np.average(t_response) if t_response else np.NAN,
+            'std' : np.std(t_response) if t_response else np.NAN,
+            'median' : np.median(t_response) if t_response else np.NAN,
+            'data' : t_response
         }
-
-        return t_reobservation
+        return t_to_first, t_to_last, t_all
     
     @staticmethod
     def __calc_response_time_metrics_normalized(observations_map: dict) -> dict:
-        t_reobservations : list = []
+        t_to_first_images : list = []
+        t_to_last_images : list = []
+        t_response : list = []
         for observations in observations_map.values():
-            for observation in observations[1:]:
-                t_reobservation = observation['resp time [norm]']
-                if not (isinstance(t_reobservation, float) and np.isnan(t_reobservation)):
-                    t_reobservations.append(t_reobservation)
+            t_earliest = min([observation['resp time [norm]'] 
+                              for observation in observations 
+                              if not (isinstance(observation['resp time [norm]'], float) 
+                                      and np.isnan(observation['resp time [norm]']))
+                            ], default=np.NAN)
+            t_latest = max([observation['resp time [norm]']
+                              for observation in observations
+                              if not (isinstance(observation['resp time [norm]'], float) 
+                                    and np.isnan(observation['resp time [norm]']))
+                            ], default=np.NAN)
+            t_to_first_images.append(t_earliest)
+            t_to_last_images.append(t_latest)
+            t_response.extend([observation['resp time [norm]'] for observation in observations
+                                if not (isinstance(observation['resp time [norm]'], float)
+                                        and np.isnan(observation['resp time [norm]']))])    
 
         # compile statistical data
-        t_reobservation : dict = {
-            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
-            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
-            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
-            'data' : t_reobservations
+        t_to_first : dict = {
+            'mean' : np.average(t_to_first_images) if t_to_first_images else np.NAN,
+            'std' : np.std(t_to_first_images) if t_to_first_images else np.NAN,
+            'median' : np.median(t_to_first_images) if t_to_first_images else np.NAN,
+            'data' : t_to_first_images
+        }        
+        t_to_last : dict = {
+            'mean' : np.average(t_to_last_images) if t_to_last_images else np.NAN,
+            'std' : np.std(t_to_last_images) if t_to_last_images else np.NAN,
+            'median' : np.median(t_to_last_images) if t_to_last_images else np.NAN,
+            'data' : t_to_last_images
+        }        
+        t_all : dict = {
+            'mean' : np.average(t_response) if t_response else np.NAN,
+            'std' : np.std(t_response) if t_response else np.NAN,
+            'median' : np.median(t_response) if t_response else np.NAN,
+            'data' : t_response
+        }
+        return t_to_first, t_to_last, t_all
+
+    @staticmethod
+    def __calc_n_observations(observations_map: dict) -> dict:
+        n_observations : list = []
+        for observations in observations_map.values():
+            n_observations.append(len(observations))
+
+        # compile statistical data
+        n_obs_per_event : dict = {
+            'mean' : np.average(n_observations) if n_observations else np.NAN,
+            'std' : np.std(n_observations) if n_observations else np.NAN,
+            'median' : np.median(n_observations) if n_observations else np.NAN,
+            'data' : n_observations
         }
 
-        return t_reobservation  
+        return n_obs_per_event
     
     @staticmethod
     def __calc_time_to_image_metrics(observations_map: dict) -> dict:
-        t_reobservations : list = []
-        for observations in observations_map.values():
-            for observation in observations[1:]:
-                # get time to image
-                t_to_image = observation['time to image [s]']
-
-                # add to list
-                t_reobservations.append(t_to_image)
+        t_to_first_images : list = []
+        t_to_last_images : list = []
+        t_to_image : list = []
+        for observations in observations_map.values():            
+            t_earliest = min([observation['time to image [s]'] 
+                              for observation in observations 
+                              if not (isinstance(observation['time to image [s]'], float) 
+                                      and np.isnan(observation['time to image [s]']))
+                            ], default=np.NAN)
+            t_latest = max([observation['time to image [s]']
+                              for observation in observations
+                              if not (isinstance(observation['time to image [s]'], float)
+                                      and np.isnan(observation['time to image [s]']))
+                            ], default=np.NAN)
+            t_to_first_images.append(t_earliest)
+            t_to_last_images.append(t_latest)
+            t_to_image.extend([observation['time to image [s]'] for observation in observations
+                                if not (isinstance(observation['time to image [s]'], float)
+                                        and np.isnan(observation['time to image [s]']))])
 
         # compile statistical data
-        t_to_image : dict = {
-            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
-            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
-            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
-            'data' : t_reobservations
+        t_to_first : dict = {
+            'mean' : np.average(t_to_first_images) if t_to_first_images else np.NAN,
+            'std' : np.std(t_to_first_images) if t_to_first_images else np.NAN,
+            'median' : np.median(t_to_first_images) if t_to_first_images else np.NAN,
+            'data' : t_to_first_images
+        }        
+        t_to_last : dict = {
+            'mean' : np.average(t_to_last_images) if t_to_last_images else np.NAN,
+            'std' : np.std(t_to_last_images) if t_to_last_images else np.NAN,
+            'median' : np.median(t_to_last_images) if t_to_last_images else np.NAN,
+            'data' : t_to_last_images
+        }        
+        t_all : dict = {
+            'mean' : np.average(t_to_image) if t_to_image else np.NAN,
+            'std' : np.std(t_to_image) if t_to_image else np.NAN,
+            'median' : np.median(t_to_image) if t_to_image else np.NAN,
+            'data' : t_to_image
         }
-
-        return t_to_image
+        return t_to_first, t_to_last, t_all
     
     @staticmethod
     def __calc_time_to_image_metrics_normalized(observations_map: dict) -> dict:
-        t_reobservations : list = []
-        for observations in observations_map.values():
-            for observation in observations[1:]:
-                # get normalized time to image
-                t_to_image = observation['time to image [norm]']
-
-                # add to list
-                t_reobservations.append(t_to_image)
+        t_to_first_images : list = []
+        t_to_last_images : list = []
+        t_to_image : list = []
+        for observations in observations_map.values():            
+            t_earliest = min([observation['time to image [norm]'] 
+                              for observation in observations 
+                              if not (isinstance(observation['time to image [norm]'], float) 
+                                      and np.isnan(observation['time to image [norm]']))
+                            ], default=np.NAN)
+            t_latest = max([observation['time to image [norm]']
+                              for observation in observations
+                              if not (isinstance(observation['time to image [norm]'], float)
+                                      and np.isnan(observation['time to image [norm]']))
+                            ], default=np.NAN)
+            t_to_first_images.append(t_earliest)
+            t_to_last_images.append(t_latest)
+            t_to_image.extend([observation['time to image [norm]'] for observation in observations
+                                if not (isinstance(observation['time to image [norm]'], float)
+                                        and np.isnan(observation['time to image [norm]']))])
 
         # compile statistical data
-        t_to_image : dict = {
-            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
-            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
-            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
-            'data' : t_reobservations
+        t_to_first : dict = {
+            'mean' : np.average(t_to_first_images) if t_to_first_images else np.NAN,
+            'std' : np.std(t_to_first_images) if t_to_first_images else np.NAN,
+            'median' : np.median(t_to_first_images) if t_to_first_images else np.NAN,
+            'data' : t_to_first_images
+        }        
+        t_to_last : dict = {
+            'mean' : np.average(t_to_last_images) if t_to_last_images else np.NAN,
+            'std' : np.std(t_to_last_images) if t_to_last_images else np.NAN,
+            'median' : np.median(t_to_last_images) if t_to_last_images else np.NAN,
+            'data' : t_to_last_images
+        }        
+        t_all : dict = {
+            'mean' : np.average(t_to_image) if t_to_image else np.NAN,
+            'std' : np.std(t_to_image) if t_to_image else np.NAN,
+            'median' : np.median(t_to_image) if t_to_image else np.NAN,
+            'data' : t_to_image
         }
-
-        return t_to_image  
+        return t_to_first, t_to_last, t_all
     
     @staticmethod
     def __calculate_reward_bounds(compiled_orbitdata : Dict[str, OrbitData], 
@@ -2959,10 +3242,8 @@ class ResultsProcessor:
         # return {task : 0.0 for task in accesses_per_task.keys()},{task : 0.0 for task in accesses_per_task.keys()}
         # ------------------------------
 
-        # calculate primal bound: best achievable with nadir-only observations (no maneuvers)
-        primal_bound = ResultsProcessor.__calculate_primal_bound(
-            task_observation_opps, compiled_orbitdata, agent_missions, agent_specs, cross_track_fovs, obtained_rewards_df, printouts
-        )
+        # placeholder value, will be populated when compiling results
+        primal_bound = np.NAN
 
         # calculate dual bound using a relaxed version of the problem
         dual_bound = ResultsProcessor.__calculate_dual_bound(
