@@ -71,7 +71,7 @@ if __name__ == "__main__":
             "None",
             "Greedy", 
             "CBBA", 
-            "CBBA (Augmented)",
+            # "CBBA (Augmented)", # TODO
         ],
         "Connectivity": [
             "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
@@ -106,7 +106,7 @@ if __name__ == "__main__":
             "None",
             "Greedy", 
             "CBBA", 
-            "CBBA (Augmented)",
+            # "CBBA (Augmented)", # TODO
             # "Metaheuristic"
         ],
         "Connectivity": [
@@ -148,8 +148,11 @@ if __name__ == "__main__":
         # centralized preplanners must have `none` replanenrs (i.e. replanning is only relevant for decentralized strategies)
         lambda d: (d["Preplanner"] != "Centralized-MILP_priority") | (d["Replanner"] == "None"),
         lambda d: (d["Preplanner"] != "Centralized-MILP_assignment") | (d["Replanner"] == "None"),
+        # there can only be one None x None scenario for each date (i.e. if no preplanner and no replanner, only one trial per scenario/constellation/date combination)
+        lambda d: ~((d["Preplanner"] == "None") & (d["Replanner"] == "None")) | (~d.duplicated(subset=["Scenario", "Constellation", "Date", "Preplanner", "Replanner"])),
+        
         # None preplanner cannot have a none replanner (i.e. if no initial plan, must have some kind of replanning strategy)
-        lambda d: (d["Preplanner"] != "None") | (d["Replanner"] != "None"),
+        # lambda d: (d["Preplanner"] != "None") | (d["Replanner"] != "None"),
         
     ]
 

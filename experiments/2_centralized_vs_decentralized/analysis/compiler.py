@@ -40,7 +40,7 @@ def compile_results_summaries(trial_name : str,
             # load summary.csv
             try:
                 summary_temp_df = pd.read_csv(results_summary_path)
-                print(f"[results compiler] Loaded summary from `{results_summary_path}` with {len(summary_temp_df)} rows.")
+                # print(f"[results compiler] Loaded summary from `{results_summary_path}` with {len(summary_temp_df)} rows.")
             except Exception as e:
                 print(f"[results compiler] error loading `{results_summary_path}`: {e}. Skipping.")
                 continue
@@ -162,6 +162,10 @@ def compile_results_summaries(trial_name : str,
         results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Task Reward Dual Bound']
         results_df['Task Reward Primal Bound [norm]'] = results_df['Task Reward Primal Bound'] / results_df['Task Reward Dual Bound']
         # results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Total Observable Task Priority']
+    
+    if 'Total Obtained Reward' in results_df.columns and 'Known Task Reward Dual Bound' in results_df.columns:
+        results_df['Total Obtained Reward [known_norm]'] = results_df['Total Obtained Reward'] / results_df['Known Task Reward Dual Bound']
+        results_df['Known Task Reward Primal Bound [known_norm]'] = results_df['Known Task Reward Primal Bound'] / results_df['Known Task Reward Dual Bound']
         
     if 'Total Obtained Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
         results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Task Reward Dual Bound']
@@ -177,6 +181,7 @@ def compile_results_summaries(trial_name : str,
 
     if 'Total Messages Broadcasted' in results_df.columns and 'Tasks Available' in results_df.columns:
         results_df['Average Messages Broadcasted per Task'] = results_df['Total Messages Broadcasted'] / results_df['Tasks Available']
+
 
     # define output paths for compiled results
     compiled_results_filename = f'{trial_name}_compiled_results.csv'
