@@ -148,9 +148,6 @@ if __name__ == "__main__":
         # centralized preplanners must have `none` replanenrs (i.e. replanning is only relevant for decentralized strategies)
         lambda d: (d["Preplanner"] != "Centralized-MILP_priority") | (d["Replanner"] == "None"),
         lambda d: (d["Preplanner"] != "Centralized-MILP_assignment") | (d["Replanner"] == "None"),
-        # there can only be one None x None scenario for each date (i.e. if no preplanner and no replanner, only one trial per scenario/constellation/date combination)
-        lambda d: ~((d["Preplanner"] == "None") & (d["Replanner"] == "None")) | (~d.duplicated(subset=["Scenario", "Constellation", "Date", "Preplanner", "Replanner"])),
-        
         # None preplanner cannot have a none replanner (i.e. if no initial plan, must have some kind of replanning strategy)
         # lambda d: (d["Preplanner"] != "None") | (d["Replanner"] != "None"),
         
@@ -183,10 +180,11 @@ if __name__ == "__main__":
         default=2,   # should be rare / indicates "belongs to none"
     )
     all_trials["Phase"] = phase
-    dp_order = {"Ground": 0, "Onboard": 1, "Oracle": 2}
+    all_trials["_none_none"] = ((all_trials["Preplanner"] == "None") & (all_trials["Replanner"] == "None")).astype(int)
+    dp_order = {"Ground": 0, "Onboard": 1, "Instant": 2}
     all_trials["_dp_sort"] = all_trials["Data Processing"].map(dp_order)
-    sort_cols = ["Phase"] + [("_dp_sort" if c == "Data Processing" else c) for c in param_cols]
-    all_trials = all_trials.sort_values(by=sort_cols).drop(columns=["Phase", "_dp_sort"]).reset_index(drop=True)
+    sort_cols = ["Phase", "_none_none"] + [("_dp_sort" if c == "Data Processing" else c) for c in param_cols]
+    all_trials = all_trials.sort_values(by=sort_cols).drop(columns=["Phase", "_none_none", "_dp_sort"]).reset_index(drop=True)
 
     # 3) Trial IDs after ordering
     all_trials.insert(0, "Trial ID", all_trials.index)
