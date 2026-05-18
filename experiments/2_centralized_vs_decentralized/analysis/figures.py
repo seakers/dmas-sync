@@ -74,7 +74,7 @@ CONN_LABELS: dict[str, str] = {
 }
 
 # Data Processing display labels (rename in plots only, not in data)
-DP_ORDER: list[str] = ['Ground', 'Onboard', 'Oracle']
+DP_ORDER: list[str] = ['Ground', 'Oracle', 'Onboard']
 DP_LABELS: dict[str, str] = {
     'Ground':  'Legacy Ground\nDetection',
     'Onboard': 'Onboard\nDetection',
@@ -381,20 +381,20 @@ def plot_decomposition_heatmap(
     Cell = mean ± std  of `metric`.
     MILP occupies its own row separated by a horizontal line.
     """
-    row_labels  = ['MILP (Centralized)', 'DP (Onboard Pre)', 'None (No Pre)']
-    col_labels  = ['No Replanner', 'CBBA', 'Greedy']
-    pre_map     = {'MILP (Centralized)': 'MILP',
-                   'DP (Onboard Pre)':   'DP',
-                   'None (No Pre)':      'GR'}    # dummy — overridden below
+    # Rows: Preplanner axis (top = centralized, middle = DP, bottom = None)
+    # Cols: Replanner axis, ordered No Replanner -> Greedy -> CBBA
+    row_labels = ['MILP (Centralized)', 'DP (Onboard Pre)', 'None (No Pre)']
+    col_labels = ['No Replanner', 'Greedy', 'CBBA']
 
-    # Build lookup: algo_label → (row_i, col_i)
+    # Build lookup: algo_label -> (row_i, col_i)
+    # col 0 = No Replanner, col 1 = Greedy, col 2 = CBBA
     algo_cell = {
         'MILP':    (0, 0),
         'DP':      (1, 0),
-        'DP-CBBA': (1, 1),
-        'DP-GR':   (1, 2),
-        'CBBA':    (2, 1),
-        'GR':      (2, 2),
+        'DP-GR':   (1, 1),
+        'DP-CBBA': (1, 2),
+        'GR':      (2, 1),
+        'CBBA':    (2, 2),
     }
 
     fig, axes = plt.subplots(1, len(DP_ORDER),
