@@ -36,7 +36,7 @@ i=$SLURM_ARRAY_TASK_ID
 
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
-      -t full_factorial_trials_2026-05-14 \
+      -t full_factorial_trials_2026-05-17 \
       --single-trial ${i} \
       --single-thread --quiet \
       --force-postprocess --force-summarize --force-simulate

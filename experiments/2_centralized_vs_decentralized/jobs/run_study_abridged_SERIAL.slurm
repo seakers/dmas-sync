@@ -38,7 +38,7 @@ end=$((start + 3))
 
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
-      -t full_factorial_trials_2026-05-14 \
+      -t full_factorial_trials_2026-05-17 \
       --trial-range "${start}:${end}" \
       --single-thread --quiet \
       --force-postprocess --force-summarize # --force-simulate
