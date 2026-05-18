@@ -52,7 +52,7 @@ Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellatio
 50,None,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
 51,None,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
 52,None,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
-53,None,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+53,None,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,2
 54,None,None,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
 55,None,None,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
 56,None,None,GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0

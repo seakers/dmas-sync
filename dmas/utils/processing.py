@@ -3400,9 +3400,11 @@ class ResultsProcessor:
         # sa_cooling: float,
         # sa_steps_per_temp: int,
         seed: int | None,
-        precomputed_accesses = None,      
-        precomputed_obj_relevances = None, 
+        precomputed_accesses = None,
+        precomputed_obj_relevances = None,
         printouts : bool = None,
+        use_earliest_time : bool = False,
+        n_restarts : int = 1,
     ) -> tuple[list[tuple], list[tuple], float]:
         """
         Simulated Annealing over valid ordered subsets of available_obs.
@@ -3418,11 +3420,9 @@ class ResultsProcessor:
 
         # adapt SA parameters based on problem size
         n_windows = len(available_obs)
-        # n_temp_levels = max(20, min(50, n_windows * 3))
-        n_temp_levels = max(10, min(30, n_windows * 2))
+        n_temp_levels = max(20, min(60, n_windows * 3))
         sa_cooling = (sa_t_final / sa_t_initial) ** (1.0 / n_temp_levels)
-        # sa_steps_per_temp = max(5, min(15, n_windows))
-        sa_steps_per_temp = max(3, min(10, n_windows))
+        sa_steps_per_temp = max(5, min(20, n_windows))
         n_iter_approx = n_temp_levels * sa_steps_per_temp 
     
         # Precompute mutual exclusivity bitmasks
@@ -3483,21 +3483,27 @@ class ResultsProcessor:
                     precomputed_obj_relevances
                 )
 
-            nd = len(indices)
-            if nd == 1:
-                n_init, n_iters = 20, 0
-            elif nd == 2:
-                n_init, n_iters = 10, 10
+            if use_earliest_time:
+                best_times, prev_t = [], -np.inf
+                for t in t_starts:
+                    prev_t = max(t, prev_t)
+                    best_times.append((prev_t, 0.0))
+                reward = objective(best_times)
             else:
-                n_init, n_iters = 5, 8
-            opt = _SequenceTimeOptimiser(
-                n_dims=nd,
-                n_initial=n_init,
-                n_iterations=n_iters,
-                n_acq_candidates=50,
-            )
-
-            best_times, reward = opt.optimise(t_starts, t_ends, d_min, objective)
+                nd = len(indices)
+                if nd == 1:
+                    n_init, n_iters = 20, 0
+                elif nd == 2:
+                    n_init, n_iters = 10, 10
+                else:
+                    n_init, n_iters = 5, 8
+                opt = _SequenceTimeOptimiser(
+                    n_dims=nd,
+                    n_initial=n_init,
+                    n_iterations=n_iters,
+                    n_acq_candidates=50,
+                )
+                best_times, reward = opt.optimise(t_starts, t_ends, d_min, objective)
 
             # cap cache size to avoid unbounded growth for large-window tasks
             if len(_eval_cache) >= _CACHE_MAX:
@@ -3538,6 +3544,13 @@ class ResultsProcessor:
                     precomputed_obj_relevances
                 )
 
+            if use_earliest_time:
+                times, prev_t = [], -np.inf
+                for t in t_starts:
+                    prev_t = max(t, prev_t)
+                    times.append((prev_t, 0.0))
+                return times, objective(times)
+
             opt = _SequenceTimeOptimiser(
                 n_dims=len(indices),
                 n_initial=bo_n_initial,
@@ -3546,90 +3559,104 @@ class ResultsProcessor:
             )
             return opt.optimise(t_starts, t_ends, d_min, objective)
     
-        # Greedy initialisation
         sorted_idx = sorted(range(n), key=lambda i: available_obs[i][0])
-        current_indices = [sorted_idx[0]]
-        excluded = mx_mask[sorted_idx[0]] | (1 << sorted_idx[0])
-        for i in sorted_idx[1:]:
-            if not (excluded & (1 << i)):
-                if available_obs[i][0] >= available_obs[current_indices[-1]][0]:
-                    current_indices.append(i)
-                    excluded |= mx_mask[i] | (1 << i)
-    
-        current_times, current_reward = evaluate_cheap(current_indices)
-        best_indices = list(current_indices)
-        best_times   = list(current_times)
-        best_reward  = current_reward
-        in_sequence  = set(current_indices)
-    
-        # SA main loop
-        temperature = sa_t_initial
-    
-        n_iter_approx = int(np.log(sa_t_final / sa_t_initial) / np.log(sa_cooling) * sa_steps_per_temp)
 
-        with tqdm(total=n_iter_approx, 
-                  desc=f'[results summary] optimizing obs sequence for task {task.id.split("-")[-1]}', 
-                  disable=not printouts or n_iter_approx < 100,
-                  leave=False
-                  ) as pbar:
-            while temperature > sa_t_final:
-                for _ in range(sa_steps_per_temp):
-                    excluded_from_current = [i for i in range(n) if i not in in_sequence]
-        
-                    ops = []
-                    if len(current_indices) > 1:
-                        ops.append('remove')
-                    if excluded_from_current:
-                        ops.append('add')
-                    if len(current_indices) > 1 and excluded_from_current:
-                        ops.append('swap')
-                    if not ops:
-                        break
-        
-                    op = random.choice(ops)
-                    candidate = list(current_indices)
-        
-                    if op == 'remove':
-                        pos = random.randrange(len(candidate))
-                        candidate.pop(pos)
-        
-                    elif op == 'add':
-                        new_idx = random.choice(excluded_from_current)
-                        valid_positions = []
-                        for pos in range(len(candidate) + 1):
-                            trial = candidate[:pos] + [new_idx] + candidate[pos:]
-                            if is_valid(trial):
-                                valid_positions.append(pos)
-                        if not valid_positions:
-                            continue
-                        pos = random.choice(valid_positions)
-                        candidate.insert(pos, new_idx)
-        
-                    elif op == 'swap':
-                        pos = random.randrange(len(candidate))
-                        new_idx = random.choice(excluded_from_current)
-                        candidate[pos] = new_idx
-                        if not is_valid(candidate):
-                            continue
-        
-                    new_times, new_reward = evaluate_cheap(candidate)
-                    delta = new_reward - current_reward
-        
-                    if delta > 0 or random.random() < math.exp(delta / temperature):
-                        current_indices = candidate
-                        current_times   = new_times
-                        current_reward  = new_reward
-                        in_sequence     = set(current_indices)
-        
-                        if new_reward > best_reward:
-                            best_reward  = new_reward
-                            best_indices = list(candidate)
-                            best_times   = list(new_times)
-        
-                    pbar.update(1)
+        def _build_greedy_sequence(start_order):
+            seq = [start_order[0]]
+            excl = mx_mask[start_order[0]] | (1 << start_order[0])
+            for i in start_order[1:]:
+                if not (excl & (1 << i)) and available_obs[i][0] >= available_obs[seq[-1]][0]:
+                    seq.append(i)
+                    excl |= mx_mask[i] | (1 << i)
+            return seq
 
-                temperature *= sa_cooling
-    
+        def _run_sa(start_indices):
+            current_indices = list(start_indices)
+            current_times, current_reward = evaluate_cheap(current_indices)
+            local_best_indices = list(current_indices)
+            local_best_times   = list(current_times)
+            local_best_reward  = current_reward
+            in_sequence        = set(current_indices)
+
+            temperature = sa_t_initial
+            n_iter_approx = int(np.log(sa_t_final / sa_t_initial) / np.log(sa_cooling) * sa_steps_per_temp)
+
+            with tqdm(total=n_iter_approx,
+                      desc=f'[results summary] optimizing obs sequence for task {task.id.split("-")[-1]}',
+                      disable=not printouts or n_iter_approx < 100,
+                      leave=False) as pbar:
+                while temperature > sa_t_final:
+                    for _ in range(sa_steps_per_temp):
+                        excluded_from_current = [i for i in range(n) if i not in in_sequence]
+
+                        ops = []
+                        if len(current_indices) > 1:
+                            ops.append('remove')
+                        if excluded_from_current:
+                            ops.append('add')
+                        if len(current_indices) > 1 and excluded_from_current:
+                            ops.append('swap')
+                        if not ops:
+                            break
+
+                        op = random.choice(ops)
+                        candidate = list(current_indices)
+
+                        if op == 'remove':
+                            pos = random.randrange(len(candidate))
+                            candidate.pop(pos)
+
+                        elif op == 'add':
+                            new_idx = random.choice(excluded_from_current)
+                            valid_positions = []
+                            for pos in range(len(candidate) + 1):
+                                trial = candidate[:pos] + [new_idx] + candidate[pos:]
+                                if is_valid(trial):
+                                    valid_positions.append(pos)
+                            if not valid_positions:
+                                continue
+                            pos = random.choice(valid_positions)
+                            candidate.insert(pos, new_idx)
+
+                        elif op == 'swap':
+                            pos = random.randrange(len(candidate))
+                            new_idx = random.choice(excluded_from_current)
+                            candidate[pos] = new_idx
+                            if not is_valid(candidate):
+                                continue
+
+                        new_times, new_reward = evaluate_cheap(candidate)
+                        delta = new_reward - current_reward
+
+                        if delta > 0 or random.random() < math.exp(delta / temperature):
+                            current_indices = candidate
+                            current_times   = new_times
+                            current_reward  = new_reward
+                            in_sequence     = set(current_indices)
+
+                            if new_reward > local_best_reward:
+                                local_best_reward  = new_reward
+                                local_best_indices = list(candidate)
+                                local_best_times   = list(new_times)
+
+                        pbar.update(1)
+
+                    temperature *= sa_cooling
+
+            return local_best_indices, local_best_times, local_best_reward
+
+        # Restart 0: greedy initialisation
+        best_indices, best_times, best_reward = _run_sa(_build_greedy_sequence(sorted_idx))
+
+        # Restarts 1..n_restarts-1: random valid starting sequences
+        for _ in range(1, n_restarts):
+            shuffled = random.sample(sorted_idx, len(sorted_idx))
+            shuffled.sort(key=lambda i: available_obs[i][0])
+            rand_start = _build_greedy_sequence(shuffled)
+            r_indices, r_times, r_reward = _run_sa(rand_start)
+            if r_reward > best_reward:
+                best_indices, best_times, best_reward = r_indices, r_times, r_reward
+
         best_sequence = [
             (available_obs[i][1], available_obs[i][0],
             available_obs[i][2], available_obs[i][3])
@@ -3642,99 +3669,7 @@ class ResultsProcessor:
         
     # ---------------------------------------------------------------------------
     # Main dual bound calculator
-    # ---------------------------------------------------------------------------
-    
-    # @staticmethod
-    # def __calculate_dual_bound_SA(
-    #     task_observation_opps: Dict,
-    #     compiled_orbitdata: Dict,
-    #     agent_missions: Dict,
-    #     agent_specs: Dict,
-    #     cross_track_fovs: Dict,
-    #     obtained_rewards_df: pd.DataFrame,
-    #     printouts: bool,
-    #     bo_n_initial: int = 8,
-    #     bo_n_iterations: int = 20,
-    #     bo_n_acq_candidates: int = 300,
-    #     sa_t_initial: float = 1.0,
-    #     sa_t_final: float = 1e-3,
-    #     sa_cooling: float = 0.95,
-    #     sa_steps_per_temp: int = 15,
-    #     sa_seed: int | None = None,
-    # ) -> float:
-    #     estimate_fn = ResultsProcessor.__estimate_task_performance_metrics
-    
-    #     dual_bound = dict()
-    #     dual_n_obs = dict()
-    
-    #     for task, observation_opps in tqdm(
-    #         task_observation_opps.items(),
-    #         desc='[results summary] calculating dual bound',
-    #         disable=not printouts or len(task_observation_opps) < 10,
-    #         leave=False,
-    #     ):
-    #         precomputed_accesses = {}
-    #         for obs_opp,agent_name,_ in tqdm(observation_opps, 
-    #                                          desc=f'Precomputing accesses for task {task.id.split("-")[-1]}',
-    #                                          disable=not printouts or len(observation_opps) < 10,
-    #                                          leave=False):
-    #             th = (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2
-    #             t_start = obs_opp.task_accessibility[task.id].left
-    #             t_end   = obs_opp.task_accessibility[task.id].right
-                
-    #             # Query the full window once — widest possible d_img
-    #             accesses = ResultsProcessor.get_available_accesses(
-    #                 task,
-    #                 obs_opp.instrument_name,
-    #                 th,
-    #                 t_start,                    # earliest possible t_img
-    #                 t_end - t_start,            # full window duration
-    #                 compiled_orbitdata[agent_name],
-    #                 cross_track_fovs[agent_name],
-    #             )
-    #             precomputed_accesses[(obs_opp, agent_name)] = accesses
-            
-    #         available_obs_times = [
-    #             (obs_time, agent_name,
-    #             (obs_opp.slew_angles.left + obs_opp.slew_angles.right) / 2,
-    #             obs_opp)
-    #             for obs_opp, agent_name, obs_time in observation_opps
-    #         ]
-    
-    #         _, best_times, task_utility = ResultsProcessor.__sa_best_sequence(
-    #             task,
-    #             available_obs_times,
-    #             agent_missions,
-    #             agent_specs,
-    #             cross_track_fovs,
-    #             compiled_orbitdata,
-    #             estimate_fn,
-    #             bo_n_initial        = bo_n_initial,
-    #             bo_n_iterations     = bo_n_iterations,
-    #             bo_n_acq_candidates = bo_n_acq_candidates,
-    #             sa_t_initial        = sa_t_initial,
-    #             sa_t_final          = sa_t_final,
-    #             # sa_cooling          = sa_cooling,
-    #             # sa_steps_per_temp   = sa_steps_per_temp,
-    #             seed                = sa_seed,
-    #             precomputed_accesses = precomputed_accesses
-    #         )
-    
-    #         dual_bound[task] = task_utility
-    #         dual_n_obs[task] = len(best_times)
-    
-    #         obs = obtained_rewards_df[obtained_rewards_df['task_id'] == task.id]
-    #         if sum(obs['reward']) - 1e-6 > task_utility:
-    #             x = 1  # set breakpoint here when debugging bound violations
-    
-    #     dual_bound_df = pd.DataFrame(
-    #         list(dual_bound.items()), columns=['task', 'reward']
-    #     )
-    #     dual_bound_df['n_obs'] = dual_bound_df['task'].map(dual_n_obs)
-    #     if printouts:
-    #         print(dual_bound_df.to_string(index=False))
-    
-    #     return sum(dual_bound.values())
+    # ---------------------------------------------------------------------------    
 
     @staticmethod
     def __calculate_dual_bound(
@@ -3748,6 +3683,8 @@ class ResultsProcessor:
         bo_n_initial: int = 8,
         bo_n_iterations: int = 20,
         opp_filter: str = None,
+        use_earliest_time: bool = False,
+        sa_n_restarts: int = 1,
     ) -> Dict:
         estimate_fn = ResultsProcessor.__estimate_task_performance_metrics
 
@@ -3837,7 +3774,9 @@ class ResultsProcessor:
                     None,
                     precomputed_accesses = precomputed_accesses,
                     precomputed_obj_relevances = precomputed_obj_relevances,
-                    printouts = printouts
+                    printouts = printouts,
+                    use_earliest_time = use_earliest_time,
+                    n_restarts = sa_n_restarts,
                 )
 
             else:
@@ -3856,6 +3795,13 @@ class ResultsProcessor:
                             precomputed_accesses=precomputed_accesses,
                             precomputed_obj_relevances=precomputed_obj_relevances
                         )
+
+                    if use_earliest_time:
+                        times, prev_t = [], -np.inf
+                        for t in t_starts:
+                            prev_t = max(t, prev_t)
+                            times.append((prev_t, 0.0))
+                        return times, objective(times)
 
                     n = len(sequence)
                     if n == 1:
@@ -3910,11 +3856,6 @@ class ResultsProcessor:
             if sum(obs['reward']) - 1e-6 > task_utility and opp_filter != 'nadir':
                 if printouts: tqdm.write(f"\tWarning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}.")
                 # x = 1  # set breakpoint here when debugging bound violations
-
-        # dual_bound_df = pd.DataFrame(
-        #     list(dual_bound.items()), columns=['task', 'reward']
-        # )
-        # if printouts: tqdm.write(dual_bound_df.to_string(index=False))
 
         return dual_bound
 
