@@ -45,7 +45,7 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                  debug: bool = False,
                  logger: bool = None,
                  printouts: bool = True,
-                 contested_reset_threshold: int = 3
+                 contested_reset_threshold: int = 1
                 ):
         """
         Parameters
@@ -59,10 +59,13 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
             a single sim timestep before it is frozen. Prevents infinite
             oscillation between agents. Default: 3.
         """
+        # co_obs_window passed as keyword so AugmentedConsensusPlanner picks it
+        # up via its *args/**kwargs __init__ without disturbing HeuristicInsertionConsensusPlanner's
+        # positional argument order.
         super().__init__(agent_results_dir, heuristic, replan_threshold,
                          optimistic_bidding_threshold, periodic_overwrite,
-                         debug, logger, printouts, contested_reset_threshold)
-        self._co_obs_window: float = co_obs_window
+                         debug, logger, printouts, contested_reset_threshold,
+                         co_obs_window=co_obs_window)
 
     def _estimate_task_value(self,
                               task: GenericObservationTask,
@@ -97,13 +100,21 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                            ) -> dict:
         """Build the co_obs dict for _estimate_task_value.
 
-        Returns a mapping of {parameter: committed_t_img} for every partner
-        instrument observing the same event whose committed bid falls within
-        self._co_obs_window seconds of t_obs. If a partner parameter has
-        multiple qualifying bids, the one closest in time to t_obs is kept.
+        Returns {parameter: committed_t_img} for every partner instrument that
+        has already committed to observe the same event strictly before t_obs
+        and within self._co_obs_window seconds of t_obs.
 
-        Returns an empty dict for non-event tasks or tasks with no committed
-        partner bids within the window.
+        Only backward-in-time partners are included: a bid at t_partner
+        qualifies iff t_partner < t_obs and (t_obs - t_partner) <= co_obs_window.
+        This means the first instrument to commit for an event sees no partners
+        (no prior observations exist yet) and receives no co-obs bonus.
+        Subsequent instruments accumulate partner context from earlier committed
+        bids.  This ordering ensures that modifying a later bid never
+        retroactively changes the evaluated value of an earlier committed bid.
+
+        If a partner parameter has multiple qualifying bids, the most recent
+        one (closest to t_obs) is kept.  Returns {} for non-event tasks or
+        tasks with no associated event.
         """
         if not isinstance(task, EventObservationTask) or task.event is None:
             return {}
@@ -116,8 +127,9 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                 for bid in self._results.get(partner_task, []):
                     if (bid.has_winner()
                             and not bid.was_performed()
-                            and abs(bid.t_img - t_obs) <= self._co_obs_window):
+                            and bid.t_img < t_obs
+                            and (t_obs - bid.t_img) <= self._co_obs_window):
                         if (param not in co_obs
-                                or abs(bid.t_img - t_obs) < abs(co_obs[param] - t_obs)):
+                                or bid.t_img > co_obs[param]):
                             co_obs[param] = bid.t_img
         return co_obs
