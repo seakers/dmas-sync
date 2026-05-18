@@ -3248,7 +3248,7 @@ class ResultsProcessor:
         # ------------------------------
 
         # placeholder value, will be populated when compiling results
-        primal_bound = np.NAN
+        primal_bound = {task : 0.0 for task in accesses_per_task.keys()}
 
         # calculate dual bound using a relaxed version of the problem
         dual_bound = ResultsProcessor.__calculate_dual_bound(

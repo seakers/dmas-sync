@@ -496,7 +496,7 @@
                 // "--single-trial", "54", // Oracle, None+CBBA (Augmented) 
 
                 "-t", "full_factorial_trials_2026-05-17",
-                "--single-trial", "54", // Oracle, None+CBBA (Augmented) 
+                "--single-trial", "55",
 
                 // "--profile-cpu",
                 // "--profile-mem",
@@ -504,7 +504,7 @@
                 // "--only-precompute",
                 // "--only-simulate",
                 // "--only-postprocess",
-                // "--force-simulate",
+                "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
                 "--reduced",
@@ -526,9 +526,9 @@
             },
             "args": [
                 "-t", "full_factorial_trials_2026-05-17",
-                // "--trial-range", "0:4",
-                "--single-trial", "53",
-                // "--single-trial", "54",
+                // "--trial-range", "0:54",
+                // "--trial-range", "54:63",
+                "--single-trial", "55",
                 "--single-thread",
                 // "--only-precompute",
                 // "--only-simulate",
