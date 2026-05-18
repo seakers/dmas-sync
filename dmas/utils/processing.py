@@ -102,7 +102,7 @@ class ResultsProcessor:
         observations_per_gp = ResultsProcessor.__classify_observations_per_gp(observations_performed_df, printouts)
         del observations_performed_df
 
-        observations_per_event_df, observations_per_event = ResultsProcessor.__compile_events_observed(events, observations_per_gp, agent_missions, printouts)
+        observations_per_event_df, observations_per_event = ResultsProcessor.__compile_events_observed(events, task_reqs,observations_per_gp, agent_missions, printouts)
         _write('observations_per_event', observations_per_event_df);  del observations_per_event_df
 
         observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(all_tasks, observations_per_gp, agent_missions, printouts)
@@ -1170,6 +1170,7 @@ class ResultsProcessor:
 
     @staticmethod
     def __compile_events_observed(events : List[GeophysicalEvent], 
+                                  task_reqs : List[TaskRequest],
                                   observations_per_gp : Dict[Tuple, pd.DataFrame], 
                                   agent_missions : Dict[str, Mission], 
                                   printouts : bool
@@ -1197,6 +1198,14 @@ class ResultsProcessor:
             allowed_pairs_by_event_type[event_type_key] = frozenset(
                 (a, i) for a, insts in reqs.items() for i in insts
             )
+
+        earliest_req_time: Dict[GeophysicalEvent, float] = {
+            req.task.event: min([r.t_req for r in task_reqs 
+                                 if r.task.event == req.task.event], 
+                                default=np.inf)
+            for req in task_reqs
+            if isinstance(req.task, EventObservationTask)
+        }
 
         for event in tqdm(events,
                           desc='[results processor] classifying event accesses, detections, and observations',
@@ -1250,11 +1259,25 @@ class ResultsProcessor:
 
             # Response times
             matching_observations = matching_observations.copy()
-            matching_observations["resp time [s]"] = matching_observations["t_start"] - event.availability.left
+            matching_observations["time to image [s]"] = matching_observations["t_start"] - event.availability.left
 
             # Normalized
-            matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / event.availability.span()
+            matching_observations["time to image [norm]"] = matching_observations["time to image [s]"] / event.availability.span()
 
+            # indicate if tasks were tasked or opportunistic based on agent name
+            # TODO currently assumes that any agent name containing "-U)" is an untasked opportunistic observation;
+            # may need to be revised for different naming conventions or more complex cases
+            is_tasked = ~matching_observations["agent name"].str.contains("-U)", regex=False)
+            matching_observations["tasked"] = is_tasked
+
+            t_req = earliest_req_time.get(event, np.nan)
+            matching_observations["resp time [s]"] = np.where(
+                is_tasked & (matching_observations["t_start"] >= t_req),
+                matching_observations["t_start"] - t_req,
+                np.nan
+            )
+            matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / event.availability.span()
+            
             # convert to list of dicts for easier handling downstream
             matching_observations = sorted(matching_observations.to_dict('records'), key=lambda x: x['t_start'])
 
@@ -1264,8 +1287,8 @@ class ResultsProcessor:
             # add to dataframe of observations per event
             prev_row = None
             for n_obs,row in enumerate(matching_observations):
-                t_rev = row['t_start'] - prev_row['t_end'] if prev_row is not None else np.Inf
-                
+                t_rev = row['t_start'] - prev_row['t_end'] if prev_row is not None else np.Inf                
+
                 observations_per_event_df_data.append({
                     'event id' : event.id,
                     'event type' : event.event_type,
@@ -1378,11 +1401,20 @@ class ResultsProcessor:
                     # skip to next event if no matching observations found
                     continue
 
-                # Response times
                 matching_observations = matching_observations.copy()
-                matching_observations["resp time [s]"] = matching_observations["t_start"] - task.availability.left
 
-                # Normalized
+                # indicate if observations were tasked or opportunistic based on agent name
+                # TODO currently assumes that any agent name containing "-U)" is an untasked opportunistic observation;
+                # may need to be revised for different naming conventions or more complex cases
+                is_tasked = ~matching_observations["agent name"].str.contains("-U)", regex=False)
+                matching_observations["tasked"] = is_tasked
+
+                # Response times (NaN for untasked/opportunistic observations)
+                matching_observations["resp time [s]"] = np.where(
+                    is_tasked,
+                    matching_observations["t_start"] - task.availability.left,
+                    np.nan
+                )
                 matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / task.availability.span()
 
                 # convert matching observations to list of dicts for easier handling
@@ -1664,10 +1696,14 @@ class ResultsProcessor:
         
         # calculate event revisit times
         t_gp_reobservation = ResultsProcessor.__calc_groundpoint_reobservation_metrics(observations_per_gp)
+        
         t_event_reobservation = ResultsProcessor.__calc_event_reobservation_metrics(observations_per_event)
-        t_task_reobservation = ResultsProcessor.__calc_task_reobservation_metrics(observations_per_task) 
+        t_event_to_image = ResultsProcessor.__calc_time_to_image_metrics(observations_per_event)
+        t_event_to_image_norm = ResultsProcessor.__calc_time_to_image_metrics_normalized(observations_per_event)
         t_response_to_event = ResultsProcessor.__calc_response_time_metrics(observations_per_event)
         t_response_to_event_norm = ResultsProcessor.__calc_response_time_metrics_normalized(observations_per_event)
+
+        t_task_reobservation = ResultsProcessor.__calc_task_reobservation_metrics(observations_per_task) 
         t_response_to_task = ResultsProcessor.__calc_response_time_metrics(observations_per_task)
         t_response_to_task_norm = ResultsProcessor.__calc_response_time_metrics_normalized(observations_per_task)
 
@@ -1872,7 +1908,15 @@ class ResultsProcessor:
                     ['P(Message Broadcasted | Bid Message)', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='BUS']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
                     ['P(Message Broadcasted | Measurement Request Message)', len(agent_broadcasts_df[agent_broadcasts_df['msg_type']=='MEASUREMENT_REQ']) / len(agent_broadcasts_df) if len(agent_broadcasts_df) > 0 else 0.0],
 
-                    # Response Time Statistics
+                    # Event Observation Time Statistics                    
+                    ['Average Time to Image Event [s]', t_event_to_image['mean']],
+                    ['Standard Deviation of Time to Image Event [s]', t_event_to_image['std']],
+                    ['Median Time to Image Event [s]', t_event_to_image['median']],
+
+                    ['Average Normalized Time to Image Event', t_event_to_image_norm['mean']],
+                    ['Standard Deviation of Normalized Time to Image Event', t_event_to_image_norm['std']],
+                    ['Median Normalized Time to Image Event', t_event_to_image_norm['median']],
+
                     ['Average Response Time to Event [s]', t_response_to_event['mean']],
                     ['Standard Deviation of Response Time to Event [s]', t_response_to_event['std']],
                     ['Median Response Time to Event [s]', t_response_to_event['median']],
@@ -1881,6 +1925,7 @@ class ResultsProcessor:
                     ['Standard Deviation of Normalized Response Time to Event', t_response_to_event_norm['std']],
                     ['Median Normalized Response Time to Event', t_response_to_event_norm['median']],
                     
+                    # Task Observation Time Statistics
                     ['Average Response Time to Task [s]', t_response_to_task['mean']],
                     ['Standard Deviation of Response Time to Task [s]', t_response_to_task['std']],
                     ['Median Response Time to Task [s]', t_response_to_task['median']],
@@ -2326,6 +2371,8 @@ class ResultsProcessor:
         # count event observations
         n_events_observed = len(events_observed)
         n_total_event_obs = sum([len(observations) for _,observations in events_observed.items()])
+        n_tasked_event_obs = sum([len([obs for obs in observations if obs['tasked']]) for _,observations in events_observed.items()])
+        n_passive_event_obs = n_total_event_obs - n_tasked_event_obs
         
         assert n_total_event_obs <= n_observations
 
@@ -2764,11 +2811,9 @@ class ResultsProcessor:
         t_reobservations : list = []
         for observations in observations_map.values():
             for observation in observations[1:]:
-                # get revisit
                 t_reobservation = observation['resp time [s]']
-
-                # add to list
-                t_reobservations.append(t_reobservation)
+                if not (isinstance(t_reobservation, float) and np.isnan(t_reobservation)):
+                    t_reobservations.append(t_reobservation)
 
         # compile statistical data
         t_reobservation : dict = {
@@ -2785,11 +2830,9 @@ class ResultsProcessor:
         t_reobservations : list = []
         for observations in observations_map.values():
             for observation in observations[1:]:
-                # get revisit
                 t_reobservation = observation['resp time [norm]']
-
-                # add to list
-                t_reobservations.append(t_reobservation)
+                if not (isinstance(t_reobservation, float) and np.isnan(t_reobservation)):
+                    t_reobservations.append(t_reobservation)
 
         # compile statistical data
         t_reobservation : dict = {
@@ -2800,6 +2843,48 @@ class ResultsProcessor:
         }
 
         return t_reobservation  
+    
+    @staticmethod
+    def __calc_time_to_image_metrics(observations_map: dict) -> dict:
+        t_reobservations : list = []
+        for observations in observations_map.values():
+            for observation in observations[1:]:
+                # get time to image
+                t_to_image = observation['time to image [s]']
+
+                # add to list
+                t_reobservations.append(t_to_image)
+
+        # compile statistical data
+        t_to_image : dict = {
+            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
+            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
+            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
+            'data' : t_reobservations
+        }
+
+        return t_to_image
+    
+    @staticmethod
+    def __calc_time_to_image_metrics_normalized(observations_map: dict) -> dict:
+        t_reobservations : list = []
+        for observations in observations_map.values():
+            for observation in observations[1:]:
+                # get normalized time to image
+                t_to_image = observation['time to image [norm]']
+
+                # add to list
+                t_reobservations.append(t_to_image)
+
+        # compile statistical data
+        t_to_image : dict = {
+            'mean' : np.average(t_reobservations) if t_reobservations else np.NAN,
+            'std' : np.std(t_reobservations) if t_reobservations else np.NAN,
+            'median' : np.median(t_reobservations) if t_reobservations else np.NAN,
+            'data' : t_reobservations
+        }
+
+        return t_to_image  
     
     @staticmethod
     def __calculate_reward_bounds(compiled_orbitdata : Dict[str, OrbitData], 

@@ -50,10 +50,10 @@ Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellatio
 48,None,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
 49,None,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
 50,None,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
-51,None,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+51,None,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,1
 52,None,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,1
 53,None,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,2
-54,None,None,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,1
+54,None,None,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
 55,Centralized-MILP_priority,None,GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
 56,Centralized-MILP_priority,None,GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
 57,Centralized-MILP_priority,None,GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
