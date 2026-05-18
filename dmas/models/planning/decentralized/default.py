@@ -464,9 +464,21 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
                 # _pending_announcements persist across periods; removed only on expiry or full coverage
 
+                # check if existing plan was performed in the current planning period
+                if self._plan.t >= 0 and self._plan.t_next > t_curr:
+                    # carry over pending broadcasts from the plan
+                    carryover_broadcasts = [action for action in self._plan
+                                            if isinstance(action, BroadcastMessageAction)
+                                            and action.t_start >= t_curr]
+                    
+                    if carryover_broadcasts:
+                        x = 1
+
+                    broadcasts += carryover_broadcasts
+
             waits = self._schedule_periodic_replan(state, t_next)
 
-            self._plan = ReactivePlan([], t=t_curr, t_next=t_next)
+            self._plan = ReactivePlan(broadcasts, t=t_curr, t_next=t_next)
             return ReactivePlan(observations, broadcasts, waits, t=t_curr, t_next=t_next)
 
         finally:
