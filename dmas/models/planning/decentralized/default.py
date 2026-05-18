@@ -478,8 +478,8 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
             waits = self._schedule_periodic_replan(state, t_next)
 
-            self._plan = ReactivePlan(broadcasts, t=t_curr, t_next=t_next)
-            return ReactivePlan(observations, broadcasts, waits, t=t_curr, t_next=t_next)
+            self._plan = ReactivePlan(observations, broadcasts, waits, t=t_curr, t_next=t_next)
+            return self._plan.copy()
 
         finally:
             # reset planning flags and advance the periodic replan timer
