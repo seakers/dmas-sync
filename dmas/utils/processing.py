@@ -312,8 +312,9 @@ class ResultsProcessor:
         if 'requester' in events_detected_df.columns:
             events_detected_df = events_detected_df.drop(columns=['requester'])
 
-        # remove duplicates
-        events_detected_df = events_detected_df.drop_duplicates().reset_index(drop=True)
+        # remove duplicates — dedup on id only; same event detected by multiple agents
+        # at different times would survive a full-row drop_duplicates()
+        events_detected_df = events_detected_df.drop_duplicates(subset=['id']).reset_index(drop=True)
         
         # convert to list of GeophysicalEvent
         events_detected = [
@@ -2464,6 +2465,10 @@ class ResultsProcessor:
 
         # count events with meaurement requests
         n_events_requested = len(events_requested)
+
+        assert n_events_requested <= n_events
+        if n_events_requested < n_events_detected:
+            x = 1 # TODO investigate why this can happen in some cases; may be due to events being detected but not having measurement requests sent for them, which would be a bug in `execsatm` that needs to be fixed
 
         # count event observations
         n_events_observed = len(events_observed)
