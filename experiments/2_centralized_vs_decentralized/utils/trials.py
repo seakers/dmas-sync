@@ -82,7 +82,7 @@ if __name__ == "__main__":
             "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
         ],
         "Data Processing" : [
-            "Oracle",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
+            "Instant",              # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
             "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
             "Onboard",              # sats must discover events using default mission tasks
         ],
@@ -119,7 +119,7 @@ if __name__ == "__main__":
             "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
         ],
         "Data Processing" : [
-            "Oracle",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
+            "Instant",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
             "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
             "Onboard",              # sats must discover events using default mission tasks
         ],
@@ -183,7 +183,10 @@ if __name__ == "__main__":
         default=2,   # should be rare / indicates "belongs to none"
     )
     all_trials["Phase"] = phase
-    all_trials = all_trials.sort_values(by=["Phase"] + param_cols).drop(columns=['Phase']).reset_index(drop=True)
+    dp_order = {"Ground": 0, "Onboard": 1, "Oracle": 2}
+    all_trials["_dp_sort"] = all_trials["Data Processing"].map(dp_order)
+    sort_cols = ["Phase"] + [("_dp_sort" if c == "Data Processing" else c) for c in param_cols]
+    all_trials = all_trials.sort_values(by=sort_cols).drop(columns=["Phase", "_dp_sort"]).reset_index(drop=True)
 
     # 3) Trial IDs after ordering
     all_trials.insert(0, "Trial ID", all_trials.index)
@@ -218,7 +221,7 @@ if __name__ == "__main__":
                 dp_trials = combo_trials[combo_trials["Data Processing"] == dp_type]
                 if not dp_trials.empty:
                     max_dp_trial_id = dp_trials["Trial ID"].max()
-                    if dp_type == "Oracle":
+                    if dp_type == "Oracle" or dp_type == "Instant":  # treat "Instant" the same as "Oracle" for this purpose since it represents perfect information, just with a different flavor of realism
                         all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "calcBoundsOpt"] = 2
                     else:
                         all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "calcBoundsOpt"] = 1

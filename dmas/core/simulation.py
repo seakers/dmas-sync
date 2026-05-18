@@ -25,14 +25,14 @@ from execsatm.events import GeophysicalEvent
 from dmas.core.messages import SimulationRoles
 from dmas.models.planning.decentralized.consensus.augmented.heuristic import AugmentedHeuristicInsertionConsensusPlanner
 from dmas.utils.orbitdata import OrbitData
-from dmas.models.actions import AgentAction, BroadcastMessageAction
+from dmas.models.actions import AgentAction
 from dmas.models.agent import SimulationAgent
 from dmas.core.environment import SimulationEnvironment
 from dmas.models.states import GroundOperatorAgentState, SatelliteAgentState, SimulationAgentState
 from dmas.models.planning.centralized.dealer import DealerPlanner, TestingDealer
 from dmas.models.planning.centralized.milp import DealerMILPPlanner
 from dmas.models.planning.centralized.worker import WorkerPlanner
-from dmas.models.planning.decentralized.announcer import AbstractEventAnnouncerPlanner, GroundProcessorEventAnnouncerPlanner, OracleEventAnnouncerPlanner
+from dmas.models.planning.decentralized.announcer import GroundProcessorEventAnnouncerPlanner, InstantEventAnnouncerPlanner
 from dmas.models.planning.decentralized.blank import BlankPlanner
 from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInsertionConsensusPlanner
 from dmas.models.planning.decentralized.dynamic import DynamicProgrammingPlanner
@@ -1222,8 +1222,8 @@ class Simulation:
             announce_horizon = preplanner_dict.get('announceHorizon', 3600.0)
             announcer_mode = preplanner_dict.get('@mode', 'oracle').lower()
 
-            if announcer_mode in ['oracle']:
-                return OracleEventAnnouncerPlanner(
+            if announcer_mode in ['instant']:
+                return InstantEventAnnouncerPlanner(
                     agent_results_dir, events_path, simulation_missions,
                     announce_horizon=announce_horizon,
                     debug=debug, logger=logger, printouts=printouts)
@@ -1232,6 +1232,7 @@ class Simulation:
                     agent_results_dir, events_path, space_segment, simulation_missions, simulation_orbitdata,
                     announce_horizon=announce_horizon,
                     debug=debug, logger=logger, printouts=printouts)
+            # TODO Oracle announcer that announces events at the start of the simulation
             else:
                 raise ValueError(f'Unsupported event announcer mode `{announcer_mode}` specified in input file.')
 
@@ -1360,10 +1361,9 @@ class Simulation:
             optimistic_bidding_threshold = replanner_dict.get('optimisticBiddingThreshold', 1)
             periodic_overwrite = bool(replanner_dict.get('periodicOverwrite', 'false').lower() in ['true', 't'])
             if 'augmented' in replanner_type.lower():
-                co_obs_window = replanner_dict.get('coObsWindow', 600)
                 if 'heuristic' in model:
                     heuristic = replanner_dict.get('heuristic', 'earliestAccess')
-                    return AugmentedHeuristicInsertionConsensusPlanner(agent_results_dir, co_obs_window, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
+                    return AugmentedHeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
                 else:
                     raise NotImplementedError(f'replanner model `{model}` not yet supported.')
             else:

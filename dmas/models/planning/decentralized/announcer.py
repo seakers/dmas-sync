@@ -115,7 +115,7 @@ class AbstractEventAnnouncerPlanner(AbstractPeriodicPlanner):
     def _schedule_broadcasts(self, state : SimulationAgentState, _, orbitdata : OrbitData, __ = None) -> List[BroadcastMessageAction]:
         pass
 
-class OracleEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
+class InstantEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
     def _schedule_broadcasts(self, state : SimulationAgentState, _, orbitdata : OrbitData, __ = None) -> List[BroadcastMessageAction]:
         # initialzie list of broadcasts to be performed in this planning period
         broadcasts : List[BroadcastMessageAction] = []
@@ -245,7 +245,7 @@ class OracleEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
         # log known and generated requests
         columns = ['id','requester','lat [deg]','lon [deg]','grid index', 'GP index','severity','start time [s]','end time [s]','detection time [s]','event type']        
         data_detected = [(event.id, self._parent_agent_name, event.location[0], event.location[1], event.location[2], event.location[3], event.severity, event.t_start, event.t_start+event.d_exp, event.t_detect, event.event_type)
-                for event in self._events]       
+                for event in self._events]
              
         df = pd.DataFrame(data=data_detected, columns=columns)        
         df.to_parquet(f"{self._agent_results_dir}/events_detected.parquet", index=False)

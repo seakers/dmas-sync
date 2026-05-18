@@ -47,9 +47,9 @@
             "maxTasks": 100,
             "debug" : "False"
         },
-        "oracle_announcer": {
+        "instant_announcer": {
             "@type": "eventAnnouncer",
-            "@mode" : "oracle",
+            "@mode" : "instant",
             "debug": "False",          
             "announceHorizon": 3600.0,
             "eventsPath" : "PATH/TO/EVENTS"

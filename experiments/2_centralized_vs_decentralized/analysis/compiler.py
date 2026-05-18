@@ -50,7 +50,10 @@ def compile_results_summaries(trial_name : str,
             for _,row in summary_temp_df.iterrows():
                 summary_as_dict[row['Metric']] = row['Value']
 
-            summary_as_dict['Trial ID'] = int(dir_name.split('_trial-')[-1])
+            trial_id = dir_name.split('_trial-')[-1]
+            if "reduced" in trial_id:
+                continue # skip reduced trials; they are used for testing and debugging but not part of the main analysis
+            summary_as_dict['Trial ID'] = int(trial_id)
             
             # add to data list
             data.append(summary_as_dict)

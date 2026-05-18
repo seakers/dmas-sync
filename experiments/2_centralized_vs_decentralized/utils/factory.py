@@ -379,8 +379,8 @@ def create_ground_operator_specifications(
         announcer_specs['planner']['preplanner']['eventsPath'] = announcer_events_path
 
         # set announcer mode based on data processing type
-        if data_processing.lower() in ['oracle', 'onboard']:
-            announcer_specs['planner']['preplanner']['@mode'] = 'oracle'
+        if data_processing.lower() in ['instant', 'onboard']:
+            announcer_specs['planner']['preplanner']['@mode'] = 'instant'
         else:
             announcer_specs['planner']['preplanner']['@mode'] = 'groundProcessor'
 
