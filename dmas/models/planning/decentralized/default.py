@@ -70,6 +70,14 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
         # intra-period access cache; flushed at the start of every planning period
         self._access_opportunities: dict = {}
 
+        # observation opportunity cache; keyed by frozenset of task IDs
+        # invalidated whenever the task set changes or a new period starts
+        self._cached_obs_opps: list = []
+        self._cached_obs_task_ids: frozenset = frozenset()
+
+        # announcement message cache: serialized once per task, reused across replans
+        self._pending_announcement_msgs: Dict[str, MeasurementRequestMessage] = {}
+
         # instrument FOV cache (never changes after first plan)
         self._cross_track_fovs: dict = None
 
@@ -159,7 +167,11 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
             for req in incoming_reqs:
                 if req.requester == state.agent_name:
                     # keep self-generated requests until their events expire
-                    self._pending_announcements[req.task.id] = req
+                    tid = req.task.id
+                    self._pending_announcements[tid] = req
+                    self._pending_announcement_msgs[tid] = MeasurementRequestMessage(
+                        state.agent_name, state.agent_name, req.to_dict()
+                    )
 
             new_ids = {req.task.id for req in incoming_reqs} - self._known_task_ids
             if new_ids:
@@ -251,10 +263,12 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                 # fix initialized flag 
                 self._initialized = True
 
-            # flush access cache only at period boundaries; mid-period replans (triggered by
-            # new incoming requests) keep the warm cache and only add missing locations
+            # flush caches at period boundaries; mid-period replans keep warm caches
+            # and only recompute for new tasks or changed task sets
             if t_curr >= self._plan.t_next:
                 self._access_opportunities = {}
+                self._cached_obs_opps = []
+                self._cached_obs_task_ids = frozenset()
 
             # ==================================================
             # PROCESS TASK REQUESTS
@@ -307,14 +321,20 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                 and task.availability.overlaps(planning_horizon)
             ]
 
-            # access opportunities for all schedulable tasks (incremental; cache is warm)
+            # access opportunities for consensus tasks not already in cache (future task
+            # accesses were populated above; this call only does new work for tasks from
+            # incoming requests whose locations weren't yet cached)
             access_opportunities: dict[tuple] = self.calculate_access_opportunities(
                 available_tasks, planning_horizon, orbitdata)
 
-            # create observation opportunities
-            observation_opportunities: list[ObservationOpportunity] = \
-                self.create_observation_opportunities_from_accesses(
+            # create observation opportunities, skipping the expensive clustering step
+            # when the task set is unchanged from the previous replan this period
+            current_task_ids = frozenset(task.id for task in available_tasks)
+            if current_task_ids != self._cached_obs_task_ids:
+                self._cached_obs_opps = self.create_observation_opportunities_from_accesses(
                     available_tasks, access_opportunities, self._cross_track_fovs, orbitdata)
+                self._cached_obs_task_ids = current_task_ids
+            observation_opportunities: list[ObservationOpportunity] = self._cached_obs_opps
 
             # ==================================================
             # GENERATE PLAN
@@ -371,32 +391,26 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
             broadcasts: List[AgentAction] = []
             if self._enable_broadcasts:
-                # expire announcements for events that are no longer active
+                u_idx = orbitdata.comms_target_indices[OrbitData.safe_name(state.agent_name)]
+                n_targets = len(orbitdata.comms_targets)
+                n_cols = len(orbitdata.comms_target_columns)
+
+                # single pass: expire stale tasks and drop fully-covered ones
                 self._pending_announcements = {
                     tid: req for tid, req in self._pending_announcements.items()
                     if not req.task.availability.ends_before(t_curr)
+                    and len(self._announced.get(tid, set())) < n_targets
                 }
-
-                if self._pending_announcements:
-                    u_idx = orbitdata.comms_target_indices[OrbitData.safe_name(state.agent_name)]
-                    n_cols = len(orbitdata.comms_target_columns)
-                    n_targets = len(orbitdata.comms_targets)
-
-                    # drop tasks that have already reached every target agent
-                    self._pending_announcements = {
-                        tid: req for tid, req in self._pending_announcements.items()
-                        if len(self._announced.get(tid, set())) < n_targets
-                    }
-                    # keep _announced in sync with _pending_announcements
-                    self._announced = {tid: s for tid, s in self._announced.items()
-                                       if tid in self._pending_announcements}
+                self._pending_announcement_msgs = {
+                    tid: msg for tid, msg in self._pending_announcement_msgs.items()
+                    if tid in self._pending_announcements
+                }
+                self._announced = {tid: s for tid, s in self._announced.items()
+                                   if tid in self._pending_announcements}
 
                 if self._pending_announcements:
                     task_items = list(self._pending_announcements.items())
-                    task_msgs = [
-                        MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict())
-                        for _, req in task_items
-                    ]
+                    task_msgs = [self._pending_announcement_msgs[tid] for tid, _ in task_items]
 
                     # bound broadcast window to the replan horizon (or event expiry, whichever comes first)
                     t_window_start = t_curr
@@ -459,26 +473,29 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                         tid: req for tid, req in self._pending_announcements.items()
                         if len(self._announced.get(tid, set())) < n_targets
                     }
+                    self._pending_announcement_msgs = {
+                        tid: msg for tid, msg in self._pending_announcement_msgs.items()
+                        if tid in self._pending_announcements
+                    }
                     self._announced = {tid: s for tid, s in self._announced.items()
                                        if tid in self._pending_announcements}
 
                 # _pending_announcements persist across periods; removed only on expiry or full coverage
 
-                # check if existing plan was performed in the current planning period
+                # carry over unfired broadcasts when replanning mid-period
                 if self._plan.t >= 0 and self._plan.t_next > t_curr:
-                    # carry over pending broadcasts from the plan
                     carryover_broadcasts = [action for action in self._plan
                                             if isinstance(action, BroadcastMessageAction)
                                             and action.t_start >= t_curr]
-                    
-                    if carryover_broadcasts:
-                        x = 1
-
                     broadcasts += carryover_broadcasts
 
+            # schedule periodic replan trigger at the end of the horizon
             waits = self._schedule_periodic_replan(state, t_next)
 
+            # compile final plan: broadcasts interleaved with observations, followed by a wait to trigger the next replan
             self._plan = ReactivePlan(observations, broadcasts, waits, t=t_curr, t_next=t_next)
+            
+            # return plan
             return self._plan.copy()
 
         finally:

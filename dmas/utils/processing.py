@@ -2467,9 +2467,7 @@ class ResultsProcessor:
         n_events_requested = len(events_requested)
 
         assert n_events_requested <= n_events
-        if n_events_requested < n_events_detected:
-            x = 1 # TODO investigate why this can happen in some cases; may be due to events being detected but not having measurement requests sent for them, which would be a bug in `execsatm` that needs to be fixed
-
+        
         # count event observations
         n_events_observed = len(events_observed)
         n_total_event_obs = sum([len(observations) for _,observations in events_observed.items()])
