@@ -242,8 +242,14 @@ class OracleEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
         return sorted(broadcasts, key=lambda action: action.t_start)    
     
     def print_results(self):
-        return super().print_results()
-        # TODO print out list of announcements and how many events were announced, etc.
+        # log known and generated requests
+        columns = ['id','requester','lat [deg]','lon [deg]','grid index', 'GP index','severity','start time [s]','end time [s]','detection time [s]','event type']        
+        data_detected = [(event.id, self._parent_agent_name, event.location[0], event.location[1], event.location[2], event.location[3], event.severity, event.t_start, event.t_start+event.d_exp, event.t_detect, event.event_type)
+                for event in self._events]       
+             
+        df = pd.DataFrame(data=data_detected, columns=columns)        
+        df.to_parquet(f"{self._agent_results_dir}/events_detected.parquet", index=False)
+
     
 class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
     def __init__(self,
