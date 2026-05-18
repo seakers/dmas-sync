@@ -526,6 +526,7 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
             if t_detect <= t_curr:
                 event = self._event_ids.get(event_id, None)
                 if event:
+                    event.t_detect = t_detect
                     self._detected_events.add(event)
 
     def print_results(self):
