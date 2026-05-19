@@ -34,6 +34,10 @@ from dmas.models.science.requests import TaskRequest
 from dmas.utils.orbitdata import OrbitData
 from dmas.utils.tools import SimulationRoles
 
+def is_taskable(name : str) -> bool:
+    # TODO refine this function to more robustly determine taskability based on task naming conventions; 
+    return "-U)" not in name
+
 class DualBoundCalcOptions(Enum):
     # dual bound calc options
     NO_TASKS = 0
@@ -132,6 +136,7 @@ class ResultsProcessor:
         for task, observations in tqdm(observations_per_task.items(),
                                        desc="[results processor] compiling rewards obtained from observations",
                                        leave=True,
+                                       leave=False,
                                        disable=not printouts,
                                        total=len(observations_per_task.keys())
                                     ):
@@ -185,6 +190,8 @@ class ResultsProcessor:
                 
                 # update observation performance information with reward
                 t_prev = t_img
+
+        if printouts: tqdm.write(f'[results processor] calculated obtained rewards for {len(obtained_rewards_data)} tasks')
 
         # construct obtained rewards dataframe
         if obtained_rewards_data:
@@ -331,9 +338,11 @@ class ResultsProcessor:
                             desc='[results processor] building event detection objects',
                             disable=not printouts,
                             leave=True,
+                            leave=False,
                             total=len(events_detected_df)
                         )
         ]
+        if printouts: tqdm.write(f'[results processor] {len(events_detected)} unique events detected loaded from data')
 
         return events_detected_df, events_detected
     
@@ -383,6 +392,7 @@ class ResultsProcessor:
                           desc='[results processor] building task request objects from data',
                           disable=not printouts or len(task_reqs_df) == 0,
                           leave=True,
+                          leave=False,
                           total=len(task_reqs_df)
                         ):
             event_id = row['task']['event']['id']
@@ -418,6 +428,7 @@ class ResultsProcessor:
 
             # add to list of task requests
             task_reqs.append(req)
+        if printouts: tqdm.write(f'[results processor] {len(task_reqs)} unique task requests loaded from data')
 
         return task_reqs
     
@@ -444,6 +455,7 @@ class ResultsProcessor:
                           desc='[results processor] building default task objects from data',
                           disable=not printouts or len(default_tasks_df) == 0,
                           leave=True,
+                          leave=False,
                           total=len(default_tasks_df)
                         ):
             # get name of agent requesting the task
@@ -469,12 +481,15 @@ class ResultsProcessor:
             )
             all_tasks.append(task)
             known_tasks.append(task)
+        if printouts: tqdm.write(f'[results processor] {len(known_tasks)} known tasks loaded from data')    
 
         # supplement known with event request tasks
         requested_tasks = {req.task 
                            for req in tqdm(task_reqs, desc='[results processor] compiling tasks from requests', disable=not printouts, leave=True)
+                           for req in tqdm(task_reqs, desc='[results processor] compiling tasks from requests', disable=not printouts, leave=False)
                             if req.task not in known_tasks}
         known_tasks.extend(requested_tasks)
+        if printouts: tqdm.write(f'[results processor] {len(requested_tasks)} additional tasks loaded from requests')
 
         # map event types to missions
         event_type_missions = defaultdict(set)
@@ -585,6 +600,7 @@ class ResultsProcessor:
                                 desc='[results processor] loading planned agent utilities',
                                 disable=not printouts,
                                 leave=True,
+                                leave=False,
                                 total=len(compiled_orbitdata.keys())
                             ):
             rewards_path = os.path.join(results_path, agent_name.lower(), 'rewards.parquet')
@@ -592,6 +608,8 @@ class ResultsProcessor:
             temp = pd.read_parquet(rewards_path)
             temp['agent'] = agent_name
             reward_parts.append(temp)
+
+        if printouts: tqdm.write(f'[results processor] loaded planned reward data for {len(reward_parts)} agents')
         
         planned_rewards_df = pd.concat(reward_parts, axis=0, ignore_index=True) if reward_parts \
             else pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent_name', 'planned reward', 'performed reward', 'agent'])
@@ -604,6 +622,7 @@ class ResultsProcessor:
                                 desc='[results processor] loading planned execution costs',
                                 disable=not printouts,
                                 leave=True,
+                                leave=False,
                                 total=len(compiled_orbitdata.keys())
                             ):
             agent_state_path = os.path.join(results_path, agent_name.lower(), 'state_history.parquet')
@@ -618,6 +637,8 @@ class ResultsProcessor:
                 'attitude [deg]': state_temp['attitude'].iloc[:-1].values,
                 'cost':           alpha * np.linalg.norm(dA, axis=1),
             }))
+
+        if printouts: tqdm.write(f'[results processor] loaded execution cost data for {len(cost_parts)} agents')
 
         execution_costs_df = pd.concat(cost_parts, axis=0, ignore_index=True) if cost_parts else None
         del cost_parts
@@ -634,6 +655,7 @@ class ResultsProcessor:
         for agent_orbitdata in tqdm(compiled_orbitdata.values(), 
                                     desc='[results processor] loading target grids from agent orbitdata', 
                                     leave=True,
+                                    leave=False,
                                     disable=not printouts,
                                     unit=' agents'
                                 ):
@@ -642,6 +664,7 @@ class ResultsProcessor:
 
             # add to main list
             grid_data.extend(gps_accessible_temp)
+        if printouts: tqdm.write(f'[results processor] loaded grid data for {len(compiled_orbitdata)} agents')
         
         # convert to dataframe
         grid_data_df_temp = pd.DataFrame(grid_data, columns=['lat [deg]', 'lon [deg]','grid index', 'GP index'])
@@ -936,6 +959,7 @@ class ResultsProcessor:
         for event in tqdm(events, 
                             desc='[results processor] classifying event requests', 
                             leave=True,
+                            leave=False,
                             disable=not printouts):
             
             # find measurement requests that match this event
@@ -962,6 +986,7 @@ class ResultsProcessor:
                     't_req' : task_req.t_req,
                     'parameter' : task_req.task.parameter
                 })
+        if printouts: tqdm.write(f'[results processor] classified {sum(len(reqs) for reqs in requests_per_event.values())} requests for {len(requests_per_event)} events')
 
         # convert to dataframe
         events_requested_df = pd.DataFrame(event_rquests_df_data)
@@ -998,6 +1023,8 @@ class ResultsProcessor:
 
         for task in tqdm(tasks, desc="[results processor] determining task accessibility", leave=True, disable=not printouts):
             # look up pre-built instrument capability requirements for this task's objective
+        for task in tqdm(tasks, desc="[results processor] determining task accessibility", leave=False, disable=not printouts):
+            # look up pre-built instrument capability requirement for this task's objective
             objective = task.objective
             instrument_capability_reqs = obj_agent_reqs.get(objective, defaultdict(set))
             allowed_pairs = obj_allowed_pairs.get(objective, frozenset())
@@ -1223,6 +1250,7 @@ class ResultsProcessor:
         for event in tqdm(events,
                           desc='[results processor] classifying event accesses, detections, and observations',
                           leave=True,
+                          leave=False,
                           disable=not printouts
                         ):
             # unpackage event
@@ -1491,6 +1519,7 @@ class ResultsProcessor:
                 # assign observations to this task in map of tasks observed
                 # tasks_observed[task] = task_observations
                 tasks_observed[task] = merged_observations
+        if printouts: tqdm.write(f'[results processor] classified {sum(len(obs) for obs in tasks_observed.values())} observations for {len(tasks_observed)} tasks')
 
         # convert task observations data to dataframe
         task_observations_df = pd.DataFrame(task_observations_df_data)
@@ -2432,6 +2461,7 @@ class ResultsProcessor:
         for _, agent in tqdm(orbitdata.items(), 
                              desc='[results summary] counting total and accessible ground points',
                              leave=True, 
+                             leave=False, 
                              disable=not printouts
                             ):
 
@@ -2447,6 +2477,8 @@ class ResultsProcessor:
 
             upairs = np.unique(pairs)
             gps_accessible_compiled.update(zip(upairs['g'].tolist(), upairs['p'].tolist()))
+
+        if printouts: print(f'[results summary] counted {n_gps} total ground points across all agents')
 
         n_gps_accessible = len(gps_accessible_compiled)
         n_gps_observed = len(observations_per_gp)
@@ -3709,6 +3741,7 @@ class ResultsProcessor:
             desc=desc,
             disable=not printouts or len(task_observation_opps) < 10,
             leave=True,
+            leave=False,
         ):
             # filter to nadir-accessible opportunities only (slew window overlaps [-FOV/2, +FOV/2])
             if opp_filter == 'nadir':
@@ -3869,6 +3902,10 @@ class ResultsProcessor:
             if sum(obs['reward']) - 1e-6 > task_utility and opp_filter != 'nadir':
                 if printouts: tqdm.write(f"\tWarning: Dual bound for task {task.id} is lower ({task_utility:.6f}) than obtained reward ({sum(obs['reward']):.6f}) by {sum(obs['reward']) - task_utility:.6f}.")
                 # x = 1  # set breakpoint here when debugging bound violations
+
+        if printouts: 
+            desc = '[results summary] primal bound calculated' if opp_filter == 'nadir' else '[results summary] dual bound calculated'
+            tqdm.write(f"{desc} for {len(dual_bound)} tasks.")
 
         return dual_bound
 
