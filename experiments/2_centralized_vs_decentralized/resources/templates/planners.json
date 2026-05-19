@@ -76,7 +76,7 @@
             "model": "heuristicInsertion",
             "heuristic" : "taskPriority",
             "replanThreshold": 1,
-            "optimisticBiddingThreshold": 1,
+            "optimisticBiddingThreshold": 3,
             "debug": "False"
         },
         "greedy" : {
