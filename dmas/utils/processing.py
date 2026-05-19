@@ -1169,8 +1169,14 @@ class ResultsProcessor:
                                     desc='[results processor] classifying performed observations by ground point',
                                     leave=True,
                                     disable=not printouts):
+                # get grid and GP indices for this group
                 grid_idx, gp_idx = int(group[0]), int(group[1])
-                observations_per_gp[(grid_idx, gp_idx)] = data
+
+                # sort data by time within this group
+                data_sorted = data.sort_values(by='t_start', kind='mergesort')
+
+                # assign sorted data to output dictionary
+                observations_per_gp[(grid_idx, gp_idx)] = data_sorted
 
         # return observations per GP and set of accessible GPs
         return observations_per_gp
@@ -1294,7 +1300,7 @@ class ResultsProcessor:
             # add to dataframe of observations per event
             prev_row = None
             for n_obs,row in enumerate(matching_observations):
-                t_rev = row['t_start'] - prev_row['t_end'] if prev_row is not None else np.Inf                
+                t_rev = row['t_start'] - prev_row['t_start'] if prev_row is not None else np.Inf                
 
                 observations_per_event_df_data.append({
                     'event id' : event.id,
@@ -1313,7 +1319,8 @@ class ResultsProcessor:
                 t_rev_data.append(t_rev)
                 prev_row = row            
 
-            matching_observations = [{**obs, 'n_obs': n_obs, 't_rev': t_rev} for obs, n_obs, t_rev in zip(matching_observations, n_obs_data, t_rev_data)]
+            matching_observations = [{**obs, 'n_obs': n_obs, 't_rev': t_rev} 
+                                     for obs, n_obs, t_rev in zip(matching_observations, n_obs_data, t_rev_data)]
             
             # add to observations per event map
             if matching_observations: observations_per_event[event] = matching_observations        
@@ -1432,7 +1439,7 @@ class ResultsProcessor:
 
                 prev_row = None
                 for n_obs,row in enumerate(matching_observations):
-                    t_rev = row['t_start'] - prev_row['t_end'] if prev_row is not None else np.Inf
+                    t_rev = row['t_start'] - prev_row['t_start'] if prev_row is not None else np.Inf
                     
                     task_observations_df_data.append({
                         'task id' : task.id,
@@ -2875,7 +2882,7 @@ class ResultsProcessor:
     def __calc_event_reobservation_metrics(events_observed : dict) -> tuple:
         t_reobservations : list = []
         for event_observations in events_observed.values():
-            for observation in event_observations[1:]:
+            for observation in sorted(event_observations, key=lambda x: x['t_start'])[1:]:
                 # get revisit
                 t_reobservation = observation['t_rev']
 
@@ -3002,8 +3009,9 @@ class ResultsProcessor:
                               if not (isinstance(observation['resp time [s]'], float)
                                       and np.isnan(observation['resp time [s]']))
                             ], default=np.NAN)
-            t_to_first_images.append(t_earliest)
-            t_to_last_images.append(t_latest)
+            if not np.isnan(t_earliest): t_to_first_images.append(t_earliest)
+            if not np.isnan(t_latest): t_to_last_images.append(t_latest)
+            
             t_response.extend([observation['resp time [s]'] for observation in observations
                                 if not (isinstance(observation['resp time [s]'], float)
                                         and np.isnan(observation['resp time [s]']))])
@@ -3045,8 +3053,8 @@ class ResultsProcessor:
                               if not (isinstance(observation['resp time [norm]'], float) 
                                     and np.isnan(observation['resp time [norm]']))
                             ], default=np.NAN)
-            t_to_first_images.append(t_earliest)
-            t_to_last_images.append(t_latest)
+            if not np.isnan(t_earliest): t_to_first_images.append(t_earliest)
+            if not np.isnan(t_latest): t_to_last_images.append(t_latest)
             t_response.extend([observation['resp time [norm]'] for observation in observations
                                 if not (isinstance(observation['resp time [norm]'], float)
                                         and np.isnan(observation['resp time [norm]']))])    
@@ -3104,8 +3112,8 @@ class ResultsProcessor:
                               if not (isinstance(observation['time to image [s]'], float)
                                       and np.isnan(observation['time to image [s]']))
                             ], default=np.NAN)
-            t_to_first_images.append(t_earliest)
-            t_to_last_images.append(t_latest)
+            if not np.isnan(t_earliest): t_to_first_images.append(t_earliest)
+            if not np.isnan(t_latest): t_to_last_images.append(t_latest)
             t_to_image.extend([observation['time to image [s]'] for observation in observations
                                 if not (isinstance(observation['time to image [s]'], float)
                                         and np.isnan(observation['time to image [s]']))])
@@ -3147,8 +3155,8 @@ class ResultsProcessor:
                               if not (isinstance(observation['time to image [norm]'], float)
                                       and np.isnan(observation['time to image [norm]']))
                             ], default=np.NAN)
-            t_to_first_images.append(t_earliest)
-            t_to_last_images.append(t_latest)
+            if not np.isnan(t_earliest): t_to_first_images.append(t_earliest)
+            if not np.isnan(t_latest): t_to_last_images.append(t_latest)
             t_to_image.extend([observation['time to image [norm]'] for observation in observations
                                 if not (isinstance(observation['time to image [norm]'], float)
                                         and np.isnan(observation['time to image [norm]']))])
