@@ -82,6 +82,8 @@ class SimulationEnvironment(object):
         # initialize parameters
         self._t_curr = np.NINF
         self._agent_state_update_times = {}
+        self._obs_last_recorded : dict = {}     # action_id -> last t_end_query recorded
+        self._obs_accumulated_data : dict = {}  # action_id -> cumulative list of observation dicts
 
         # initialize data sinks for historical data
         self._task_reqs = DataSink(out_dir=env_results_path, owner_name=SimulationRoles.ENVIRONMENT.value.lower(), data_name="requests")       
@@ -264,49 +266,57 @@ class SimulationEnvironment(object):
         # log broadcast event
         return state, ActionStatuses.COMPLETED.value, [msg_out], []
     
-    def __handle_observation(self, 
+    def __handle_observation(self,
                             state : SimulationAgentState,
-                            action : ObservationAction, 
+                            action : ObservationAction,
                             t_curr : float
                         ) -> Tuple[SimulationAgentState, str, list, list]:
         """ Performs an observation action """
-        
-        if action is None:
-            x = 1
-        if action.req is None:
-            x = 1
 
         # unpack message
         agent_state_dict = action.req['agent_state']
         instrument_dict = action.req['instrument']
         t_start = action.req['t_start']
-        t_end = max(action.req['t_end'], t_curr)
+        t_end = action.req['t_end']
 
-        assert t_end >= t_start, \
-            f"Invalid observation action times: t_start={action.req['t_start']}[s], t_end={t_end}[s], t_img={t_curr}[s]"
+        # determine completion status
+        completed = t_curr >= t_end - 1e-6
+        status = ActionStatuses.COMPLETED.value if completed else ActionStatuses.PENDING.value
 
-        # find/generate measurement results
-        observation_data = self._query_measurement_data(agent_state_dict, instrument_dict, t_start, t_end)
+        # query only the new portion of the observation window since the last recording to
+        # prevent double-counting when an observation spans multiple simulation time-steps
+        # while still capturing data from partially-executed (interrupted) observations
+        t_last = self._obs_last_recorded.get(action.id, t_start)
+        t_end_query = t_end if completed else t_curr
+        # use an exclusive lower bound on follow-up queries: lookup_interval is inclusive
+        # on both sides, so starting at exactly t_last would re-include the boundary point
+        t_query_start = t_last + 1e-9 if t_last > t_start else t_start
 
-        # package observation data
-        obs_data : tuple = (instrument_dict['name'].lower(), observation_data)
+        new_observation_data = []
+        if t_end_query > t_last + 1e-9:
+            assert t_end_query >= t_query_start, \
+                f"Invalid observation query: t_query_start={t_query_start}[s], t_end_query={t_end_query}[s], t_curr={t_curr}[s]"
+            new_observation_data = self._query_measurement_data(agent_state_dict, instrument_dict, t_query_start, t_end_query)
+            self._observation_history.extend(new_observation_data)
+            self._obs_last_recorded[action.id] = t_end_query
+
+        # accumulate data across partial steps so planners always see the full set
+        accumulated = self._obs_accumulated_data.get(action.id, [])
+        accumulated = accumulated + new_observation_data
+        self._obs_accumulated_data[action.id] = accumulated
+
+        if completed:
+            self._obs_last_recorded.pop(action.id, None)
+            self._obs_accumulated_data.pop(action.id, None)
+
+        # propagate cumulative observation data back into the action so planners can inspect it
+        action.req['observation_data'] = accumulated
+
+        # package newly-acquired observation data for this step as my_measurements
+        obs_data : tuple = (instrument_dict['name'].lower(), new_observation_data)
 
         # update state status
-        state.update(t_curr, status=SimulationAgentState.MEASURING)    
-
-        # save observation to history
-        resp = action.req.copy()
-        resp['observation_data'] = observation_data
-        self._observation_history.extend(observation_data)    
-
-        # set completion status based on end time of observation action
-        if t_curr < t_end - 1e-6:
-            # observation action is still ongoing; 
-            #  mark as pending for nows
-            status = ActionStatuses.PENDING.value
-        else:
-            # observation action has completed; mark as completed
-            status = ActionStatuses.COMPLETED.value
+        state.update(t_curr, status=SimulationAgentState.MEASURING)
 
         # return packaged results
         return state, status, [], [obs_data]
