@@ -1677,6 +1677,7 @@ class ResultsProcessor:
                             n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                                 n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
                                     n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
+                                    n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, n_planned_task_obs, \
                                         n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
                                             n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
                                                 n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
@@ -1702,6 +1703,7 @@ class ResultsProcessor:
                                                                                             known_tasks,
                                                                                             accesses_per_task,
                                                                                             observations_per_task,
+                                                                                            obtained_rewards_df,
                                                                                             printouts)
             
         # count probabilities of observations performed
@@ -1737,6 +1739,9 @@ class ResultsProcessor:
                                                                                                 accesses_per_task,
                                                                                                 observations_per_task,
                                                                                                 printouts)
+                                                                                                obtained_rewards_df,
+                                                                                                printouts
+                                                                                            )
         
         # calculate event revisit times
         t_gp_reobservation = ResultsProcessor.__calc_groundpoint_reobservation_metrics(observations_per_gp)
@@ -1782,6 +1787,7 @@ class ResultsProcessor:
                 compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts
             )
             reward_primal_bound = sum(primal_per_task.values())
+            reward_primal_bound = np.NAN
             reward_dual_bound   = sum(dual_per_task.values())
 
             # known bounds: filter per-task dicts to known tasks only (no second computation needed)
@@ -1812,6 +1818,7 @@ class ResultsProcessor:
                     compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts
                 )
                 known_reward_primal_bound = sum(known_primal_per_task.values())
+                known_reward_primal_bound = np.NAN
                 known_reward_dual_bound   = sum(known_dual_per_task.values())
             else:
                 known_reward_primal_bound, known_reward_dual_bound = np.NAN, np.NAN
@@ -1840,6 +1847,8 @@ class ResultsProcessor:
                     ['Events Announced', n_events_requested],
 
                     ['Event Observations', n_total_event_obs],
+                    ['Tasked Event Observations', n_tasked_event_obs],
+                    ['Passive Event Observations', n_passive_event_obs],
                     
                     ['Events Re-observable', n_events_reobservable],
                     ['Events Re-observed', n_events_reobserved],
@@ -1867,6 +1876,9 @@ class ResultsProcessor:
                     ['Task Observations', n_total_task_obs],
                     ['Event-Driven Tasks Observed', n_event_tasks_observed],
                     ['Default Mission Tasks Observed', n_default_tasks_observed],
+                    
+                    ['Task Observations', n_total_task_obs],
+                    ['Planned Task Observations', n_planned_task_obs],
 
                     # Coverage Metrics 
                     ['Ground Points', n_gps],
@@ -2450,6 +2462,7 @@ class ResultsProcessor:
                             tasks_known : list,
                             tasks_observable : dict,
                             tasks_observed : dict,
+                            obtained_rewards_df : pd.DataFrame,
                             printouts : bool = True
                         ) -> tuple:
         # get a representative agent orbitdata for time and ground point information
@@ -2562,6 +2575,7 @@ class ResultsProcessor:
         n_event_tasks = len([task for task in all_tasks if isinstance(task, EventObservationTask)])
         n_default_tasks = len([task for task in all_tasks if isinstance(task, DefaultMissionTask)]) 
         n_total_task_obs = sum(len(observations) for observations in tasks_observed.values())
+        n_planned_task_obs = len(obtained_rewards_df) if not obtained_rewards_df.empty else 0
 
         assert n_event_tasks + n_default_tasks <= n_tasks
 
@@ -2634,6 +2648,7 @@ class ResultsProcessor:
                                 n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                                     n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
                                         n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
+                                        n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, n_planned_task_obs, \
                                             n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
                                                 n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
                                                     n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
@@ -2663,6 +2678,7 @@ class ResultsProcessor:
                                     tasks_known : list,
                                     tasks_observable : dict,
                                     tasks_observed : dict,
+                                    obtained_rewards_df : pd.DataFrame,
                                     printouts : bool = True
                                 ) -> tuple:
 
@@ -2674,7 +2690,7 @@ class ResultsProcessor:
                         n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
                             n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                                 n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                    n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
+                                    n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, n_task_obs_planned, \
                                         n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
                                             n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
                                                 n_tasks_observed, n_event_tasks_observed, n_default_tasks_observed, \
@@ -2700,6 +2716,7 @@ class ResultsProcessor:
                                                                                     tasks_known,
                                                                                     tasks_observable,
                                                                                     tasks_observed,
+                                                                                    obtained_rewards_df,
                                                                                     printouts)
                     
         # count number of ground points accessible and observed 
