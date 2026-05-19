@@ -40,7 +40,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                  debug : bool = False,
                  logger : bool = None,
                  printouts : bool = True,
-                 contested_reset_threshold : int = 3
+                #  contested_reset_threshold : int = 3
+                 contested_reset_threshold : int = None
                 ):
         super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, agent_results_dir, debug, logger, printouts, contested_reset_threshold)
 
@@ -173,7 +174,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         cross_track_fovs : dict = self._collect_fov_specs(specs)
 
         # Outline planning horizon interval
-        t_next = max(self._preplan.t + self._preplan.horizon, state._t)
+        # t_next = max(self._preplan.t + self._preplan.horizon, state._t)
+        t_next = max(self._preplan.t_next, state._t)
         planning_horizon = Interval(state._t, t_next)
         
         # calculate observation opportunities for this planning horizon
@@ -226,7 +228,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         access_opportunities : dict[tuple] = self.calculate_access_opportunities(state, available_tasks, planning_horizon, orbitdata)
 
         # create and merge task observation opportunities from scheduled tasks and urgent tasks
-        observation_opportunities : List[ObservationOpportunity] = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
+        observation_opportunities : List[ObservationOpportunity] \
+            = self.create_observation_opportunities_from_accesses(available_tasks, access_opportunities, cross_track_fovs, orbitdata)
         
         # extract already planned task observation opportunities from current plan
         planned_observation_opportunities = [obs.obs_opp for obs in self._path 
@@ -1244,7 +1247,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                 # 1) I am the current bid winner and proposed observation value is positive
                                 existing_bid.winner == state.agent_name and task_value > 0.0,
                                 # 2) I outperform the current bid and the immediately following bid for this task, 
-                                beats_current and beats_immediate_next,
+                                beats_current,
+                                # beats_current and beats_immediate_next,
                                 # 3) I propose an earlier observation time and have a positive optimistic bidding counter
                                 t_obs < existing_bid.t_img and self._optimistic_bidding_counters[task][n_obs] > 0
                             ]
