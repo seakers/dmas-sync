@@ -55,6 +55,7 @@ class AbstractEventAnnouncerPlanner(AbstractPeriodicPlanner):
         self._parent_agent_name : str = None 
 
         # load predefined events
+        self._events_dir : str = events_path
         self._events : list[GeophysicalEvent] = self.load_events(events_path)
         self._event_ids : Dict[str, GeophysicalEvent]= {event.id : event for event in self._events}
         # tracks which comms-column indices have already been covered per event id
@@ -242,6 +243,9 @@ class InstantEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
         return sorted(broadcasts, key=lambda action: action.t_start)    
     
     def print_results(self):
+        # clear events list and reload them 
+        self._events = self.load_events(self._events_dir)
+
         # log known and generated requests
         columns = ['id','requester','lat [deg]','lon [deg]','grid index', 'GP index','severity','start time [s]','end time [s]','detection time [s]','event type']        
         data_detected = [(event.id, self._parent_agent_name, event.location[0], event.location[1], event.location[2], event.location[3], event.severity, event.t_start, event.t_start+event.d_exp, event.t_detect, event.event_type)
