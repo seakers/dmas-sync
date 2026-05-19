@@ -199,7 +199,7 @@ if __name__ == "__main__":
     
     # compile and save compiled results summaries for this trial
     compile_results_summaries(trial_name, 
-                              base_dir=base_dir
+                            #   base_dir=base_dir
                               )
 
     # print completion message
