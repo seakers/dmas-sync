@@ -1,5 +1,4 @@
 import os
-from tokenize import group
 
 import pandas as pd
 
@@ -100,65 +99,51 @@ def compile_results_summaries(trial_name : str,
     # sort by Trial ID for easier comparison across trials
     results_df = results_df.sort_values(by=id_col).reset_index(drop=True)
 
-    # fill missing dual bounds with the values from the same scenario
+    # fill Task Reward Dual Bound: propagate first non-NaN within (Scenario, Date)
     if 'Task Reward Dual Bound' in results_df.columns:
-        # group by scenario and date
-        for group_key,group_data in results_df.groupby(['Scenario', 'Date']):
-            # unpack key
-            group_scenario,group_date = group_key
-            
-            # define group mask
+        for (group_scenario, group_date), group_data in results_df.groupby(['Scenario', 'Date']):
             group_mask = (results_df['Scenario'] == group_scenario) & (results_df['Date'] == group_date)
-
-            # find if any value in the group has real dual and primal bouds
-            has_real_dual_bound =  group_data['Task Reward Dual Bound'].notna()
-            has_real_primal_bound = group_data['Total Planned Reward'].notna()
-            real_values_slice = group_data[has_real_dual_bound & has_real_primal_bound]
-
-            # check if data was found for this scenario and date
-            if not real_values_slice.empty:
-                # get the dual bound value from the first row of the slice (should be the same for all rows in the slice)
-                dual_bound_value = real_values_slice['Task Reward Dual Bound'].iloc[0]
-                primal_bound_value = real_values_slice['Total Planned Reward'].iloc[0]
-
-                # fill missing dual bound values in the group with this value
-                results_df.loc[group_mask, 'Task Reward Dual Bound'] = dual_bound_value
-
-                # fill missing primal bound values in the group with this value
-                results_df.loc[group_mask, 'Task Reward Primal Bound'] = primal_bound_value
+            non_nan = group_data['Task Reward Dual Bound'].dropna()
+            if not non_nan.empty:
+                results_df.loc[group_mask, 'Task Reward Dual Bound'] = non_nan.iloc[0]
             else:
-                # no real data found for this scenario and date, fill with string `NaN`
-                results_df.loc[group_mask, 'Task Reward Dual Bound'].fillna('NaN', inplace=True)
-                results_df.loc[group_mask, 'Task Reward Primal Bound'].fillna('NaN', inplace=True)
+                results_df.loc[group_mask, 'Task Reward Dual Bound'] = results_df.loc[group_mask, 'Task Reward Dual Bound'].fillna('NaN')
 
-            # define subgroups based on Data Processing and fill missing values within each subgroup
-            for subgroup_key,subgroup_data in group_data.groupby('Data Processing'):
-                # unpack key
-                subgroup_processor = subgroup_key
+    # fill Known Task Reward Dual Bound, Known Task Reward Primal Bound, and Task Reward Primal Bound
+    # grouped by (Connectivity, Data Processing, Date)
+    subgroup_cols = ['Connectivity', 'Data Processing', 'Date']
+    for (group_connectivity, group_dp, group_date), group_data in results_df.groupby(subgroup_cols):
+        group_mask = (
+            (results_df['Connectivity'] == group_connectivity) &
+            (results_df['Data Processing'] == group_dp) &
+            (results_df['Date'] == group_date)
+        )
 
-                # define subgroup mask
-                subgroup_mask = group_mask & (results_df['Data Processing'] == subgroup_processor)
+        # Known Task Reward Dual Bound: propagate first non-NaN in group
+        if 'Known Task Reward Dual Bound' in results_df.columns:
+            non_nan = group_data['Known Task Reward Dual Bound'].dropna()
+            if not non_nan.empty:
+                results_df.loc[group_mask, 'Known Task Reward Dual Bound'] = non_nan.iloc[0]
+            else:
+                results_df.loc[group_mask, 'Known Task Reward Dual Bound'] = results_df.loc[group_mask, 'Known Task Reward Dual Bound'].fillna('NaN')
 
-                # find if any value in the subgroup has real dual and primal bouds
-                has_real_dual_bound_subgroup =  subgroup_data['Known Task Reward Dual Bound'].notna()
-                has_real_primal_bound_subgroup = subgroup_data['Known Task Reward Primal Bound'].notna()
-                real_values_slice_subgroup = subgroup_data[has_real_dual_bound_subgroup & has_real_primal_bound_subgroup]
+        # Known Task Reward Primal Bound and Task Reward Primal Bound:
+        # use Total Obtained Utility from the Preplanner=None x Replanner=None row in this group
+        none_none_rows = group_data[
+            (group_data['Preplanner'] == 'None') & (group_data['Replanner'] == 'None')
+        ]['Total Obtained Utility'].dropna()
 
-                # check if data was found for this subgroup
-                if not real_values_slice_subgroup.empty:
-                    # get the dual bound value from the first row of the slice (should be the same for all rows in the slice)
-                    dual_bound_value_subgroup = real_values_slice_subgroup['Known Task Reward Dual Bound'].iloc[0]
-                    primal_bound_value_subgroup = real_values_slice_subgroup['Known Task Reward Primal Bound'].iloc[0]
-
-                    # fill missing dual bound values in the subgroup with this value
-                    results_df.loc[subgroup_mask, 'Known Task Reward Dual Bound'] = dual_bound_value_subgroup
-
-                    # fill missing primal bound values in the subgroup with this value
-                    results_df.loc[subgroup_mask, 'Known Task Reward Primal Bound'] = primal_bound_value_subgroup
-                else:
-                    # no real data found for this subgroup, fill with string `NaN`
-                    results_df.loc[subgroup_mask, 'Known Task Reward Dual Bound'].fillna('NaN', inplace=True)
-                    results_df.loc[subgroup_mask, 'Known Task Reward Primal Bound'].fillna('NaN', inplace=True)
+        if not none_none_rows.empty:
+            primal_value = none_none_rows.iloc[0]
+            if 'Known Task Reward Primal Bound' in results_df.columns:
+                results_df.loc[group_mask, 'Known Task Reward Primal Bound'] = primal_value
+            if 'Task Reward Primal Bound' in results_df.columns:
+                results_df.loc[group_mask, 'Task Reward Primal Bound'] = primal_value
+        else:
+            if 'Known Task Reward Primal Bound' in results_df.columns:
+                results_df.loc[group_mask, 'Known Task Reward Primal Bound'] = results_df.loc[group_mask, 'Known Task Reward Primal Bound'].fillna('NaN')
+            if 'Task Reward Primal Bound' in results_df.columns:
+                results_df.loc[group_mask, 'Task Reward Primal Bound'] = results_df.loc[group_mask, 'Task Reward Primal Bound'].fillna('NaN')
 
     # perform normalization of metrics if desired (e.g. normalize rewards by number of tasks)
     if 'Total Obtained Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
@@ -207,14 +192,14 @@ def compile_results_summaries(trial_name : str,
 
 if __name__ == "__main__":
     # define trial parameters
-    base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-14_archive"
+    base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-17_archive_v3"
 
     # trial_name = "full_factorial_trials_2026-05-11"
-    trial_name = "full_factorial_trials_2026-05-14"
+    trial_name = "full_factorial_trials_2026-05-17"
     
     # compile and save compiled results summaries for this trial
     compile_results_summaries(trial_name, 
-                            #   base_dir=base_dir
+                              base_dir=base_dir
                               )
 
     # print completion message
