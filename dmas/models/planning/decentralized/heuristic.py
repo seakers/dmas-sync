@@ -598,9 +598,15 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
                 obs_prev = obs_next
 
             # check if observation time was found
-            if t_img is None: 
+            if t_img is None:
                 # no time found; cannot insert new observation into path
-                continue 
+                continue
+
+            # enforce one-observation-per-pass constraint: mirrors the mutually_exclusive
+            # check in HeuristicInsertionPeriodicPlanner — skip if the same task is already
+            # scheduled in an overlapping access window (same orbital pass)
+            if any(new_obs.is_mutually_exclusive(_a.obs_opp) for _a in current_path):
+                continue
 
             # insert new observation into path
             ## create observation action for new task
