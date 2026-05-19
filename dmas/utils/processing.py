@@ -36,6 +36,7 @@ from dmas.utils.tools import SimulationRoles
 
 def is_taskable(name : str) -> bool:
     # TODO refine this function to more robustly determine taskability based on task naming conventions; 
+    # for now, we just exclude tasks with "-U)" in the name, which are used in the default mission to denote unobservable tasks that should not be included in accessibility and performance calculations
     return "-U)" not in name
 
 class DualBoundCalcOptions(Enum):
@@ -135,7 +136,6 @@ class ResultsProcessor:
         # iterate tasks and corresponding observations
         for task, observations in tqdm(observations_per_task.items(),
                                        desc="[results processor] compiling rewards obtained from observations",
-                                       leave=True,
                                        leave=False,
                                        disable=not printouts,
                                        total=len(observations_per_task.keys())
@@ -144,8 +144,14 @@ class ResultsProcessor:
             # initialize previous observation time for revisit time calculation
             t_prev = np.NINF
 
-            # iterate observations by start time 
-            for n_obs,obs_perf in enumerate(sorted(observations, key=lambda obs: obs['time [s]'])):
+            # only consider taskable observations for reward calculation
+            taskable_observations = [obs_perf for obs_perf in observations 
+                                     if is_taskable(obs_perf['instrument'])]
+            # sort by observation time to properly calculate revisit times for performance metrics that depend on them (e.g. timeliness)
+            taskable_observations.sort(key=lambda obs: obs['time [s]'])
+
+            # iterate observations by start time             
+            for n_obs,obs_perf in enumerate(taskable_observations): # sorted(observations, key=lambda obs: obs['time [s]'])
                 # unpack observation information
                 observing_agent = obs_perf['agent name']
                 instrument_name : str = obs_perf['instrument']
@@ -337,7 +343,6 @@ class ResultsProcessor:
             for row in tqdm(events_detected_df.to_dict('records'), 
                             desc='[results processor] building event detection objects',
                             disable=not printouts,
-                            leave=True,
                             leave=False,
                             total=len(events_detected_df)
                         )
@@ -391,7 +396,6 @@ class ResultsProcessor:
         for _,row in tqdm(task_reqs_df.iterrows(), 
                           desc='[results processor] building task request objects from data',
                           disable=not printouts or len(task_reqs_df) == 0,
-                          leave=True,
                           leave=False,
                           total=len(task_reqs_df)
                         ):
@@ -454,7 +458,6 @@ class ResultsProcessor:
         for _,row in tqdm(default_tasks_df.iterrows(), 
                           desc='[results processor] building default task objects from data',
                           disable=not printouts or len(default_tasks_df) == 0,
-                          leave=True,
                           leave=False,
                           total=len(default_tasks_df)
                         ):
@@ -485,7 +488,6 @@ class ResultsProcessor:
 
         # supplement known with event request tasks
         requested_tasks = {req.task 
-                           for req in tqdm(task_reqs, desc='[results processor] compiling tasks from requests', disable=not printouts, leave=True)
                            for req in tqdm(task_reqs, desc='[results processor] compiling tasks from requests', disable=not printouts, leave=False)
                             if req.task not in known_tasks}
         known_tasks.extend(requested_tasks)
@@ -599,7 +601,6 @@ class ResultsProcessor:
         for agent_name in tqdm(compiled_orbitdata.keys(),
                                 desc='[results processor] loading planned agent utilities',
                                 disable=not printouts,
-                                leave=True,
                                 leave=False,
                                 total=len(compiled_orbitdata.keys())
                             ):
@@ -621,7 +622,6 @@ class ResultsProcessor:
         for agent_name in tqdm(compiled_orbitdata.keys(),
                                 desc='[results processor] loading planned execution costs',
                                 disable=not printouts,
-                                leave=True,
                                 leave=False,
                                 total=len(compiled_orbitdata.keys())
                             ):
@@ -654,7 +654,6 @@ class ResultsProcessor:
         grid_data = []
         for agent_orbitdata in tqdm(compiled_orbitdata.values(), 
                                     desc='[results processor] loading target grids from agent orbitdata', 
-                                    leave=True,
                                     leave=False,
                                     disable=not printouts,
                                     unit=' agents'
@@ -760,7 +759,8 @@ class ResultsProcessor:
             gp_slices[(g, p)] = slice(a, b)
 
         # 5) Build final output: (grid,gp) -> {col: big[col][slice]}
-        out = {(g,p): {c: big[c][sl] for c in big} for (g,p), sl in gp_slices.items()}
+        out = {(g,p): {c: big[c][sl] for c in big} 
+               for (g,p), sl in gp_slices.items()}
 
         # sort by time within each group
         for data in out.values():
@@ -798,25 +798,20 @@ class ResultsProcessor:
         accesses_per_event_data = []
         accesses_per_event = dict()
 
-        # pre-build instrument capability requirements by event type (avoid rebuilding per event)
-        reqs_by_event_type: Dict[str, Dict[str, set]] = {}
-        allowed_pairs_by_event_type: Dict[str, frozenset] = {}
+        # pre-build instrument capability requirement by event type (avoid rebuilding per event)
+        cap_req_by_event_type: Dict[str, object] = {}
         for event_type_key in {e.event_type.lower() for e in events}:
-            reqs: Dict[str, set] = defaultdict(set)
             for agent_name, mission in agent_missions.items():
                 for objective in mission:
                     if (isinstance(objective, EventDrivenObjective)
-                            and objective.event_type.lower() == event_type_key):
-                        for req in objective:
-                            if (isinstance(req, CapabilityRequirement)
-                                    and req.attribute == 'instrument'):
-                                reqs[agent_name].update({v.lower() for v in req.valid_values})
-            if any(len(v) == 0 for v in reqs.values()):
-                raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type_key}`. Case not yet supported.")
-            reqs_by_event_type[event_type_key] = reqs
-            allowed_pairs_by_event_type[event_type_key] = frozenset(
-                (a, i) for a, insts in reqs.items() for i in insts
-            )
+                            and objective.event_type.lower() == event_type_key
+                            and event_type_key not in cap_req_by_event_type):
+                        cap_reqs = [req for req in objective
+                                    if isinstance(req, CapabilityRequirement)
+                                    and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
+                        cap_req_by_event_type[event_type_key] = cap_reqs[0] if cap_reqs else None
+            if event_type_key not in cap_req_by_event_type:
+                cap_req_by_event_type[event_type_key] = None
 
         # look for accesses to each event for each agent
         for event in tqdm(events,
@@ -829,8 +824,7 @@ class ResultsProcessor:
             event_gp_idx = int(event_gp_idx)
             event_type = event.event_type.lower()
 
-            instrument_capability_reqs = reqs_by_event_type[event_type]
-            allowed_pairs = allowed_pairs_by_event_type[event_type]
+            cap_req = cap_req_by_event_type.get(event_type, None)
 
             # get matching accesses for this location
             location_key = (event_grid_idx, event_gp_idx)
@@ -853,10 +847,15 @@ class ResultsProcessor:
             idx = np.nonzero(availability_mask)[0]
 
             # Build compatibility mask only over the narrowed slice
-            compat = np.fromiter(
-                ((str(agent[i]), str(instr[i]).lower()) in allowed_pairs for i in idx),
-                dtype=bool, count=idx.size
-            )
+            if cap_req is not None:
+                compat = np.fromiter(
+                    (cap_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value,
+                                             str(instr[i]).lower()) >= 0.5
+                     for i in idx),
+                    dtype=bool, count=idx.size
+                )
+            else:
+                compat = np.ones(idx.size, dtype=bool)
 
             combined_mask = availability_mask.copy()
             combined_mask[idx] = compat
@@ -958,12 +957,12 @@ class ResultsProcessor:
 
         for event in tqdm(events, 
                             desc='[results processor] classifying event requests', 
-                            leave=True,
                             leave=False,
                             disable=not printouts):
             
             # find measurement requests that match this event
-            if any(not isinstance(task_req.task, EventObservationTask) for task_req in task_reqs):
+            if any(not isinstance(task_req.task, EventObservationTask) 
+                   for task_req in task_reqs):
                 raise NotImplementedError("Non-event observation tasks are not yet supported in event observation classification.")
             else:
                 matching_requests = sorted([task_req for task_req in task_reqs 
@@ -1005,29 +1004,25 @@ class ResultsProcessor:
         accesses_per_task : Dict[GenericObservationTask, list] = defaultdict(list)
         accesses_per_task_df_data = []
 
-        # pre-build per-objective instrument capability requirements (avoid rebuilding per task)
-        obj_agent_reqs: Dict[int, Dict[str, set]] = {}
-        obj_allowed_pairs: Dict[int, frozenset] = {}
+        # pre-build per-objective instrument capability requirement (avoid rebuilding per task)
+        obj_cap_req: Dict = {}
         for agent_name, mission in agent_missions.items():
             for objective in mission:
-                if objective not in obj_agent_reqs:
-                    obj_agent_reqs[objective] = defaultdict(set)
-                for req in objective:
-                    if (isinstance(req, CapabilityRequirement)
-                            and req.attribute == 'instrument'):
-                        obj_agent_reqs[objective][agent_name].update(v.lower() for v in req.valid_values)
-        for objective, reqs in obj_agent_reqs.items():
-            obj_allowed_pairs[objective] = frozenset(
-                (a, i) for a, insts in reqs.items() for i in insts
-            )
+                if objective not in obj_cap_req:
+                    cap_reqs = [req for req in objective
+                                if isinstance(req, CapabilityRequirement)
+                                and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
+                    obj_cap_req[objective] = cap_reqs[0] if cap_reqs else None
 
-        for task in tqdm(tasks, desc="[results processor] determining task accessibility", leave=True, disable=not printouts):
-            # look up pre-built instrument capability requirements for this task's objective
         for task in tqdm(tasks, desc="[results processor] determining task accessibility", leave=False, disable=not printouts):
             # look up pre-built instrument capability requirement for this task's objective
             objective = task.objective
-            instrument_capability_reqs = obj_agent_reqs.get(objective, defaultdict(set))
-            allowed_pairs = obj_allowed_pairs.get(objective, frozenset())
+            cap_req = obj_cap_req.get(objective, None)
+            if cap_req is None and objective is not None:
+                cap_reqs = [req for req in objective
+                            if isinstance(req, CapabilityRequirement)
+                            and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
+                cap_req = cap_reqs[0] if cap_reqs else None
 
             # find all accesses and observations that match this task
             task_access_windows = []
@@ -1067,10 +1062,15 @@ class ResultsProcessor:
                 idx = np.nonzero(availability_mask)[0]
 
                 # Build compatibility mask only over the narrowed slice
-                compat = np.fromiter(
-                    ((str(agent[i]), str(instr[i]).lower()) in allowed_pairs for i in idx),
-                    dtype=bool, count=idx.size
-                )
+                if cap_req is not None:
+                    compat = np.fromiter(
+                        (cap_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value,
+                                                 str(instr[i]).lower()) >= 0.5
+                         for i in idx),
+                        dtype=bool, count=idx.size
+                    )
+                else:
+                    compat = np.ones(idx.size, dtype=bool)
 
                 combined_mask = availability_mask.copy()
                 combined_mask[idx] = compat
@@ -1142,6 +1142,12 @@ class ResultsProcessor:
                                         for interval, agent_name, i0 in access_intervals 
                                         if interval.overlaps(task.availability)]    
                 
+                # filter by capability requirements for this task's objective 
+                # (if no explicit requirement found, assume can be tasked)
+                access_intervals = [(interval, agent_name, instrument) 
+                                    for interval, agent_name, instrument in access_intervals 
+                                    if is_taskable(agent_name)]
+
                 # append to task lists
                 task_access_windows.extend(access_intervals)
 
@@ -1168,6 +1174,8 @@ class ResultsProcessor:
             # if access windows were found for this task, add to map of tasks to access intervals
             if task_access_windows: accesses_per_task[task] = task_access_windows
     
+        if printouts: tqdm.write(f'[results processor] determined task accessibility for {len(accesses_per_task)} out of {len(tasks)} tasks')
+
         # convert to dataframe
         if accesses_per_task_df_data:
             accesses_per_task_df = pd.DataFrame(accesses_per_task_df_data)
@@ -1182,30 +1190,47 @@ class ResultsProcessor:
 
     @staticmethod
     def __classify_observations_per_gp(observations_performed_df : pd.DataFrame, printouts : bool) -> Dict[Tuple[int,int], pd.DataFrame]:
-        # classify observations per GP 
-        # observations_per_gp : Dict[Tuple[int,int], pd.DataFrame] \
-        #                         = {(int(group[0]), int(group[1])) : data
-        #                         for group,data in observations_performed_df.groupby(['grid index', 'GP index'])} \
-        #                         if not observations_performed_df.empty else dict() # handle empty observations case
+        # classify observations per GP
         if observations_performed_df.empty:
             if printouts: tqdm.write('[results processor] no observations were performed. Skipping classification of observations by ground point.')
-            observations_per_gp = dict()
-        else:
-            observations_per_gp = {}
-            for group, data in tqdm(observations_performed_df.groupby(['grid index', 'GP index']),
-                                    desc='[results processor] classifying performed observations by ground point',
-                                    leave=True,
-                                    disable=not printouts):
-                # get grid and GP indices for this group
-                grid_idx, gp_idx = int(group[0]), int(group[1])
+            return dict()
 
-                # sort data by time within this group
-                data_sorted = data.sort_values(by='t_start', kind='mergesort')
+        observations_per_gp = {}
+        for group, data in tqdm(observations_performed_df.groupby(['grid index', 'GP index']),
+                                desc='[results processor] classifying performed observations by ground point',
+                                leave=False,
+                                disable=not printouts):
+            grid_idx, gp_idx = int(group[0]), int(group[1])
 
-                # assign sorted data to output dictionary
-                observations_per_gp[(grid_idx, gp_idx)] = data_sorted
+            # drop exact duplicates, then sort by agent+instrument+t_start for the merge pass
+            data = data.drop_duplicates().sort_values(
+                by=['agent name', 'instrument', 't_start'], kind='mergesort'
+            )
 
-        # return observations per GP and set of accessible GPs
+            # merge adjacent/overlapping intervals from the same (agent name, instrument)
+            merged_rows = []
+            prev = None
+            for _, row in data.iterrows():
+                row_d = row.to_dict()
+                if prev is None:
+                    prev = row_d
+                elif (row_d['agent name'] == prev['agent name']
+                      and row_d['instrument'] == prev['instrument']
+                      and row_d['t_start'] <= prev['t_end'] + 1e-9):
+                    prev['t_end'] = max(prev['t_end'], row_d['t_end'])
+                else:
+                    merged_rows.append(prev)
+                    prev = row_d
+            if prev is not None:
+                merged_rows.append(prev)
+
+            # re-sort by t_start for all downstream consumers
+            merged_df = (pd.DataFrame(merged_rows)
+                           .sort_values(by='t_start', kind='mergesort')
+                           .reset_index(drop=True))
+            observations_per_gp[(grid_idx, gp_idx)] = merged_df
+
+        if printouts: tqdm.write(f'[results processor] classified performed observations for {len(observations_per_gp)} ground points')
         return observations_per_gp
 
     @staticmethod
@@ -1219,25 +1244,20 @@ class ResultsProcessor:
         observations_per_event = defaultdict(list)
         observations_per_event_df_data = []
 
-        # pre-build instrument capability requirements by event type (avoid rebuilding per event)
-        reqs_by_event_type: Dict[str, Dict[str, set]] = {}
-        allowed_pairs_by_event_type: Dict[str, frozenset] = {}
+        # pre-build instrument capability requirement by event type (avoid rebuilding per event)
+        cap_req_by_event_type: Dict[str, object] = {}
         for event_type_key in {e.event_type.lower() for e in events}:
-            reqs: Dict[str, set] = defaultdict(set)
             for agent_name, mission in agent_missions.items():
                 for objective in mission:
                     if (isinstance(objective, EventDrivenObjective)
-                            and objective.event_type.lower() == event_type_key):
-                        for req in objective:
-                            if (isinstance(req, CapabilityRequirement)
-                                    and req.attribute == 'instrument'):
-                                reqs[agent_name].update(v.lower() for v in req.valid_values)
-            if any(len(v) == 0 for v in reqs.values()):
-                raise NotImplementedError(f"No instrument capability requirements found for event type `{event_type_key}`. Case not yet supported.")
-            reqs_by_event_type[event_type_key] = reqs
-            allowed_pairs_by_event_type[event_type_key] = frozenset(
-                (a, i) for a, insts in reqs.items() for i in insts
-            )
+                            and objective.event_type.lower() == event_type_key
+                            and event_type_key not in cap_req_by_event_type):
+                        cap_reqs = [req for req in objective
+                                    if isinstance(req, CapabilityRequirement)
+                                    and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
+                        cap_req_by_event_type[event_type_key] = cap_reqs[0] if cap_reqs else None
+            if event_type_key not in cap_req_by_event_type:
+                cap_req_by_event_type[event_type_key] = None
 
         earliest_req_time: Dict[GeophysicalEvent, float] = {
             req.task.event: min([r.t_req for r in task_reqs 
@@ -1249,7 +1269,6 @@ class ResultsProcessor:
 
         for event in tqdm(events,
                           desc='[results processor] classifying event accesses, detections, and observations',
-                          leave=True,
                           leave=False,
                           disable=not printouts
                         ):
@@ -1259,8 +1278,7 @@ class ResultsProcessor:
             event_gp_idx = int(event_gp_idx)
             event_type = event.event_type.lower()
 
-            instrument_capability_reqs = reqs_by_event_type[event_type]
-            allowed_pairs = allowed_pairs_by_event_type[event_type]
+            cap_req = cap_req_by_event_type.get(event_type, None)
 
             # get event observations for this event's location
             if (event_grid_idx, event_gp_idx) not in observations_per_gp:
@@ -1285,12 +1303,15 @@ class ResultsProcessor:
 
             # find observations that match the event's instrument capability requirements
             inst_lower = matching_observations["instrument"].str.lower()
-            agents = matching_observations["agent name"]
 
-            instrument_mask = np.fromiter(
-                ((a, i) in allowed_pairs for a, i in zip(agents, inst_lower)),
-                dtype=bool, count=len(agents)
-            )
+            if cap_req is not None:
+                instrument_mask = np.fromiter(
+                    (cap_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value, i) >= 0.5
+                     for i in inst_lower),
+                    dtype=bool, count=len(inst_lower)
+                )
+            else:
+                instrument_mask = np.ones(len(inst_lower), dtype=bool)
             matching_observations = matching_observations[instrument_mask]
 
             # check if any observations remain after filtering by time and instrument capability requirements
@@ -1353,6 +1374,8 @@ class ResultsProcessor:
             # add to observations per event map
             if matching_observations: observations_per_event[event] = matching_observations        
 
+        if printouts: tqdm.write(f'[results processor] classified {sum(len(obs) for obs in observations_per_event.values())} observations for {len(observations_per_event)} events')
+
         # convert to dataframe
         if observations_per_event_df_data:
             observations_per_event_df = pd.DataFrame(observations_per_event_df_data)
@@ -1372,28 +1395,27 @@ class ResultsProcessor:
         tasks_observed : Dict[GenericObservationTask, list] = defaultdict(list)
         task_observations_df_data = []
 
-        # pre-build per-objective instrument capability requirements (avoid rebuilding per task)
-        obj_agent_reqs: Dict[int, Dict[str, set]] = {}
-        obj_allowed_pairs: Dict[int, frozenset] = {}
+        # pre-build per-objective instrument capability requirement (avoid rebuilding per task)
+        obj_cap_req: Dict = {}
         for agent_name, mission in agent_missions.items():
             for objective in mission:
-                if objective not in obj_agent_reqs:
-                    obj_agent_reqs[objective] = defaultdict(set)
-                for req in objective:
-                    if (isinstance(req, CapabilityRequirement)
-                            and req.attribute == 'instrument'):
-                        obj_agent_reqs[objective][agent_name].update(v.lower() for v in req.valid_values)
-        for objective, reqs in obj_agent_reqs.items():
-            obj_allowed_pairs[objective] = frozenset(
-                (a, i) for a, insts in reqs.items() for i in insts
-            )
+                if objective not in obj_cap_req:
+                    cap_reqs = [req for req in objective
+                                if isinstance(req, CapabilityRequirement)
+                                and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
+                    obj_cap_req[objective] = cap_reqs[0] if cap_reqs else None
 
         # itarate through tasks and find matching observations
-        for task in tqdm(known_tasks, desc="[results processor] classfying observations by task", leave=True, disable=not printouts):
-            # look up pre-built instrument capability requirements for this task's objective
+        for task in tqdm(known_tasks, desc="[results processor] classfying observations by task", leave=False, disable=not printouts):
+            # look up pre-built instrument capability requirement for this task's objective
             objective = task.objective
-            instrument_capability_reqs = obj_agent_reqs.get(objective, defaultdict(set))
-            allowed_pairs = obj_allowed_pairs.get(objective, frozenset())
+            cap_req = obj_cap_req.get(objective, None)
+            if cap_req is None and objective is not None:
+                # objective not found in any agent's mission; extract directly from task objective
+                cap_reqs = [req for req in objective
+                            if isinstance(req, CapabilityRequirement)
+                            and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
+                cap_req = cap_reqs[0] if cap_reqs else None
 
             # find all accesses and observations that match this task
             task_observations = []
@@ -1430,12 +1452,15 @@ class ResultsProcessor:
 
                 # find observations that match the event's instrument capability requirements
                 inst_lower = matching_observations["instrument"].str.lower()
-                agents = matching_observations["agent name"]
 
-                instrument_mask = np.fromiter(
-                    ((a, i) in allowed_pairs for a, i in zip(agents, inst_lower)),
-                    dtype=bool, count=len(agents)
-                )
+                if cap_req is not None:
+                    instrument_mask = np.fromiter(
+                        (cap_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value, i) >= 0.5
+                         for i in inst_lower),
+                        dtype=bool, count=len(inst_lower)
+                    )
+                else:
+                    instrument_mask = np.ones(len(inst_lower), dtype=bool)
                 matching_observations = matching_observations[instrument_mask]
 
                 # check if any observations remain after filtering by time and instrument capability requirements
@@ -1451,12 +1476,15 @@ class ResultsProcessor:
                 is_tasked = ~matching_observations["agent name"].str.contains("-U)", regex=False)
                 matching_observations["tasked"] = is_tasked
 
-                # Response times (NaN for untasked/opportunistic observations)
-                matching_observations["resp time [s]"] = np.where(
-                    is_tasked,
-                    matching_observations["t_start"] - task.availability.left,
-                    np.nan
-                )
+                # filter to only tasked observations that occur after the task request time (if applicable)
+                matching_observations = matching_observations[matching_observations["tasked"]==True]
+
+                if matching_observations.empty:
+                    # skip to next event if no matching observations found
+                    continue
+
+                # Response times (all remaining observations are tasked after the filter above)
+                matching_observations["resp time [s]"] = matching_observations["t_start"] - task.availability.left
                 matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / task.availability.span()
 
                 # convert matching observations to list of dicts for easier handling
@@ -1489,36 +1517,12 @@ class ResultsProcessor:
                 # append to task lists
                 task_observations.extend(matching_observations)
             
-            if task_observations: 
+            if task_observations:
+                # GP-level merge already handled same-agent/instrument adjacency within each GP.
+                # Sort covers multi-location tasks where observations from different GPs interleave.
+                task_observations.sort(key=lambda x: x['t_start'])
+                tasks_observed[task] = task_observations
 
-                # sort by observation start time
-                task_observations.sort(key=lambda x: x['t_start']) 
-
-                # check if any overlapping observations were found for this task; 
-                # if so, merge to avoid repeated observations
-                merged_observations = []
-                for obs in task_observations:
-                    if not merged_observations:
-                        merged_observations.append(obs)
-                    else:
-                        merged = False
-                        for prev_obs in reversed(merged_observations):
-                            # check if this observation overlaps with the previous one
-                            if obs['t_start'] <= prev_obs['t_end'] + 1e-9 and obs['agent name'] == prev_obs['agent name'] and obs['instrument'] == prev_obs['instrument']:
-                                # if so, merge by extending the end time and updating n_obs and t_rev
-                                prev_obs['t_end'] = max(prev_obs['t_end'], obs['t_end'])
-                                prev_obs['n_obs'] = min(prev_obs['n_obs'], obs['n_obs'])
-                                prev_obs['t_rev'] = min(prev_obs['t_rev'], obs['t_rev'])
-                                merged = True
-                            
-                            if merged: break
-
-                        if not merged:
-                            merged_observations.append(obs)              
-
-                # assign observations to this task in map of tasks observed
-                # tasks_observed[task] = task_observations
-                tasks_observed[task] = merged_observations
         if printouts: tqdm.write(f'[results processor] classified {sum(len(obs) for obs in tasks_observed.values())} observations for {len(tasks_observed)} tasks')
 
         # convert task observations data to dataframe
@@ -1676,7 +1680,6 @@ class ResultsProcessor:
                         n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
                             n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                                 n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                    n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
                                     n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, n_planned_task_obs, \
                                         n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
                                             n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
@@ -1738,7 +1741,6 @@ class ResultsProcessor:
                                                                                                 known_tasks,
                                                                                                 accesses_per_task,
                                                                                                 observations_per_task,
-                                                                                                printouts)
                                                                                                 obtained_rewards_df,
                                                                                                 printouts
                                                                                             )
@@ -1786,7 +1788,6 @@ class ResultsProcessor:
             primal_per_task, dual_per_task = ResultsProcessor.__calculate_reward_bounds(
                 compiled_orbitdata, accesses_per_task, agent_specs, agent_missions, obtained_rewards_df, printouts
             )
-            reward_primal_bound = sum(primal_per_task.values())
             reward_primal_bound = np.NAN
             reward_dual_bound   = sum(dual_per_task.values())
 
@@ -1817,7 +1818,6 @@ class ResultsProcessor:
                 known_primal_per_task, known_dual_per_task = ResultsProcessor.__calculate_reward_bounds(
                     compiled_orbitdata, accesses_per_known_task, agent_specs, agent_missions, obtained_rewards_df, printouts
                 )
-                known_reward_primal_bound = sum(known_primal_per_task.values())
                 known_reward_primal_bound = np.NAN
                 known_reward_dual_bound   = sum(known_dual_per_task.values())
             else:
@@ -1873,7 +1873,6 @@ class ResultsProcessor:
                     ['Default Mission Tasks Observable', n_default_tasks_observable],
                     
                     ['Tasks Observed', n_tasks_observed],
-                    ['Task Observations', n_total_task_obs],
                     ['Event-Driven Tasks Observed', n_event_tasks_observed],
                     ['Default Mission Tasks Observed', n_default_tasks_observed],
                     
@@ -2473,7 +2472,6 @@ class ResultsProcessor:
         gps_accessible_compiled = set()
         for _, agent in tqdm(orbitdata.items(), 
                              desc='[results summary] counting total and accessible ground points',
-                             leave=True, 
                              leave=False, 
                              disable=not printouts
                             ):
@@ -2647,7 +2645,6 @@ class ResultsProcessor:
                             n_events_co_observable, n_events_co_obs, n_total_event_co_obs, \
                                 n_events_co_observable_fully, n_events_fully_co_obs, n_total_event_fully_co_obs, \
                                     n_events_co_observable_partially, n_events_partially_co_obs, n_total_event_partially_co_obs, \
-                                        n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, \
                                         n_tasks, n_total_task_obs, n_event_tasks, n_default_tasks, n_planned_task_obs, \
                                             n_known_tasks, n_known_event_tasks, n_known_default_tasks, \
                                                 n_tasks_observable, n_event_tasks_observable, n_default_tasks_observable, \
@@ -3757,7 +3754,6 @@ class ResultsProcessor:
             sorted(task_observation_opps.items(), key=lambda kv: kv[0].id),
             desc=desc,
             disable=not printouts or len(task_observation_opps) < 10,
-            leave=True,
             leave=False,
         ):
             # filter to nadir-accessible opportunities only (slew window overlaps [-FOV/2, +FOV/2])
