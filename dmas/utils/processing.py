@@ -1221,6 +1221,8 @@ class ResultsProcessor:
                       and row_d['instrument'] == prev['instrument']
                       and row_d['t_start'] <= prev['t_end'] + 1e-9):
                     prev['t_end'] = max(prev['t_end'], row_d['t_end'])
+                    if row_d.get('intentional', False):
+                        prev['intentional'] = True
                 else:
                     merged_rows.append(prev)
                     prev = row_d
@@ -1479,8 +1481,13 @@ class ResultsProcessor:
                 is_tasked = ~matching_observations["agent name"].str.contains("-U)", regex=False)
                 matching_observations["tasked"] = is_tasked
 
-                # filter to only tasked observations that occur after the task request time (if applicable)
-                matching_observations = matching_observations[matching_observations["tasked"]==True]
+                # filter to only intentional observations (agent explicitly targeted this GP);
+                # fall back to agent-name heuristic for legacy parquet files without the column
+                if "intentional" in matching_observations.columns:
+                    is_intentional = matching_observations["intentional"].fillna(False)
+                else:
+                    is_intentional = is_tasked
+                matching_observations = matching_observations[is_intentional]
 
                 if matching_observations.empty:
                     # skip to next event if no matching observations found
