@@ -156,8 +156,11 @@ class ResultsProcessor:
                 observing_agent = obs_perf['agent name']
                 instrument_name : str = obs_perf['instrument']
                 # loc = (obs_perf['lat [deg]'], obs_perf['lon [deg]'], obs_perf['grid index'], obs_perf['GP index'])
+                # use committed t_img written by the environment (from planner's t_imgs);
+                # fall back to window start if not present (old results or non-CBBA runs)
                 # t_img = obs_perf['time [s]']
-                t_img = max(obs_perf['t_start'], task.availability.left) 
+                _committed = obs_perf.get('t_img')
+                t_img = _committed if _committed is not None else max(obs_perf['t_start'], task.availability.left)
                 d_img = obs_perf['t_end'] - t_img
                 assert t_img <= obs_perf['t_end'] + 1e-9, \
                     f"Observation time {t_img} is after end of observation window at {obs_perf['t_end']}."

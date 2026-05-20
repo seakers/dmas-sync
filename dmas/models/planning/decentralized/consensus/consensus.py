@@ -943,12 +943,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # match observation times from path to bundle entries
         t_img_bundle = [np.NAN for _ in self._bundle]
         for idx,(obs_opp, obs_tasks) in enumerate(self._bundle):
-            # find matching observation action in path
-            matching_actions = [obs_action.obs_opp.get_earliest_starts(obs_action.t_start) for obs_action in self._path
+            matching_actions = [obs_action
+                                for obs_action in self._path
                                 if obs_action.obs_opp == obs_opp]
             assert len(matching_actions) == 1, \
                 "Each bundle observation opportunity must have a matching observation action in the path."
-            t_img_bundle[idx] = matching_actions[0]
+            t_img_bundle[idx] = matching_actions[0].t_imgs
         
         min_updated_idx = None
         for idx,(_,obs_tasks) in enumerate(self._bundle):
@@ -961,7 +961,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         # 2) or this agent is no longer the winning bidder
                         or not self._results[task][n_obs].is_bidder_winning() 
                         # 3) or the imaging time does not match that in the path
-                        or abs(self._results[task][n_obs].t_img - t_img_bundle[idx][task]) > self.EPS
+                        or abs(self._results[task][n_obs].t_img - t_img_bundle[idx][task.id]) > self.EPS
                         # 4) or the bid was performed
                         or self._results[task][n_obs].was_performed()
                     ):
@@ -1750,11 +1750,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
             n_obs_i : dict = n_obs[obs_idx]
             t_prev_i : dict = t_prev[obs_idx]
 
-
             # iterate through parent tasks
-            for task, task_t_earliest in obs_act.obs_opp.get_earliest_starts(t_start).items():
+            for task_id, task_t_earliest in obs_act.t_imgs.items():
+                task = self._id_to_tasks[task_id]
                 # calculate earliest possible end time for this observation task
-                t_end = task_t_earliest + obs_act.obs_opp.task_min_duration[task.id]
+                t_end = task_t_earliest + obs_act.obs_opp.task_min_duration[task_id]
                 # ignore if task observation would have already been completed for this observation opportunity
                 if t_end < t_curr:
                     completed_tasks_from_obs[obs_act.obs_opp].append(task)

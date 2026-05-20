@@ -496,9 +496,9 @@
                 // "--single-trial", "54", // Oracle, None+CBBA (Augmented) 
 
                 "-t", "full_factorial_trials_2026-05-17",
-                // "--single-trial", "36", // Ground Processor, None+CBBA 
+                "--single-trial", "36", // Ground Processor, None+CBBA 
                 // "--single-trial", "42", // Interconstellation, None+CBBA 
-                "--single-trial", "45", // Ground Processor, None+Greedy 
+                // "--single-trial", "45", // Ground Processor, None+Greedy 
                 // "--single-trial", "54",
 
                 // "--profile-cpu",

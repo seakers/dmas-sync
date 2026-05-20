@@ -5,7 +5,7 @@ import numpy as np
 import json
 import uuid
 
-from execsatm.observations import ObservationOpportunity
+from execsatm.observations import Dict, ObservationOpportunity
 
 from dmas.core.messages import SimulationMessage
 
@@ -357,6 +357,7 @@ class ObservationAction(AgentAction):
                     duration: Union[float, int] = 0.0, 
                     obs_opp : ObservationOpportunity = None,
                     req : dict = None,
+                    t_imgs : Dict[str,float] = None, 
                     status: str = 'PENDING', 
                     id: str = None, 
                     **_) -> None:
@@ -368,6 +369,7 @@ class ObservationAction(AgentAction):
             - t_start (`float`): start time of the measurement of this action in [s] from the beginning of the simulation
             - duration (`float`): duration of the measurement of this action in [s]
             - obs_opp (`ObservationOpportunity`): the task observation opportunity associated with this action
+            - t_imgs (`Dict[str,float]`): dictionary of commited image times for each observation task associated with this action
             - id (`str`) : identifying number for this task in uuid format
         """
         super().__init__(ActionTypes.OBSERVE.value, t_start, t_start + duration, status, id)
@@ -386,11 +388,19 @@ class ObservationAction(AgentAction):
         self.obs_opp : ObservationOpportunity = obs_opp
         self.req : dict = req
 
+        if t_imgs is not None:
+            self.t_imgs : Dict[str,float] = t_imgs
+        elif obs_opp is not None:
+            self.t_imgs : Dict[str,float] = obs_opp.get_earliest_starts(t_start)
+        else:
+            self.t_imgs : Dict[str,float] = dict()
+
     def to_dict(self):
         out = super().to_dict()
         out['obs_opp'] = self.obs_opp.to_dict() if self.obs_opp else 'None'
         out['req'] = self.req
         out['duration'] = self.t_end - self.t_start
+        out['t_imgs'] = dict(self.t_imgs)
         return out
 
 class WaitAction(AgentAction):

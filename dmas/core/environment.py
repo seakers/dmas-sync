@@ -297,6 +297,21 @@ class SimulationEnvironment(object):
             assert t_end_query >= t_query_start, \
                 f"Invalid observation query: t_query_start={t_query_start}[s], t_end_query={t_end_query}[s], t_curr={t_curr}[s]"
             new_observation_data = self._query_measurement_data(agent_state_dict, instrument_dict, t_query_start, t_end_query)
+
+            # annotate each record with the per-task committed imaging time so the
+            # processor can use the planner's chosen t_img* instead of reconstructing it
+            gp_to_t_img: dict = {}
+            if action.obs_opp is not None and action.t_imgs:
+                for task in action.obs_opp.tasks:
+                    committed = action.t_imgs.get(task.id)
+                    if committed is None:
+                        continue
+                    for loc in task.location:
+                        gp_to_t_img.setdefault((int(loc[2]), int(loc[3])), committed)
+            for obs_rec in new_observation_data:
+                key = (int(obs_rec['grid index']), int(obs_rec['GP index']))
+                obs_rec['t_img'] = gp_to_t_img.get(key, obs_rec['t_start'])
+
             self._observation_history.extend(new_observation_data)
             self._obs_last_recorded[action.id] = t_end_query
 
