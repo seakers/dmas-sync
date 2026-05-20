@@ -190,7 +190,7 @@ class Plan(ABC):
                     # create duplciate of interrupted action with a new ID
                     continued_action : AgentAction = action_from_dict(**earliest_interrupted_action.to_dict())
                     continued_action.t_end = earliest_interrupted_action.t_end
-                    continued_action.id = str(uuid.uuid1())
+                    continued_action.id = str(uuid.uuid4())
 
                     ## change start and end times for the interrupted and continued actions
                     earliest_interrupted_action.t_end = new_action.t_start

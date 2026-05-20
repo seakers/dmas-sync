@@ -88,7 +88,7 @@ class AgentAction(ABC):
         self.t_start = t_start
         self.t_end = t_end
         self.status = status
-        self.id = str(uuid.UUID(id)) if id is not None else str(uuid.uuid1())
+        self.id = str(uuid.UUID(id)) if id is not None else str(uuid.uuid4())
 
     def __eq__(self, other) -> bool:
         """

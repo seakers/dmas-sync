@@ -54,7 +54,7 @@ class SimulationMessage(object):
         self.dst = dst
         self.msg_type = msg_type
         self.path = [elem for elem in path]
-        self.id = str(uuid.UUID(id)) if id is not None else str(uuid.uuid1())
+        self.id = str(uuid.UUID(id)) if id is not None else str(uuid.uuid4())
 
         # check types 
         if not isinstance(self.src , str):
