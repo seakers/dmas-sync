@@ -78,7 +78,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._path : List[ObservationAction] = list()
         self._results : Dict[GenericObservationTask, List[Bid]] = defaultdict(list)
         self._optimistic_bidding_counters : Dict[GenericObservationTask, List[int]] = defaultdict(list)
-        self._contested_reset_counters : Dict[GenericObservationTask, List[int]] = defaultdict(list)
+        # self._contested_reset_counters : Dict[GenericObservationTask, List[int]] = defaultdict(list)
         self._id_to_tasks : Dict[str, GenericObservationTask] = dict()
 
         # min-heap of (availability.right, task_id) for fast expiry detection
@@ -237,11 +237,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # reset contested-reset counters whenever sim time advances so frozen
         # bids get a fresh chance to compete in a new consensus round
-        t_curr = state.get_time()
-        if t_curr > self._last_consensus_time:
-            for task in self._contested_reset_counters:
-                self._contested_reset_counters[task] = [0] * len(self._contested_reset_counters[task])
-            self._last_consensus_time = t_curr
+        # t_curr = state.get_time()
+        # if t_curr > self._last_consensus_time:
+        #     for task in self._contested_reset_counters:
+        #         self._contested_reset_counters[task] = [0] * len(self._contested_reset_counters[task])
+        #     self._last_consensus_time = t_curr
 
         # check for new default mission tasks
         new_default_tasks = self.__process_default_tasks(state, tasks)
@@ -273,7 +273,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         task_updates = list(chain.from_iterable([
                                                     new_default_tasks,
                                                     new_urgent_task_added, 
-                                                ]))
+                                                ]))        
         results_updates = list(chain.from_iterable([
                                                     # new_default_tasks,
                                                     # new_urgent_task_added, 
@@ -394,8 +394,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # initialize optimistic bidding counter for new task
             self._optimistic_bidding_counters[task].append(self._optimistic_bidding_threshold)
 
-            # initialize contested reset counter for new task
-            self._contested_reset_counters[task].append(0)
+            # # initialize contested reset counter for new task
+            # self._contested_reset_counters[task].append(0)
 
             # add task to known tasks
             self._id_to_tasks[task.id] = task
@@ -476,8 +476,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # initialize optimistic bidding counter for new task
             self._optimistic_bidding_counters[task].append(self._optimistic_bidding_threshold)
 
-            # initialize contested reset counter for new task
-            self._contested_reset_counters[task].append(0)
+            # # initialize contested reset counter for new task
+            # self._contested_reset_counters[task].append(0)
 
             # add task to known tasks
             self._id_to_tasks[task.id] = task
@@ -534,8 +534,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # remove optimistic bidding counters
             self._optimistic_bidding_counters.pop(task, None)
 
-            # remove contested reset counters
-            self._contested_reset_counters.pop(task, None)
+            # # remove contested reset counters
+            # self._contested_reset_counters.pop(task, None)
 
             # remove task from known event tasks
             self._id_to_tasks.pop(task.id, None)
@@ -797,7 +797,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # get current results (defaultdict — never raises KeyError)
             current_task_bids : List[Bid] = self._results[task]
             current_bidding_counters : List[int] = self._optimistic_bidding_counters[task]
-            current_reset_counters : List[int] = self._contested_reset_counters[task]
+            # current_reset_counters : List[int] = self._contested_reset_counters[task]
 
             self.__register_task_expiry(task)
 
@@ -808,7 +808,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 n = len(current_task_bids)
                 current_task_bids.append(Bid.make_empty_bid(task, my_name, n))
                 current_bidding_counters.append(self._optimistic_bidding_threshold)
-                current_reset_counters.append(0)
+                # current_reset_counters.append(0)
 
             # extra accumulates requeued bids (from performed-bid conflicts) keyed by
             # their target n_obs. requeue always targets a higher n_obs, so processing
@@ -833,7 +833,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     n = len(current_task_bids)
                     current_task_bids.append(Bid.make_empty_bid(task, my_name, n))
                     current_bidding_counters.append(self._optimistic_bidding_threshold)
-                    current_reset_counters.append(0)
+                    # current_reset_counters.append(0)
 
                 current_bid : Bid = current_task_bids[n_obs]
 
@@ -854,7 +854,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         if not results_updates: results_updates.append(current_bid)
                         # legitimate external update: clear the cascade-freeze counter so
                         # this bid is free to be cascade-reset again in future rounds
-                        current_reset_counters[n_obs] = 0
+                        # current_reset_counters[n_obs] = 0
 
                     # check if previously unperformed bid was performed
                     elif not cur_performed_before and current_bid.performed:
@@ -1444,7 +1444,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                         empty_bid = Bid.make_empty_bid(task, state.agent_name, i_obs)
                         self._results[task].append(empty_bid)
                         self._optimistic_bidding_counters[task].append(self._optimistic_bidding_threshold)
-                        self._contested_reset_counters[task].append(0)
+                        # self._contested_reset_counters[task].append(0)
 
                     # bid for new observation number; add to results
                     self._results[task].append(bid)
@@ -1453,7 +1453,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     self._optimistic_bidding_counters[task].append(self._optimistic_bidding_threshold)
 
                     # add contested reset counter for new bid
-                    self._contested_reset_counters[task].append(0)
+                    # self._contested_reset_counters[task].append(0)
 
         # collect bids that have been removed from the bundle
         bids_in_bundle = { (task, n_obs)
@@ -2179,7 +2179,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._path.clear()
         self._results.clear()
         self._optimistic_bidding_counters.clear()
-        self._contested_reset_counters.clear()
+        # self._contested_reset_counters.clear()
         self._id_to_tasks.clear()
         self._known_event_tasks.clear()
         self._incoming_event_tasks.clear()
