@@ -7,7 +7,7 @@ from tqdm import tqdm
 from execsatm.mission import DefaultMissionTask, Mission
 from execsatm.observations import Interval, ObservationOpportunity
 
-from dmas.models.planning.plan import Plan, ReactivePlan
+from dmas.models.planning.plan import PeriodicPlan, Plan, ReactivePlan
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.utils.orbitdata import OrbitData
 from dmas.core.messages import *
@@ -254,6 +254,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
         self._known_tasks = set() 
 
         # initialize replanning flags 
+        self._preplan_updated = False
         self._task_announcements_received = False
 
     def update_percepts(self, 
@@ -300,13 +301,18 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             # set replan flags
             self._task_announcements_received = True
 
+        if isinstance(current_plan, PeriodicPlan) and abs(state.get_time() - current_plan.t) <= self.EPS:
+            self._preplan_updated = True
+        else:
+            self._preplan_updated = False
+
         # initialize properties
         self.access_opportunity_horizon : Interval = None
         self.access_opportunities : dict[tuple] = None
 
     def needs_planning(self, *_) -> bool:
         # replan if replan flag was set in `update_percepts`
-        return self._task_announcements_received    
+        return self._task_announcements_received or self._preplan_updated
 
     def generate_plan(  self, 
                         state : SimulationAgentState,
@@ -361,8 +367,9 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             return self._plan.copy()
         
         finally:
-            # reset replan flag
+            # reset replan flags
             self._task_announcements_received = False   
+            self._preplan_updated = False
 
     def calculate_access_opportunities(self, 
                                        state : SimulationAgentState, 

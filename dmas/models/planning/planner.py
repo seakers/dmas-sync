@@ -1226,7 +1226,10 @@ class AbstractPlanner(ABC):
         # Validate inputs
         assert isinstance(observations, list), "Observations must be a list."
         assert all(isinstance(obs, ObservationAction) for obs in observations), "All elements in observations must be of type ObservationAction."
-        observations : list[ObservationAction] = observations
+        
+        if not observations:
+            # No observations to perform; path is valid by default
+            return True
 
         if isinstance(state, SatelliteAgentState):
 

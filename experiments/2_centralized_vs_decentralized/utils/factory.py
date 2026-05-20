@@ -259,8 +259,12 @@ def create_spacecraft_specifications(
             # pass events path directly to the replanner so it can load tasks at init
             satellite_spec['planner']['replanner']['eventsPath'] = relevant_events_path
         
-        # enforce planning horizon for CBBA preplanner if needed
-        if agent_replanner.lower() == 'cbba' and agent_preplanner.lower() == 'none':
+        # # enforce planning horizon for CBBA replanner if needed
+        # if agent_replanner.lower() == 'cbba' and agent_preplanner.lower() == 'none':
+        #     satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['blank'].copy()
+
+        # enforce planning horizon for replanners if needed
+        if agent_replanner.lower() not in ['none', 'default'] and agent_preplanner.lower() == 'none':
             satellite_spec['planner']['preplanner'] = planner_specs['preplanners']['blank'].copy()
 
         # remove planner if no preplanner or replanner specified

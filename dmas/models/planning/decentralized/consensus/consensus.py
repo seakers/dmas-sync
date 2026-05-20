@@ -601,8 +601,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # collect actions in bundle past their imaging time
         observed_opportunities : list[ObservationOpportunity] \
             = [obs_action.obs_opp for obs_action in performed_observations]    
-        observed_data : list[dict] \
-            = [obs_action.req['observation_data'] for obs_action in performed_observations]              
+        # observed_data : list[dict] \
+        #     = [obs_action.req['observation_data'] for obs_action in performed_observations]              
         
         # check if any observation tasks in bundle were observed 
         performed_bundle_tasks \
@@ -657,21 +657,21 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     # bid was already marked as performed; skip
                     continue
 
-                if observed_opportunities:
-                    opp_idx = observed_opportunities.index(obs_opp)
-                    data_for_opp = observed_data[opp_idx]
-                    # Compare using integer (grid_index, GP_index) only — lat/lon comparison is
-                    # unreliable because orbit binary (3 decimal places from datametrics CSV) and
-                    # task.location (4 decimal places from grid CSV) store different float64 values
-                    # for the same ground point.
-                    task_gp_set = frozenset((int(grid), int(gp)) for *_, grid, gp in task.location)
-                    target_observed = any(
-                        (int(d['grid index']), int(d['GP index'])) in task_gp_set
-                        for d in data_for_opp
-                    )
-                    if not target_observed:
-                        tqdm.write(f'[{state.agent_id}] Warning: Observation opportunity for task {task} was marked as performed, but target GP was not observed in the data. Skipping bid.')
-                        # continue
+                # if observed_opportunities:
+                #     opp_idx = observed_opportunities.index(obs_opp)
+                #     data_for_opp = observed_data[opp_idx]
+                #     # Compare using integer (grid_index, GP_index) only — lat/lon comparison is
+                #     # unreliable because orbit binary (3 decimal places from datametrics CSV) and
+                #     # task.location (4 decimal places from grid CSV) store different float64 values
+                #     # for the same ground point.
+                #     task_gp_set = frozenset((int(grid), int(gp)) for *_, grid, gp in task.location)
+                #     target_observed = any(
+                #         (int(d['grid index']), int(d['GP index'])) in task_gp_set
+                #         for d in data_for_opp
+                #     )
+                #     if not target_observed:
+                #         tqdm.write(f'[{state.agent_id}] Warning: Observation opportunity for task {task} was marked as performed, but target GP was not observed in the data. Skipping bid.')
+                #         # continue
 
                 # mark bid as performed
                 bid_to_perform.set_performed(t_curr, performed=True)
@@ -949,25 +949,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
             assert len(matching_actions) == 1, \
                 "Each bundle observation opportunity must have a matching observation action in the path."
             t_img_bundle[idx] = matching_actions[0]
-
-        # search for results updates for any tasks in the bundle
-        # min_updated_idx = min([ idx 
-        #                         # set index `idx` to be removed from bundle if...
-        #                         for idx,(_,obs_tasks) in enumerate(self._bundle)
-        #                         # for an a given bundle entry...
-        #                         if any( 
-        #                                 # 1) there is not a bid in results for this task and observation number
-        #                                 len(self._results[task]) <= n_obs
-        #                                 # 2) or this agent is no longer the winning bidder
-        #                                 or not self._results[task][n_obs].is_bidder_winning() 
-        #                                 # 3) or the imaging time does not match that in the path
-        #                                 or abs(self._results[task][n_obs].t_img - t_img_bundle[idx][task]) > self.EPS
-        #                                 # 4) or the bid was performed
-        #                                 or self._results[task][n_obs].was_performed()
-        #                             for task, n_obs in obs_tasks.items())
-        #                         ], 
-        #                         # if no updates found, set to None
-        #                         default=None)
         
         min_updated_idx = None
         for idx,(_,obs_tasks) in enumerate(self._bundle):
@@ -1050,51 +1031,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
                 # update results
                 self._results[task][n_obs] = released_bid
-
-                # # initiate list of bids being reset for this task
-                # bids_reset = []
-
-                # # reset invalid bid along with all subsequent bids
-                # for bid_idx in range(n_obs, len(self._results[task])):
-
-                    # # do not reset bids that are still referenced by the valid revised bundle
-                    # if (task, bid_idx) in revised_bundle_pairs:
-                    #     continue
-
-                    # # check if this agent is still listed as the winning bidder
-                    # if not self._results[task][bid_idx].is_bidder_winning():
-                    #     continue # another agent is winning this bid; skip
-                    # elif self._results[task][bid_idx].was_performed():
-                    #     continue # bid was already performed by this agent; do not reset
-
-                    # # get bid to reset and remove from results
-                    # bid_to_reset : Bid = self._results[task][bid_idx]
-
-                    # # guard: if this (task, n_obs) slot has been cascade-reset too many
-                    # # times within the current sim timestep, still reset the bid locally
-                    # # (so the invariant winning_bids == bundle_entries is maintained and
-                    # # the inner while-loop converges) but skip adding to bundle_updates,
-                    # # which suppresses the replanning/broadcast that drives the cascade.
-                    # reset_counters = self._contested_reset_counters[task]
-                    # frozen = (bid_idx < len(reset_counters)
-                    #           and reset_counters[bid_idx] >= self._contested_reset_threshold)
-                    # if not frozen and bid_idx < len(reset_counters):
-                    #     reset_counters[bid_idx] += 1
-
-                    # # reset bid (always)
-                    # bid_to_reset.reset(t_curr)
-
-                    # # update results
-                    # self._results[task][bid_idx] = bid_to_reset
-
-                    # if frozen:
-                    #     continue  # reset locally but suppress bundle update and replanning
-
-                    # # add to list of resets
-                    # bids_reset.append(bid_to_reset)
-
-                # # add to violations list
-                # bundle_updates.append(bids_reset)
 
         assert len(revised_bundle) + len(self._bundle[min_updated_idx:]) == init_bundle_size, \
             "Revised bundle size does not match initial bundle size."
@@ -1253,65 +1189,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
                 # update results
                 self._results[task][n_obs] = released_bid
-
-
-        # # check every task for constraint violations
-        # for task, bids in self._results.items():
-        #     # ensure the index of every bid matches their observation number
-        #     for i in range(len(bids)):
-        #         if bids[i].n_obs != i:
-        #             raise AssertionError("Results bids are not sorted by observation number.")
-            
-        #     if len(bids) <= 1: continue # no observation sequence to check for constraints
-            
-        #     # initialize search for constraint violations
-        #     invalid_bid_idx : int = None
-            
-        #     # check every bid for this task
-        #     for n_obs_idx, bid in enumerate(bids[1:], start=1):
-                # # get previous bid to compare constraints with
-                # prev_bid : Bid = bids[n_obs_idx - 1]
-
-                # # Constraint 0: Previous bid must be assigned to a winner if the bid has a winner
-                # if bid.has_winner() and not prev_bid.has_winner():
-                #     invalid_bid_idx = n_obs_idx
-                #     break # stop searching for constraint violations for this task
-
-                # # Constraint 1: Observation number must be consecutive
-                # if prev_bid.n_obs + 1 != bid.n_obs:
-                #     invalid_bid_idx = n_obs_idx
-                #     break # stop searching for constraint violations for this task
-
-                # # Constraint 2: If assigned, imaging time must be after previous imaging time
-                # if bid.has_winner() and prev_bid.t_img > bid.t_img:
-                #     invalid_bid_idx = n_obs_idx
-                #     break # stop searching for constraint violations for this task         
-            
-        #     # check if invalid bid was found
-        #     if invalid_bid_idx is None: continue # no violations for this task; continue to next task
-
-        #     # reset invalid bid along with all subsequent bids
-        #     reset_counters = self._contested_reset_counters[task]
-        #     for bid_idx in range(invalid_bid_idx, len(bids)):
-        #         # guard: if this slot is frozen, still reset locally so the constraint
-        #         # is cleared and the inner while-loop converges, but skip adding to
-        #         # bids_in_violation so the reset is not broadcast (breaking the cascade).
-        #         frozen = (bid_idx < len(reset_counters)
-        #                   and reset_counters[bid_idx] >= self._contested_reset_threshold)
-        #         if not frozen and bid_idx < len(reset_counters):
-        #             reset_counters[bid_idx] += 1
-
-        #         # get bid to reset 
-        #         bid_to_reset : Bid = bids[bid_idx]
-
-        #         # reset bid (always, so constraint is cleared for the inner while-loop)
-        #         bid_to_reset.reset(t_curr)
-
-        #         if frozen:
-        #             continue  # reset locally but suppress broadcast
-
-        #         # add to violations list
-        #         bids_in_violation.append(bid_to_reset.to_dict())
 
         # return list of bids in violation
         return self._bundle, self._path, bids_in_violation   
