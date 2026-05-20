@@ -33,7 +33,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
     def __init__(self,
                  agent_results_dir : str,
-                 heuristic : str = EARLIEST_ACCESS,
+                 heuristic : str = TASK_PRIORITY,
                  replan_threshold : int = 1,
                  optimistic_bidding_threshold : int = 1,
                  periodic_overwrite : bool = False,
@@ -242,8 +242,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     # check if just performed
                                     and obs_opp not in self.latest_performed_observations
                                     # check if mutually exclusive with any already planned observation opportunities
-                                    and all(not obs_opp.is_mutually_exclusive(planned_obs) 
-                                            for planned_obs in planned_observation_opportunities)
+                                    # and all(not obs_opp.is_mutually_exclusive(planned_obs) 
+                                    #         for planned_obs in planned_observation_opportunities)
                                     ]
              
         # return observation opportunities
@@ -723,8 +723,26 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         assert not self._debug or all([(path is None or self.is_observation_path_valid(state, path, max_slew_rate, max_torque, specs)) for path,*_ in proposed_paths]), \
               "One or more proposed paths are invalid."
         
+        # ensure proposed observation is not placed right after a mutually exclusive observation opportunity in any proposed path
+        valid_paths = []
+        for path, path_changes, _ in proposed_paths:
+            if path is None: continue # skip invalid paths
+
+            # find indices of proposed observation opportunity in path
+            obs_indices = [idx for idx, action in enumerate(path) if action.obs_opp == new_obs]
+
+            # check if any proposed observation opportunity is placed right after a mutually exclusive observation opportunity
+            valid = True
+            for idx in obs_indices:
+                if idx > 0 and path[idx-1].obs_opp.is_mutually_exclusive(new_obs):
+                    valid = False
+                    break
+            
+            # add to list of valid paths if valid
+            if valid: valid_paths.append((path, path_changes, _))
+        
         # return proposed paths and the respective observation times for the new observation opportunity in said paths
-        return [(path,obs_added,obs_removed) for path,obs_added,obs_removed in proposed_paths if path is not None]
+        return [(path,obs_added,obs_removed) for path,obs_added,obs_removed in valid_paths]
         
     def _direct_insertion_into_path(self,
                                     state : SimulationAgentState,
@@ -735,10 +753,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     max_torque : float
                                 ) -> Tuple[List[ObservationAction], List[ObservationAction], List[ObservationAction]]:
         """ Try to directly insert new observation opportunity into existing path. """
-        # check if new observation opportunity is mutually exclusive with any observation opportunities in current path
-        if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, current_path):
-            # new observation opportunity cannot be directly inserted into path due to mutual exclusivity
-            return (None, None, None) 
+        # # check if new observation opportunity is mutually exclusive with any observation opportunities in current path
+        # if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, current_path):
+        #     # new observation opportunity cannot be directly inserted into path due to mutual exclusivity
+        #     return (None, None, None) 
 
         # initialize feasible observation time and select observation look angle for new observation opportunity
         t_img, th_img = None, np.average([new_obs.slew_angles.left, new_obs.slew_angles.right])
@@ -854,10 +872,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # Current path is empty; cannot right-shift path for new observation.
             return (None, None, None)
         
-        # check if new observation opportunity is mutually exclusive with any observation opportunities in current path
-        if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, current_path):
-            # new observation opportunity cannot be right-shifted into path due to mutual exclusivity
-            return (None, None, None)
+        # # check if new observation opportunity is mutually exclusive with any observation opportunities in current path
+        # if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, current_path):
+        #     # new observation opportunity cannot be right-shifted into path due to mutual exclusivity
+        #     return (None, None, None)
 
         # check if path is sorted by start time
         assert all(current_path[i].t_start <= current_path[i+1].t_start for i in range(len(current_path)-1)), "Current path is not sorted by start time."
@@ -1045,10 +1063,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             assert conflicting_observation not in new_path, \
                 "Conflicting observation was not properly replaced in new path."
 
-            # check if new task is mutually exclusive with any tasks in the new path
-            if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, new_path):
-                # new task cannot be right-shifted into path due to mutual exclusivity
-                return (None, None, None)
+            # # check if new task is mutually exclusive with any tasks in the new path
+            # if self._is_obs_opportunity_mutually_exclusive_with_path(new_obs, new_path):
+            #     # new task cannot be right-shifted into path due to mutual exclusivity
+            #     return (None, None, None)
 
             # return new path if valid
             if self.is_observation_path_valid(state, new_path, max_slew_rate, max_torque, specs):

@@ -93,7 +93,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._replan_threshold = replan_threshold
         self._optimistic_bidding_threshold = optimistic_bidding_threshold
         self._periodic_overwrite = periodic_overwrite
-        self._contested_reset_threshold = contested_reset_threshold
+        self._contested_reset_threshold = contested_reset_threshold if contested_reset_threshold is not None else np.Inf
         self._last_consensus_time : float = np.NINF
 
         # replanning flags
@@ -291,7 +291,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 = self.__update_bundle_from_results(state)
 
             # enforce constraints in results
-            constraint_violations = self.__check_results_constraints(state)
+            self._bundle, self._path, constraint_violations \
+                = self.__check_results_constraints(state)
 
             # append updates to compiling lists
             bundle_updates.extend(results_bundle_updates)
@@ -584,6 +585,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # return list of removed bids
         return expired_bids, revised_bundle, bundle_updates
+        
     
     def __update_performed_bundle_observations(self, 
                                                state : SimulationAgentState, 
@@ -598,8 +600,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # collect actions in bundle past their imaging time
         observed_opportunities : list[ObservationOpportunity] \
-            = [obs_action.obs_opp for obs_action in performed_observations]
-
+            = [obs_action.obs_opp for obs_action in performed_observations]    
+        observed_data : list[dict] \
+            = [obs_action.req['observation_data'] for obs_action in performed_observations]              
+        
         # check if any observation tasks in bundle were observed 
         performed_bundle_tasks \
             = [ (bundle_idx, obs_opp, obs_tasks) 
@@ -652,6 +656,22 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 if bid_to_perform.was_performed():
                     # bid was already marked as performed; skip
                     continue
+
+                if observed_opportunities:
+                    opp_idx = observed_opportunities.index(obs_opp)
+                    data_for_opp = observed_data[opp_idx]
+                    # Compare using integer (grid_index, GP_index) only — lat/lon comparison is
+                    # unreliable because orbit binary (3 decimal places from datametrics CSV) and
+                    # task.location (4 decimal places from grid CSV) store different float64 values
+                    # for the same ground point.
+                    task_gp_set = frozenset((int(grid), int(gp)) for *_, grid, gp in task.location)
+                    target_observed = any(
+                        (int(d['grid index']), int(d['GP index'])) in task_gp_set
+                        for d in data_for_opp
+                    )
+                    if not target_observed:
+                        tqdm.write(f'[{state.agent_id}] Warning: Observation opportunity for task {task} was marked as performed, but target GP was not observed in the data. Skipping bid.')
+                        # continue
 
                 # mark bid as performed
                 bid_to_perform.set_performed(t_curr, performed=True)
@@ -710,7 +730,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         assert all(t_curr <= obs_action.t_end
                    for obs_action in revised_path), \
             "Revised path contains observation actions that have already been performed."
-                
+         
         # return revised bundle and list of performed bids
         return revised_bundle, revised_path, bundle_updates
 
@@ -931,23 +951,43 @@ class ConsensusPlanner(AbstractReactivePlanner):
             t_img_bundle[idx] = matching_actions[0]
 
         # search for results updates for any tasks in the bundle
-        min_updated_idx = min([ idx 
-                                # set index `idx` to be removed from bundle if...
-                                for idx,(_,obs_tasks) in enumerate(self._bundle)
-                                # for an a given bundle entry...
-                                if any( 
-                                        # 1) there is not a bid in results for this task and observation number
-                                        len(self._results[task]) <= n_obs
-                                        # 2) or this agent is no longer the winning bidder
-                                        or not self._results[task][n_obs].is_bidder_winning() 
-                                        # 3) or the imaging time does not match that in the path
-                                        or abs(self._results[task][n_obs].t_img - t_img_bundle[idx][task]) > self.EPS
-                                        # 4) or the bid was performed
-                                        or self._results[task][n_obs].was_performed()
-                                    for task, n_obs in obs_tasks.items())
-                                ], 
-                                # if no updates found, set to None
-                                default=None)
+        # min_updated_idx = min([ idx 
+        #                         # set index `idx` to be removed from bundle if...
+        #                         for idx,(_,obs_tasks) in enumerate(self._bundle)
+        #                         # for an a given bundle entry...
+        #                         if any( 
+        #                                 # 1) there is not a bid in results for this task and observation number
+        #                                 len(self._results[task]) <= n_obs
+        #                                 # 2) or this agent is no longer the winning bidder
+        #                                 or not self._results[task][n_obs].is_bidder_winning() 
+        #                                 # 3) or the imaging time does not match that in the path
+        #                                 or abs(self._results[task][n_obs].t_img - t_img_bundle[idx][task]) > self.EPS
+        #                                 # 4) or the bid was performed
+        #                                 or self._results[task][n_obs].was_performed()
+        #                             for task, n_obs in obs_tasks.items())
+        #                         ], 
+        #                         # if no updates found, set to None
+        #                         default=None)
+        
+        min_updated_idx = None
+        for idx,(_,obs_tasks) in enumerate(self._bundle):
+            # for an a given bundle entry...
+            for task, n_obs in obs_tasks.items():
+                # a results update is needed if...
+                if ( 
+                        # 1) there is not a bid in results for this task and observation number
+                        len(self._results[task]) <= n_obs
+                        # 2) or this agent is no longer the winning bidder
+                        or not self._results[task][n_obs].is_bidder_winning() 
+                        # 3) or the imaging time does not match that in the path
+                        or abs(self._results[task][n_obs].t_img - t_img_bundle[idx][task]) > self.EPS
+                        # 4) or the bid was performed
+                        or self._results[task][n_obs].was_performed()
+                    ):
+                    min_updated_idx = idx
+                    break
+            if min_updated_idx is not None:
+                break
         
         # check if any updates were found
         if min_updated_idx is None:
@@ -968,7 +1008,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
         
         # split bundle at first updated task
-        revised_bundle = self._bundle[:min_updated_idx]
+        revised_bundle = self._bundle[:min_updated_idx]       
 
         # collect (task, n_obs) pairs still valid in revised_bundle so the reset
         # loop below does not clobber them. The bundle is in insertion order, not
@@ -987,51 +1027,74 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # iterate through remaining bundle to update bids
         for _, obs_tasks in self._bundle[min_updated_idx:]:
             # reset subsequent bids for all tasks in bundle if the bidder is still listed as the winner
-            for task, n_obs in obs_tasks.items():
-                # initiate list of bids being reset for this task
-                bids_reset = []
+            for task, n_obs in obs_tasks.items():                
 
-                # reset invalid bid along with all subsequent bids
-                for bid_idx in range(n_obs, len(self._results[task])):
+                # do not reset bids that are still referenced by the valid revised bundle
+                if (task, n_obs) in revised_bundle_pairs:
+                    continue
 
-                    # do not reset bids that are still referenced by the valid revised bundle
-                    if (task, bid_idx) in revised_bundle_pairs:
-                        continue
+                # get bid to reset and remove from results
+                released_bid : Bid = self._results[task][n_obs]
 
-                    # check if this agent is still listed as the winning bidder
-                    if not self._results[task][bid_idx].is_bidder_winning():
-                        continue # another agent is winning this bid; skip
-                    elif self._results[task][bid_idx].was_performed():
-                        continue # bid was already performed by this agent; do not reset
+                # add to list of resets
+                bundle_updates.append(released_bid)
 
-                    # get bid to reset and remove from results
-                    bid_to_reset : Bid = self._results[task][bid_idx]
+                # check if this agent is still listed as the winning bidder
+                if not released_bid.is_bidder_winning():
+                    continue # another agent is winning this bid; skip
+                elif released_bid.was_performed():
+                    continue # bid was already performed by this agent; do not reset
 
-                    # guard: if this (task, n_obs) slot has been cascade-reset too many
-                    # times within the current sim timestep, still reset the bid locally
-                    # (so the invariant winning_bids == bundle_entries is maintained and
-                    # the inner while-loop converges) but skip adding to bundle_updates,
-                    # which suppresses the replanning/broadcast that drives the cascade.
-                    reset_counters = self._contested_reset_counters[task]
-                    frozen = (bid_idx < len(reset_counters)
-                              and reset_counters[bid_idx] >= self._contested_reset_threshold)
-                    if not frozen and bid_idx < len(reset_counters):
-                        reset_counters[bid_idx] += 1
+                # reset bid 
+                released_bid.reset(t_curr)
 
-                    # reset bid (always)
-                    bid_to_reset.reset(t_curr)
+                # update results
+                self._results[task][n_obs] = released_bid
 
-                    # update results
-                    self._results[task][bid_idx] = bid_to_reset
+                # # initiate list of bids being reset for this task
+                # bids_reset = []
 
-                    if frozen:
-                        continue  # reset locally but suppress bundle update and replanning
+                # # reset invalid bid along with all subsequent bids
+                # for bid_idx in range(n_obs, len(self._results[task])):
 
-                    # add to list of resets
-                    bids_reset.append(bid_to_reset)
+                    # # do not reset bids that are still referenced by the valid revised bundle
+                    # if (task, bid_idx) in revised_bundle_pairs:
+                    #     continue
 
-                # add to violations list
-                bundle_updates.append(bids_reset)
+                    # # check if this agent is still listed as the winning bidder
+                    # if not self._results[task][bid_idx].is_bidder_winning():
+                    #     continue # another agent is winning this bid; skip
+                    # elif self._results[task][bid_idx].was_performed():
+                    #     continue # bid was already performed by this agent; do not reset
+
+                    # # get bid to reset and remove from results
+                    # bid_to_reset : Bid = self._results[task][bid_idx]
+
+                    # # guard: if this (task, n_obs) slot has been cascade-reset too many
+                    # # times within the current sim timestep, still reset the bid locally
+                    # # (so the invariant winning_bids == bundle_entries is maintained and
+                    # # the inner while-loop converges) but skip adding to bundle_updates,
+                    # # which suppresses the replanning/broadcast that drives the cascade.
+                    # reset_counters = self._contested_reset_counters[task]
+                    # frozen = (bid_idx < len(reset_counters)
+                    #           and reset_counters[bid_idx] >= self._contested_reset_threshold)
+                    # if not frozen and bid_idx < len(reset_counters):
+                    #     reset_counters[bid_idx] += 1
+
+                    # # reset bid (always)
+                    # bid_to_reset.reset(t_curr)
+
+                    # # update results
+                    # self._results[task][bid_idx] = bid_to_reset
+
+                    # if frozen:
+                    #     continue  # reset locally but suppress bundle update and replanning
+
+                    # # add to list of resets
+                    # bids_reset.append(bid_to_reset)
+
+                # # add to violations list
+                # bundle_updates.append(bids_reset)
 
         assert len(revised_bundle) + len(self._bundle[min_updated_idx:]) == init_bundle_size, \
             "Revised bundle size does not match initial bundle size."
@@ -1110,66 +1173,148 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # initiate list of constraint violations
         bids_in_violation = []
 
-        # check every task for constraint violations
-        for task, bids in self._results.items():
-            # ensure the index of every bid matches their observation number
-            for i in range(len(bids)):
-                if bids[i].n_obs != i:
-                    raise AssertionError("Results bids are not sorted by observation number.")
-            
-            if len(bids) <= 1: continue # no observation sequence to check for constraints
-            
-            # initialize search for constraint violations
-            invalid_bid_idx : int = None
-            
-            # check every bid for this task
-            for n_obs_idx, bid in enumerate(bids[1:], start=1):
+        # check every task in the bundle for constraint violations
+        min_bundle_violation_idx = None
+        for bundle_idx, (_, obs_tasks) in enumerate(self._bundle):
+            for task, n_obs in obs_tasks.items():
+                # get bid for this task and observation number
+                try:
+                    bid : Bid = self._results[task][n_obs]
+                except (KeyError, IndexError):
+                    # no bid exists for this task and observation number; add to violations list
+                    min_bundle_violation_idx = min(min_bundle_violation_idx, bundle_idx) if min_bundle_violation_idx is not None else bundle_idx
+                    break
+
+                # check if sequential constraints
+                if n_obs == 0: continue
+
                 # get previous bid to compare constraints with
-                prev_bid : Bid = bids[n_obs_idx - 1]
+                prev_bid : Bid = self._results[task][n_obs - 1]
 
                 # Constraint 0: Previous bid must be assigned to a winner if the bid has a winner
                 if bid.has_winner() and not prev_bid.has_winner():
-                    invalid_bid_idx = n_obs_idx
+                    min_bundle_violation_idx = bundle_idx
                     break # stop searching for constraint violations for this task
 
                 # Constraint 1: Observation number must be consecutive
                 if prev_bid.n_obs + 1 != bid.n_obs:
-                    invalid_bid_idx = n_obs_idx
+                    min_bundle_violation_idx = bundle_idx
                     break # stop searching for constraint violations for this task
 
                 # Constraint 2: If assigned, imaging time must be after previous imaging time
                 if bid.has_winner() and prev_bid.t_img > bid.t_img:
-                    invalid_bid_idx = n_obs_idx
+                    min_bundle_violation_idx = bundle_idx
                     break # stop searching for constraint violations for this task         
             
-            # check if invalid bid was found
-            if invalid_bid_idx is None: continue # no violations for this task; continue to next task
+            if min_bundle_violation_idx is not None: break
 
-            # reset invalid bid along with all subsequent bids
-            reset_counters = self._contested_reset_counters[task]
-            for bid_idx in range(invalid_bid_idx, len(bids)):
-                # guard: if this slot is frozen, still reset locally so the constraint
-                # is cleared and the inner while-loop converges, but skip adding to
-                # bids_in_violation so the reset is not broadcast (breaking the cascade).
-                frozen = (bid_idx < len(reset_counters)
-                          and reset_counters[bid_idx] >= self._contested_reset_threshold)
-                if not frozen and bid_idx < len(reset_counters):
-                    reset_counters[bid_idx] += 1
+        # check if any updates were found
+        if min_bundle_violation_idx is None:
+            # no updates to bids in bundle; return original bundle
+            return self._bundle, self._path, bids_in_violation
 
-                # get bid to reset 
-                bid_to_reset : Bid = bids[bid_idx]
+        # split bundle at first updated task
+        revised_bundle = self._bundle[:min_bundle_violation_idx]
 
-                # reset bid (always, so constraint is cleared for the inner while-loop)
-                bid_to_reset.reset(t_curr)
+        # collect (task, n_obs) pairs still valid in revised_bundle so the reset
+        # loop below does not clobber them. The bundle is in insertion order, not
+        # observation-number order, so a removed entry can have a lower n_obs than
+        # a kept entry for the same task, causing range(n_obs, ...) to overwrite
+        # bids that revised_bundle still points to.
+        revised_bundle_pairs = {
+            (task, n_obs)
+            for _, obs_tasks in revised_bundle
+            for task, n_obs in obs_tasks.items()
+        }
 
-                if frozen:
-                    continue  # reset locally but suppress broadcast
+        # iterate through remaining bundle to update bids
+        for _, obs_tasks in self._bundle[min_bundle_violation_idx:]:
+            # reset subsequent bids for all tasks in bundle if the bidder is still listed as the winner
+            for task, n_obs in obs_tasks.items():                
 
-                # add to violations list
-                bids_in_violation.append(bid_to_reset.to_dict())
+                # do not reset bids that are still referenced by the valid revised bundle
+                if (task, n_obs) in revised_bundle_pairs:
+                    continue
+
+                # get bid to release and remove from results
+                released_bid : Bid = self._results[task][n_obs]
+
+                # add to list of resets
+                bids_in_violation.append(released_bid)
+
+                # check if this agent is still listed as the winning bidder
+                if not released_bid.is_bidder_winning():
+                    continue # another agent is winning this bid; skip
+                elif released_bid.was_performed():
+                    continue # bid was already performed by this agent; do not reset
+
+                # reset bid 
+                released_bid.reset(t_curr)
+
+                # update results
+                self._results[task][n_obs] = released_bid
+
+
+        # # check every task for constraint violations
+        # for task, bids in self._results.items():
+        #     # ensure the index of every bid matches their observation number
+        #     for i in range(len(bids)):
+        #         if bids[i].n_obs != i:
+        #             raise AssertionError("Results bids are not sorted by observation number.")
+            
+        #     if len(bids) <= 1: continue # no observation sequence to check for constraints
+            
+        #     # initialize search for constraint violations
+        #     invalid_bid_idx : int = None
+            
+        #     # check every bid for this task
+        #     for n_obs_idx, bid in enumerate(bids[1:], start=1):
+                # # get previous bid to compare constraints with
+                # prev_bid : Bid = bids[n_obs_idx - 1]
+
+                # # Constraint 0: Previous bid must be assigned to a winner if the bid has a winner
+                # if bid.has_winner() and not prev_bid.has_winner():
+                #     invalid_bid_idx = n_obs_idx
+                #     break # stop searching for constraint violations for this task
+
+                # # Constraint 1: Observation number must be consecutive
+                # if prev_bid.n_obs + 1 != bid.n_obs:
+                #     invalid_bid_idx = n_obs_idx
+                #     break # stop searching for constraint violations for this task
+
+                # # Constraint 2: If assigned, imaging time must be after previous imaging time
+                # if bid.has_winner() and prev_bid.t_img > bid.t_img:
+                #     invalid_bid_idx = n_obs_idx
+                #     break # stop searching for constraint violations for this task         
+            
+        #     # check if invalid bid was found
+        #     if invalid_bid_idx is None: continue # no violations for this task; continue to next task
+
+        #     # reset invalid bid along with all subsequent bids
+        #     reset_counters = self._contested_reset_counters[task]
+        #     for bid_idx in range(invalid_bid_idx, len(bids)):
+        #         # guard: if this slot is frozen, still reset locally so the constraint
+        #         # is cleared and the inner while-loop converges, but skip adding to
+        #         # bids_in_violation so the reset is not broadcast (breaking the cascade).
+        #         frozen = (bid_idx < len(reset_counters)
+        #                   and reset_counters[bid_idx] >= self._contested_reset_threshold)
+        #         if not frozen and bid_idx < len(reset_counters):
+        #             reset_counters[bid_idx] += 1
+
+        #         # get bid to reset 
+        #         bid_to_reset : Bid = bids[bid_idx]
+
+        #         # reset bid (always, so constraint is cleared for the inner while-loop)
+        #         bid_to_reset.reset(t_curr)
+
+        #         if frozen:
+        #             continue  # reset locally but suppress broadcast
+
+        #         # add to violations list
+        #         bids_in_violation.append(bid_to_reset.to_dict())
 
         # return list of bids in violation
-        return bids_in_violation   
+        return self._bundle, self._path, bids_in_violation   
     
     def needs_planning(self, *_) -> bool:
         # -------------------------------

@@ -1222,7 +1222,7 @@ class Simulation:
             announce_horizon = preplanner_dict.get('announceHorizon', 3600.0)
             announcer_mode = preplanner_dict.get('@mode', 'oracle').lower()
 
-            if announcer_mode in ['instant']:
+            if announcer_mode in ['instant', 'oracle']:
                 return InstantEventAnnouncerPlanner(
                     agent_results_dir, events_path, simulation_missions,
                     announce_horizon=announce_horizon,
