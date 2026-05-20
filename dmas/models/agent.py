@@ -969,7 +969,8 @@ class SimulationAgent(object):
                         ) -> SimulationAgentState:
         """ Update the agent state based on the next actions to perform. """               
         # create copy of current state
-        next_state : SimulationAgentState = curr_state.copy()
+        next_state = curr_state
+        # next_state : SimulationAgentState = curr_state.copy()
         # next_state : SimulationAgentState = copy.copy(curr_state)
 
         # reset attitude rates to zero; let next action modify as needed
