@@ -855,7 +855,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         # check if observation time was found
         if t_start is None: return (None, None, None) # no time found; cannot insert new observation into path
-
+       
         # insert new observation into path
         ## create observation action for new task
         obs_duration = t_end - t_start
@@ -1685,10 +1685,13 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                for task, bid in bids_candidate[obs_act.obs_opp].items()})
                 min_duration = obs_act.obs_opp.min_duration
                 t_start = min(*t_imgs.values(), obs_act.t_end - min_duration)
+                t_end = max(*[t_img + obs_act.obs_opp.task_min_duration[task_id] 
+                              for task_id,t_img in t_imgs.items()], 
+                              obs_act.t_start + min_duration)
                 
                 # set new start and end times for this observation action 
                 obs_act.t_start = t_start
-                obs_act.t_end = t_start + min_duration
+                obs_act.t_end = t_end
                 obs_act.t_imgs = t_imgs
 
                 # ensure bids are still valid after path refinement
@@ -1698,6 +1701,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         "Bid observation time is not within bounds of observation action after path refinement."
                     assert bid.t_img + min_duration <= obs_act.t_end, \
                         "Bid observation time plus minimum duration exceeds end time of observation action after path refinement."                        
+                assert obs_act.t_start + min_duration <= obs_act.t_end, \
+                    "Start time plus minimum duration exceeds end time of observation action after path refinement."
 
         # return modified candidate path
         return candidate_path 
