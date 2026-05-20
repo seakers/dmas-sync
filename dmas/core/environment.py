@@ -310,7 +310,11 @@ class SimulationEnvironment(object):
                         gp_to_t_img.setdefault((int(loc[2]), int(loc[3])), committed)
             for obs_rec in new_observation_data:
                 key = (int(obs_rec['grid index']), int(obs_rec['GP index']))
-                obs_rec['t_img'] = gp_to_t_img.get(key, obs_rec['t_start'])
+                # clamp to [t_start, t_end]: tail records from adjacent orbit-data timesteps
+                # can inherit a committed t_img from a prior window; they merge in processing
+                # but should be self-consistent in the raw parquet
+                committed = gp_to_t_img.get(key, obs_rec['t_start'])
+                obs_rec['t_img'] = max(committed, obs_rec['t_start'])
 
             self._observation_history.extend(new_observation_data)
             self._obs_last_recorded[action.id] = t_end_query
