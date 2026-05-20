@@ -39,23 +39,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 },
@@ -97,23 +80,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 },
@@ -152,23 +118,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 }
@@ -213,23 +162,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 },
@@ -268,23 +200,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 }
@@ -328,23 +243,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 },
@@ -381,23 +279,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 },
@@ -437,23 +318,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 },
@@ -490,23 +354,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 }
@@ -551,23 +398,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "revisit_time [s]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                59.0,
-                                60,
-                                3600
-                            ],
-                            "scores": [
-                                0.1,
-                                0.1,
-                                1.0,
-                                0.3
-                            ]
                         }
                     ]
                 }
