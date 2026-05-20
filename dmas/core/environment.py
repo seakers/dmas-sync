@@ -315,6 +315,7 @@ class SimulationEnvironment(object):
                 # but should be self-consistent in the raw parquet
                 committed = gp_to_t_img.get(key, obs_rec['t_start'])
                 obs_rec['t_img'] = max(committed, obs_rec['t_start'])
+                obs_rec['intentional'] = key in gp_to_t_img
 
             self._observation_history.extend(new_observation_data)
             self._obs_last_recorded[action.id] = t_end_query

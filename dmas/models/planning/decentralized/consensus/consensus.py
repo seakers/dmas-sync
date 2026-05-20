@@ -372,6 +372,11 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
     def __process_default_tasks(self, state: SimulationAgentState, tasks: List[GenericObservationTask]) -> List[Bid]:
         """ Processes new default mission tasks and updates results accordingly. """
+        
+        # only check for default tasks at the start of the simulation 
+        if state.get_time() > self.EPS:
+            return [] # not at start of simulation; skip processing
+        
         # initialize list of newly added bids from new tasks
         new_task_added = []
 
