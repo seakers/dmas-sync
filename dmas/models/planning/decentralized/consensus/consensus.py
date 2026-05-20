@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from ast import Set
 from collections import defaultdict, deque
+from heapq import heappush, heappop
 from itertools import chain
 from typing import Dict, List, Tuple, Union
 
@@ -79,6 +80,10 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._optimistic_bidding_counters : Dict[GenericObservationTask, List[int]] = defaultdict(list)
         self._contested_reset_counters : Dict[GenericObservationTask, List[int]] = defaultdict(list)
         self._id_to_tasks : Dict[str, GenericObservationTask] = dict()
+
+        # min-heap of (availability.right, task_id) for fast expiry detection
+        self._task_expiry_heap : List[Tuple[float, str]] = []
+        self._heap_registered_task_ids : set = set()
 
         # initialize urgent tasks and bid inbox/outbox
         self._known_event_tasks : set[GenericObservationTask] = set()
@@ -388,6 +393,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
             # add task to known tasks
             self._id_to_tasks[task.id] = task
+            self.__register_task_expiry(task)
 
             # create empty bid for new task and add to list of changes
             new_task_added.append(self._results[task][-1].to_dict())
@@ -469,6 +475,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
             # add task to known tasks
             self._id_to_tasks[task.id] = task
+            self.__register_task_expiry(task)
 
             # # create empty bid for new task and add to list of changes
             # new_task_added.append(Bid(task, state.agent_name, t_bid=state.get_time()))
@@ -487,14 +494,27 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return list of new task bids added to results
         return new_task_added
     
+    def __register_task_expiry(self, task : GenericObservationTask) -> None:
+        """ Push a newly registered task onto the expiry min-heap (idempotent). """
+        if task.id not in self._heap_registered_task_ids:
+            heappush(self._task_expiry_heap, (task.availability.right, task.id))
+            self._heap_registered_task_ids.add(task.id)
+
     def __remove_expired_tasks(self, state : SimulationAgentState) -> Tuple[list, list, list]:
         """ Remove expired tasks from results. """
-        # get current time 
+        # get current time
         t_curr = state.get_time()
 
-        # identify expired tasks
-        expired_tasks = [task for task in self._results 
-                         if not task.is_available(t_curr)]
+        # identify expired tasks using heap — avoids O(n_tasks) is_available scan.
+        # tasks are popped when availability.right < t_curr - 1e-6, which guarantees
+        # not task.is_available(t_curr) for both open and closed right-bound intervals.
+        expired_tasks = []
+        while (self._task_expiry_heap
+               and self._task_expiry_heap[0][0] < t_curr - 1e-6):
+            _, task_id = heappop(self._task_expiry_heap)
+            task = self._id_to_tasks.get(task_id)
+            if task is not None and task in self._results:
+                expired_tasks.append(task)
 
         # initialize list of removed bids
         expired_bids = []
@@ -798,7 +818,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 self._results[task] = current_task_bids
                 self._optimistic_bidding_counters[task] = current_bidding_counters
                 self._contested_reset_counters[task] = current_reset_counters
-            
+
+            self.__register_task_expiry(task)
+
             # initialize queue of incoming bids for processing
             q = deque(incoming_task_bids)
 
@@ -941,14 +963,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
         init_bundle_size = len(self._bundle)
 
         # match observation times from path to bundle entries
+        path_by_opp_id = {obs_action.obs_opp.id: obs_action for obs_action in self._path}
         t_img_bundle = [np.NAN for _ in self._bundle]
-        for idx,(obs_opp, obs_tasks) in enumerate(self._bundle):
-            matching_actions = [obs_action
-                                for obs_action in self._path
-                                if obs_action.obs_opp == obs_opp]
-            assert len(matching_actions) == 1, \
+        for idx, (obs_opp, obs_tasks) in enumerate(self._bundle):
+            obs_action = path_by_opp_id.get(obs_opp.id)
+            assert obs_action is not None, \
                 "Each bundle observation opportunity must have a matching observation action in the path."
-            t_img_bundle[idx] = matching_actions[0].t_imgs
+            t_img_bundle[idx] = obs_action.t_imgs
         
         min_updated_idx = None
         for idx,(_,obs_tasks) in enumerate(self._bundle):
