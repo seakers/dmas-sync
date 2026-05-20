@@ -1235,7 +1235,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     n_obs = seq_idx + (n_obs_last_performed + 1)
 
                     # get observation number and previous observation time
-                    t_prev = obs_times[seq_idx-1] if seq_idx > 0 else latest_performed_obs_time[0] if last_performed_bid else np.NINF
+                    t_prev = t_img_seq[seq_idx-1] if seq_idx > 0 else latest_performed_obs_time[0] if last_performed_bid else np.NINF
                     
                     if n_obs > 0: assert t_prev >= 0.0, \
                         "Previous observation time is not defined for observation number greater than zero."
