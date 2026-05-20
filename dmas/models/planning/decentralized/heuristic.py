@@ -303,8 +303,6 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
 
         if isinstance(current_plan, PeriodicPlan) and abs(state.get_time() - current_plan.t) <= self.EPS:
             self._preplan_updated = True
-        else:
-            self._preplan_updated = False
 
         # initialize properties
         self.access_opportunity_horizon : Interval = None
