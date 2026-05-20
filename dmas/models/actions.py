@@ -24,9 +24,13 @@ class ActionTypes(Enum):
     TRAVEL = 'TRAVEL'
     MANEUVER = 'MANEUVER'
     BROADCAST = 'BROADCAST'
+    FUTURE_BROADCAST = 'FUTURE_BROADCAST'
     WAIT = 'WAIT'
     OBSERVE = 'OBSERVE'
     REPLAN = 'REPLAN'
+
+# frozen set of all broadcast action_type values — use instead of isinstance(x, BroadcastMessageAction)
+BROADCAST_ACTION_TYPES = frozenset({ActionTypes.BROADCAST.value, ActionTypes.FUTURE_BROADCAST.value})
 
 class ActionStatuses(Enum):
     PENDING = 'PENDING'
@@ -331,7 +335,10 @@ class FutureBroadcastMessageAction(BroadcastMessageAction):
 
         # validate inputs
         assert broadcast_type in self.FUTURE_BROADCAST_TYPES, f'`broadcast_type` must be one of {self.FUTURE_BROADCAST_TYPES}. Is `{broadcast_type}`.'
-    
+
+        # override action_type so callers can distinguish from BroadcastMessageAction without isinstance
+        self.action_type = ActionTypes.FUTURE_BROADCAST.value
+
         # set parameters
         self.broadcast_type = broadcast_type
         self.only_own_info = only_own_info

@@ -17,7 +17,7 @@ from execsatm.tasks import DefaultMissionTask, EventObservationTask, GenericObse
 from execsatm.observations import ObservationOpportunity
 from execsatm.mission import Mission
 
-from dmas.models.actions import BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
+from dmas.models.actions import ActionTypes, BROADCAST_ACTION_TYPES, BroadcastMessageAction, FutureBroadcastMessageAction, ObservationAction, WaitAction
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.trackers import DataSink, TaskObservationTracker
 from dmas.models.planning.plan import Plan, PeriodicPlan, ReactivePlan
@@ -381,8 +381,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         new_task_added = []
 
         # identify new default tasks
-        unknown_tasks = [task for task in tasks 
-                         if isinstance(task, DefaultMissionTask)
+        _DEFAULT = GenericObservationTask.DEFAULT
+        unknown_tasks = [task for task in tasks
+                         if task.task_type == _DEFAULT
                          and task not in self._results]
         
         # process each default task
@@ -424,8 +425,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                 and req.task not in self._results])
         
         # extract tasks from incoming bids
-        ## find unique tasks in incoming bids
-        unique_bid_tasks = list({self.__task_key(bid['task']): bid['task']
+        ## find unique tasks in incoming bids (dedup by task id)
+        unique_bid_tasks = list({bid['task']['id']: bid['task']
                                 for bid in incoming_bids}.values())
 
         ## unpack unique bid tasks
@@ -764,7 +765,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                        incoming_bids : List[Union[Bid, dict]]
                        ) -> Tuple[List[Bid], List[Bid]]:
         """
-        Compares incoming bids with existing results and updates results and bundle accordingly. 
+        Compares incoming bids with existing results and updates results and bundle accordingly.
          - If incoming bid corresponds to an existing observation number for a task, compare bids and update results with winning bid.
          - If there is a conflict between an incoming bid and an existing bid for the same observation (i.e. both bids were performed), update results with winning bid and add losing bid to list of incoming bids to be processed.
          - If any bid was updated in results, check if corresponding bundle entry needs to be updated.
@@ -775,153 +776,116 @@ class ConsensusPlanner(AbstractReactivePlanner):
         t_curr = state.get_time()
         my_name = state.agent_name
 
-        # group bids by bidding agent 
-        grouped_bids : Dict[str, List[dict]] = self.__group_incoming_bids(incoming_bids)
+        # group bids by task_id then by n_obs
+        grouped_bids : Dict[str, Dict[int, List[dict]]] = self.__group_incoming_bids(incoming_bids)
 
         # initialize list of updates done to results
-        results_updates = []   
+        results_updates = []
 
-        # keep track of tasks receiving incoming bids
-        tasks_from_incoming_bids : Dict[Tuple, GenericObservationTask] = dict()
+        for task_id, bids_by_n_obs in grouped_bids.items():
 
-        # iterate through grouped bids and compare with existing results
-        for task_key,incoming_task_bids in grouped_bids.items():
-            
-            # get task object for this task key from incoming bids
-            task : GenericObservationTask = tasks_from_incoming_bids.get(task_key)
-            
-            # check if a matching task was found
+            # resolve the canonical task object (reconstruct from bid dict if not yet known)
+            task : GenericObservationTask = self._id_to_tasks.get(task_id)
             if task is None:
-                # no matching task found; check if task is known in results
-                task_dict = incoming_task_bids[0]["task"]
-                task_id = task_dict["id"]
+                task_dict = next(iter(bids_by_n_obs.values()))[0]["task"]
+                task = GenericObservationTask.from_dict(task_dict)
+                # register canonical object so future calls reuse the same
+                # Python object as dict key in self._results — without this,
+                # each call creates a new object → duplicate results entries
+                self._id_to_tasks[task.id] = task
 
-                task = self._id_to_tasks.get(task_id)
-
-                if task is None:
-                    # task is not known in results; reconstruct task from bids
-                    task = GenericObservationTask.from_dict(task_dict)
-                    # register canonical object so future calls reuse the same
-                    # Python object as dict key in self._results — without this,
-                    # each call creates a new object → duplicate results entries
-                    self._id_to_tasks[task.id] = task
-
-                # assign task to task key for future reference in this round
-                tasks_from_incoming_bids[task_key] = task
-            
-            # get current results
-            try:
-                current_task_bids : List[Bid] = self._results[task]
-                current_bidding_counters : List[int] = self._optimistic_bidding_counters[task]
-                current_reset_counters : List[int] = self._contested_reset_counters[task]
-            except KeyError:
-                # task is not known in results; initialize empty results for this task
-                current_task_bids = []
-                current_bidding_counters = []
-                current_reset_counters = []
-                
-                self._results[task] = current_task_bids
-                self._optimistic_bidding_counters[task] = current_bidding_counters
-                self._contested_reset_counters[task] = current_reset_counters
+            # get current results (defaultdict — never raises KeyError)
+            current_task_bids : List[Bid] = self._results[task]
+            current_bidding_counters : List[int] = self._optimistic_bidding_counters[task]
+            current_reset_counters : List[int] = self._contested_reset_counters[task]
 
             self.__register_task_expiry(task)
 
-            # initialize queue of incoming bids for processing
-            q = deque(incoming_task_bids)
+            # pre-expand result lists to the highest known n_obs, avoiding
+            # per-bid expansion checks inside the inner loop
+            max_n_obs = max(bids_by_n_obs.keys())
+            while max_n_obs >= len(current_task_bids):
+                n = len(current_task_bids)
+                current_task_bids.append(Bid.make_empty_bid(task, my_name, n))
+                current_bidding_counters.append(self._optimistic_bidding_threshold)
+                current_reset_counters.append(0)
 
-            # process incoming bids
-            while q:
-                # get next incoming bid
-                incoming_bid : dict = q.popleft()
-                    
-                # check if incoming bid observation number exceeds existing bids for this task
-                n_obs = incoming_bid['n_obs']
-                # n_existing_bids = len(current_task_bids)
+            # extra accumulates requeued bids (from performed-bid conflicts) keyed by
+            # their target n_obs. requeue always targets a higher n_obs, so processing
+            # slots in ascending order ensures each slot is final before being requeued from.
+            extra : Dict[int, List[dict]] = {}
 
+            sorted_n_obs = sorted(bids_by_n_obs.keys())
+            n_obs_idx = 0
+            while n_obs_idx < len(sorted_n_obs) or extra:
+                if n_obs_idx < len(sorted_n_obs):
+                    n_obs = sorted_n_obs[n_obs_idx]
+                    n_obs_idx += 1
+                    slot_bids = bids_by_n_obs[n_obs]
+                    if n_obs in extra:
+                        slot_bids = slot_bids + extra.pop(n_obs)
+                else:
+                    n_obs = min(extra.keys())
+                    slot_bids = extra.pop(n_obs)
+
+                # expand if a requeued bid pushed n_obs beyond pre-expanded length
                 while n_obs >= len(current_task_bids):
-                    # incoming bid observation number exceeds existing bids; 
-                    #  initialize missing elements in results with empty bids
-                    current_task_bids.append(Bid.make_empty_bid(task, my_name, len(current_task_bids)))
-                    # initialize optimistic bidding counter for new bids
+                    n = len(current_task_bids)
+                    current_task_bids.append(Bid.make_empty_bid(task, my_name, n))
                     current_bidding_counters.append(self._optimistic_bidding_threshold)
-                    # initialize contested reset counter for new bid slot
                     current_reset_counters.append(0)
 
-                # get current bid for this task and observation number
                 current_bid : Bid = current_task_bids[n_obs]
-                cur_performed_before = current_bid.performed
 
-                # check if there could be a possible conflict between incoming bid and existing bid
-                old_cur_dict = None
-                if current_bid.performed and incoming_bid['performed']:
-                    old_cur_dict = current_bid.to_dict_for_requeue(incoming_bid['task'])
-                
-                # compare incoming bid with existing bids for the same task
-                update_flag : int = current_bid.update_from_dict_inplace(incoming_bid, t_curr)
-                
-                # check if current bid was modified
-                if update_flag != 0: # `0` indicates current bid was not modified
-                    # add updated bid to results updates
-                    if not results_updates: results_updates.append(current_bid)
-                    # legitimate external update: clear the cascade-freeze counter so
-                    # this bid is free to be cascade-reset again in future rounds
-                    try:
+                for incoming_bid in slot_bids:
+                    cur_performed_before = current_bid.performed
+
+                    # check if there could be a possible conflict between incoming bid and existing bid
+                    old_cur_dict = None
+                    if current_bid.performed and incoming_bid['performed']:
+                        old_cur_dict = current_bid.to_dict_for_requeue(incoming_bid['task'])
+
+                    # compare incoming bid with existing bids for the same task
+                    update_flag : int = current_bid.update_from_dict_inplace(incoming_bid, t_curr)
+
+                    # check if current bid was modified
+                    if update_flag != 0: # `0` indicates current bid was not modified
+                        # add updated bid to results updates
+                        if not results_updates: results_updates.append(current_bid)
+                        # legitimate external update: clear the cascade-freeze counter so
+                        # this bid is free to be cascade-reset again in future rounds
                         current_reset_counters[n_obs] = 0
-                    except IndexError:
-                        # this should not happen since we already ensured the list is long enough above
-                        raise IndexError(f"Contested reset counters list is not long enough for observation number {n_obs}.")
-                
-                # check if previously unperformed bid was performed 
-                elif not cur_performed_before and current_bid.performed:
-                    # bid values remained the same but bid was performed; 
-                    #  add updated bid to results updates
-                    if not results_updates: results_updates.append(current_bid)              
-                
-                # check if both bids corresponded to a performed observation
-                if old_cur_dict is not None:
-                    # both bids were performed; check which bid was the one that won the comparison
-                    if update_flag == 1:
-                        # current bid lost
-                        loser_bid : dict = old_cur_dict 
-                    elif current_bid.has_different_winner_values(incoming_bid):
-                        # incoming bid lost
-                        loser_bid : dict = incoming_bid
-                    else:
-                        # both bids are identical; skip
-                        continue
 
-                    # --- if reached here there was a bid performed conflict ---
-                    #        both bids need to be reflected in results
-                    
-                    # modify losing bid to reflect updated observation number 
-                    loser_bid['n_obs'] += 1
+                    # check if previously unperformed bid was performed
+                    elif not cur_performed_before and current_bid.performed:
+                        # bid values remained the same but bid was performed;
+                        #  add updated bid to results updates
+                        if not results_updates: results_updates.append(current_bid)
 
-                    # check if new bid observation number exceeds existing bids for this task
-                    if loser_bid['n_obs'] >= len(current_task_bids):
-                        # add empty bid to results for new observation number
-                        current_task_bids.append(
-                            Bid.make_empty_bid(task, my_name, loser_bid['n_obs'])
-                        )
+                    # check if both bids corresponded to a performed observation
+                    if old_cur_dict is not None:
+                        # both bids were performed; check which bid was the one that won the comparison
+                        if update_flag == 1:
+                            loser_bid : dict = old_cur_dict
+                        elif current_bid.has_different_winner_values(incoming_bid):
+                            loser_bid : dict = incoming_bid
+                        else:
+                            # both bids are identical; skip requeue
+                            continue
 
-                        # initialize optimistic bidding counter for new bid
-                        current_bidding_counters.append(
-                            self._optimistic_bidding_threshold
-                        )
+                        # --- bid performed conflict: both bids need to be reflected in results ---
 
-                        # initialize contested reset counter for new bid slot
-                        current_reset_counters.append(0)
-
-                    # add updated bid to list of bids to be processed
-                    # bids.append(loser_bid)
-                    q.append(loser_bid)
+                        # bump losing bid to next observation slot
+                        loser_bid['n_obs'] += 1
+                        extra.setdefault(loser_bid['n_obs'], []).append(loser_bid)
 
         # -------------------------------
         # DEBUG PRINTOUTS
         # for task, bids in self.results.items():
         #     for bid in bids:
         #         if not bid.has_winner():
-        #             x=1 # debug breakpoint    
-        
+        #             x=1 # debug breakpoint
+
         # if results_updates and self._debug:
         #     self._log_results('CONSENSUS PHASE - RESULTS (AFTER COMPARISON)', state, self._results)
         #     x = 1 # debug breakpoint
@@ -935,25 +899,14 @@ class ConsensusPlanner(AbstractReactivePlanner):
     
     def __group_incoming_bids(self,
                               incoming_bids : List[dict]
-                              ) -> Dict[str,List[dict]]:
+                              ) -> Dict[str, Dict[int, List[dict]]]:
         """
-        Groups incoming bids by task_key.
+        Groups incoming bids by task_id then by n_obs.
+        Returns: task_id -> n_obs -> [bid_dicts]
         """
-        # initialize bid grouping: task_key -> list[bid_dict]
-        grouped_bids = defaultdict(list)
-
-        # set local bindings 
-        task_key_fn = self.__task_key
-
-        # group bids by task key
+        grouped_bids : Dict[str, Dict[int, List[dict]]] = defaultdict(lambda: defaultdict(list))
         for bid in incoming_bids:
-            grouped_bids[task_key_fn(bid["task"])].append(bid)
-
-        # sort so that the winner is always first in the list for each task key
-        #   `n_obs` (descending) >> `performed` (performed bids first) >> `winner` (winning bids first) >> `owner` (ascending)
-        for bids in grouped_bids.values():
-            bids.sort(key=lambda bid: (-bid['n_obs'], bid['performed'], bid['winner'] == bid['owner'], bid['owner']), reverse=True)
-
+            grouped_bids[bid["task"]["id"]][bid["n_obs"]].append(bid)
         return grouped_bids
          
     def __update_bundle_from_results(self,
@@ -1947,8 +1900,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # Schedule bid broadcast messages
         if t_broadcasts:
             # check if sharable bids are contained in results
+            _EVENT = GenericObservationTask.EVENT
             has_bidded_tasks = any(
-                isinstance(task, EventObservationTask) and bids
+                task.task_type == _EVENT and bids
                 for task, bids in self._results.items()
             )
             if has_bidded_tasks:
@@ -1962,13 +1916,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # include scheduled broadcasts from preplan
         preplan_broadcasts = [
             action for action in self._preplan
-            # extract only broadcast actions
-            if isinstance(action, BroadcastMessageAction)
-            # exclude broadcasts of future information; 
-            #  these would be redundant with those scheduled here 
-            and not isinstance(action, FutureBroadcastMessageAction)
-            # exclude past broadcasts; 
-            #  these should have already been performed
+            # keep only concrete broadcast actions (not future-broadcast placeholders)
+            if action.action_type == ActionTypes.BROADCAST.value
+            # exclude past broadcasts; these should have already been performed
             and action.t_start > t_curr - self.EPS
         ]
         broadcasts.extend(preplan_broadcasts)

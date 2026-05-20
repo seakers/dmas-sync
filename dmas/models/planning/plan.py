@@ -334,8 +334,10 @@ class Plan(ABC):
             assert plan_out, "No actions found in `plan_out` after filtering by duration."
 
         # if there are waits in the plan out, remove them and execute them in a future batch
-        if not all([isinstance(action, WaitAction) for action in plan_out]):
-            plan_out = [action for action in plan_out if not isinstance(action, WaitAction)]
+        _WAIT = ActionTypes.WAIT.value
+        non_wait = [a for a in plan_out if a.action_type != _WAIT]
+        if non_wait:
+            plan_out = non_wait
 
         # check if actions are contained in output plan
         if plan_out:

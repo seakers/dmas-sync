@@ -20,7 +20,7 @@ from dmas.core.messages import AgentActionMessage, AgentStateMessage, BusMessage
 from dmas.models.planning.centralized.worker import WorkerPlanner
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
 from dmas.utils.orbitdata import OrbitData
-from dmas.models.actions import ActionStatuses, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
+from dmas.models.actions import ActionStatuses, ActionTypes, BROADCAST_ACTION_TYPES, AgentAction, BroadcastMessageAction, FutureBroadcastMessageAction, ManeuverAction, ObservationAction, WaitAction
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.planning.reactive import AbstractReactivePlanner
 from dmas.models.trackers import DataSink, TaskObservationTracker
@@ -427,16 +427,23 @@ class SimulationAgent(object):
                                                List[SimulationMessage]]:
         """ Classify incoming messages into their respective types """
 
-        # check if there exist any bus messages in incoming messages
-        bus_messages : List[BusMessage] = [msg for msg in incoming_messages 
-                                           if isinstance(msg, BusMessage)]
+        # local aliases to avoid repeated global lookups
+        _BUS           = SimulationMessageTypes.BUS.value
+        _MEAS_REQ      = SimulationMessageTypes.MEASUREMENT_REQ.value
+        _OBSERVATION   = SimulationMessageTypes.OBSERVATION.value
+        _REWARD_GRID   = SimulationMessageTypes.REWARD_GRID.value
+        _AGENT_STATE   = SimulationMessageTypes.AGENT_STATE.value
+        _AGENT_ACTION  = SimulationMessageTypes.AGENT_ACTION.value
+        _my_name       = state.agent_name
 
-        # unpack bus messages
-        for bus_msg in bus_messages: 
-            # add bus' contents to list of incoming messages
-            incoming_messages.extend(bus_msg.msgs)
-            # remove original bus messages 
-            incoming_messages.remove(bus_msg)
+        # unpack bus messages (expand their payloads into the main list)
+        i = 0
+        while i < len(incoming_messages):
+            if incoming_messages[i].msg_type == _BUS:
+                bus_msg = incoming_messages.pop(i)
+                incoming_messages.extend(bus_msg.msgs)
+            else:
+                i += 1
 
         # define classified message lists
         incoming_reqs, observation_msgs, reward_grid_msgs, \
@@ -444,19 +451,20 @@ class SimulationAgent(object):
                 external_action_statuses, misc_messages \
                     = [], [], [], [], [], [], []
 
-        # classify incoming messages
+        # classify incoming messages by msg_type (avoids isinstance + ABC overhead)
         for msg in incoming_messages:
-            if isinstance(msg, MeasurementRequestMessage):
+            mt = msg.msg_type
+            if mt == _MEAS_REQ:
                 incoming_reqs.append(msg)
-            elif isinstance(msg, ObservationResultsMessage):
+            elif mt == _OBSERVATION:
                 observation_msgs.append(msg)
                 if isinstance(msg.instrument, str):
                     external_measurements.append((msg.instrument, msg.observation_data))
-            elif isinstance(msg, RewardGridMessage):
+            elif mt == _REWARD_GRID:
                 reward_grid_msgs.append(msg)
-            elif isinstance(msg, AgentStateMessage) and msg.src != state.agent_name:
+            elif mt == _AGENT_STATE and msg.src != _my_name:
                 external_states.append(msg)
-            elif isinstance(msg, AgentActionMessage):
+            elif mt == _AGENT_ACTION:
                 external_action_statuses.append(msg)
             else:
                 misc_messages.append(msg)
@@ -669,7 +677,7 @@ class SimulationAgent(object):
         # attach observation requests to observation actions
         for action in actions:
             # skip non-observation actions
-            if not isinstance(action, ObservationAction): continue
+            if action.action_type != ActionTypes.OBSERVE.value: continue
 
             # get observation duration
             dt = action.t_end - t_curr
@@ -697,8 +705,8 @@ class SimulationAgent(object):
                                        state: SatelliteAgentState, 
                                        t_curr: float) -> List[AgentAction]:
         # check if any future-broadcast actions are present
-        future_broadcasts = [a for a in actions 
-                             if isinstance(a, FutureBroadcastMessageAction)]
+        future_broadcasts = [a for a in actions
+                             if a.action_type == ActionTypes.FUTURE_BROADCAST.value]
         
         # return if no future-broadcast actions present
         if not future_broadcasts: return actions
@@ -871,7 +879,7 @@ class SimulationAgent(object):
         if len(actions) <= 1:
             # not enough actions to merge; return as is
             return actions
-        if all([not isinstance(a, BroadcastMessageAction) for a in actions]):
+        if all(a.action_type not in BROADCAST_ACTION_TYPES for a in actions):
             # no broadcast actions to merge; return as is
             return actions
 
@@ -880,7 +888,7 @@ class SimulationAgent(object):
         merged : List[Tuple[int, AgentAction]] = []
         for i,a in enumerate(actions):
             # skip non-broadcast actions
-            if not isinstance(a, BroadcastMessageAction): continue
+            if a.action_type not in BROADCAST_ACTION_TYPES: continue
 
             # get messages from action
             msg = a.msg
@@ -973,16 +981,14 @@ class SimulationAgent(object):
             "State time must match the provided time."
 
         # determine new status from next action
-        if isinstance(next_action, ManeuverAction):
+        _at = next_action.action_type
+        if _at == ActionTypes.MANEUVER.value:
             next_state.perform_maneuver(next_action, t)
-        elif isinstance(next_action, ObservationAction):
-            # update state
+        elif _at == ActionTypes.OBSERVE.value:
             next_state.update(t, status=SimulationAgentState.MEASURING)
-        elif isinstance(next_action, BroadcastMessageAction):
-            # update state
+        elif _at in BROADCAST_ACTION_TYPES:
             next_state.update(t, status=SimulationAgentState.MESSAGING)
-        elif isinstance(next_action, WaitAction):
-            # update state
+        elif _at == ActionTypes.WAIT.value:
             next_state.update(t, status=SimulationAgentState.WAITING)
 
         # return updated state

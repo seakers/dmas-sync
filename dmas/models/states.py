@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from typing import Union
 from enum import Enum
-from dmas.models.actions import ActionStatuses, AgentAction, IdleAction, TravelAction, ManeuverAction
+from dmas.models.actions import ActionStatuses, ActionTypes, AgentAction, IdleAction, TravelAction, ManeuverAction
 from orbitpy.util import OrbitState
 import propcov
 
@@ -166,7 +166,8 @@ class SimulationAgentState(AbstractAgentState):
             - status (`str`): action completion status
             - dt (`float`): time to be waited by the agent
         """
-        if isinstance(action, IdleAction):
+        _at = action.action_type
+        if _at == ActionTypes.IDLE.value:
             self.update(t, status=self.IDLING)
             if action.t_end > t:
                 dt = action.t_end - t
@@ -176,10 +177,10 @@ class SimulationAgentState(AbstractAgentState):
                 status = ActionStatuses.COMPLETED.value
             return status, dt
 
-        elif isinstance(action, TravelAction):
+        elif _at == ActionTypes.TRAVEL.value:
             return self.perform_travel(action, t)
 
-        elif isinstance(action, ManeuverAction):
+        elif _at == ActionTypes.MANEUVER.value:
             return self.perform_maneuver(action, t)
         
         return ActionStatuses.ABORTED.value, 0.0
