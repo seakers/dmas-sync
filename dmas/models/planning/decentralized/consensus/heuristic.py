@@ -461,6 +461,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         - path : List[ObservationAction]
             Updated observation path after bundle building.        
         """
+        # get current simulation time
+        t_curr = state.get_time()
 
         # initialized bundle from current plan
         proposed_bundle : List[Tuple[ObservationOpportunity, 
@@ -534,7 +536,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             # initialize search for best path for proposed task    
             best_path : List[ObservationAction] = None
             best_path_utility : float = current_path_utility # must outperform current path
-            best_bids : Dict[ObservationOpportunity, Dict[GenericObservationTask,Bid]] = None
+            best_new_bids : Dict[ObservationOpportunity, Dict[GenericObservationTask,Bid]] = None
             # best_abandoned : Dict[GenericObservationTask, Dict[int, Bid]] = None
 
             # Generate list of candidate paths for this observation opportunity
@@ -548,7 +550,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                                             ):
                 # -------------------------------
                 # DEBUG PRINTOUTS
-                if len(candidate_paths) > 1:
+                if len(candidate_path) > 1:
                     x= 1
                 # if self._debug:
                 #     self._log_path('CANDIDATE PATH (DURING BUNDLE-BUILDING PHASE)', state, candidate_path)
@@ -557,14 +559,14 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 # -------------------------------
 
                 # find best observation sequence for each parent task of the proposed task in this candidate path
-                n_obs_candidate, t_prev_candidate, bids_candidate \
+                n_obs_candidate, t_prev_candidate, new_bids \
                     = self._assign_best_observations_and_revisit_times_to_proposed_path(state, candidate_path, obs_added, obs_removed, proposed_bids, specs, cross_track_fovs, orbitdata, mission, observation_history)
 
                 # check if valid bids were found for proposed task
-                if bids_candidate is None: continue # no valid bids found; skip
+                if new_bids is None: continue # no valid bids found; skip
 
-                # refine path 
-                candidate_path = self.__refine_path(candidate_path, proposed_observation, bids_candidate)
+                # refine observation actions in candidate path to match proposed bids
+                refined_path = self.__refine_path(candidate_path, proposed_observation, new_bids)
 
                 # get path value for proposed path using best observation sequences
                 proposed_path_utility : float \
@@ -575,8 +577,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 
                 # else: save as best path
                 best_path_utility = proposed_path_utility
-                best_path = candidate_path
-                best_bids = bids_candidate
+                best_path = refined_path
+                best_new_bids = new_bids
 
             # if no best path was found, continue to next proposed task
             if best_path is None: continue
@@ -588,15 +590,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             current_path_utility : float = best_path_utility
 
             # update bundle
-            # updated_proposed_bundle : List[Tuple[ObservationOpportunity, 
-            #                                     Dict[GenericObservationTask, int]]] = []
-            # # get existing proposed bundle elements if they are still in the proposed path
-            # for obs_opp,obs_dict in proposed_bundle:
-            #     if any([obs_opp == path_action.obs_opp for path_action in proposed_path]):
-            #         updated_proposed_bundle.append((obs_opp, obs_dict))
-
             ## add new observations to proposed bundle
-            obs_dict = {task: bid.n_obs for task,bid in best_bids[proposed_observation].items()}
+            obs_dict = {task: bid.n_obs for task,bid in best_new_bids[proposed_observation].items()}
             proposed_bundle.append((proposed_observation, obs_dict))
 
             ## collect all observation opportunities in proposed path
@@ -607,10 +602,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 bundle_idx for bundle_idx,(obs_opp,_) in enumerate(proposed_bundle)
                 if obs_opp not in obs_opps_in_path
             ]
-            # bundle_elements_to_remove = [ 
-            #     bundle_idx for bundle_idx,(obs_opp,_) in enumerate(proposed_bundle)
-            #     if all(obs_opp != obs_action.obs_opp for obs_action in proposed_path)
-            # ]
 
             ## remove any existing bids for observations that were removed from the path
             for bundle_idx in sorted(bundle_elements_to_remove, reverse=True):
@@ -623,11 +614,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             ## map tasks in bundle to best bids
             matching_bundle_indices = {obs_opp : idx 
                                        for idx,(obs_opp,_) in enumerate(proposed_bundle)
-                                       if obs_opp in best_bids}
+                                       if obs_opp in best_new_bids}
             
             ## update any values in proposed bids and results
             for obs_opp,idx in matching_bundle_indices.items():
-                for task,proposed_bid in best_bids[obs_opp].items():
+                for task,proposed_bid in best_new_bids[obs_opp].items():
                     proposed_bundle[idx][1][task] = proposed_bid.n_obs
 
             # compile list of updated proposed bids
@@ -641,11 +632,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                     if task not in updated_proposed_bids: updated_proposed_bids[task] = dict()
 
                     # update proposed bid
-                    if obs in best_bids and task in best_bids[obs]:                        
+                    if obs in best_new_bids and task in best_new_bids[obs]:                        
                         # observation was modified; update bids
-                        updated_proposed_bids[task][n_obs] = best_bids[obs][task].copy()
+                        updated_proposed_bids[task][n_obs] = best_new_bids[obs][task].copy()
 
-                        assert abs(updated_proposed_bids[task][n_obs].t_bid - state._t) < self.EPS, \
+                        assert abs(updated_proposed_bids[task][n_obs].t_bid - t_curr) < self.EPS, \
                             "Bid time in updated proposed bids does not match current state time."
                     else:
                         # observation was not modified; retain existing proposed bids
@@ -951,10 +942,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             m_next = abs(obs_next.look_angle - th_img) / max_slew_rate
 
             # check if latest time would interfere with `t_imgs` from `obs_next`
-            t_img_next = min(*obs_next.t_imgs.values(), None)
+            t_img_next = min(obs_next.t_imgs.values(), default=np.Inf)
 
             # push as far as possible without hurting feasibility of next observation
-            t_end = min(new_obs.accessibility.right, t_img_next - m_next) if t_img_next is not None else new_obs.accessibility.right            
+            t_end = min(new_obs.accessibility.right, t_img_next - m_next)
             duration = t_end - t_img
 
         else:
@@ -1270,14 +1261,13 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         assert obs_action is not None, \
                             "Task observation action not defined for task to be performed by agent."
 
+                        # establish observation time bounds for this observation
                         min_duration = obs_action.obs_opp.task_min_duration[task.id]
-
                         t_img_l = t_obs
                         t_img_u = obs_action.t_end - min_duration
                         
-                        # pick observation time 
-                        task_value, t_img \
-                            = self._find_best_imaging_time(
+                        # pick an observation time to commit to for this observation and get corresponding task value
+                        task_value, t_img = self._find_best_imaging_time(
                                 task, obs_action.instrument_name, obs_action.look_angle, 
                                     t_img_l, t_img_u, min_duration, specs, cross_track_fovs, 
                                         orbitdata, mission, n_obs, t_prev)
@@ -1286,10 +1276,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
                         # if no existing bid for this observation number, accept if:
                         if n_obs >= len(self._results[task]):
-                            accept_bid = [
-                                # 1) proposed observation value is positive 
-                                task_value > 0.0
-                            ]
+                            # 1) proposed observation value is positive 
+                            accept_bid = [task_value > 0.0]
 
                         # if there is an existing bid, accept if either:
                         else:
@@ -1301,22 +1289,13 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
                             beats_current = task_value > existing_bid.winning_bid
 
-                            # Only the immediately following bid needs to be checked upfront.
-                            immediate_next = next(
-                                (b for b in self._results[task]
-                                if b.n_obs == n_obs + 1 and b.winner != state.agent_name),
-                                None
-                            )
                             # beats_immediate_next = immediate_next is None or task_value > immediate_next.winning_bid
-
-                            accept_bid = [
-                                # 1) I am the current bid winner and proposed observation value is positive
-                                existing_bid.winner == state.agent_name and task_value > 0.0,
-                                # 2) I outperform the current bid and the immediately following bid for this task, 
-                                beats_current, # beats_current and beats_immediate_next,
-                                # 3) I propose an earlier observation time and have a positive optimistic bidding counter
-                                t_img < existing_bid.t_img and self._optimistic_bidding_counters[task][n_obs] > 0
-                            ]
+                            # Only the immediately following bid needs to be checked upfront.
+                            # immediate_next = next(
+                            #     (b for b in self._results[task]
+                            #     if b.n_obs == n_obs + 1 and b.winner != state.agent_name),
+                            #     None
+                            # )
 
                             # LEGACY APPROACH - check proposed observation value against all mutex bids for this observation number
                             # # get mutex bids for this observation
@@ -1328,16 +1307,16 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                             #                 ]
                             # mutex_bids = [existing_bid] + following_bids
 
-                            # # determine if bid is accepted
-                            # accept_bid = [
-                            #     # 1) I am the current bid winner and proposed observation value is positive
-                            #     existing_bid.winner == state.agent_name and task_value > 0.0,
-                            #     # 2) or if proposed observation value outperforms existing winning bids for all mutex bids
+                            accept_bid = [
+                                # 1) I am the current bid winner and proposed observation value is positive
+                                existing_bid.winner == state.agent_name and task_value > 0.0,
+                                # 2) I outperform the current bid (and the immediately following bid for this task), 
+                                beats_current, # beats_current and beats_immediate_next,
+                                # 3) I propose an earlier observation time and have a positive optimistic bidding counter
+                                t_img < existing_bid.t_img and self._optimistic_bidding_counters[task][n_obs] > 0
+                                # 4) or if proposed observation value outperforms existing winning bids for all mutex bids
                             #     all(task_value > mutex_bid.winning_bid for mutex_bid in mutex_bids),
-                            #     # 3) or if proposed earlier observation time and optimistic bidding counter allows it
-                            #     t_obs < existing_bid.t_img 
-                            #         and self._optimistic_bidding_counters[task][n_obs] > 0
-                            # ]
+                            ]
 
                         # check if bid is accepted
                         if not any(accept_bid):
@@ -1491,21 +1470,20 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
                 # b) check if bid is being proposed for this task but not modified in this path
                 elif task in proposed_bids:
-                    # no best sequence found for this parent task; use existing bids from results
-                    t_img = obs_act.t_imgs[task.id]
-
-                    # get matching bid for this observation task
+                    # sequence was not modified this round; find the existing bid by window
+                    # containment rather than comparing against obs_act.t_imgs (which may be
+                    # stale if the bid's t_img was updated in a prior round)
                     matching_bids = [bid for bid in proposed_bids[task].values()
-                                    # if abs(bid.t_img - obs.t_start) <= self.EPS
-                                    if abs(bid.t_img - t_img) <= self.EPS
+                                    if obs_act.t_start <= bid.t_img <= obs_act.t_end - min_durations[task.id]
                                     and bid.owner == state.agent_name]
-                    
+
                     assert matching_bids, \
                         "Matching bid for observation in path not found in results. Was assigned without updating results."
                     assert len(matching_bids) <= 1, \
                         "There should be at most one matching bid for the current time step."
 
                     matching_bid : Bid = matching_bids.pop()
+                    t_img = matching_bid.t_img  # recover committed t_img for prev_bids lookups
 
                     # get previous matching observations for this task
                     prev_bids_self = [bid for bid in proposed_bids[task].values()
@@ -1691,12 +1669,20 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                       proposed_observation : ObservationOpportunity, 
                       bids_candidate : Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]]
                     ) -> List[ObservationAction]:
-        """ refine duration """
+        """ 
+        Refine observation action duration to minimize obsevation span while
+        respecting the commited observation times in the candidate bids.
+        """
+        
         for obs_act in candidate_path:
-            if obs_act.obs_opp == proposed_observation:
-                # calculate adjusted start time
-                t_imgs = {task.id : bid.t_img 
-                          for task, bid in bids_candidate[obs_act.obs_opp].items()}
+            # only refine path for observation actions that have a matching proposed bid
+            if obs_act.obs_opp in bids_candidate:
+                # seed from existing t_imgs so tasks not modified this round are still present,
+                # then override with the updated bids
+                t_imgs = {task.id: obs_act.t_imgs.get(task.id, obs_act.t_start)
+                          for task in obs_act.obs_opp.tasks}
+                t_imgs.update({task.id: bid.t_img
+                               for task, bid in bids_candidate[obs_act.obs_opp].items()})
                 min_duration = obs_act.obs_opp.min_duration
                 t_start = min(*t_imgs.values(), obs_act.t_end - min_duration)
                 
@@ -1705,8 +1691,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 obs_act.t_end = t_start + min_duration
                 obs_act.t_imgs = t_imgs
 
-            # ensure bids are still valid after path refinement
-            if obs_act.obs_opp in bids_candidate:
+                # ensure bids are still valid after path refinement
                 for task, bid in bids_candidate[obs_act.obs_opp].items():
                     min_duration = obs_act.obs_opp.task_min_duration[task.id]
                     assert obs_act.t_start <= bid.t_img <= obs_act.t_end, \

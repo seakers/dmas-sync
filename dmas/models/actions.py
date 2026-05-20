@@ -389,9 +389,16 @@ class ObservationAction(AgentAction):
         self.req : dict = req
 
         if t_imgs is not None:
+            assert len(t_imgs) == len(obs_opp.tasks), \
+                f'`t_imgs` must contain a time for each task in the associated `obs_opp`. `t_imgs` contains {len(t_imgs)} times but there are {len(obs_opp.tasks)} tasks in the associated `obs_opp`.'
+            assert all(task.id in t_imgs for task in obs_opp.tasks), \
+                f'All tasks in the associated `obs_opp` must have a corresponding time in `t_imgs`. Tasks in `obs_opp` are {[task.id for task in obs_opp.tasks]} but `t_imgs` contains times for {[task_id for task_id in t_imgs]}.'
+            assert all(isinstance(t_img, (float, int)) for t_img in t_imgs.values()), \
+                f'All values in `t_imgs` must be numerical values of type `float` or `int`. Is of type `{type(t_imgs)}`.'
             self.t_imgs : Dict[str,float] = t_imgs
         elif obs_opp is not None:
-            self.t_imgs : Dict[str,float] = obs_opp.get_earliest_starts(t_start)
+            # get_earliest_starts returns {task_obj: float}; convert to {task.id: float}
+            self.t_imgs : Dict[str,float] = {task.id: v for task, v in obs_opp.get_earliest_starts(t_start).items()}
         else:
             self.t_imgs : Dict[str,float] = dict()
 
