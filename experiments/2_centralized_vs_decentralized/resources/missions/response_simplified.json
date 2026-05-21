@@ -22,16 +22,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
                         {
                             "req_type": "performance",
@@ -82,16 +75,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
                         {
                             "req_type": "performance",
@@ -138,16 +124,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
 
                         {
@@ -202,16 +181,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
                         {
                             "req_type": "performance",
@@ -258,16 +230,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
 
                         {
@@ -321,16 +286,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
                         {
                             "req_type": "performance",
@@ -376,16 +334,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
                         {
                             "req_type": "performance",
@@ -434,16 +385,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
                         {
                             "req_type": "performance",
@@ -489,16 +433,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
                         {
                             "req_type": "performance",
@@ -551,16 +488,9 @@
                         },
                         {
                             "req_type": "performance",
-                            "attribute": "response_time [normalized]",
-                            "strategy": "discrete_intervals",
-                            "thresholds": [
-                                0,
-                                1.0
-                            ],
-                            "scores": [
-                                1.0,
-                                0.0
-                            ]
+                            "attribute": "response_time [s]",
+                            "strategy": "exp_decay",
+                            "decay_rate": 0.000192541
                         },
 
                         {
