@@ -3567,27 +3567,14 @@ class ResultsProcessor:
                     precomputed_obj_relevances
                 )
 
-            if use_earliest_time:
-                best_times, prev_t = [], -np.inf
-                for t in t_starts:
-                    prev_t = max(t, prev_t)
-                    best_times.append((prev_t, 0.0))
-                reward = objective(best_times)
-            else:
-                nd = len(indices)
-                if nd == 1:
-                    n_init, n_iters = 20, 0
-                elif nd == 2:
-                    n_init, n_iters = 10, 10
-                else:
-                    n_init, n_iters = 5, 8
-                opt = _SequenceTimeOptimiser(
-                    n_dims=nd,
-                    n_initial=n_init,
-                    n_iterations=n_iters,
-                    n_acq_candidates=50,
-                )
-                best_times, reward = opt.optimise(t_starts, t_ends, d_min, objective)
+            # Always use earliest feasible times for SA ranking — precise timing
+            # is only needed for the final winner (handled by evaluate_full).
+            # This reduces each SA step from ~13+ objective calls to 1.
+            best_times, prev_t = [], -np.inf
+            for t in t_starts:
+                prev_t = max(t, prev_t)
+                best_times.append((prev_t, 0.0))
+            reward = objective(best_times)
 
             # cap cache size to avoid unbounded growth for large-window tasks
             if len(_eval_cache) >= _CACHE_MAX:
