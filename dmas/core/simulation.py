@@ -153,7 +153,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            # t = 65_000.0 # TODO remove after testing
+            # t = 40_000.0 # TODO comment out or remove after testing
             # t_check = 0.0
             # dt_progress = 0.0
             

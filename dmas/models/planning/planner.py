@@ -626,17 +626,18 @@ class AbstractPlanner(ABC):
                     )
 
     
-    def estimate_observation_opportunity_value(self, 
-                                     obs : ObservationOpportunity, 
+    def estimate_observation_opportunity_value(self,
+                                     obs : ObservationOpportunity,
                                      t_img : float,
                                      d_img : float,
-                                     specs : object, 
+                                     specs : object,
                                      cross_track_fovs : Dict[str, float],
                                      orbitdata : OrbitData,
                                      mission : Mission,
                                      observation_history : TaskObservationTracker,
                                      task_n_obs : Dict[GenericObservationTask,int] = None,
-                                     task_t_prevs : Dict[GenericObservationTask,int] = None
+                                     task_t_prevs : Dict[GenericObservationTask,int] = None,
+                                     task_t_imgs : Dict[str,float] = None
                                 ) -> float:
         """ 
         
@@ -671,18 +672,25 @@ class AbstractPlanner(ABC):
         th_img = np.average([obs.slew_angles.left, obs.slew_angles.right])
 
         # find observation time for each task in the observation opp
-        action_tasks_start_times = obs.get_earliest_starts(t_img)
+        if task_t_imgs is not None:
+            # use caller-supplied per-task image times (e.g. from committed bids);
+            # bypasses get_earliest_starts so t_prev consistency is maintained relative
+            # to the actual bid times rather than the window start
+            action_tasks_start_times = task_t_imgs
+        else:
+            action_tasks_start_times = {task.id: t for task, t in obs.get_earliest_starts(t_img).items()}
+        
         action_task_duration = {
-            task : d_img - (t_task_img - t_img)
-            for task, t_task_img in action_tasks_start_times.items()
+            task_id : d_img - (t_task_img - t_img)
+            for task_id, t_task_img in action_tasks_start_times.items()
         }
 
         # calculate task reward per parent task
         rewards = {parent_task : self._estimate_task_value(parent_task,
                                                             obs.instrument_name,
                                                             th_img,
-                                                            action_tasks_start_times[parent_task],
-                                                            action_task_duration[parent_task],
+                                                            action_tasks_start_times[parent_task.id],
+                                                            action_task_duration[parent_task.id],
                                                             specs,
                                                             cross_track_fovs,
                                                             orbitdata,

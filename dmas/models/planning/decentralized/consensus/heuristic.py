@@ -1249,6 +1249,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         # establish observation time bounds for this observation
                         min_duration = obs_action.obs_opp.task_min_duration[task.id]
                         t_img_l = t_obs
+                        # t_img_l = max(t_prev, t_obs)# proposed fix
                         t_img_u = min(obs_action.t_end, obs_action.obs_opp.accessibility.right) - min_duration
                         
                         # pick an observation time to commit to for this observation and get corresponding task value
@@ -1609,8 +1610,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         Finds the best imaging time for a given interval by evaluating 
         """
         
-        assert t_img_u > t_img_l or abs(t_img_u - t_img_l) < 1e-6, \
-            "Upper bound on imaging time must be greater or equal than lower bound."
+        if t_img_u < t_img_l:
+            return np.NINF, None  # invalid interval; return negative infinity value and no time
 
         if abs(t_img_u - t_img_l) < 1e-6:
             # bounds are effectively equal; return value at this time
@@ -1686,7 +1687,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         t_imgs[task.id] = active[0] if active else obs_act.t_imgs.get(task.id, obs_act.t_start)
                     else:
                         t_imgs[task.id] = obs_act.t_imgs.get(task.id, obs_act.t_start)
-                t_imgs.update({task.id: bid.t_img for task, bid in bids_candidate[obs_act.obs_opp].items()})
+                t_imgs.update({task.id: bid.t_img 
+                                for task, bid in bids_candidate[obs_act.obs_opp].items()})
 
                 # calculate new start and end times for this observation action
                 min_duration = obs_act.obs_opp.min_duration

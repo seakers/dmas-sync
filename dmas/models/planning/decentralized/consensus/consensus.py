@@ -1630,14 +1630,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
         """ Calculate expected value of each observation in the path. """        
         return [self.estimate_observation_opportunity_value(obs_act.obs_opp,
                                                  obs_act.t_start,
-                                                 obs_act.obs_opp.min_duration,
+                                                 obs_act.t_end - obs_act.t_start,
                                                  specs,
                                                  cross_track_fovs,
                                                  orbitdata,
                                                  mission,
                                                  observation_history,
                                                  n_obs[obs_idx],
-                                                 t_prev[obs_idx])
+                                                 t_prev[obs_idx],
+                                                 task_t_imgs=obs_act.t_imgs
+                                                )
                         for obs_idx, obs_act in enumerate(path)]
 
     def _count_observations_and_revisit_times_from_path(self,

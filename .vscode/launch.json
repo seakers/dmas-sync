@@ -499,7 +499,7 @@
                 // "--single-trial", "36", // GS, None+CBBA 
                 // "--single-trial", "42", // Inter, None+CBBA 
                 // "--single-trial", "45", // GS, None+Greedy 
-                "--single-trial", "11",
+                "--single-trial", "36",
                 // "--trial-range", "0:1",
 
                 // "--profile-cpu",
@@ -508,7 +508,7 @@
                 // "--only-precompute",
                 // "--only-simulate",
                 // "--only-postprocess",
-                // "--force-simulate",
+                "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
                 // "--reduced",
