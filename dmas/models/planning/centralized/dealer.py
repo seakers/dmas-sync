@@ -752,10 +752,10 @@ class DealerPlanner(AbstractPeriodicPlanner):
                 if t_broadcast >= state._t + self._period: continue
 
                 # schedule broadcasts for the client
-                plan_msg = PlanMessage(state.agent_name, client, [action.to_dict() for action in client_plan.actions], state._t)
+                plan_msg = PlanMessage(state.agent_name, client, [action for action in client_plan.actions], state._t)
 
                 # create broadcast action
-                plan_broadcast = BroadcastMessageAction(plan_msg.to_dict(), t_broadcast)
+                plan_broadcast = BroadcastMessageAction(plan_msg, t_broadcast)
                 broadcasts.append(plan_broadcast)
 
             elif self._sharing == self.PERIODIC:
@@ -771,10 +771,10 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     t_broadcast : float = t_curr + self._period * (i + 1) - 5e-3  # ensure broadcast happens before the end of the planning period
 
                     # schedule broadcasts for the client
-                    plan_msg = PlanMessage(state.agent_name, client, [action.to_dict() for action in client_plan.actions], state._t)
+                    plan_msg = PlanMessage(state.agent_name, client, [action for action in client_plan.actions], state._t)
 
                     # create broadcast action
-                    plan_broadcast = BroadcastMessageAction(plan_msg.to_dict(), t_broadcast)
+                    plan_broadcast = BroadcastMessageAction(plan_msg, t_broadcast)
                     broadcasts.append(plan_broadcast)
 
             else:

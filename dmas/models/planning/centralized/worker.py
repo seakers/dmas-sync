@@ -65,8 +65,14 @@ class WorkerPlanner(AbstractPeriodicPlanner):
 
     def generate_plan(self, state : SimulationAgentState, *_) -> Plan:
         # get actions from latest plan message
-        planner_actions : list[AgentAction] = [action_from_dict(**action) 
-                                       for action in self.plan_message.plan]
+        planner_actions : list[AgentAction] = []
+        for action in self.plan_message.plan:
+            if isinstance(action, dict):
+                planner_actions.append(action_from_dict(**action))
+            elif isinstance(action, AgentAction):
+                planner_actions.append(action)
+            else:
+                raise ValueError(f"Unrecognized action format in plan message: {action}")
         
         # only keep actions that start after the current time
         actions = [action for action in planner_actions if action.t_start >= state._t]
