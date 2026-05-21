@@ -566,7 +566,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 if new_bids is None: continue # no valid bids found; skip
 
                 # refine observation actions in candidate path to match proposed bids
-                refined_path = self.__refine_path(candidate_path, proposed_observation, new_bids)
+                refined_path = self.__refine_path(state, candidate_path, new_bids, specs)
 
                 # get path value for proposed path using best observation sequences
                 proposed_path_utility : float \
@@ -778,11 +778,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         next_observations = [action for action in current_path
                              if action.t_start >= new_obs.accessibility.right]
         if next_observations:
-            next_observation = min(next_observations, key=lambda action: action.t_start) 
+            next_observation = min(next_observations, key=lambda action: action.t_start)
         else:
             # dummy observation action representing end state if no future observations exist and the agent performs this observation opportunity;
-            #  used to check feasibility of addind the new observation at the end of the current path
-            next_observation = ObservationAction(new_obs.instrument_name, th_img, np.Inf, 0.0) 
+            #  used to check feasibility of adding the new observation at the end of the current path
+            next_observation = ObservationAction(new_obs.instrument_name, th_img, np.Inf, 0.0)
         ## find observations that are being performed during new observation opportunity accessibility
         observations_during_task_access = [action for action in current_path
                                            if action.t_start in new_obs.accessibility
@@ -790,24 +790,23 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                            or (action.t_start <= new_obs.accessibility.left and action.t_end >= new_obs.accessibility.right)
                                         ]
 
-        # compile conflicting observations        
-        conflicting_obs_actions = {prev_observation, next_observation} # if prev_observation else {next_observation} if next_observation else set()
+        # compile conflicting observations
+        conflicting_obs_actions = {prev_observation, next_observation}
         conflicting_obs_actions.discard(None)
-        ## get unique observations during new observation opportunity access
         conflicting_obs_actions.update(observations_during_task_access)
-        ## sort conflicting observations by start time
-        conflicting_obs_actions = sorted([obs for obs in conflicting_obs_actions 
-                                           if obs is not None], key=lambda obs: obs.t_start)
+        conflicting_obs_actions = sorted([obs for obs in conflicting_obs_actions
+                                          if obs is not None], key=lambda obs: obs.t_start)
 
         # set current state as a dummy previous observation
-        obs_act_prev = ObservationAction(new_obs.instrument_name,  state.attitude[0], t_curr)
+        obs_act_prev = ObservationAction(new_obs.instrument_name, state.attitude[0], t_curr)
 
         # check if gaps between observations can accommodate new observation opportunity
-        for i_obs,obs_act_next in enumerate(conflicting_obs_actions): 
+        insert_idx = None
+        for obs_act_next in conflicting_obs_actions:
             # check maneuver time between new task and current observations
             m_prev = abs(obs_act_prev.look_angle - th_img) / max_slew_rate
-            m_next = abs(obs_act_next.look_angle - th_img) / max_slew_rate        
-            
+            m_next = abs(obs_act_next.look_angle - th_img) / max_slew_rate
+
             # get earliest and latest feasible observation time
             t_earliest_start = max(new_obs.accessibility.left, obs_act_prev.t_end + m_prev)
             t_latest_start = min(new_obs.accessibility.right, obs_act_next.t_start - m_next) - new_obs.min_duration
@@ -822,50 +821,28 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     and t_earliest_start + new_obs.min_duration <= new_obs.accessibility.right)
             latest_is_feasible = (t_latest_start + new_obs.min_duration + m_next <= obs_act_next.t_start
                                     and obs_act_prev.t_end + m_prev <= t_latest_start
-                                    and new_obs.accessibility.left <= t_latest_start 
+                                    and new_obs.accessibility.left <= t_latest_start
                                     and t_latest_start + new_obs.min_duration <= new_obs.accessibility.right)
-            
+
             # if feasible, select observation time
             if earliest_is_feasible:
-                # choose earliest feasible time
                 t_start = t_earliest_start
-
             elif latest_is_feasible:
-                # choose latest feasible time
                 t_start = t_latest_start
-                
-            # if feasible time found, break
-            if earliest_is_feasible or latest_is_feasible: 
-                # choose latest end time for this start time
+
+            if earliest_is_feasible or latest_is_feasible:
                 t_end = min(new_obs.accessibility.right, obs_act_next.t_start - m_next)
-                # stop search
-                break    
+                try:
+                    insert_idx = current_path.index(obs_act_next)
+                except ValueError:
+                    insert_idx = len(current_path)  # dummy sentinel → append at end
+                break
 
-            # else; update previous observation
             obs_act_prev = obs_act_next
-
-        # no conflicting observations were found; compare against current state
-        if not conflicting_obs_actions:
-            # calculate maneuver time from current state
-            m = abs(th_img - state.attitude[0]) / max_slew_rate
-            
-            # schedule at earliest maneuverable observation time
-            t_start = max(new_obs.accessibility.left, t_curr + m)
-
-            # choose latest end time for this start time
-            t_end = new_obs.accessibility.right
-
-            # set insert index to start of the path
-            i_obs = 0
-
-            # check observation time feasibility
-            if (t_start not in new_obs.accessibility 
-                or t_start + new_obs.min_duration not in new_obs.accessibility):
-                t_start, t_end = None, None # no feasible observation time found
 
         # check if observation time was found
         if t_start is None: return (None, None, None) # no time found; cannot insert new observation into path
-       
+
         # insert new observation into path
         ## create observation action for new task
         obs_duration = t_end - t_start
@@ -873,9 +850,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
         ## create new path with inserted observation
         new_path = [action for action in current_path]
-        new_path.insert(i_obs, new_observation)
-        # new_path.append(new_observation)
-        # new_path = sorted(new_path, key=lambda action: action.t_start)
+        new_path.insert(insert_idx, new_observation)
         
         # return new path if valid
         return (new_path, [new_observation], []) if self.is_observation_path_valid(state, new_path, max_slew_rate, max_torque, specs) else (None, None, None)
@@ -1274,7 +1249,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         # establish observation time bounds for this observation
                         min_duration = obs_action.obs_opp.task_min_duration[task.id]
                         t_img_l = t_obs
-                        t_img_u = obs_action.t_end - min_duration
+                        t_img_u = min(obs_action.t_end, obs_action.obs_opp.accessibility.right) - min_duration
                         
                         # pick an observation time to commit to for this observation and get corresponding task value
                         task_value, t_img = self._find_best_imaging_time(
@@ -1675,14 +1650,20 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         return value, t_img
 
     def __refine_path(self, 
+                      state : SimulationAgentState,
                       candidate_path : List[ObservationAction],
-                      proposed_observation : ObservationOpportunity, 
-                      bids_candidate : Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]]
+                      bids_candidate : Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]],
+                      specs : object,
                     ) -> List[ObservationAction]:
         """ 
         Refine observation action duration to minimize obsevation span while
         respecting the commited observation times in the candidate bids.
-        """
+        """        
+        # Failure at t=52138.00s.
+
+        # ensure candidate path is valid before refinement
+        assert self.is_observation_path_valid(state, candidate_path, specs=specs), \
+            "Candidate path is not valid; cannot refine path."
         
         for obs_act in candidate_path:
             # only refine path for observation actions that have a matching proposed bid
@@ -1695,9 +1676,12 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                for task, bid in bids_candidate[obs_act.obs_opp].items()})
                 min_duration = obs_act.obs_opp.min_duration
                 t_start = min(*t_imgs.values(), obs_act.t_end - min_duration)
-                t_end = max(*[t_img + obs_act.obs_opp.task_min_duration[task_id] 
-                              for task_id,t_img in t_imgs.items()], 
-                              obs_act.t_start + min_duration)
+                t_end = min(
+                    max(*[t_img + obs_act.obs_opp.task_min_duration[task_id]
+                          for task_id, t_img in t_imgs.items()],
+                          obs_act.t_start + min_duration),
+                    obs_act.obs_opp.accessibility.right
+                )
                 
                 # set new start and end times for this observation action 
                 obs_act.t_start = t_start
@@ -1713,6 +1697,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         "Bid observation time plus minimum duration exceeds end time of observation action after path refinement."                        
                 assert obs_act.t_start + min_duration <= obs_act.t_end, \
                     "Start time plus minimum duration exceeds end time of observation action after path refinement."
+
+        # ensure modified path is still valid after refinement
+        assert self.is_observation_path_valid(state, candidate_path, specs=specs), \
+            "Candidate path is not valid; cannot refine path."
 
         # return modified candidate path
         return candidate_path 
