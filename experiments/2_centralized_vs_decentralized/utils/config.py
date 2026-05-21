@@ -119,6 +119,9 @@ def parse_study_args() -> SimulationConfig:
     parser.add_argument("-1", "--single-thread", action="store_true",
                         help="Run simulation single-threaded")
 
+    parser.add_argument("--max-workers", type=int, default=None,
+                        help="Number of parallel worker processes (overrides cpu_count-based default)")
+
     parser.add_argument("-r", "--reduced", action="store_true",
                         help="Run reduced-complexity debug scenarios")
 
@@ -214,6 +217,7 @@ def parse_study_args() -> SimulationConfig:
         profile_cpu=args.profile_cpu,
         profile_mem=args.profile_mem,
         single_thread=args.single_thread,
+        max_workers=args.max_workers,
         reduced=args.reduced,
 
         log_level=args.log_level,

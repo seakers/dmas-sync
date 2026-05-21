@@ -4,8 +4,8 @@
 #SBATCH --error=experiments/2_centralized_vs_decentralized/logs/errors/study_2_run_%A_%a.err
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=64G
+#SBATCH --cpus-per-task=3
+#SBATCH --mem=192G
 # #SBATCH --array=3-17
 
 set -euo pipefail
@@ -40,7 +40,8 @@ end=$((start + 3))
 python ./experiments/2_centralized_vs_decentralized/study.py \
       -t full_factorial_trials_2026-05-17 \
       --trial-range "${start}:${end}" \
-      --quiet --force-postprocess --force-summarize 
+      --max-workers 3 \
+      --quiet --force-postprocess --force-summarize
       # --single-thread --force-simulate
       # --only-simulate --force-simulate 
       # --exceptions --profile-cpu --profile-mem
