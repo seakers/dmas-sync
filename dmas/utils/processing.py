@@ -146,14 +146,14 @@ class ResultsProcessor:
 
             # only consider taskable observations for reward calculation
             taskable_observations = [obs_perf for obs_perf in observations 
-                                     if is_taskable(obs_perf['instrument'])]
+                                     if is_taskable(obs_perf['agent name'])]
             # sort by observation time to properly calculate revisit times for performance metrics that depend on them (e.g. timeliness)
             taskable_observations.sort(key=lambda obs: obs['time [s]'])
 
             # iterate observations by start time             
-            # for n_obs,obs_perf in enumerate(taskable_observations): # sorted(observations, key=lambda obs: obs['time [s]'])
-            n_obs = 0
-            for obs_perf in taskable_observations:
+            for n_obs,obs_perf in enumerate(taskable_observations): # sorted(observations, key=lambda obs: obs['time [s]'])
+            # n_obs = 0
+            # for obs_perf in taskable_observations:
                 # unpack observation information
                 observing_agent = obs_perf['agent name']
                 instrument_name : str = obs_perf['instrument']
@@ -1490,8 +1490,14 @@ class ResultsProcessor:
                 # indicate if observations were tasked or opportunistic based on agent name
                 # TODO currently assumes that any agent name containing "-U)" is an untasked opportunistic observation;
                 # may need to be revised for different naming conventions or more complex cases
-                # is_tasked = ~matching_observations["agent name"].str.contains("-U)", regex=False)
-                # matching_observations["tasked"] = is_tasked
+                is_tasked = ~matching_observations["agent name"].str.contains("-U)", regex=False)
+                matching_observations["tasked"] = is_tasked
+
+                # filter to only tasked observations (agent name indicates this was a tasked observation)
+                matching_observations = matching_observations[matching_observations["tasked"]]
+                if matching_observations.empty:
+                    # skip to next event if no matching observations found
+                    continue
 
                 # filter to only intentional observations (agent explicitly targeted this GP)
                 if "intentional" in matching_observations.columns:
