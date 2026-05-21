@@ -242,8 +242,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     # check if just performed
                                     and obs_opp not in self.latest_performed_observations
                                     # check if mutually exclusive with any already planned observation opportunities
-                                    # and all(not obs_opp.is_mutually_exclusive(planned_obs) 
-                                    #         for planned_obs in planned_observation_opportunities)
+                                    and all(not obs_opp.is_mutually_exclusive(planned_obs) 
+                                            for planned_obs in planned_observation_opportunities)
                                     ]
              
         # return observation opportunities
@@ -724,15 +724,25 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         for path, path_changes, _ in proposed_paths:
             if path is None: continue # skip invalid paths
 
-            # find indices of proposed observation opportunity in path
-            obs_indices = [idx for idx, action in enumerate(path) if action.obs_opp == new_obs]
-
-            # check if any proposed observation opportunity is placed right after a mutually exclusive observation opportunity
+            # for it to be valid, the new observation must not be exclusive with any observation in the path;
+            # regardless of its placement 
             valid = True
-            for idx in obs_indices:
-                if idx > 0 and path[idx-1].obs_opp.is_mutually_exclusive(new_obs):
+            for action in path:
+                if action.obs_opp == new_obs: continue # skip new observation opportunity itself
+                if action.obs_opp.is_mutually_exclusive(new_obs):
                     valid = False
                     break
+            
+            # # find indices of proposed observation opportunity in path
+            # obs_indices = [idx for idx, action in enumerate(path) 
+            #                if action.obs_opp == new_obs]
+
+            # check if any proposed observation opportunity is placed right after a mutually exclusive observation opportunity
+            # valid = True
+            # for idx in obs_indices:
+            #     if idx > 0 and path[idx-1].obs_opp.is_mutually_exclusive(new_obs):
+            #         valid = False
+            #         break
             
             # add to list of valid paths if valid
             if valid: valid_paths.append((path, path_changes, _))

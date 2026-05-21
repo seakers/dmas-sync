@@ -314,7 +314,7 @@ class SimulationEnvironment(object):
                 # can inherit a committed t_img from a prior window; they merge in processing
                 # but should be self-consistent in the raw parquet
                 committed = gp_to_t_img.get(key, obs_rec['t_start'])
-                obs_rec['t_img'] = max(committed, obs_rec['t_start'])
+                obs_rec['t_img'] = committed   # not max(committed, obs_rec['t_start'])
                 obs_rec['intentional'] = key in gp_to_t_img
 
             self._observation_history.extend(new_observation_data)
@@ -347,6 +347,7 @@ class SimulationEnvironment(object):
                      t_curr : float
                     ) -> Tuple[SimulationAgentState, str, list, list]:
         """ Performs a wait action for incoming messages """
+                
         # update state
         state.update(t_curr, status=SimulationAgentState.WAITING)
         

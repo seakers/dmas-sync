@@ -771,10 +771,8 @@ class AbstractPlanner(ABC):
                     for measurement in measurement_performance.values()] \
                         if len(measurement_performance.values()) > 0 else [0.0]
         return value
-
         # -----------------------------
-
-
+        
         # return max([mission.calc_task_value(task, measurement) 
         #             for measurement in measurement_performance.values()]) \
         #                 if len(measurement_performance.values()) > 0 else 0.0
@@ -869,7 +867,7 @@ class AbstractPlanner(ABC):
 
             # handle special case of first observation
             if n_obs == 0:
-                obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
+                obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = np.NINF
 
             # update instrument-specific observation performance information
             if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()

@@ -151,7 +151,9 @@ class ResultsProcessor:
             taskable_observations.sort(key=lambda obs: obs['time [s]'])
 
             # iterate observations by start time             
-            for n_obs,obs_perf in enumerate(taskable_observations): # sorted(observations, key=lambda obs: obs['time [s]'])
+            # for n_obs,obs_perf in enumerate(taskable_observations): # sorted(observations, key=lambda obs: obs['time [s]'])
+            n_obs = 0
+            for obs_perf in taskable_observations:
                 # unpack observation information
                 observing_agent = obs_perf['agent name']
                 instrument_name : str = obs_perf['instrument']
@@ -159,8 +161,10 @@ class ResultsProcessor:
                 # use committed t_img written by the environment (from planner's t_imgs);
                 # fall back to window start if not present (old results or non-CBBA runs)
                 # t_img = obs_perf['time [s]']
-                _committed = obs_perf.get('t_img')
-                t_img = _committed if _committed is not None else max(obs_perf['t_start'], task.availability.left)
+                
+                t_img = obs_perf.get('t_img', None)
+                if t_img is None: continue
+
                 d_img = obs_perf['t_end'] - t_img
                 assert t_img <= obs_perf['t_end'] + 1e-9, \
                     f"Observation time {t_img} is after end of observation window at {obs_perf['t_end']}."
@@ -581,7 +585,7 @@ class ResultsProcessor:
 
     @staticmethod
     def __load_broadcast_history(results_path : str, printouts : bool = True) -> pd.DataFrame:
-        if printouts: print('[results processor] loading agent broadcast history')
+        if printouts: tqdm.write('[results processor] loading agent broadcast history')
 
         # define results path for the environment
         environment_results_path = os.path.join(results_path, SimulationRoles.ENVIRONMENT.name.lower())        
@@ -1209,20 +1213,28 @@ class ResultsProcessor:
             data = data.drop_duplicates().sort_values(
                 by=['agent name', 'instrument', 't_start'], kind='mergesort'
             )
+            data_original = data.copy()
 
             # merge adjacent/overlapping intervals from the same (agent name, instrument)
             merged_rows = []
             prev = None
-            for _, row in data.iterrows():
+            for i, row in data.iterrows():
                 row_d = row.to_dict()
                 if prev is None:
                     prev = row_d
+                # elif (row_d['agent name'] == prev['agent name']
+                #       and row_d['instrument'] == prev['instrument']
+                #       and row_d['t_start'] <= prev['t_end'] + 1e-9):
+                #     prev['t_end'] = max(prev['t_end'], row_d['t_end'])
+                #     if row_d.get('intentional', False):
+                #         prev['intentional'] = True
                 elif (row_d['agent name'] == prev['agent name']
-                      and row_d['instrument'] == prev['instrument']
-                      and row_d['t_start'] <= prev['t_end'] + 1e-9):
+                        and row_d['instrument'] == prev['instrument']
+                        and row_d['t_start'] <= prev['t_end'] + 1e-9
+                        and row_d.get('intentional', False) == prev.get('intentional', False)
+                        and abs(row_d.get('t_img', 0) - prev.get('t_img', 0)) <= 1e-9):
                     prev['t_end'] = max(prev['t_end'], row_d['t_end'])
-                    if row_d.get('intentional', False):
-                        prev['intentional'] = True
+
                 else:
                     merged_rows.append(prev)
                     prev = row_d
@@ -1478,16 +1490,15 @@ class ResultsProcessor:
                 # indicate if observations were tasked or opportunistic based on agent name
                 # TODO currently assumes that any agent name containing "-U)" is an untasked opportunistic observation;
                 # may need to be revised for different naming conventions or more complex cases
-                is_tasked = ~matching_observations["agent name"].str.contains("-U)", regex=False)
-                matching_observations["tasked"] = is_tasked
+                # is_tasked = ~matching_observations["agent name"].str.contains("-U)", regex=False)
+                # matching_observations["tasked"] = is_tasked
 
-                # filter to only intentional observations (agent explicitly targeted this GP);
-                # fall back to agent-name heuristic for legacy parquet files without the column
+                # filter to only intentional observations (agent explicitly targeted this GP)
                 if "intentional" in matching_observations.columns:
                     is_intentional = matching_observations["intentional"].fillna(False)
+                    matching_observations = matching_observations[is_intentional]
                 else:
-                    is_intentional = is_tasked
-                matching_observations = matching_observations[is_intentional]
+                    continue
 
                 if matching_observations.empty:
                     # skip to next event if no matching observations found
@@ -1780,6 +1791,7 @@ class ResultsProcessor:
         n_obs_per_task = ResultsProcessor.__calc_n_observations(observations_per_task)
 
         # calculate utility metrics
+        n_planned_observations = len(planned_rewards_df) if planned_rewards_df is not None else 0
         total_planned_reward = np.round(planned_rewards_df['planned reward'].sum(), precision) if planned_rewards_df is not None else 0.0
         total_planned_utility = np.round(planned_rewards_df['planned reward'].sum() - execution_costs_df['cost'].sum(), precision) if planned_rewards_df is not None and execution_costs_df is not None else 0.0
 
@@ -2091,11 +2103,8 @@ class ResultsProcessor:
 
                     # Reward Statistics 
                     ['Total Planned Reward', total_planned_reward],
-                    # ['Normalized Total Planned Reward', total_planned_reward / total_available_utility if total_available_utility > 0 else 0.0],
-                    ['Total Planned Task Observations', len(planned_rewards_df) if planned_rewards_df is not None else 0],
 
                     ['Total Obtained Reward', total_obtained_reward],
-                    # ['Normalized Total Obtained Reward', total_obtained_reward / total_available_utility if total_available_utility > 0 else 0.0],
                     ['Total Obtained Task Observations', len(obtained_rewards_df) if obtained_rewards_df is not None else 0],
                     
                     ['Average Planned Reward per Task Observation', avg_planned_reward],
@@ -2499,7 +2508,7 @@ class ResultsProcessor:
             upairs = np.unique(pairs)
             gps_accessible_compiled.update(zip(upairs['g'].tolist(), upairs['p'].tolist()))
 
-        if printouts: print(f'[results summary] counted {n_gps} total ground points across all agents')
+        if printouts: tqdm.write(f'[results summary] counted {n_gps} total ground points across all agents')
 
         n_gps_accessible = len(gps_accessible_compiled)
         n_gps_observed = len(observations_per_gp)
@@ -3376,7 +3385,7 @@ class ResultsProcessor:
             for measurement in measurement_performance.values():
                 measurement[ObservationRequirementAttributes.OBSERVATION_NUMBER.value] = n_obs + 1
                 measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = (
-                    t_obs - t_prev if n_obs > 0 else 0.0
+                    t_obs - t_prev if n_obs > 0 else np.NINF
                 )
     
             obs_opp_utility = max(
@@ -3426,7 +3435,7 @@ class ResultsProcessor:
         #         for measurement in measurement_performance.values():
         #             measurement[ObservationRequirementAttributes.OBSERVATION_NUMBER.value] = n_obs + 1
         #             measurement[TemporalRequirementAttributes.REVISIT_TIME.value] = (
-        #                 t_obs - t_prev if n_obs > 0 else 0.0
+        #                 t_obs - t_prev if n_obs > 0 else np.NINF
         #             )
 
         #         if precomputed_obj_relevances is not None:
@@ -4051,7 +4060,7 @@ class ResultsProcessor:
 
             # handle special case of first observation
             if n_obs == 0:
-                obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = 0.0
+                obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = np.NINF
 
             # update instrument-specific observation performance information
             if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()

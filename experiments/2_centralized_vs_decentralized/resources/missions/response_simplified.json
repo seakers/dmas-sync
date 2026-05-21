@@ -45,16 +45,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -103,16 +105,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -158,16 +162,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -219,16 +225,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -274,16 +282,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -334,16 +344,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -387,16 +399,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -443,16 +457,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -496,16 +512,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]
@@ -557,16 +575,18 @@
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
                             "thresholds": [
+                                -1,
                                 0,
                                 59.0,
                                 60,
-                                3600
+                                5400
                             ],
                             "scores": [
-                                0.1,
-                                0.1,
                                 1.0,
-                                0.3
+                                0.0,
+                                0.0,
+                                0.1,
+                                1.0
                             ]
                         }
                     ]

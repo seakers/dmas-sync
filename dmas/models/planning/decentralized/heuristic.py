@@ -528,7 +528,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             if new_obs.instrument_name not in payload: continue
 
             # initialize feasible observation time and select observation look angle for new observation opportunity
-            t_img, th_img = None, np.average([new_obs.slew_angles.left, new_obs.slew_angles.right])
+            t_img_start, th_img = None, np.average([new_obs.slew_angles.left, new_obs.slew_angles.right])
 
             # find possible conflicts in current path
             ## get latest observation before new observation opportunity accessibility
@@ -591,10 +591,10 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
                 # if feasible, select observation time
                 if earliest_is_feasible:
                     # choose earliest feasible time
-                    t_img = t_earliest
+                    t_img_start = t_earliest
                 elif latest_is_feasible:
                     # choose latest feasible time
-                    t_img = t_latest
+                    t_img_start = t_latest
 
                 # if feasible time found, break
                 if earliest_is_feasible or latest_is_feasible: break    
@@ -603,8 +603,15 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
                 obs_prev = obs_next
 
             # check if observation time was found
-            if t_img is None:
+            if t_img_start is None:
                 # no time found; cannot insert new observation into path
+                continue
+
+            # choose latest feasible observation end time
+            t_img_end = min(new_obs.accessibility.right, obs_next.t_start - m_next)
+            d_img = t_img_end - t_img_start
+            if d_img < new_obs.min_duration:
+                # not enough time to perform observation; cannot insert new observation into path
                 continue
 
             # enforce one-observation-per-pass constraint: mirrors the mutually_exclusive
@@ -615,7 +622,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
 
             # insert new observation into path
             ## create observation action for new task
-            new_observation = ObservationAction(new_obs.instrument_name, th_img, t_img, new_obs.min_duration, new_obs)
+            new_observation = ObservationAction(new_obs.instrument_name, th_img, t_img_start, d_img, new_obs)
 
             ## create new path with inserted observation
             new_path = [action for action in current_path]
