@@ -502,7 +502,7 @@
                 // "--single-trial", "40",
                 // "--trial-range", "0:1",
 
-                // "--profile-cpu",
+                "--profile-cpu",
                 // "--profile-mem",
                 
                 // "--single-thread",
@@ -511,7 +511,7 @@
                 // "--only-simulate",
                 // "--only-postprocess",
 
-                "--force-simulate",
+                // "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
 

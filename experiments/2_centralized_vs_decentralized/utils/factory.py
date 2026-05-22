@@ -90,8 +90,11 @@ def create_scenario_specifications(base_path : str,
     #     mission_filename = "response.json"
     # else:
     #     mission_filename = "monitoring.json"
+    
+    # defined mission name
     # mission_filename = "response.json"    
-    mission_filename = "response_simplified.json"
+    # mission_filename = "response_simplified.json"
+    mission_filename = "response_augmented.json"
     
     return {
             "events": {
