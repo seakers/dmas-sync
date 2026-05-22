@@ -71,7 +71,7 @@ if __name__ == "__main__":
             "None",
             "Greedy", 
             "CBBA", 
-            # "CBBA (Augmented)", # TODO
+            "CBBA (Augmented)", # TODO
         ],
         "Connectivity": [
             "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
@@ -106,7 +106,7 @@ if __name__ == "__main__":
             "None",
             "Greedy", 
             "CBBA", 
-            # "CBBA (Augmented)", # TODO
+            "CBBA (Augmented)", # TODO
             # "Metaheuristic"
         ],
         "Connectivity": [

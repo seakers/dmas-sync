@@ -3,6 +3,7 @@ from typing import Dict, List, Set, Tuple, Union
 import logging
 
 from execsatm.tasks import EventObservationTask, GenericObservationTask
+from execsatm.requirements import CoObservationRequirement
 from execsatm.mission import Mission
 
 from dmas.models.planning.decentralized.consensus.consensus import ConsensusPlanner
@@ -21,10 +22,17 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
 
     New state beyond ConsensusPlanner:
       _co_obs_window : float
-          Maximum time separation [s] between partner observations to count as
-          a co-observation.  Passed as a keyword-only argument so it threads
+          Global fallback maximum time separation [s] between partner
+          observations, used when a task has no CoObservationRequirement in
+          its objective.  Passed as a keyword-only argument so it threads
           cleanly through Python's MRO without disturbing the positional
           argument order of ConsensusPlanner.
+
+      _co_obs_windows : task_id → float
+          Per-task co-observation window derived from each task's
+          CoObservationRequirement.decorrelation_time.  Populated
+          incrementally as tasks enter the event index and cleaned up when
+          they expire.  Look up via _co_obs_window_for(task).
 
       _event_to_tasks_by_instrument : event_id → parameter → [task]
           Index rebuilt after each consensus round when the task registry
@@ -55,6 +63,9 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
     def __init__(self, *args, co_obs_window: float = 300.0, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._co_obs_window: float = co_obs_window
+
+        # task_id -> co-obs window [s] from task's CoObservationRequirement
+        self._co_obs_windows: Dict[str, float] = {}
 
         # event_id -> parameter -> List[EventObservationTask]
         self._event_to_tasks_by_instrument: Dict[str, Dict[str, List[EventObservationTask]]] = \
@@ -161,7 +172,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                 still_valid = (partner_bid.has_winner()
                                and not partner_bid.was_performed()
                                and partner_bid.t_img < bid.t_img
-                               and (bid.t_img - partner_bid.t_img) <= self._co_obs_window)
+                               and (bid.t_img - partner_bid.t_img) <= self._co_obs_window_for(task))
                 if not still_valid:
                     to_invalidate.append((task, n_obs))
                     break
@@ -238,10 +249,37 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                             if (pbid.has_winner()
                                     and not pbid.was_performed()
                                     and pbid.t_img < t_img
-                                    and (t_img - pbid.t_img) <= self._co_obs_window):
+                                    and (t_img - pbid.t_img) <= self._co_obs_window_for(task)):
                                 deps.add((partner_task, p_n_obs))
                 if deps:
                     self._coalition_deps[(task, n_obs)] = deps
+
+    # ------------------------------------------------------------------
+    # CO-OBS WINDOW HELPERS
+    # ------------------------------------------------------------------
+
+    def _co_obs_window_for(self, task: GenericObservationTask) -> float:
+        """Return the co-observation time window [s] for *task*.
+
+        Looks up the cached per-task window in _co_obs_windows first.
+        Falls back to the global _co_obs_window if the task has no cached
+        entry (non-event tasks, or tasks whose CoObservationRequirement was
+        never populated).
+        """
+        return self._co_obs_windows.get(task.id, self._co_obs_window)
+
+    @staticmethod
+    def _extract_co_obs_window(task: GenericObservationTask) -> float:
+        """Extract decorrelation_time from a task's CoObservationRequirement, or None."""
+        if not isinstance(task, EventObservationTask) or task.event is None:
+            return None
+        objective = getattr(task, 'objective', None)
+        if objective is None:
+            return None
+        co_req = objective.requirements.get(CoObservationRequirement.ATTRIBUTE)
+        if co_req is None:
+            return None
+        return float(co_req.decorrelation_time)
 
     # ------------------------------------------------------------------
     # CO-OBS INDEX MANAGEMENT
@@ -258,6 +296,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         lookup is needed.
         """
         for task in expired_tasks:
+            self._co_obs_windows.pop(task.id, None)
             if not isinstance(task, EventObservationTask) or task.event is None:
                 continue
             param_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
@@ -282,13 +321,17 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         registry (they will be caught on the next full rebuild if needed).
         Avoids duplicate entries under the same parameter key.
         """
-        for bid_dict in task_updates:
-            task_id = bid_dict.get('task', {}).get('id')
-            if task_id is None:
-                continue
-            task = self._id_to_tasks.get(task_id)
-            if task is None:
-                continue
+        # for bid_dict in task_updates:
+            # task_id = bid_dict.get('task', {}).get('id')
+            # if task_id is None:
+            #     continue
+            # task = self._id_to_tasks.get(task_id)
+            # if task is None:
+            #     continue
+        for task in task_updates:
+            window = self._extract_co_obs_window(task)
+            if window is not None:
+                self._co_obs_windows[task.id] = window
             if isinstance(task, EventObservationTask) and task.event is not None:
                 param_list = self._event_to_tasks_by_instrument[task.event.id][task.parameter]
                 if task not in param_list:
@@ -302,7 +345,11 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         self._results. Called automatically after each consensus round.
         """
         self._event_to_tasks_by_instrument.clear()
+        self._co_obs_windows.clear()
         for task in self._results:
+            window = self._extract_co_obs_window(task)
+            if window is not None:
+                self._co_obs_windows[task.id] = window
             if isinstance(task, EventObservationTask) and task.event is not None:
                 self._event_to_tasks_by_instrument[task.event.id][task.parameter].append(task)
 

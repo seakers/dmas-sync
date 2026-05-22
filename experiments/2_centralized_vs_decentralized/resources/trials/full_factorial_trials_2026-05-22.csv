@@ -1,0 +1,325 @@
+Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_abridged,in_full,calcBoundsOpt
+0,Centralized-MILP_priority,None,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+1,Centralized-MILP_priority,None,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+2,Centralized-MILP_priority,None,GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+3,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+4,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+5,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+6,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+7,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+8,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+9,DP,CBBA,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+10,DP,CBBA,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+11,DP,CBBA,GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+12,DP,CBBA,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+13,DP,CBBA,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+14,DP,CBBA,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+15,DP,CBBA,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+16,DP,CBBA,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+17,DP,CBBA,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+18,DP,CBBA (Augmented),GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+19,DP,CBBA (Augmented),GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+20,DP,CBBA (Augmented),GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+21,DP,CBBA (Augmented),Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+22,DP,CBBA (Augmented),Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+23,DP,CBBA (Augmented),Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+24,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+25,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+26,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+27,DP,Greedy,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+28,DP,Greedy,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+29,DP,Greedy,GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+30,DP,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+31,DP,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+32,DP,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+33,DP,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+34,DP,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+35,DP,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+36,DP,None,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+37,DP,None,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+38,DP,None,GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+39,DP,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+40,DP,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+41,DP,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+42,DP,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+43,DP,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+44,DP,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+45,None,CBBA,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+46,None,CBBA,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+47,None,CBBA,GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+48,None,CBBA,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+49,None,CBBA,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+50,None,CBBA,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+51,None,CBBA,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+52,None,CBBA,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+53,None,CBBA,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+54,None,CBBA (Augmented),GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+55,None,CBBA (Augmented),GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+56,None,CBBA (Augmented),GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+57,None,CBBA (Augmented),Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+58,None,CBBA (Augmented),Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+59,None,CBBA (Augmented),Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+60,None,CBBA (Augmented),Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+61,None,CBBA (Augmented),Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+62,None,CBBA (Augmented),Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+63,None,Greedy,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+64,None,Greedy,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+65,None,Greedy,GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+66,None,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+67,None,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+68,None,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+69,None,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+70,None,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+71,None,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+72,None,None,GS,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+73,None,None,GS,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+74,None,None,GS,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+75,None,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,0
+76,None,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,0
+77,None,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,0
+78,None,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-02-15,True,True,1
+79,None,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-02-15,True,True,1
+80,None,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-02-15,True,True,2
+81,Centralized-MILP_priority,None,GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+82,Centralized-MILP_priority,None,GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+83,Centralized-MILP_priority,None,GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+84,Centralized-MILP_priority,None,GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+85,Centralized-MILP_priority,None,GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+86,Centralized-MILP_priority,None,GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+87,Centralized-MILP_priority,None,GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+88,Centralized-MILP_priority,None,GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+89,Centralized-MILP_priority,None,GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+90,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+91,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+92,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+93,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+94,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+95,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+96,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+97,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+98,Centralized-MILP_priority,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+99,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+100,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+101,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+102,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+103,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+104,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+105,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+106,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+107,Centralized-MILP_priority,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+108,DP,CBBA,GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+109,DP,CBBA,GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+110,DP,CBBA,GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+111,DP,CBBA,GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+112,DP,CBBA,GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+113,DP,CBBA,GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+114,DP,CBBA,GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+115,DP,CBBA,GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+116,DP,CBBA,GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+117,DP,CBBA,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+118,DP,CBBA,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+119,DP,CBBA,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+120,DP,CBBA,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+121,DP,CBBA,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+122,DP,CBBA,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+123,DP,CBBA,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+124,DP,CBBA,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+125,DP,CBBA,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+126,DP,CBBA,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+127,DP,CBBA,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+128,DP,CBBA,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+129,DP,CBBA,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+130,DP,CBBA,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+131,DP,CBBA,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+132,DP,CBBA,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+133,DP,CBBA,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+134,DP,CBBA,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+135,DP,CBBA (Augmented),GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+136,DP,CBBA (Augmented),GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+137,DP,CBBA (Augmented),GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+138,DP,CBBA (Augmented),GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+139,DP,CBBA (Augmented),GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+140,DP,CBBA (Augmented),GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+141,DP,CBBA (Augmented),GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+142,DP,CBBA (Augmented),GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+143,DP,CBBA (Augmented),GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+144,DP,CBBA (Augmented),Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+145,DP,CBBA (Augmented),Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+146,DP,CBBA (Augmented),Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+147,DP,CBBA (Augmented),Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+148,DP,CBBA (Augmented),Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+149,DP,CBBA (Augmented),Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+150,DP,CBBA (Augmented),Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+151,DP,CBBA (Augmented),Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+152,DP,CBBA (Augmented),Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+153,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+154,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+155,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+156,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+157,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+158,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+159,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+160,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+161,DP,CBBA (Augmented),Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+162,DP,Greedy,GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+163,DP,Greedy,GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+164,DP,Greedy,GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+165,DP,Greedy,GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+166,DP,Greedy,GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+167,DP,Greedy,GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+168,DP,Greedy,GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+169,DP,Greedy,GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+170,DP,Greedy,GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+171,DP,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+172,DP,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+173,DP,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+174,DP,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+175,DP,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+176,DP,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+177,DP,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+178,DP,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+179,DP,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+180,DP,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+181,DP,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+182,DP,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+183,DP,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+184,DP,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+185,DP,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+186,DP,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+187,DP,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+188,DP,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+189,DP,None,GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+190,DP,None,GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+191,DP,None,GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+192,DP,None,GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+193,DP,None,GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+194,DP,None,GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+195,DP,None,GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+196,DP,None,GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+197,DP,None,GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+198,DP,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+199,DP,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+200,DP,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+201,DP,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+202,DP,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+203,DP,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+204,DP,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+205,DP,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+206,DP,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+207,DP,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+208,DP,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+209,DP,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+210,DP,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+211,DP,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+212,DP,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+213,DP,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+214,DP,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+215,DP,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+216,None,CBBA,GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+217,None,CBBA,GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+218,None,CBBA,GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+219,None,CBBA,GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+220,None,CBBA,GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+221,None,CBBA,GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+222,None,CBBA,GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+223,None,CBBA,GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+224,None,CBBA,GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+225,None,CBBA,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+226,None,CBBA,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+227,None,CBBA,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+228,None,CBBA,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+229,None,CBBA,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+230,None,CBBA,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+231,None,CBBA,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+232,None,CBBA,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+233,None,CBBA,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+234,None,CBBA,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+235,None,CBBA,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+236,None,CBBA,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+237,None,CBBA,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+238,None,CBBA,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+239,None,CBBA,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+240,None,CBBA,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+241,None,CBBA,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+242,None,CBBA,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+243,None,CBBA (Augmented),GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+244,None,CBBA (Augmented),GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+245,None,CBBA (Augmented),GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+246,None,CBBA (Augmented),GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+247,None,CBBA (Augmented),GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+248,None,CBBA (Augmented),GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+249,None,CBBA (Augmented),GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+250,None,CBBA (Augmented),GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+251,None,CBBA (Augmented),GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+252,None,CBBA (Augmented),Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+253,None,CBBA (Augmented),Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+254,None,CBBA (Augmented),Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+255,None,CBBA (Augmented),Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+256,None,CBBA (Augmented),Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+257,None,CBBA (Augmented),Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+258,None,CBBA (Augmented),Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+259,None,CBBA (Augmented),Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+260,None,CBBA (Augmented),Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+261,None,CBBA (Augmented),Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+262,None,CBBA (Augmented),Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+263,None,CBBA (Augmented),Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+264,None,CBBA (Augmented),Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+265,None,CBBA (Augmented),Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+266,None,CBBA (Augmented),Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+267,None,CBBA (Augmented),Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+268,None,CBBA (Augmented),Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+269,None,CBBA (Augmented),Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+270,None,Greedy,GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+271,None,Greedy,GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+272,None,Greedy,GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+273,None,Greedy,GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+274,None,Greedy,GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+275,None,Greedy,GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+276,None,Greedy,GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+277,None,Greedy,GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+278,None,Greedy,GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+279,None,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+280,None,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+281,None,Greedy,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+282,None,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+283,None,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+284,None,Greedy,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+285,None,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+286,None,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+287,None,Greedy,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+288,None,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+289,None,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+290,None,Greedy,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+291,None,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+292,None,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+293,None,Greedy,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+294,None,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+295,None,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+296,None,Greedy,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+297,None,None,GS,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+298,None,None,GS,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+299,None,None,GS,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+300,None,None,GS,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+301,None,None,GS,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+302,None,None,GS,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+303,None,None,GS,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+304,None,None,GS,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+305,None,None,GS,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+306,None,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,0
+307,None,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,0
+308,None,None,Interconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,0
+309,None,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,0
+310,None,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,0
+311,None,None,Interconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,0
+312,None,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,0
+313,None,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,0
+314,None,None,Interconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,0
+315,None,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-05-15,False,True,1
+316,None,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-08-10,False,True,1
+317,None,None,Intraconstellation,Comprehensive,Ground,Walker-Delta,2019-11-10,False,True,1
+318,None,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-05-15,False,True,1
+319,None,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-08-10,False,True,1
+320,None,None,Intraconstellation,Comprehensive,Onboard,Walker-Delta,2019-11-10,False,True,1
+321,None,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-05-15,False,True,2
+322,None,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-08-10,False,True,2
+323,None,None,Intraconstellation,Comprehensive,Instant,Walker-Delta,2019-11-10,False,True,2

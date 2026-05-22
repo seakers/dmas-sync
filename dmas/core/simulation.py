@@ -1360,10 +1360,13 @@ class Simulation:
             model = replanner_dict.get('model', 'heuristicInsertion')
             optimistic_bidding_threshold = replanner_dict.get('optimisticBiddingThreshold', 1)
             periodic_overwrite = bool(replanner_dict.get('periodicOverwrite', 'false').lower() in ['true', 't'])
-            if 'augmented' in replanner_type.lower():
+            if 'augmented' in replanner_type.lower():                
                 if 'heuristic' in model:
                     heuristic = replanner_dict.get('heuristic', 'earliestAccess')
-                    return AugmentedHeuristicInsertionConsensusPlanner(agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, debug, logger, printouts)
+                    return AugmentedHeuristicInsertionConsensusPlanner(
+                        agent_results_dir, heuristic, replan_threshold, optimistic_bidding_threshold,
+                        periodic_overwrite, debug, logger, printouts=printouts
+                    )
                 else:
                     raise NotImplementedError(f'replanner model `{model}` not yet supported.')
             else:

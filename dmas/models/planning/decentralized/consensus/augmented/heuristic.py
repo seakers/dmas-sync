@@ -37,7 +37,6 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
 
     def __init__(self,
                  agent_results_dir: str,
-                 co_obs_window: float = 300.0,
                  heuristic: str = HeuristicInsertionConsensusPlanner.EARLIEST_ACCESS,
                  replan_threshold: int = 1,
                  optimistic_bidding_threshold: int = 1,
@@ -45,7 +44,7 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                  debug: bool = False,
                  logger: bool = None,
                  printouts: bool = True,
-                 contested_reset_threshold: int = 1,
+                 co_obs_window: float = 300.0,
                  **kwargs
                 ):
         """
@@ -65,7 +64,7 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
         # positional argument order.
         super().__init__(agent_results_dir, heuristic, replan_threshold,
                          optimistic_bidding_threshold, periodic_overwrite,
-                         debug, logger, printouts, contested_reset_threshold,
+                         debug, logger, printouts,
                          co_obs_window=co_obs_window, **kwargs)
 
     def _estimate_task_value(self,
@@ -129,7 +128,7 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                     if (bid.has_winner()
                             and not bid.was_performed()
                             and bid.t_img < t_obs
-                            and (t_obs - bid.t_img) <= self._co_obs_window):
+                            and (t_obs - bid.t_img) <= self._co_obs_window_for(task)):
                         if (param not in co_obs
                                 or bid.t_img > co_obs[param]):
                             co_obs[param] = bid.t_img

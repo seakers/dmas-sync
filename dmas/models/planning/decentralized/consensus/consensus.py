@@ -401,7 +401,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             self.__register_task_expiry(task)
 
             # create empty bid for new task and add to list of changes
-            new_task_added.append(self._results[task][-1].to_dict())
+            # new_task_added.append(self._results[task][-1].to_dict())
+            new_task_added.append(self._results[task][-1])
 
         # return list of new task bids added to results
         return new_task_added
@@ -416,10 +417,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # initialize list of newly added bids from new tasks
         new_task_added = []
 
+        # get current simulation time
+        t_curr = state.get_time()
+
         # get new and active incoming tasks from requests
         active_req_tasks = set([req.task for req in incoming_reqs 
                                 # check if task is still available 
-                                if req.task.is_available(state.get_time())
+                                if req.task.is_available(t_curr)
                                 # and not already in results
                                 and req.task not in self._results])
         
@@ -435,7 +439,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         ## filter active bid tasks
         active_bid_tasks = set([task for task in incoming_bid_tasks
                                 # check if task is still available
-                                if task.is_available(state.get_time())
+                                if task.is_available(t_curr)
                                 #  and not already in results
                                 and task not in self._results])
         
@@ -475,9 +479,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # initialize optimistic bidding counter for new task
             self._optimistic_bidding_counters[task].append(self._optimistic_bidding_threshold)
 
-            # # initialize contested reset counter for new task
-            # self._contested_reset_counters[task].append(0)
-
             # add task to known tasks
             self._id_to_tasks[task.id] = task
             self.__register_task_expiry(task)
@@ -486,7 +487,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # new_task_added.append(Bid(task, state.agent_name, t_bid=state.get_time()))
 
             # add new task to list of changes
-            new_task_added.append(task.to_dict())
+            # new_task_added.append(task.to_dict())
+            new_task_added.append(task)
 
         # DEBUG PRINTOUTS --------
         #     if self._debug:
