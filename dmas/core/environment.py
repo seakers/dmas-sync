@@ -298,8 +298,7 @@ class SimulationEnvironment(object):
                 f"Invalid observation query: t_query_start={t_query_start}[s], t_end_query={t_end_query}[s], t_curr={t_curr}[s]"
             new_observation_data = self._query_measurement_data(agent_state_dict, instrument_dict, t_query_start, t_end_query)
 
-            # annotate each record with the per-task committed imaging time so the
-            # processor can use the planner's chosen t_img* instead of reconstructing it
+            # compile targets that were intended to be observed during this window 
             gp_to_t_img: dict = {}
             if action.obs_opp is not None and action.t_imgs:
                 for task in action.obs_opp.tasks:
@@ -308,14 +307,19 @@ class SimulationEnvironment(object):
                         continue
                     for loc in task.location:
                         gp_to_t_img.setdefault((int(loc[2]), int(loc[3])), committed)
+
+            # annotate each record with the per-task committed imaging time
             for obs_rec in new_observation_data:
                 key = (int(obs_rec['grid index']), int(obs_rec['GP index']))
-                # clamp to [t_start, t_end]: tail records from adjacent orbit-data timesteps
-                # can inherit a committed t_img from a prior window; they merge in processing
-                # but should be self-consistent in the raw parquet
                 committed = gp_to_t_img.get(key, obs_rec['t_start'])
-                obs_rec['t_img'] = committed   # not max(committed, obs_rec['t_start'])
-                obs_rec['intentional'] = key in gp_to_t_img
+                # On partial execution steps t_end_query = t_curr, which can be earlier than
+                # the committed imaging time. Only stamp committed t_img when the record's
+                # window actually covers it; otherwise the planned imaging moment hasn't been
+                # reached yet — mark as unintentional and use t_start so that downstream
+                # processing doesn't count this partial record as the intended observation.
+                reached = committed <= obs_rec['t_end'] + 1e-9
+                obs_rec['t_img'] = committed if reached else obs_rec['t_start']
+                obs_rec['intentional'] = (key in gp_to_t_img) and reached
 
             self._observation_history.extend(new_observation_data)
             self._obs_last_recorded[action.id] = t_end_query

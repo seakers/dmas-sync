@@ -1256,7 +1256,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         min_duration = obs_action.obs_opp.task_min_duration[task.id]
 
                         # establish observation time bounds for this observation
-                        t_img_l = t_obs
+                        t_img_l = max(
+                                        t_obs, 
+                                        t_prev
+                                    )
                         t_img_u = min(
                                         obs_action.obs_opp.task_accessibility[task.id].right - min_duration,
                                         obs_action.t_end - min_duration
@@ -1370,8 +1373,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # DEBUG BREAKPOINT
         # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
         # if self._debug or debug_case:
-        if len(candidate_path) > 1:
-            x = 1
+        # if len(candidate_path) > 1:
+        #     x = 1
         # -------------------------------
 
         # ensure filter was successful
