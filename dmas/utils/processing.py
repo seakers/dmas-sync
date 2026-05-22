@@ -148,7 +148,7 @@ class ResultsProcessor:
             taskable_observations = [obs_perf for obs_perf in observations 
                                      if is_taskable(obs_perf['agent name'])]
             # sort by observation time to properly calculate revisit times for performance metrics that depend on them (e.g. timeliness)
-            taskable_observations.sort(key=lambda obs: obs['time [s]'])
+            taskable_observations.sort(key=lambda obs: obs['t_img'])
 
             # iterate observations by start time             
             for n_obs,obs_perf in enumerate(taskable_observations): # sorted(observations, key=lambda obs: obs['time [s]'])
@@ -3987,7 +3987,8 @@ class ResultsProcessor:
         assert all(fov >= 0 for fov in cross_track_fovs.values()), "Cross-track FOVs must be non-negative."
         assert isinstance(orbitdata, OrbitData), "Orbit data must be of type `OrbitData`."
         assert n_obs >= 0, "Number of observations must be non-negative."
-        assert t_prev <= t_img, "Last observation time must be before the current image time."
+        assert t_prev <= t_img, \
+            "Last observation time must be before the current image time."
 
         # Use precomputed accesses if available, otherwise fall back to lookup
         if precomputed_accesses is not None:
