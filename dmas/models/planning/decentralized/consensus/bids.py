@@ -569,16 +569,18 @@ class Bid:
                 if other_t_stamps[other_winner] > my_t_stamps.get(other_winner, np.NINF):
                 # if other.t_bid > self.t_bid:
                     # Sending agent has more recent info on 3rd party winner 
-                    if other > self:  
+                    if other > self:
                         # Sending agent's bid is higher and more updated → update info
                         return BidComparisonResults.UPDATE
-                    elif other_t_img < my_t_img:
-                        # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
-                        return BidComparisonResults.UPDATE
+                    # NOTE: earlier-time (optimistic) override is intentionally omitted here.
+                    # In case 3 the sender is *relaying* a third-party bid (other_owner ≠ other_winner).
+                    # Accepting an earlier-but-lower-value relay causes circular negotiation because
+                    # the optimistic-bidding justification only applies when the bid comes *directly*
+                    # from the agent placing the optimistic bid, not through intermediaries.
                     elif other == self and abs(other_t_img - my_t_img) < self.EPS and not self.__wins_tie_breaker(other):
                         # Both bids are tied and sending agent wins tie-breaker → update info
                         return BidComparisonResults.UPDATE
-            
+
             # 2. Receiving agent believes other is the winner already.
             # if self.believes_other_is_winning(other):
             if my_winner == other_owner:
@@ -608,12 +610,11 @@ class Bid:
                     if other_t_stamps.get(my_winner, np.NINF) > my_t_stamps[my_winner]:
                         # Sending agent's bids from all parties are more updated → update info
                         return BidComparisonResults.UPDATE                
-                    elif other > self:  
+                    elif other > self:
                         # Sending agent's bid is higher and more updated → update info
-                        return BidComparisonResults.UPDATE                
-                    elif other_t_img < my_t_img:
-                        # Sending agent is bidding for an earlier observation and is more updated → bidder must be optimistic in its bidding; update info
-                        return BidComparisonResults.UPDATE                
+                        return BidComparisonResults.UPDATE
+                    # NOTE: earlier-time (optimistic) override is intentionally omitted here.
+                    # Same reason as sub-case 1: relay of an optimistic bid must not be accepted.
                     elif other == self and abs(other_t_img - my_t_img) < self.EPS and not self.__wins_tie_breaker(other):
                         # Both bids are tied and sending agent wins tie-breaker → update info
                         return BidComparisonResults.UPDATE

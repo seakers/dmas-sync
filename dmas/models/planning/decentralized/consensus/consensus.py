@@ -143,7 +143,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
         # DEBUG PRINTOUTS
         # debug_case = state._t >= 19_999.00 an ("(VNIR-FR-T) Sat 4" in state.agent_name)
-        # debug_case = state.get_time() >= 66790.00
+        debug_case = state.get_time() >= 65_000.00
         # if debug_case and incoming_bids:
         # if incoming_bids:
         if self._debug and incoming_bids:
@@ -1326,7 +1326,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
-        # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
+        debug_case = state._t > 65_000.0
         # if debug_case and new_bids:
         if self._debug and new_bids:
         # if new_bids:

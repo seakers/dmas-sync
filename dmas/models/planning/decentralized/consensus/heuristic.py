@@ -566,7 +566,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 if new_bids is None: continue # no valid bids found; skip
 
                 # refine observation actions in candidate path to match proposed bids
-                refined_path = self.__refine_path(state, candidate_path, new_bids, specs, proposed_bids)
+                # refined_path = self.__refine_path(state, candidate_path, new_bids, specs, proposed_bids)
 
                 # get path value for proposed path using best observation sequences
                 proposed_path_utility : float \
@@ -577,7 +577,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 
                 # else: save as best path
                 best_path_utility = proposed_path_utility
-                best_path = refined_path
+                best_path = candidate_path
                 best_new_bids = new_bids
 
             # if no best path was found, continue to next proposed task
@@ -610,6 +610,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             ## ensure path and bundle lengths match
             assert len(proposed_path) == len(proposed_bundle), \
                 "Proposed path and bundle lengths do not match after bundle building phase."
+            # assert all(obs_opp in obs_opps_in_path for obs_action in proposed_path), \
+            #     "Not all observation opportunities in proposed path are represented in proposed bundle after bundle building phase."
 
             ## map tasks in bundle to best bids
             matching_bundle_indices = {obs_opp : idx 
@@ -644,6 +646,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
             # update list of proposed bids
             proposed_bids = updated_proposed_bids
+
+            # refine path to free as much space as possible for future observations
+            proposed_path = self.__refine_path(state, proposed_path, proposed_bundle, proposed_bids, specs)
 
             # -------------------------------
             # DEBUG PRINTOUTS
@@ -1172,7 +1177,8 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
             # extract observation times for all previously performed observations for this parent task
             latest_performed_obs_time : Tuple[float,str,float,ObservationOpportunity] \
-                  = (last_performed_bid.t_img, last_performed_bid.owner, np.NAN, None) if last_performed_bid else None
+                  = (last_performed_bid.t_img, last_performed_bid.owner, np.NAN, None) \
+                    if last_performed_bid else None
                         
             # initialize feasible observation sequences for this task
             available_obs_times : list[Tuple[float,str,float,ObservationOpportunity]] = []
@@ -1200,7 +1206,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 if any(abs(t_img - other_t_img) <= self.EPS for other_t_img in obs_times_for_agent if other_t_img != t_img):
                     # repeated observation time found for this agent; raise error
                     raise ValueError(f"Repeated observation time {t_img} found for agent '{state.agent_name}' when generating observation sequences for task '{task.id}'.")
-
+            
             # collect feasible sequences
             feasible_sequences = self._find_feasible_observation_sequences_for_task(state, task, available_obs_times)
             
@@ -1246,11 +1252,15 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                         assert obs_action is not None, \
                             "Task observation action not defined for task to be performed by agent."
 
-                        # establish observation time bounds for this observation
+                        # get minimum duration for this task
                         min_duration = obs_action.obs_opp.task_min_duration[task.id]
+
+                        # establish observation time bounds for this observation
                         t_img_l = t_obs
-                        # t_img_l = max(t_prev, t_obs)# proposed fix
-                        t_img_u = min(obs_action.t_end, obs_action.obs_opp.accessibility.right) - min_duration
+                        t_img_u = min(
+                                        obs_action.obs_opp.task_accessibility[task.id].right - min_duration,
+                                        obs_action.t_end - min_duration
+                                    )
                         
                         # pick an observation time to commit to for this observation and get corresponding task value
                         task_value, t_img = self._find_best_imaging_time(
@@ -1299,7 +1309,7 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                 # 2) I outperform the current bid (and the immediately following bid for this task), 
                                 beats_current, # beats_current and beats_immediate_next,
                                 # 3) I propose an earlier observation time and have a positive optimistic bidding counter
-                                t_img < existing_bid.t_img and self._optimistic_bidding_counters[task][n_obs] > 0
+                                t_img is not None and t_img < existing_bid.t_img and self._optimistic_bidding_counters[task][n_obs] > 0
                                 # 4) or if proposed observation value outperforms existing winning bids for all mutex bids
                             #     all(task_value > mutex_bid.winning_bid for mutex_bid in mutex_bids),
                             ]
@@ -1342,13 +1352,6 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # check if a sequence was found for all modified parent tasks
         if any(value < 0.0 for value in best_values.values()):
             return None, None, None #, None
-
-        # -------------------------------
-        # DEBUG BREAKPOINT
-        # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
-        # if self._debug or debug_case:
-            # x = 1
-        # -------------------------------
             
         # filter out observations from other agents in best sequences
         indeces_to_remove = {task : [idx for idx,agent_name in enumerate(obs_names_best[task])
@@ -1362,6 +1365,14 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 t_prev_best[task].pop(idx)
                 obs_names_best[task].pop(idx)
                 vals_best[task].pop(idx)
+
+        # -------------------------------
+        # DEBUG BREAKPOINT
+        # debug_case = state._t > 24_909.00 and ("imager_a_sat_9" in state.agent_name or "imager_b_sat_54" in state.agent_name)
+        # if self._debug or debug_case:
+        if len(candidate_path) > 1:
+            x = 1
+        # -------------------------------
 
         # ensure filter was successful
         assert all([all([agent_name == state.agent_name for agent_name in obs_names_best[task]])
@@ -1652,10 +1663,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
     def __refine_path(self, 
                       state : SimulationAgentState,
-                      candidate_path : List[ObservationAction],
-                      bids_candidate : Dict[ObservationOpportunity, Dict[GenericObservationTask, Bid]],
-                      specs : object,
-                      proposed_bids = None
+                      path : List[ObservationAction],
+                      bundle : List[Tuple[ObservationOpportunity,Dict[GenericObservationTask,int]]],
+                      bids : Dict[GenericObservationTask, Dict[int, Bid]],
+                      specs : object
                     ) -> List[ObservationAction]:
         """ 
         Refine observation action duration to minimize obsevation span while
@@ -1664,63 +1675,115 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
         # ensure candidate path is valid before refinement
         # assert self.is_observation_path_valid(state, candidate_path, specs=specs), \
         #     "Candidate path is not valid; cannot refine path."
-        
-        for obs_act in candidate_path:
-            # only refine path for observation actions that have a matching proposed bid
-            if obs_act.obs_opp in bids_candidate:
-                # extract commited times for this observation action from candidate bids and observation action
-
-                # t_imgs = {task.id: obs_act.t_imgs.get(task.id, obs_act.obs_opp.get_earliest_task_start(task))
-                #           for task in obs_act.obs_opp.tasks}
-                # t_imgs.update({task.id: bid.t_img
-                #                for task, bid in bids_candidate[obs_act.obs_opp].items()})
-                t_imgs = {}
-                for task in obs_act.obs_opp.tasks:
-                    if task in bids_candidate[obs_act.obs_opp]:
-                        continue  # will be set by update below
-                    # prefer the current proposed bid's t_img over the stale obs_act.t_imgs
-                    if proposed_bids is not None and task in proposed_bids:
-                        acc = obs_act.obs_opp.task_accessibility[task.id]
-                        active = [b.t_img for b in proposed_bids[task].values()
-                                if acc.left <= b.t_img <= acc.right
-                                and b.owner == state.agent_name]
-                        t_imgs[task.id] = active[0] if active else obs_act.t_imgs.get(task.id, obs_act.t_start)
-                    else:
-                        t_imgs[task.id] = obs_act.t_imgs.get(task.id, obs_act.t_start)
-                t_imgs.update({task.id: bid.t_img 
-                                for task, bid in bids_candidate[obs_act.obs_opp].items()})
-
-                # calculate new start and end times for this observation action
-                min_duration = obs_act.obs_opp.min_duration
-                t_start = min(*t_imgs.values(), obs_act.t_end - min_duration)
-                t_end = min(
-                    max(*[t_img + obs_act.obs_opp.task_min_duration[task_id]
-                          for task_id, t_img in t_imgs.items()],
-                          obs_act.t_start + min_duration),
-                    obs_act.obs_opp.accessibility.right
-                )
                 
-                # set new start and end times 
-                obs_act.t_start = t_start
-                obs_act.t_end = t_end
-                obs_act.t_imgs = t_imgs
+        for obs_act in path:
+            # find matching bundle entry
+            task_dict = None
+            for obs_opp, task_bid_dict in bundle:
+                if obs_opp == obs_act.obs_opp:
+                    task_dict = task_bid_dict
+                    break
+            assert task_dict is not None, \
+                "Matching bundle entry not found for observation action during path refinement."
+            assert len(task_dict) > 0, \
+                "Bundle entry for observation action has no active bids during path refinement."
+            
+            # get matching bids for this observation action
+            bids_candidate : Dict[GenericObservationTask, Bid] = {
+                task : bids[task][n_obs_candidate]
+                for task, n_obs_candidate in task_dict.items()
+            }
 
-                # ensure bids are still valid after path refinement
-                for task, bid in bids_candidate[obs_act.obs_opp].items():
-                    min_duration = obs_act.obs_opp.task_min_duration[task.id]
-                    assert obs_act.t_start <= bid.t_img <= obs_act.t_end, \
-                        "Bid observation time is not within bounds of observation action after path refinement."
-                    assert bid.t_img + min_duration <= obs_act.t_end, \
-                        "Bid observation time plus minimum duration exceeds end time of observation action after path refinement."                        
-                assert obs_act.t_start + min_duration <= obs_act.t_end, \
-                    "Start time plus minimum duration exceeds end time of observation action after path refinement."
+            # apply `t_img` commitments to task action
+            t_imgs = {
+                task.id: bid.t_img
+                for task, bid in bids_candidate.items()
+            }
+            obs_act.t_imgs.update(t_imgs)
+
+            # update observation action start and end times to reflect committed observation times
+            t_earliest = min(t_imgs.values())
+            t_latest = max(t_img + obs_act.obs_opp.task_min_duration[task_id]
+                           for task_id,t_img in t_imgs.items())
+            
+            # ---------------------
+            # DEBUG BREAKPOINT
+            if obs_act.t_start < t_earliest:
+                x = 1
+            if t_latest < obs_act.t_end:
+                x = 1
+            # ---------------------
+            
+            obs_act.t_start = max(obs_act.t_start, t_earliest)
+            obs_act.t_end = min(obs_act.t_end, t_latest)
+
+            # ensure bids are still valid after path refinement
+            for task in obs_act.obs_opp.tasks:
+                bid = bids_candidate[task] 
+                min_duration = obs_act.obs_opp.task_min_duration[task.id]
+                assert obs_act.t_start <= bid.t_img <= obs_act.t_end, \
+                    "Bid observation time is not within bounds of observation action after path refinement."
+                assert bid.t_img + min_duration <= obs_act.t_end, \
+                    "Bid observation time plus minimum duration exceeds end time of observation action after path refinement."                        
+            assert obs_act.t_start + obs_act.obs_opp.min_duration <= obs_act.t_end, \
+                "Start time plus minimum duration exceeds end time of observation action after path refinement."
+
+            # # only refine path for observation actions that have a matching proposed bid
+            # if obs_act.obs_opp in new_bids:
+            #     # extract commited times for this observation action from candidate bids and observation action
+
+            #     # t_imgs = {task.id: obs_act.t_imgs.get(task.id, obs_act.obs_opp.get_earliest_task_start(task))
+            #     #           for task in obs_act.obs_opp.tasks}
+            #     # t_imgs.update({task.id: bid.t_img
+            #     #                for task, bid in bids_candidate[obs_act.obs_opp].items()})
+            #     t_imgs = {}
+            #     for task in obs_act.obs_opp.tasks:
+            #         if task in new_bids[obs_act.obs_opp]:
+            #             continue  # will be set by update below
+            #         # prefer the current proposed bid's t_img over the stale obs_act.t_imgs
+            #         if proposed_bids is not None and task in proposed_bids:
+            #             acc = obs_act.obs_opp.task_accessibility[task.id]
+            #             active = [b.t_img for b in proposed_bids[task].values()
+            #                     if acc.left <= b.t_img <= acc.right
+            #                     and b.owner == state.agent_name]
+            #             t_imgs[task.id] = active[0] if active else obs_act.t_imgs.get(task.id, obs_act.t_start)
+            #         else:
+            #             t_imgs[task.id] = obs_act.t_imgs.get(task.id, obs_act.t_start)
+            #     t_imgs.update({task.id: bid.t_img 
+            #                     for task, bid in new_bids[obs_act.obs_opp].items()})
+
+            #     # calculate new start and end times for this observation action
+            #     min_duration = obs_act.obs_opp.min_duration
+            #     t_start = max(obs_act.t_start,   # preserve maneuver-feasible lower bound
+            #                   min(*t_imgs.values(), obs_act.t_end - min_duration))
+            #     t_end = min(
+            #         max(*[t_img + obs_act.obs_opp.task_min_duration[task_id]
+            #               for task_id, t_img in t_imgs.items()],
+            #               obs_act.t_start + min_duration),
+            #         obs_act.t_end # was obs_act.obs_opp.accessibility.right
+            #     )
+                
+            #     # set new start and end times 
+            #     obs_act.t_start = t_start
+            #     obs_act.t_end = t_end
+            #     obs_act.t_imgs = t_imgs
+
+                # # ensure bids are still valid after path refinement
+                # for task, bid in new_bids[obs_act.obs_opp].items():
+                #     min_duration = obs_act.obs_opp.task_min_duration[task.id]
+                #     assert obs_act.t_start <= bid.t_img <= obs_act.t_end, \
+                #         "Bid observation time is not within bounds of observation action after path refinement."
+                #     assert bid.t_img + min_duration <= obs_act.t_end, \
+                #         "Bid observation time plus minimum duration exceeds end time of observation action after path refinement."                        
+                # assert obs_act.t_start + min_duration <= obs_act.t_end, \
+                #     "Start time plus minimum duration exceeds end time of observation action after path refinement."
 
         # ensure modified path is still valid after refinement
-        assert self.is_observation_path_valid(state, candidate_path, specs=specs), \
+        assert self.is_observation_path_valid(state, path, specs=specs), \
             "Candidate path is not valid; cannot refine path."
 
         # return modified candidate path
-        return candidate_path 
+        return path 
 
     """
     PRINTOUTS
