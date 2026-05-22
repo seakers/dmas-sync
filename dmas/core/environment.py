@@ -298,28 +298,35 @@ class SimulationEnvironment(object):
                 f"Invalid observation query: t_query_start={t_query_start}[s], t_end_query={t_end_query}[s], t_curr={t_curr}[s]"
             new_observation_data = self._query_measurement_data(agent_state_dict, instrument_dict, t_query_start, t_end_query)
 
-            # compile targets that were intended to be observed during this window 
-            gp_to_t_img: dict = {}
+            # compile targets that were intended to be observed during this window
+            # maps (grid_idx, gp_idx) → (committed_t_img, parameter) for each targeted GP
+            gp_to_task_info: dict = {}
             if action.obs_opp is not None and action.t_imgs:
                 for task in action.obs_opp.tasks:
                     committed = action.t_imgs.get(task.id)
                     if committed is None:
                         continue
+                    parameter = getattr(task, 'parameter', None)
                     for loc in task.location:
-                        gp_to_t_img.setdefault((int(loc[2]), int(loc[3])), committed)
+                        gp_to_task_info.setdefault((int(loc[2]), int(loc[3])), (committed, parameter))
 
-            # annotate each record with the per-task committed imaging time
+            # annotate each record with the per-task committed imaging time and parameter
             for obs_rec in new_observation_data:
                 key = (int(obs_rec['grid index']), int(obs_rec['GP index']))
-                committed = gp_to_t_img.get(key, obs_rec['t_start'])
+                info = gp_to_task_info.get(key)
+                if info is not None:
+                    committed, parameter = info
+                else:
+                    committed, parameter = obs_rec['t_start'], None
                 # On partial execution steps t_end_query = t_curr, which can be earlier than
                 # the committed imaging time. Only stamp committed t_img when the record's
                 # window actually covers it; otherwise the planned imaging moment hasn't been
                 # reached yet — mark as unintentional and use t_start so that downstream
                 # processing doesn't count this partial record as the intended observation.
-                reached = committed <= obs_rec['t_end'] + 1e-9
+                reached = (info is not None) and (committed <= obs_rec['t_end'] + 1e-9)
                 obs_rec['t_img'] = committed if reached else obs_rec['t_start']
-                obs_rec['intentional'] = (key in gp_to_t_img) and reached
+                obs_rec['intentional'] = reached
+                obs_rec['parameter'] = parameter if reached else None
 
             self._observation_history.extend(new_observation_data)
             self._obs_last_recorded[action.id] = t_end_query
