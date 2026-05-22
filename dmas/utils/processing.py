@@ -149,19 +149,16 @@ class ResultsProcessor:
                                      if is_taskable(obs_perf['agent name'])]
             # sort by observation time to properly calculate revisit times for performance metrics that depend on them (e.g. timeliness)
             taskable_observations.sort(key=lambda obs: obs['t_img'])
+            # taskable_observations.sort(key=lambda obs: obs['time [s]']) # <- IGNORE, use t_img for ordering 
 
             # iterate observations by start time             
-            for n_obs,obs_perf in enumerate(taskable_observations): # sorted(observations, key=lambda obs: obs['time [s]'])
-            # n_obs = 0
-            # for obs_perf in taskable_observations:
+            for n_obs,obs_perf in enumerate(taskable_observations): 
                 # unpack observation information
                 observing_agent = obs_perf['agent name']
                 instrument_name : str = obs_perf['instrument']
-                # loc = (obs_perf['lat [deg]'], obs_perf['lon [deg]'], obs_perf['grid index'], obs_perf['GP index'])
-                # use committed t_img written by the environment (from planner's t_imgs);
-                # fall back to window start if not present (old results or non-CBBA runs)
-                # t_img = obs_perf['time [s]']
                 
+                # use committed t_img written by the environment (from planner's t_imgs);
+                # fall back to window start if not present (old results or non-CBBA runs)                
                 t_img = obs_perf.get('t_img', None)
                 if t_img is None: continue
 
@@ -172,23 +169,13 @@ class ResultsProcessor:
                 # get matching mission for observing agent
                 agent_mission : Mission = agent_missions[observing_agent]
 
-                measurement_performance \
-                        = ResultsProcessor.__estimate_task_performance_metrics(task,
-                                                                            instrument_name,
-                                                                            obs_perf['off-nadir axis angle [deg]'],
-                                                                            t_img,
-                                                                            d_img,
-                                                                            agent_specs[observing_agent],
-                                                                            cross_track_fovs[observing_agent],
-                                                                            compiled_orbitdata[observing_agent],
-                                                                            n_obs,
-                                                                            t_prev,
-                                                                        )
+                # augment task observation performance
+                measurement_performance = ResultsProcessor.__augment_observation_performance_metrics(
+                    task, agent_specs[observing_agent], obs_perf, t_img, t_prev, d_img, n_obs
+                )
 
-                # evaluate reward for this observation
-                reward = max([agent_mission.calc_task_value(task, measurement) 
-                                for measurement in measurement_performance.values()]) \
-                                    if len(measurement_performance.values()) > 0 else 0.0
+                # calculate reward for this observation 
+                reward = agent_mission.calc_task_value(task, measurement_performance) 
 
                 # add reward information to observation performance information
                 reward_dict = {
@@ -4029,56 +4016,160 @@ class ResultsProcessor:
         observation_performance_metrics : Dict[tuple[int,int], dict] = {loc : observed_location_groups[loc][0] # keep only first observation
                                                  for loc in observed_location_groups
                                                  if (loc[2],loc[3]) in task_targets
-                                                 }       
+                                                 }   
+
+        for loc, obs_perf in observation_performance_metrics.items():
+            obs_perf['instrument'] = instrument_name
+                                                           
+            obs_perf = ResultsProcessor.__augment_observation_performance_metrics(
+                    task, specs, obs_perf, t_img, t_prev, d_img, n_obs, loc=loc
+                )           
+
+            x = 1
+
+        # # get instrument specifications
+        # instrument_spec : BasicSensorModel = next(instr 
+        #                                           for instr in specs.instrument
+        #                                           if instr.name.lower() == instrument_name.lower()).mode[0]
+
+        # # include additional observation information 
+        # for loc,obs_perf in observation_performance_metrics.items():
+            
+        #     # update observation performance information
+        #     obs_perf.update({ 
+        #         SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
+        #         TemporalRequirementAttributes.DURATION.value : d_img,
+        #         TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
+        #         #TODO Co-observation time
+        #         TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
+        #         TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
+        #         TemporalRequirementAttributes.OBS_TIME.value : t_img,
+        #         "t_end" : t_img + d_img,
+        #         ObservationRequirementAttributes.OBSERVATION_NUMBER.value : n_obs + 1, # including this observation
+        #     })
+
+        #     # handle special case of first observation
+        #     if n_obs == 0:
+        #         obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = np.NINF
+
+        #     # update instrument-specific observation performance information
+        #     if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
+        #         or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
+        #         # check if spectral config is a parameter of the instrument specification object; if not, assume no spectral bands are available                
+        #         spectral_bands_config = instrument_spec.spectral_config.get('bands', []) if hasattr(instrument_spec, 'spectral_config') else []
+        #         spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
+        #                           # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
+        #                           for band in spectral_bands_config] 
+        #         obs_perf.update({
+        #             ObservationRequirementAttributes.SPECTRAL_BANDS.value : spectral_bands,
+        #             ObservationRequirementAttributes.ACCURACY.value : np.Inf,
+        #         })
+        #     elif ('altimeter' in instrument_name.lower() or 'alt' in instrument_name.lower()
+        #           or 'altimeter' in instrument_spec._type.lower() or 'alt' in instrument_spec._type.lower()):
+        #         obs_perf.update({
+        #             ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
+        #             ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
+        #         })
+        #     elif ('sar' in instrument_name.lower() or 'sar' in instrument_spec._type.lower()):
+        #         # TODO implement SAR observation performance metrics                                       
+        #         obs_perf.update({
+        #             ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
+        #             ObservationRequirementAttributes.ACCURACY.value : np.Inf,
+        #         })
+        #         if hasattr(instrument_spec, 'spectral_config'):
+        #             swath_config = instrument_spec.spectral_config.get('swath_km', None)
+        #             if swath_config is not None:
+        #                 obs_perf[ObservationRequirementAttributes.SWATH_WIDTH.value] = swath_config.get('spotlight', 30) 
+        #                 obs_perf[ObservationRequirementAttributes.SNR.value] = swath_config.get('nesz_db', -18) 
+        #             else:
+        #                 obs_perf[ObservationRequirementAttributes.SWATH_WIDTH.value] = 30 # default swath width for SAR instruments in km
+        #                 obs_perf[ObservationRequirementAttributes.SNR.value] = -18 # default NESZ for SAR instruments in dB
+
+        #     else:
+        #         raise NotImplementedError(f'Calculation of task reward not yet supported for instruments of type `{instrument_name.lower()}`.')
+
+        return observation_performance_metrics
+    
+    @staticmethod
+    def __augment_observation_performance_metrics(
+        task : GenericObservationTask,
+        specs : object,
+        obs_perf : Dict,
+        t_img : float,
+        t_prev : float,
+        d_img : float,
+        n_obs : int,
+        loc : tuple[int,int,int,int] = None
+    ) -> dict:
+        
+        # extract instrument name
+        instrument_name = obs_perf['instrument']
+
+        # get observation location
+        if loc is None:
+            lat,lon,grid_index,gp_index = obs_perf['lat [deg]'], obs_perf['lon [deg]'], int(obs_perf['grid index']), int(obs_perf['GP index'])
+            loc = (lat,lon,grid_index,gp_index)
 
         # get instrument specifications
         instrument_spec : BasicSensorModel = next(instr 
                                                   for instr in specs.instrument
                                                   if instr.name.lower() == instrument_name.lower()).mode[0]
+        
+        # update observation performance information
+        obs_perf.update({ 
+            SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
+            TemporalRequirementAttributes.DURATION.value : d_img,
+            TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
+            #TODO Co-observation time
+            TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
+            TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
+            TemporalRequirementAttributes.OBS_TIME.value : t_img,
+            "t_end" : t_img + d_img,
+            ObservationRequirementAttributes.OBSERVATION_NUMBER.value : n_obs + 1, # including this observation
+        })
 
-        # include additional observation information 
-        for loc,obs_perf in observation_performance_metrics.items():
-            
-            # update observation performance information
-            obs_perf.update({ 
-                SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
-                TemporalRequirementAttributes.DURATION.value : d_img,
-                TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
-                #TODO Co-observation time
-                TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
-                TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
-                TemporalRequirementAttributes.OBS_TIME.value : t_img,
-                "t_end" : t_img + d_img,
-                ObservationRequirementAttributes.OBSERVATION_NUMBER.value : n_obs + 1, # including this observation
+        # handle special case of first observation
+        if n_obs == 0:
+            obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = np.NINF
+
+        # update instrument-specific observation performance information
+        if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
+            or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
+            # check if spectral config is a parameter of the instrument specification object; if not, assume no spectral bands are available                
+            spectral_bands_config = instrument_spec.spectral_config.get('bands', []) if hasattr(instrument_spec, 'spectral_config') else []
+            spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
+                                # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
+                                for band in spectral_bands_config] 
+            obs_perf.update({
+                ObservationRequirementAttributes.SPECTRAL_BANDS.value : spectral_bands,
+                ObservationRequirementAttributes.ACCURACY.value : np.Inf,
             })
+        elif ('altimeter' in instrument_name.lower() or 'alt' in instrument_name.lower()
+                or 'altimeter' in instrument_spec._type.lower() or 'alt' in instrument_spec._type.lower()):
+            obs_perf.update({
+                ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
+                ObservationRequirementAttributes.ACCURACY.value : obs_perf[ObservationRequirementAttributes.ACCURACY.value],
+            })
+        elif ('sar' in instrument_name.lower() or 'sar' in instrument_spec._type.lower()):
+            # TODO implement SAR observation performance metrics                                       
+            obs_perf.update({
+                ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
+                ObservationRequirementAttributes.ACCURACY.value : np.Inf,
+            })
+            if hasattr(instrument_spec, 'spectral_config'):
+                swath_config = instrument_spec.spectral_config.get('swath_km', None)
+                if swath_config is not None:
+                    obs_perf[ObservationRequirementAttributes.SWATH_WIDTH.value] = swath_config.get('spotlight', 30) 
+                    obs_perf[ObservationRequirementAttributes.SNR.value] = swath_config.get('nesz_db', -18) 
+                else:
+                    obs_perf[ObservationRequirementAttributes.SWATH_WIDTH.value] = 30 # default swath width for SAR instruments in km
+                    obs_perf[ObservationRequirementAttributes.SNR.value] = -18 # default NESZ for SAR instruments in dB
 
-            # handle special case of first observation
-            if n_obs == 0:
-                obs_perf[TemporalRequirementAttributes.REVISIT_TIME.value] = np.NINF
+        else:
+            raise NotImplementedError(f'Calculation of task reward not yet supported for instruments of type `{instrument_name.lower()}`.')
 
-            # update instrument-specific observation performance information
-            if (('vnir' in instrument_name.lower() or 'tir' in instrument_name.lower() or 'mir' in instrument_name.lower()
-                or 'vnir' in instrument_spec._type.lower() or 'tir' in instrument_spec._type.lower() or 'mir' in instrument_spec._type.lower())):
-                # check if spectral config is a parameter of the instrument specification object; if not, assume no spectral bands are available                
-                spectral_bands_config = instrument_spec.spectral_config.get('bands', []) if hasattr(instrument_spec, 'spectral_config') else []
-                spectral_bands = [(band['center_nm'], abs(band['range_nm'][1]-band['range_nm'][0]), band['FWHM_nm']) 
-                                  # `[(center_nm, bandwidth_nm, resolution_nm), ...]`
-                                  for band in spectral_bands_config] 
-                obs_perf.update({
-                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : spectral_bands,
-                    ObservationRequirementAttributes.ACCURACY.value : np.Inf,
-                })
-            elif ('altimeter' in instrument_name.lower() or 'alt' in instrument_name.lower()
-                  or 'altimeter' in instrument_spec._type.lower() or 'alt' in instrument_spec._type.lower()):
-                obs_perf.update({
-                    ObservationRequirementAttributes.SPECTRAL_BANDS.value : [],
-                    ObservationRequirementAttributes.ACCURACY.value : observation_performance_metrics[loc][ObservationRequirementAttributes.ACCURACY.value],
-                })
-            else:
-                raise NotImplementedError(f'Calculation of task reward not yet supported for instruments of type `{instrument_name.lower()}`.')
+        return obs_perf
 
-        return observation_performance_metrics
-    
     @staticmethod
     def get_available_accesses( 
                                task : GenericObservationTask, 
