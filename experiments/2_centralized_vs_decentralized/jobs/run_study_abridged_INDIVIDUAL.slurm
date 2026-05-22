@@ -39,6 +39,6 @@ python ./experiments/2_centralized_vs_decentralized/study.py \
       -t full_factorial_trials_2026-05-17 \
       --single-trial ${i} \
       --single-thread --quiet \
-      --force-postprocess --force-summarize # --force-simulate
+      --force-postprocess --force-summarize --force-simulate
       # --only-simulate --force-simulate 
       # --exceptions --profile-cpu --profile-mem
