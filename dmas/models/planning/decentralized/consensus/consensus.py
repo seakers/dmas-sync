@@ -1326,7 +1326,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
         # -------------------------------
         # DEBUG PRINTOUTS
-        debug_case = state._t > 65_000.0
+        # debug_case = state._t > 65_000.0
         # if debug_case and new_bids:
         if self._debug and new_bids:
         # if new_bids:
