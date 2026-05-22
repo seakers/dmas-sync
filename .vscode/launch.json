@@ -496,9 +496,9 @@
                 // "--single-trial", "54", // Oracle, None+CBBA (Augmented) 
 
                 "-t", "full_factorial_trials_2026-05-17",
-                // "--single-trial", "36", // GS, None+CBBA 
+                "--single-trial", "36", // GS, None+CBBA 
                 // "--single-trial", "42", // Inter, None+CBBA 
-                "--single-trial", "45", // GS, None+Greedy 
+                // "--single-trial", "45", // GS, None+Greedy 
                 // "--single-trial", "40",
                 // "--trial-range", "0:1",
 

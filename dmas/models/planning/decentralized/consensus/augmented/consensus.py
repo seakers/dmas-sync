@@ -90,8 +90,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
             state, incoming_reqs, incoming_bids, tasks, current_plan, performed_observations
         )
         # consensus_results <- task_updates, results_updates, bundle_updates, performed_bundle_observations, expired_tasks
-        task_updates          = consensus_results[0]
-        expired_tasks  = consensus_results[4]
+        task_updates, *_, expired_tasks = consensus_results
 
         if expired_tasks:
             self._remove_from_event_index(expired_tasks)
@@ -106,7 +105,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
 
     def _check_results_constraints(self,
                                     state: SimulationAgentState
-                                   ) -> List[Bid]:
+                                   ) -> Tuple[List, List, List[Bid]]:
         """Base ordering constraint check + co-obs coalition validity check.
 
         After the standard ordering-violation check, inspects _coalition_deps
@@ -120,17 +119,25 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         subsequent iterations of the convergence loop do not re-trigger the
         same violation.
         """
-        violations = super()._check_results_constraints(state)
-        violations += self._check_co_obs_constraints(state)
-        return violations
+        # perform regular constraint checks for intra-task related constraints
+        self._bundle, self._path, bids_in_violation  = super()._check_results_constraints(state)
+        
+        # update violations with any co-obs coalition constraint violations
+        self._bundle, self._path, co_obs_bids_in_violation = self._check_co_obs_constraints(state)
+
+        # combine violation lists (if any) and remove duplicates
+        constraint_violations = bids_in_violation + co_obs_bids_in_violation
+
+        # return updated bundle, path, and full violation list
+        return self._bundle, self._path, constraint_violations
 
     def _check_co_obs_constraints(self,
                                    state: SimulationAgentState
-                                  ) -> List[dict]:
+                                  ) -> Tuple[List, List, List[dict]]:
         """Detect and reset winning bids whose coalition dependencies are broken.
 
-        Returns a list of bid dicts (same format as base constraint violations)
-        for each bid that was reset due to coalition invalidity.
+        Returns a tuple of [bundle, path, list of bid dicts] (same format as base constraint violations)
+        with the last conatinig an entry for each bid that was reset due to coalition invalidity.
         """
         t_curr = state.get_time()
         to_invalidate: List[Tuple[GenericObservationTask, int]] = []
@@ -171,7 +178,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                 self._coalition_deps.pop((task, bid_idx), None)
                 bids_in_violation.append(bid_to_reset.to_dict())
 
-        return bids_in_violation
+        return self._bundle, self._path, bids_in_violation
 
     # ------------------------------------------------------------------
     # PLANNING PHASE — rebuild coalition deps after committing bids

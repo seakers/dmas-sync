@@ -40,10 +40,9 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                  debug : bool = False,
                  logger : bool = None,
                  printouts : bool = True,
-                #  contested_reset_threshold : int = 3
-                 contested_reset_threshold : int = None
+                 **kwargs
                 ):
-        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, agent_results_dir, debug, logger, printouts, contested_reset_threshold)
+        super().__init__(ConsensusPlanner.HEURISTIC_INSERTION, replan_threshold, optimistic_bidding_threshold, periodic_overwrite, agent_results_dir, debug, logger, printouts, **kwargs)
 
         # validate inputs
         assert heuristic in self.HEURISTICS, f"Invalid heuristic '{heuristic}'. Must be one of {self.HEURISTICS}."

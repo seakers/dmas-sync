@@ -44,7 +44,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                  debug : bool = False,
                  logger: logging.Logger = None,
                  printouts : bool = True,
-                 contested_reset_threshold : int = 3
+                 **kwargs
                 ) -> None:
         super().__init__(debug, logger, printouts)
         """
@@ -98,7 +98,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         self._replan_threshold = replan_threshold
         self._optimistic_bidding_threshold = optimistic_bidding_threshold
         self._periodic_overwrite = periodic_overwrite
-        self._contested_reset_threshold = contested_reset_threshold if contested_reset_threshold is not None else np.Inf
         self._last_consensus_time : float = np.NINF
 
         # replanning flags
@@ -154,7 +153,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
 
         # perform consensus phase for incoming task bids
-        task_updates, results_updates, bundle_updates, performed_bundle_observations \
+        task_updates, results_updates, bundle_updates, performed_bundle_observations, _ \
               = self._consensus_phase(state, incoming_reqs, incoming_bids, tasks, current_plan, performed_observations)
 
         # update latest observations performed 
@@ -262,8 +261,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
         comparison_updates = self.__compare_incoming_bids(state, incoming_bids)
 
         # check if planned tasks expired
-        expired_tasks, self._bundle, expired_bundle_updates \
-              = self.__remove_expired_tasks(state)
+        expired_tasks, expired_bids, self._bundle, expired_bundle_updates \
+              = self.__remove_expired_tasks_and_bids(state)
 
         # TODO make sure this is not needed:
         # # check if bids in results would have been performed by other agents
@@ -277,7 +276,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         results_updates = list(chain.from_iterable([
                                                     # new_default_tasks,
                                                     # new_urgent_task_added, 
-                                                    expired_tasks, 
+                                                    expired_bids, 
                                                     preplan_obs,
                                                     performed_bundle_updates,
                                                     comparison_updates, 
@@ -297,7 +296,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
             # enforce constraints in results
             self._bundle, self._path, constraint_violations \
-                = self.__check_results_constraints(state)
+                = self._check_results_constraints(state)
 
             # append updates to compiling lists
             bundle_updates.extend(results_bundle_updates)
@@ -312,7 +311,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             = [obs_opp for obs_opp,_ in performed_bundle_updates]
                 
         # return lists of updates
-        return task_updates, results_updates, bundle_updates, performed_bundle_observations   
+        return task_updates, results_updates, bundle_updates, performed_bundle_observations, expired_tasks 
 
     def __update_bundle_from_preplan(self, 
                                      state : SimulationAgentState, 
@@ -506,8 +505,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
             heappush(self._task_expiry_heap, (task.availability.right, task.id))
             self._heap_registered_task_ids.add(task.id)
 
-    def __remove_expired_tasks(self, state : SimulationAgentState) -> Tuple[list, list, list]:
-        """ Remove expired tasks from results. """
+    def __remove_expired_tasks_and_bids(self, state : SimulationAgentState) -> Tuple[list, list, list]:
+        """ Remove expired tasks and their corresponding bids from results. """
         # get current time
         t_curr = state.get_time()
 
@@ -534,9 +533,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # remove optimistic bidding counters
             self._optimistic_bidding_counters.pop(task, None)
 
-            # # remove contested reset counters
-            # self._contested_reset_counters.pop(task, None)
-
             # remove task from known event tasks
             self._id_to_tasks.pop(task.id, None)
 
@@ -554,7 +550,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # check if no expired task exists in bundle
         if bundle_idx_to_remove is None:
             # return expired bids and do not modify bundle
-            return expired_bids, self._bundle, []
+            return expired_tasks,expired_bids, self._bundle, []
 
         # TODO ensure that the following section is not needed. Bids should not 
         #   be placed for tasks that will expire before they are performed.
@@ -610,7 +606,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 bundle_updates.append(bids_reset)
 
         # return list of removed bids
-        return expired_bids, revised_bundle, bundle_updates
+        return expired_tasks, expired_bids, revised_bundle, bundle_updates
         
     
     def __update_performed_bundle_observations(self, 
@@ -1080,7 +1076,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return updated bundle and list of updates
         return revised_bundle, revised_path, bundle_updates
     
-    def __check_results_constraints(self, state : SimulationAgentState) -> List[Bid]:
+    def _check_results_constraints(self, state : SimulationAgentState) -> List[Bid]:
         """ Check results for constraint violations and return list of affected bids. """
         # get current time 
         t_curr = state.get_time()

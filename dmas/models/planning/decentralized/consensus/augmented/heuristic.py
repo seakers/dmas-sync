@@ -45,7 +45,8 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                  debug: bool = False,
                  logger: bool = None,
                  printouts: bool = True,
-                 contested_reset_threshold: int = 1
+                 contested_reset_threshold: int = 1,
+                 **kwargs
                 ):
         """
         Parameters
@@ -65,7 +66,7 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
         super().__init__(agent_results_dir, heuristic, replan_threshold,
                          optimistic_bidding_threshold, periodic_overwrite,
                          debug, logger, printouts, contested_reset_threshold,
-                         co_obs_window=co_obs_window)
+                         co_obs_window=co_obs_window, **kwargs)
 
     def _estimate_task_value(self,
                               task: GenericObservationTask,
