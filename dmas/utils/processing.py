@@ -133,6 +133,20 @@ class ResultsProcessor:
         # initialize list of obtained rewards
         obtained_rewards_data = []
 
+        # Pre-build event observation index for co-obs lookup:
+        #   event_id -> parameter -> sorted list of t_img values across all taskable observations.
+        # Built before the main loop so partner observations are visible regardless of task iteration order.
+        event_obs_index: Dict[str, Dict[str, List[float]]] = defaultdict(lambda: defaultdict(list))
+        for _t, _obs_list in observations_per_task.items():
+            if not isinstance(_t, EventObservationTask) or _t.event is None:
+                continue
+            for _o in _obs_list:
+                if is_taskable(_o.get('agent name', '')) and _o.get('t_img') is not None:
+                    event_obs_index[_t.event.id][_t.parameter].append(_o['t_img'])
+        for _param_dict in event_obs_index.values():
+            for _t_list in _param_dict.values():
+                _t_list.sort()
+
         # iterate tasks and corresponding observations
         for task, observations in tqdm(observations_per_task.items(),
                                        desc="[results processor] compiling rewards obtained from observations",
@@ -140,25 +154,32 @@ class ResultsProcessor:
                                        disable=not printouts,
                                        total=len(observations_per_task.keys())
                                     ):
-            
+
             # initialize previous observation time for revisit time calculation
             t_prev = np.NINF
 
             # only consider taskable observations for reward calculation
-            taskable_observations = [obs_perf for obs_perf in observations 
+            taskable_observations = [obs_perf for obs_perf in observations
                                      if is_taskable(obs_perf['agent name'])]
             # sort by observation time to properly calculate revisit times for performance metrics that depend on them (e.g. timeliness)
             taskable_observations.sort(key=lambda obs: obs['t_img'])
-            # taskable_observations.sort(key=lambda obs: obs['time [s]']) # <- IGNORE, use t_img for ordering 
+            # taskable_observations.sort(key=lambda obs: obs['time [s]']) # <- IGNORE, use t_img for ordering
 
-            # iterate observations by start time             
-            for n_obs,obs_perf in enumerate(taskable_observations): 
+            # resolve co-obs requirement once per task; None means no co-obs requirement
+            _co_req = None
+            if isinstance(task, EventObservationTask) and task.event is not None:
+                _obj = getattr(task, 'objective', None)
+                if _obj is not None:
+                    _co_req = _obj.requirements.get(CoObservationRequirement.ATTRIBUTE)
+
+            # iterate observations by start time
+            for n_obs,obs_perf in enumerate(taskable_observations):
                 # unpack observation information
                 observing_agent = obs_perf['agent name']
                 instrument_name : str = obs_perf['instrument']
-                
+
                 # use committed t_img written by the environment (from planner's t_imgs);
-                # fall back to window start if not present (old results or non-CBBA runs)                
+                # fall back to window start if not present (old results or non-CBBA runs)
                 t_img = obs_perf.get('t_img', None)
                 if t_img is None: continue
 
@@ -169,9 +190,22 @@ class ResultsProcessor:
                 # get matching mission for observing agent
                 agent_mission : Mission = agent_missions[observing_agent]
 
+                # build co_obs dict: {parameter: latest_t_img} for partner instruments that
+                # observed the same event strictly before t_img and within the co-obs window
+                co_obs = {}
+                if _co_req is not None:
+                    _co_obs_window = float(_co_req.decorrelation_time)
+                    for _param, _t_list in event_obs_index.get(task.event.id, {}).items():
+                        if _param == task.parameter:
+                            continue
+                        _qualifying = [t for t in _t_list if t < t_img and (t_img - t) <= _co_obs_window]
+                        if _qualifying:
+                            co_obs[_param] = max(_qualifying)
+
                 # augment task observation performance
                 measurement_performance = ResultsProcessor.__augment_observation_performance_metrics(
-                    task, agent_specs[observing_agent], obs_perf, t_img, t_prev, d_img, n_obs
+                    task, agent_specs[observing_agent], obs_perf, t_img, t_prev, d_img, n_obs,
+                    co_obs=co_obs
                 )
 
                 # calculate reward for this observation 
@@ -1682,8 +1716,14 @@ class ResultsProcessor:
         # clasify co-observations
         if printouts: tqdm.write('[results summary] classifying co-observations')
         events_co_observable, events_co_observable_fully, events_co_observable_partially, \
-            events_co_obs, events_co_obs_fully, events_co_obs_partially \
+            events_co_obs, events_co_obs_fully, events_co_obs_partially, \
+            events_co_obs_tasked, events_co_obs_tasked_fully, events_co_obs_tasked_partially \
                 = ResultsProcessor.__classify_event_coobservations(accesses_per_event, observations_per_event, all_tasks)
+
+        # tasked co-obs counts (at least one tasked observation in the co-obs window)
+        n_events_co_obs_tasked = len(events_co_obs_tasked)
+        n_events_co_obs_tasked_fully = len(events_co_obs_tasked_fully)
+        n_events_co_obs_tasked_partially = len(events_co_obs_tasked_partially)
 
         # count observations performed
         # n_events, n_unique_event_obs, n_total_event_obs,
@@ -1871,12 +1911,15 @@ class ResultsProcessor:
                     
                     ['Events Co-observable', n_events_co_observable],
                     ['Events Co-observed', n_events_co_obs],
+                    ['Events Tasked Co-observed', n_events_co_obs_tasked],
                     ['Event Co-observations', n_total_event_co_obs],
                     ['Events Fully Co-observable', n_events_co_observable_fully],
                     ['Events Fully Co-observed', n_events_fully_co_obs],
+                    ['Events Tasked Fully Co-observed', n_events_co_obs_tasked_fully],
                     ['Event Full Co-observations', n_total_event_fully_co_obs],
                     ['Events Only Partially Co-observable', n_events_co_observable_partially],
                     ['Events Partially Co-observed', n_events_partially_co_obs],
+                    ['Events Tasked Partially Co-observed', n_events_co_obs_tasked_partially],
                     ['Event Partial Co-observations', n_total_event_partially_co_obs],
                     
                     ['Tasks Available', n_tasks],
@@ -2181,7 +2224,8 @@ class ResultsProcessor:
                 for req in task.objective:
                     # check for instrument capability requirements
                     if isinstance(req, CapabilityRequirement) and req.attribute == 'instrument':
-                        for val in req.valid_values: required_observations[task.objective.parameter].add(val)
+                        for val in req.valid_values: 
+                            required_observations[task.objective.parameter].add(val)
                     # TODO include other capability requirements that define a co-observation here
 
             # add to map of events to required observations
@@ -2229,9 +2273,9 @@ class ResultsProcessor:
                 co_obs_group = [b for b in observations[i:]
                                 if b[0].left <= a[0].right + t_corr]
 
-                # get parameters in this co-observation group
-                params_in_group = {b[3].lower() for b in co_obs_group}
-                
+                # get parameters in this co-observation group (b[4] is param, b[3] is instrument)
+                params_in_group = {b[4].lower() for b in co_obs_group}
+
                 # check if this group is the best so far
                 if len(params_in_group) > len(best_params_in_group):
                     # best_co_obs_group = co_obs_group
@@ -2256,201 +2300,72 @@ class ResultsProcessor:
                 continue # if not, skip co-observability classification for this event
 
             for a in observations:
-                # check if instrument is part of those required for this event 
-                for param,valid_instruments in event_to_required_observations[event].items():
-                    if a['instrument'].lower() in valid_instruments:
-                        possible_co_observations[event].append((a,param))
+                # intentional observations carry the exact parameter stamped by the environment
+                if a.get('intentional', False) and a.get('parameter') is not None:
+                    possible_co_observations[event].append((a, a['parameter']))
+                else:
+                    # unintentional observations: fall back to instrument-capability matching
+                    for param, valid_instruments in event_to_required_observations[event].items():
+                        if a['instrument'].lower() in valid_instruments:
+                            possible_co_observations[event].append((a, param))
 
             # sort accesses by start time
             possible_co_observations[event].sort(key=lambda x: x[0]['t_start'])
 
         # initiate event co-observation sets
         events_co_obs = set()
+        events_co_obs_tasked = set()
         events_co_obs_fully = set()
-        events_co_obs_partially = set()  
+        events_co_obs_tasked_fully = set()
+        events_co_obs_partially = set()
+        events_co_obs_tasked_partially = set()
 
-        # evaluate events co-observable based on accesses
+        # evaluate events co-observed based on observations
         for event, observations in possible_co_observations.items():
             # check if more than one type of observation is required for this event
-            if len(event_to_required_observations[event]) < 2: 
+            if len(event_to_required_observations[event]) < 2:
                 # only one or no observation types required;
                 #  co-observability classification not applicable
                 continue
 
-            # initiate group 
-            # best_co_obs_group = []
             best_params_in_group = set()
+            best_group_has_tasked = False
 
             for i,(a,param) in enumerate(observations):
-                # get accesses within the desired decorreleation time 
+                # get observations within the desired decorrelation time of the anchor
                 co_obs_group = [b for b in observations[i:]
                                 if b[0]['t_start'] <= a['t_end'] + t_corr]
 
-                # get parameters in this co-observation group
                 params_in_group = {b[1] for b in co_obs_group}
+                tasked_params_in_group = {b[1] for b in co_obs_group 
+                                          if b[0]['tasked']}
+                group_has_tasked = len(tasked_params_in_group) >= 2
 
-                # check if this group is the best so far
                 if len(params_in_group) > len(best_params_in_group):
-                    # best_co_obs_group = co_obs_group
-                    best_params_in_group = params_in_group            
+                    best_params_in_group = params_in_group
+                    best_group_has_tasked = group_has_tasked
+                elif len(params_in_group) == len(best_params_in_group) and group_has_tasked and not best_group_has_tasked:
+                    # same parameter coverage but this window has a tasked observation — prefer it
+                    best_group_has_tasked = True
 
-            # check if more than one instrument was involved in observations of this event
             if len(best_params_in_group) > 1:
-                # add to set of co-observed events
                 events_co_obs.add(event)
+                if best_group_has_tasked:
+                    events_co_obs_tasked.add(event)
 
-                # classify co-observability of this event based on best co-observation group
-                if list(event_to_required_observations[event].keys()) == best_params_in_group:
+                required_params = set(event_to_required_observations[event].keys())
+                if required_params == best_params_in_group:
                     events_co_obs_fully.add(event)
+                    if best_group_has_tasked:
+                        events_co_obs_tasked_fully.add(event)
                 else:
                     events_co_obs_partially.add(event)
+                    if best_group_has_tasked:
+                        events_co_obs_tasked_partially.add(event)
 
         return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
-            events_co_obs, events_co_obs_fully, events_co_obs_partially
-
-    # @staticmethod
-    # def __classify_event_coobservations(
-    #         accesses_per_event : Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]],
-    #         observations_per_event : Dict[GeophysicalEvent, List[Dict]],
-    #         known_tasks : List[GenericObservationTask],
-    #         t_corr : float = 3600.0 # TODO temp solution
-    #     ) -> Tuple[Dict[GeophysicalEvent, List[Tuple[Interval, str, str]]], Dict[GeophysicalEvent, List[Dict]]]:
-    #     # TODO define co-observation requirement in `execsatm` and use that to classify co-observations rather than hardcoding a decorrelation time threshold as is done here
-
-        # # map events to tasks that observe them
-        # event_to_task : Dict[GeophysicalEvent, GenericObservationTask] = dict()
-        # for task in known_tasks:
-        #     if isinstance(task, EventObservationTask):
-        #         event = task.event
-        #         if event in event_to_task:
-        #             raise NotImplementedError(f"Multiple tasks found for event {event.id}. Co-observability classification not yet supported for multiple tasks per event.")
-        #         event_to_task[event] = task
-        
-        # # map events to required obserations for their tasks
-        # event_to_required_observations : Dict[GeophysicalEvent, Set[Dict]] = defaultdict(set)
-        # for event, task in event_to_task.items():
-        #     # initialize set of required observations
-        #     required_observations = set()
-
-        #     for req in task.objective:
-        #         # check for instrument capability requirements
-        #         if isinstance(req, CapabilityRequirement) and req.attribute == 'instrument':
-        #             for val in req.valid_values: required_observations.add(val)
-        #         # TODO include other capability requirements that define a co-observation here
-
-        #     # add to map of events to required observations
-        #     event_to_required_observations[event] = required_observations
-
-    #     # classify accesses
-    #     co_observation_acesses = defaultdict(list)
-    #     for event, observations in accesses_per_event.items():
-    #         for a in observations:
-    #             # unpack access
-    #             *_,instrument = a
-
-    #             # check if instrument is part of those required for this event 
-    #             if instrument.lower() in event_to_required_observations[event]:
-    #                 co_observation_acesses[event].append(a)
-
-    #         # sort accesses by start time
-    #         co_observation_acesses[event].sort(key=lambda x: x[0].left) 
-        
-    #     # initiate event co-observability sets
-    #     events_co_observable = set()
-    #     events_co_observable_fully = set()
-    #     events_co_observable_partially = set()
-
-    #     # evaluate events co-observable based on accesses
-    #     for event, observations in co_observation_acesses.items():
-    #         # check if more than one type of observation is required for this event
-    #         if len(event_to_required_observations[event]) < 2: 
-    #             # only one or no observation types required;
-    #             #  co-observability classification not applicable
-    #             continue
-            
-    #         # initiate group 
-    #         # best_co_obs_group = []
-    #         best_instruments_in_group = set()
-
-    #         for i,a in enumerate(observations):
-    #             # get accesses within the desired decorreleation time 
-    #             co_obs_group = [b for b in observations[i:]
-    #                             if b[0].left <= a[0].right + t_corr]
-
-    #             # get instruments in this co-observation group
-    #             instruments_in_group = {a[2].lower() for a in co_obs_group} | {a[2].lower()}
-                
-    #             # check if this group is the best so far
-    #             if len(instruments_in_group) > len(best_instruments_in_group):
-    #                 # best_co_obs_group = co_obs_group
-    #                 best_instruments_in_group = instruments_in_group
-            
-    #         # check if more than one instrument is available to observe this event
-    #         if len(best_instruments_in_group) > 1:
-    #             # add to set of co-observable events
-    #             events_co_observable.add(event)
-
-    #             # classify co-observability of this event based on best co-observation group
-    #             if event_to_required_observations[event] == best_instruments_in_group:
-    #                 events_co_observable_fully.add(event)
-    #             else:
-    #                 events_co_observable_partially.add(event)
-
-    #     # classify observations
-    #     possible_co_observations = defaultdict(list)
-    #     for event, observations in observations_per_event.items():
-    #         for a in observations:
-    #             # check if instrument is part of those required for this event 
-    #             if a['instrument'].lower() in event_to_required_observations[event]:
-    #                 possible_co_observations[event].append(a)
-
-    #         # sort accesses by start time
-    #         possible_co_observations[event].sort(key=lambda x: x['t_start'])
-
-    #     # initiate event co-observation sets
-    #     events_co_obs = set()
-    #     events_co_obs_fully = set()
-    #     events_co_obs_partially = set()  
-
-    #     # evaluate events co-observable based on accesses
-    #     for event, observations in possible_co_observations.items():
-    #         # check if more than one type of observation is required for this event
-    #         if len(event_to_required_observations[event]) < 2: 
-    #             # only one or no observation types required;
-    #             #  co-observability classification not applicable
-    #             continue
-
-    #         # initiate group 
-    #         # best_co_obs_group = []
-    #         best_instruments_in_group = set()
-
-    #         for i,a in enumerate(observations):
-    #             # get accesses within the desired decorreleation time 
-    #             co_obs_group = [b for b in observations[i:]
-    #                             if b['t_start'] <= a['t_end'] + t_corr]
-
-    #             # get instruments in this co-observation group
-    #             instruments_in_group = {a['instrument'].lower() for a in co_obs_group} | {a['instrument'].lower()}
-
-    #             # check if this group is the best so far
-    #             if len(instruments_in_group) > len(best_instruments_in_group):
-    #                 # best_co_obs_group = co_obs_group
-    #                 best_instruments_in_group = instruments_in_group
-            
-
-    #         # check if more than one instrument was involved in observations of this event
-    #         if len(best_instruments_in_group) > 1:
-    #             # add to set of co-observed events
-    #             events_co_obs.add(event)
-
-    #             # classify co-observability of this event based on best co-observation group
-    #             if event_to_required_observations[event] == best_instruments_in_group:
-    #                 events_co_obs_fully.add(event)
-    #             else:
-    #                 events_co_obs_partially.add(event)
-
-    #     return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
-    #         events_co_obs, events_co_obs_fully, events_co_obs_partially
+            events_co_obs, events_co_obs_fully, events_co_obs_partially, \
+                events_co_obs_tasked, events_co_obs_tasked_fully, events_co_obs_tasked_partially
 
     @staticmethod
     def __count_observations(orbitdata : Dict[str, OrbitData], 
@@ -4036,7 +3951,8 @@ class ResultsProcessor:
         t_prev : float,
         d_img : float,
         n_obs : int,
-        loc : tuple[int,int,int,int] = None
+        loc : tuple[int,int,int,int] = None,
+        co_obs : dict = None,
     ) -> dict:
         
         # extract instrument name
@@ -4057,7 +3973,7 @@ class ResultsProcessor:
             SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
             TemporalRequirementAttributes.DURATION.value : d_img,
             TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
-            #TODO Co-observation time
+            TemporalRequirementAttributes.CO_OBSERVATIONS.value : co_obs if co_obs is not None else dict(),
             TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
             TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
             TemporalRequirementAttributes.OBS_TIME.value : t_img,
