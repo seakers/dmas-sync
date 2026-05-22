@@ -151,9 +151,9 @@ def compile_results_summaries(trial_name : str,
         results_df['Task Reward Primal Bound [norm]'] = results_df['Task Reward Primal Bound'] / results_df['Task Reward Dual Bound']
         # results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Total Observable Task Priority']
     
-    if 'Total Obtained Reward' in results_df.columns and 'Known Task Reward Dual Bound' in results_df.columns:
-        results_df['Total Obtained Reward [known_norm]'] = results_df['Total Obtained Reward'] / results_df['Known Task Reward Dual Bound']
-        results_df['Known Task Reward Primal Bound [known_norm]'] = results_df['Known Task Reward Primal Bound'] / results_df['Known Task Reward Dual Bound']
+    # if 'Total Obtained Reward' in results_df.columns and 'Known Task Reward Dual Bound' in results_df.columns:
+        # results_df['Total Obtained Reward [known_norm]'] = results_df['Total Obtained Reward'] / results_df['Known Task Reward Dual Bound']
+        # results_df['Known Task Reward Primal Bound [known_norm]'] = results_df['Known Task Reward Primal Bound'] / results_df['Known Task Reward Dual Bound']
         
     if 'Total Obtained Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
         results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Task Reward Dual Bound']
@@ -192,7 +192,7 @@ def compile_results_summaries(trial_name : str,
 
 if __name__ == "__main__":
     # define trial parameters
-    base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-17_archive_v3"
+    base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-17_archive_v5"
 
     # trial_name = "full_factorial_trials_2026-05-11"
     trial_name = "full_factorial_trials_2026-05-17"
