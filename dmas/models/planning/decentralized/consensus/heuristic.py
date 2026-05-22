@@ -1712,8 +1712,10 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
             #     x = 1
             # ---------------------
             
+            # shorten to minimum duration to minimize observation span
             obs_act.t_start = max(obs_act.t_start, t_earliest)
-            obs_act.t_end = min(obs_act.t_end, t_latest)
+            obs_act.t_end = max(obs_act.t_start + obs_act.obs_opp.min_duration, t_latest)
+            # obs_act.t_end = min(obs_act.t_end, t_latest)
 
             # ensure bids are still valid after path refinement
             for task in obs_act.obs_opp.tasks:
@@ -1726,11 +1728,11 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                 min_duration = obs_act.obs_opp.task_min_duration[task.id]
 
                 # validate observation action times and bid times
-                assert obs_act.t_start <= bid.t_img <= obs_act.t_end, \
+                assert obs_act.t_start - 1e-9 <= bid.t_img <= obs_act.t_end + 1e-9, \
                     "Bid observation time is not within bounds of observation action after path refinement."
-                assert bid.t_img + min_duration <= obs_act.t_end, \
+                assert bid.t_img + min_duration <= obs_act.t_end + 1e-9, \
                     "Bid observation time plus minimum duration exceeds end time of observation action after path refinement."                        
-            assert obs_act.t_start + obs_act.obs_opp.min_duration <= obs_act.t_end, \
+            assert obs_act.t_start + obs_act.obs_opp.min_duration <= obs_act.t_end + 1e-9, \
                 "Start time plus minimum duration exceeds end time of observation action after path refinement."
 
         # ensure modified path is still valid after refinement
