@@ -1717,8 +1717,15 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
 
             # ensure bids are still valid after path refinement
             for task in obs_act.obs_opp.tasks:
+                if task not in bids_candidate:
+                    continue # task not being bid on; skip
+                
+                # get proposed bid for this task
                 bid = bids_candidate[task] 
+                # get minimum duration for this observation opportunity
                 min_duration = obs_act.obs_opp.task_min_duration[task.id]
+
+                # validate observation action times and bid times
                 assert obs_act.t_start <= bid.t_img <= obs_act.t_end, \
                     "Bid observation time is not within bounds of observation action after path refinement."
                 assert bid.t_img + min_duration <= obs_act.t_end, \
