@@ -1,6 +1,5 @@
 from collections import defaultdict
 from typing import Dict, List, Set, Tuple, Union
-import logging
 
 from execsatm.tasks import EventObservationTask, GenericObservationTask
 from execsatm.requirements import CoObservationRequirement
@@ -150,15 +149,23 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         Returns a tuple of [bundle, path, list of bid dicts] (same format as base constraint violations)
         with the last conatinig an entry for each bid that was reset due to coalition invalidity.
         """
+        # get current simulation time
         t_curr = state.get_time()
+
+        # initialize list of bids to invalidate
         to_invalidate: List[Tuple[GenericObservationTask, int]] = []
 
+        # check every committed winning bid for this agent for broken coalition deps
         for (task, n_obs), deps in list(self._coalition_deps.items()):
             # skip if this agent no longer holds this bid
             if n_obs >= len(self._results[task]):
                 self._coalition_deps.pop((task, n_obs), None)
                 continue
+
+            # get current bid
             bid = self._results[task][n_obs]
+
+            # check
             if not bid.has_winner() or bid.winner != state.agent_name or bid.was_performed():
                 self._coalition_deps.pop((task, n_obs), None)
                 continue
@@ -321,13 +328,6 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         registry (they will be caught on the next full rebuild if needed).
         Avoids duplicate entries under the same parameter key.
         """
-        # for bid_dict in task_updates:
-            # task_id = bid_dict.get('task', {}).get('id')
-            # if task_id is None:
-            #     continue
-            # task = self._id_to_tasks.get(task_id)
-            # if task is None:
-            #     continue
         for task in task_updates:
             window = self._extract_co_obs_window(task)
             if window is not None:
