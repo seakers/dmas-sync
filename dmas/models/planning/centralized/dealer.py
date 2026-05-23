@@ -65,9 +65,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
             "Clients and client_specs must have the same keys."
         assert all(client in client_missions for client in client_orbitdata), \
             "Clients and client_missions must have the same keys."
-        assert sharing in [self.OPPORTUNISTIC, self.PERIODIC], \
-            f"Sharing mode `{sharing}` is not recognized. Supported modes are: `{self.OPPORTUNISTIC}`, `{self.PERIODIC}`."
-
+        
         # store client information
         self.client_orbitdata : Dict[str, OrbitData] = \
             {client: client_orbitdata for client, client_orbitdata in client_orbitdata.items()}
@@ -450,9 +448,15 @@ class DealerPlanner(AbstractPeriodicPlanner):
         next_accesses : Dict[str, Interval] = dict()
 
         # calculate next access for each client
-        for client in self.client_orbitdata:            
-            # Try to find the next access after the desired horizon 
-            next_access,*_ = orbitdata.get_next_agent_access(t_curr, target=client, t_max=t_next, include_current=True)
+        for client in self.client_orbitdata:        
+            if self._sharing == self.OPPORTUNISTIC:    
+                # Try to find the next access after the desired horizon 
+                next_access,*_ = orbitdata.get_next_agent_access(t_curr, target=client, t_max=t_next, include_current=True)
+            elif self._sharing == self.GROUND_BASED:
+                next_access, *_ = self.client_orbitdata[client].get_next_gs_access(t_curr, t_max=t_next, include_current=True)
+            
+            else:
+                raise ValueError(f"Sharing mode `{self._sharing}` is not recognized. Supported modes are: `{self.OPPORTUNISTIC}`, `{self.PERIODIC}`, `{self.GROUND_BASED}`.")
 
             # set planning horizon interval for this client
             next_accesses[client] = next_access
@@ -688,6 +692,36 @@ class DealerPlanner(AbstractPeriodicPlanner):
                     # client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
                     client_broadcasts[client].extend([task_requests_msg])
 
+            elif self._sharing == self.GROUND_BASED:
+                # get access intervals with the client agent within the planning horizon
+                access_intervals : List[Tuple[Interval, str]] \
+                    = self.client_orbitdata[client].get_next_gs_accesses(t_curr, t_max=t_next, include_current=True)
+
+                # create broadcast actions for each access interval
+                for next_access,*_ in access_intervals:
+
+                    # if no access opportunities in this planning horizon, skip scheduling
+                    if next_access.is_empty(): continue
+
+                    # if access opportunity is beyond the next planning period, skip scheduling    
+                    if next_access.right <= t_next: continue
+
+                    # get last access interval and calculate broadcast time
+                    t_broadcast : float = max(next_access.left, t_next-5e-3) # ensure broadcast happens before the end of the planning period
+
+                    # generate plan message to share state
+                    state_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.STATE, t_broadcast)
+
+                    # generate plan message to share completed observations
+                    observations_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.OBSERVATIONS, t_broadcast)
+
+                    # generate plan message to share any task requests generated
+                    task_requests_msg = FutureBroadcastMessageAction(FutureBroadcastMessageAction.REQUESTS, t_broadcast)
+
+                    # add to client broadcast list
+                    # client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
+                    client_broadcasts[client].extend([task_requests_msg])
+
             elif self._sharing == self.PERIODIC:
                 # determine current time        
                 t_curr : float  = state._t
@@ -738,6 +772,29 @@ class DealerPlanner(AbstractPeriodicPlanner):
             if self._sharing == self.OPPORTUNISTIC:
                 # get next access interval
                 next_access,*_ = orbitdata.get_next_agent_access(t_curr, target=client, t_max=t_next, include_current=True)
+
+                # if no access opportunities in this planning horizon, skip scheduling
+                if not next_access: continue
+
+                # collect access start times for future reference
+                t_access_starts.add(next_access.left)
+
+                # calculate broadcast time
+                t_broadcast : float = max(next_access.left, t_curr)
+
+                # if broadcast time is beyond the next planning period, skip scheduling
+                if t_broadcast >= state._t + self._period: continue
+
+                # schedule broadcasts for the client
+                plan_msg = PlanMessage(state.agent_name, client, [action for action in client_plan.actions], state._t)
+
+                # create broadcast action
+                plan_broadcast = BroadcastMessageAction(plan_msg, t_broadcast)
+                broadcasts.append(plan_broadcast)
+
+            elif self._sharing == self.GROUND_BASED:
+                # get next access interval
+                next_access,*_ = self.client_orbitdata[client].get_next_gs_access(t_curr, t_max=t_next, include_current=True)
 
                 # if no access opportunities in this planning horizon, skip scheduling
                 if not next_access: continue

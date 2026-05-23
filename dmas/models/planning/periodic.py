@@ -29,6 +29,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
     NONE = 'none'                   # no information sharing
     PERIODIC = 'periodic'           # periodic information sharing  
     OPPORTUNISTIC = 'opportunistic' # opportunistic information sharing based on access opportunities
+    GROUND_BASED = 'ground_based'   # TODO ground-based planning with perfect information (no sharing constraints)
 
     def __init__(   self, 
                     agent_results_dir : str,
