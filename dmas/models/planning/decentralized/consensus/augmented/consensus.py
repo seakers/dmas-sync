@@ -1,5 +1,6 @@
 from collections import defaultdict
 from typing import Dict, List, Set, Tuple, Union
+from abc import abstractmethod
 
 from execsatm.tasks import EventObservationTask, GenericObservationTask
 from execsatm.requirements import CoObservationRequirement
@@ -96,18 +97,35 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
 
         The common case (no change) is zero cost.
         """
-        consensus_results = super()._consensus_phase(
-            state, incoming_reqs, incoming_bids, tasks, current_plan, performed_observations
-        )
-        # consensus_results <- task_updates, results_updates, bundle_updates, performed_bundle_observations, expired_tasks
-        task_updates, *_, expired_tasks = consensus_results
+        task_updates, results_updates, bundle_updates, performed_bundle_observations, expired_tasks = \
+            super()._consensus_phase(
+                state, incoming_reqs, incoming_bids, tasks, current_plan, performed_observations
+            )
 
         if expired_tasks:
             self._remove_from_event_index(expired_tasks)
         if task_updates:
             self._update_event_index(task_updates)
 
-        return consensus_results
+        # Release bundle items whose co-obs context has improved since last planning.
+        # Extend bundle_updates so _bundle_changes_performed is set True in update_percepts,
+        # which triggers replanning so the planning phase can re-evaluate with the co-obs bonus.
+        stale_releases = self._release_stale_bundle_items(state)
+        bundle_updates.extend(stale_releases)
+
+        return task_updates, results_updates, bundle_updates, performed_bundle_observations, expired_tasks
+
+    @abstractmethod
+    def _release_stale_bundle_items(self, state: SimulationAgentState) -> List:
+        """Hook called after each consensus phase to release stale bundle items.
+
+        Subclasses whose bundle structure supports co-obs re-evaluation override
+        this to remove from _bundle and _path any entries whose co-obs context has
+        improved since _coalition_deps was last built, so the planning phase can
+        re-evaluate and raise the bid to capture the co-obs bonus.
+
+        Returns the list of released bids to be appended to bundle_updates by the caller.
+        """
 
     # ------------------------------------------------------------------
     # CONSTRAINT CHECK — co-obs coalition validity

@@ -1,11 +1,13 @@
-from typing import Dict, List
+from typing import Dict, List, Set
 import numpy as np
 
 from execsatm.tasks import EventObservationTask, GenericObservationTask
+from execsatm.observations import ObservationOpportunity
 from execsatm.mission import Mission
 
 from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInsertionConsensusPlanner
 from dmas.models.planning.decentralized.consensus.augmented.consensus import AugmentedConsensusPlanner
+from dmas.models.states import SimulationAgentState
 from dmas.utils.orbitdata import OrbitData
 
 
@@ -33,6 +35,15 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
     gets a partial boost; the third sees two and gets a larger boost.
     No future or hypothetical bids are considered — only what is already
     in self._results at bid-evaluation time.
+
+    Coalition re-evaluation:
+      After each consensus phase, _release_stale_bundle_items scans _bundle for
+      tasks that now have new qualifying co-obs partner bids that weren't present
+      when _coalition_deps was last built. Those observation opportunities are
+      removed from _bundle and _path (without resetting the bid) so the planning
+      phase re-evaluates them with the updated co-obs context and can raise the
+      bid to capture the bonus. The backward-time asymmetry (only partners strictly
+      before t_img qualify) bounds cascade depth to one direction.
     """
 
     def __init__(self,
@@ -133,3 +144,85 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                                 or bid.t_img > co_obs[param]):
                             co_obs[param] = bid.t_img
         return co_obs
+
+    def _release_stale_bundle_items(self, state: SimulationAgentState) -> list:
+        """Release bundle items whose co-obs context has improved since last planning.
+
+        After consensus updates _results, scans _bundle for EventObservationTask entries
+        won by this agent that now have qualifying co-obs partner bids which weren't
+        present when _coalition_deps was last built. Removes their ObservationOpportunity
+        from _bundle and _path so the planning phase re-evaluates them with the updated
+        co-obs context (via _build_co_obs_dict) and raises the bid to capture the bonus.
+
+        The backward-time asymmetry (only partners strictly before t_img qualify) means
+        only the later observer re-evaluates, bounding cascade depth to one direction.
+        No bid is reset — the agent retains its current winning bid until the planning
+        phase produces a higher one.
+        """
+        obs_opps_to_release: Set[ObservationOpportunity] = set()
+
+        for obs_opp, task_dict in self._bundle:
+            for task, n_obs in task_dict.items():
+                if not isinstance(task, EventObservationTask) or task.event is None:
+                    continue
+                if n_obs >= len(self._results.get(task, [])):
+                    continue
+                bid = self._results[task][n_obs]
+                if not bid.has_winner() or bid.winner != state.agent_name:
+                    continue
+
+                t_img = bid.t_img
+                co_obs_window = self._co_obs_window_for(task)
+                known_deps = self._coalition_deps.get((task, n_obs), set())
+
+                new_partner_found = False
+                for param, partner_tasks in \
+                        self._event_to_tasks_by_instrument.get(task.event.id, {}).items():
+                    if param == task.parameter:
+                        continue
+                    for partner_task in partner_tasks:
+                        for p_n_obs, pbid in enumerate(self._results.get(partner_task, [])):
+                            if (pbid.has_winner()
+                                    and not pbid.was_performed()
+                                    and pbid.t_img < t_img
+                                    and (t_img - pbid.t_img) <= co_obs_window
+                                    and (partner_task, p_n_obs) not in known_deps):
+                                new_partner_found = True
+                                break
+                        if new_partner_found:
+                            break
+                    if new_partner_found:
+                        break
+
+                if new_partner_found:
+                    obs_opps_to_release.add(obs_opp)
+
+        if not obs_opps_to_release:
+            return []
+
+        # collect (task, n_obs, bid) triples for the released entries so we can
+        # reset them after filtering _bundle; must be gathered before the filter
+        # so we still have the original bundle to iterate over.
+        released_info = [
+            (task, n_obs, self._results[task][n_obs])
+            for opp, task_dict in self._bundle
+            if opp in obs_opps_to_release
+            for task, n_obs in task_dict.items()
+            if n_obs < len(self._results.get(task, []))
+        ]
+
+        # drop released entries from bundle and path; planning phase re-evaluates them
+        self._bundle = [(opp, td) for opp, td in self._bundle
+                        if opp not in obs_opps_to_release]
+        self._path = [action for action in self._path
+                      if action.obs_opp not in obs_opps_to_release]
+
+        # reset released bids in _results so they are no longer orphaned winning bids
+        t_curr = state.get_time()
+        for task, n_obs, bid in released_info:
+            if bid.is_bidder_winning() and not bid.was_performed():
+                bid.reset(t_curr)
+                self._results[task][n_obs] = bid
+
+        # released bids
+        return [bid for _, _, bid in released_info]
