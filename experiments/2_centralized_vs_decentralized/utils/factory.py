@@ -173,7 +173,7 @@ def create_propagator_settings_specifications(base_path : str,
 def create_spacecraft_specifications(
                                      preplanner : str, 
                                      replanner : str, 
-                                     scenario : str,
+                                     mission_name : str,
                                      data_processing : str,
                                      constellation : str,
                                      date : str,
@@ -247,6 +247,10 @@ def create_spacecraft_specifications(
             # set max slew rate to 0 for fixed pointing
             satellite_spec['spacecraftBus']['components']['adcs']['maxRate'] = 0.0
             satellite_spec['spacecraftBus']['components']['adcs']['maxTorque'] = 0.0
+
+        if "co-obs" in mission_name.lower() and agent_replanner.lower() == 'cbba':
+            # use augmented CBBA replanner for co-observation scenario
+            agent_replanner = 'cbba (augmented)'
 
         # set planner settings
         if agent_preplanner.lower() != 'none':
@@ -455,7 +459,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
     
     # create satellite specifications
     mission_specs['spacecraft'] \
-        = create_spacecraft_specifications(preplanner, replanner, scenario, data_processing, constellation, date, events_path,
+        = create_spacecraft_specifications(preplanner, replanner, mission_name, data_processing, constellation, date, events_path,
                                            spacecraft_specs_template, instrument_specs, planner_specs)
     
     # set network name from ground segment type

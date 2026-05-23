@@ -493,8 +493,8 @@
                 // "--single-trial", "37",
 
                 "-t", "full_factorial_trials_2026-05-22",
-                "--single-trial", "9", // GS, GS, DP + None
-                // "--single-trial", "12", // GS, GS, None + CBBA (Augmented) 
+                // "--single-trial", "9", // GS, GS, DP + None
+                "--single-trial", "12", // GS, GS, None + CBBA (Augmented) 
                 // "--single-trial", "13", // GS, GS, None + CBBA 
                 // "--single-trial", "15", // GS, GS, None + Greedy
 
