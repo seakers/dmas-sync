@@ -318,9 +318,20 @@ class ResultsProcessor:
             observations_performed = pd.read_parquet(observations_performed_path)
 
         except pd.errors.EmptyDataError:
-            columns = ['observer','t_img','lat','lon','range','look','incidence','zenith','instrument_name']
+            columns = ['t_start', 't_end', 'time [s]', 'lat [deg]', 'lon [deg]', 'grid index',
+                        'GP index', 'pnt-opt index', 'agent', 'instrument', 'observation range [km]',
+                        'look angle [deg]', 'incidence angle [deg]', 'solar zenith [deg]',
+                        'off-nadir axis angle [deg]', 'agent name', 't_img', 'intentional',
+                        'parameter']
             observations_performed = pd.DataFrame(data=[],columns=columns)
             if printouts: tqdm.write('[results processor] No observations were performed during the simulation.')
+
+        # check if any value in 'intentional' or 'parameter' is a nan
+        # if not observations_performed.empty:
+        #     if observations_performed['intentional'].isna().any():
+        #         if printouts: tqdm.write('[results processor] Warning: Found NaN values in `intentional` column of observations performed data.')
+        #     if observations_performed['parameter'].isna().any():
+        #         if printouts: tqdm.write('[results processor] Warning: Found NaN values in `parameter` column of observations performed data.')
 
         # return observations performed        
         return observations_performed
@@ -1253,6 +1264,7 @@ class ResultsProcessor:
                         and row_d['instrument'] == prev['instrument']
                         and row_d['t_start'] <= prev['t_end'] + 1e-9
                         and row_d.get('intentional', False) == prev.get('intentional', False)
+                        and row_d.get('parameter', False) == prev.get('parameter', False)
                         and abs(row_d.get('t_img', 0) - prev.get('t_img', 0)) <= 1e-9):
                     prev['t_end'] = max(prev['t_end'], row_d['t_end'])
 
@@ -1378,6 +1390,11 @@ class ResultsProcessor:
             )
             matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / event.availability.span()
             
+            # DEBUG SECTION -------
+            x = 1 # debug breakpoint
+
+            # ---------------------
+
             # convert to list of dicts for easier handling downstream
             matching_observations = sorted(matching_observations.to_dict('records'), key=lambda x: x['t_start'])
 
@@ -1387,7 +1404,16 @@ class ResultsProcessor:
             # add to dataframe of observations per event
             prev_row = None
             for n_obs,row in enumerate(matching_observations):
-                t_rev = row['t_start'] - prev_row['t_start'] if prev_row is not None else np.Inf                
+                t_rev = row['t_start'] - prev_row['t_start'] if prev_row is not None else np.Inf      
+
+                if (prev_row is not None
+                        and row['t_start'] - prev_row['t_end'] < 1e-9
+                        and prev_row['agent name'] == row['agent name']
+                        and prev_row['instrument'] == row['instrument']
+                        and prev_row.get('intentional', False)
+                        and row.get('intentional', False)):
+                    # raise ValueError(f"Mutually exclusive observations performed by agent{row['agent name']} with instrument {row['instrument']} at times {prev_row['t_end']} and {row['t_start']} for event {event.id}.")
+                    tqdm.write(f"[results processor] WARNING mutually exclusive observations performed by agent{row['agent name']} with instrument {row['instrument']} at time {prev_row['t_end']}s for event {event.id} for parameters {prev_row['parameter']} and {row['parameter']}.")
 
                 observations_per_event_df_data.append({
                     'event id' : event.id,
