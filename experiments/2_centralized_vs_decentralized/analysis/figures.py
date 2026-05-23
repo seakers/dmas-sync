@@ -1183,9 +1183,9 @@ if __name__ == '__main__':
         default=os.path.join(
             'experiments', '2_centralized_vs_decentralized', 'analysis',
             'compiled',
-            'full_factorial_trials_2026-05-17_compiled_results.csv'))
+            'full_factorial_trials_2026-05-22_compiled_results.csv'))
     parser.add_argument('--trial-name',
-                        default='full_factorial_trials_2026-05-17')
+                        default='full_factorial_trials_2026-05-22')
     parser.add_argument('--abridged', action='store_true')
     parser.add_argument('--full',     action='store_true')
     args = parser.parse_args()
