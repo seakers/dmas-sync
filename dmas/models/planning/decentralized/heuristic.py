@@ -527,6 +527,12 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             # check if agent has the payload to peform observation
             if new_obs.instrument_name not in payload: continue
 
+            # enforce one-observation-per-pass constraint: mirrors the mutually_exclusive
+            if any(new_obs.is_mutually_exclusive(_a.obs_opp) for _a in current_path):
+                continue
+            if any(new_obs.is_mutually_exclusive(obs_opp) for obs_opp in self.latest_performed_observations):
+                continue  
+
             # initialize feasible observation time and select observation look angle for new observation opportunity
             t_img_start, th_img = None, np.average([new_obs.slew_angles.left, new_obs.slew_angles.right])
 
@@ -612,13 +618,7 @@ class HeuristicInsertionReactivePlanner(AbstractReactivePlanner):
             d_img = t_img_end - t_img_start
             if d_img < new_obs.min_duration:
                 # not enough time to perform observation; cannot insert new observation into path
-                continue
-
-            # enforce one-observation-per-pass constraint: mirrors the mutually_exclusive
-            # check in HeuristicInsertionPeriodicPlanner — skip if the same task is already
-            # scheduled in an overlapping access window (same orbital pass)
-            if any(new_obs.is_mutually_exclusive(_a.obs_opp) for _a in current_path):
-                continue
+                continue            
 
             # insert new observation into path
             ## create observation action for new task
