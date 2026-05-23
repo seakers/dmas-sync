@@ -33,6 +33,9 @@ def load_trials(base_path : str, trial_filename : str, lower_bound : int, upper_
     trials : pd.DataFrame = pd.read_csv(trials_file)
     n_trials = len(trials)
 
+    # fill NANs for "None" strings
+    trials = trials.fillna('None')
+
     # check if bounds are valid
     assert 0 <= lower_bound < n_trials, f"Lower bound {lower_bound} is out of range [0, {n_trials})"
     assert lower_bound < upper_bound, f"Lower bound {lower_bound} must be less than upper bound {upper_bound}"
@@ -84,7 +87,7 @@ def create_scenario_specifications(base_path : str,
                                    events_path : str, 
                                    constellation : str,
                                    connectivity : str,
-                                   data_processing : str,
+                                   mission_name : str,
                                 ) -> dict:
     # if "oracle" in data_processing.lower():
     #     mission_filename = "response.json"
@@ -94,7 +97,7 @@ def create_scenario_specifications(base_path : str,
     # defined mission name
     # mission_filename = "response.json"    
     # mission_filename = "response_simplified.json"
-    mission_filename = "response_augmented.json"
+    mission_filename = f"{mission_name.lower()}_mission.json"
     
     return {
             "events": {
@@ -417,7 +420,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
                                     step_size : float, 
                                     base_path : str, 
                                     trials_filename : str,
-                                    trial_id : int, preplanner : str, replanner : str, connectivity : str, scenario : int, 
+                                    trial_id : int, preplanner : str, replanner : str, connectivity : str, mission_name : int, 
                                     data_processing : str, constellation : str, date : str,   
                                     spacecraft_specs_template : dict, instrument_specs : dict,
                                     planner_specs : dict,
@@ -432,7 +435,8 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
     if reduced: results_dir += "_reduced"
     
     # define event file path based on scenario parameters
-    events_file = f'{scenario.lower().replace("-", "_")}_case_{date}.csv'
+    scenario = "comprehensive"
+    events_file = f"{scenario}_case_{date}.csv"
     events_path = os.path.join(base_path, 'resources', 'events', 'processed', events_file)
 
     # set simulation duration and propagator step size
@@ -440,7 +444,7 @@ def generate_scenario_mission_specs(mission_specs_template : dict,
     mission_specs['propagator']['stepSize'] = step_size
 
     # set scenario specifications
-    mission_specs['scenario'] = create_scenario_specifications(base_path, results_dir, events_path, constellation, connectivity, data_processing)
+    mission_specs['scenario'] = create_scenario_specifications(base_path, results_dir, events_path, constellation, connectivity, mission_name)
 
     # set target distribution type
     mission_specs['grid'] = create_grid_specifications(base_path, scenario, date)

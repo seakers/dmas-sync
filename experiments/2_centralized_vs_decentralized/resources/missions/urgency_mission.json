@@ -32,22 +32,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },                        
-                        {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -103,22 +87,6 @@
                             "threshold": 5
                         },
                         {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
-                        },
-                        {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
@@ -167,22 +135,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -241,22 +193,6 @@
                             "threshold": 5
                         },
                         {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
-                        },
-                        {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
@@ -305,22 +241,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -378,22 +298,6 @@
                             "threshold": 5
                         },
                         {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
-                        },
-                        {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
@@ -440,22 +344,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -509,22 +397,6 @@
                             "threshold": 5
                         },
                         {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
-                        },
-                        {
                             "req_type": "performance",
                             "attribute": "revisit_time [s]",
                             "strategy": "discrete_intervals",
@@ -571,22 +443,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
                         },
                         {
                             "req_type": "performance",
@@ -643,22 +499,6 @@
                             "strategy": "diminishing_returns",
                             "slope": 0.5,
                             "threshold": 5
-                        },
-                        {
-                            "req_type": "coordination",
-                            "attribute": "co_observations",
-                            "strategy": "discrete_intervals",
-                            "decorrelation_time [s]": 900,
-                            "thresholds": [
-                                0,
-                                1,
-                                3
-                            ],
-                            "scores": [
-                                0.05,
-                                0.85,
-                                1.0
-                            ]
                         },
                         {
                             "req_type": "performance",

@@ -85,9 +85,12 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
     t0 = time.time()
 
     # Unpack trial row
-    #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_centralization,calc_dual`
-    trial_id,preplanner,replanner,connectivity,scenario,data_processing,constellation,date,*_,calc_bounds_opt = trial_row
-    
+    #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,
+    #               Mission,Data Processing,Date,in_testing,in_abridged,in_year_2019,calcBoundsOpt`
+    trial_id,preplanner,replanner,connectivity,\
+        mission_name,data_processing,date,*_,calc_bounds_opt = trial_row
+    constellation = "Walker-Delta" # default to a constellation for all cases
+
     # normalize `nan` values to None
     preplanner = "none" if not isinstance(preplanner, str) and pd.isna(preplanner) else preplanner.lower()
     replanner = "none" if not isinstance(replanner, str) and pd.isna(replanner) else replanner.lower()
@@ -126,16 +129,16 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             }
 
         # generate scenario specifications from templates and trial parameters
-        if printouts: tqdm.write(f" [simulation] generated mission specifications for scenario {trial_id}")
         mission_specs : dict = generate_scenario_mission_specs(
             run_cfg.mission_specs_template, run_cfg.duration, run_cfg.step_size,
             run_cfg.base_path, trial_stem, trial_id,
-            preplanner, replanner, connectivity, scenario, 
+            preplanner, replanner, connectivity, mission_name, 
             data_processing, constellation, date, 
             run_cfg.spacecraft_specs_template, run_cfg.instrument_specs,
             run_cfg.planner_specs, run_cfg.ground_operator_specs_template, 
             sim_cfg.reduced, calc_bounds_opt
         )
+        if printouts: tqdm.write(f" [simulation] generated mission specifications for scenario {trial_id}")
 
         # random wait for staggering
         # if not sim_cfg.reduced:
@@ -168,15 +171,15 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
                         #   or (sim_cfg.only_simulate and not already_done)
                         )
 
-        mission = None
+        mission_name = None
         if should_run_sim:
-            mission = Simulation.from_dict(
+            mission_name = Simulation.from_dict(
                 mission_specs,
                 overwrite=sim_cfg.force_simulate,
                 printouts=printouts,
                 level=log_level_int,
             )
-            mission.execute(pbar_pos, pbar_leave=pbar_leave)
+            mission_name.execute(pbar_pos, pbar_leave=pbar_leave)
             sim_status = "executed"
         else:
             sim_status = "skipped_existing"
@@ -201,9 +204,9 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         should_postprocess = sim_cfg.force_postprocess or (not processing_exists) or sim_cfg.only_postprocess or should_run_sim
 
         if should_postprocess:
-            if mission is None:
+            if mission_name is None:
                 # Load mission if needed for processing
-                mission = Simulation.from_dict(
+                mission_name = Simulation.from_dict(
                     mission_specs,
                     overwrite=False,
                     printouts=printouts,
@@ -214,7 +217,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             force_postprocess = sim_cfg.force_postprocess or should_run_sim  
 
             # process results
-            mission.process_results(force_process=force_postprocess, printouts=not sim_cfg.quiet)
+            mission_name.process_results(force_process=force_postprocess, printouts=not sim_cfg.quiet)
             
             # set postprocess status for return summary
             post_status = "postprocessed" 
@@ -238,9 +241,9 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         should_summarize = sim_cfg.force_summarize or (not summary_exists) or should_run_sim
 
         if should_summarize:
-            if mission is None:
+            if mission_name is None:
                 # Load mission if needed for processing
-                mission = Simulation.from_dict(
+                mission_name = Simulation.from_dict(
                     mission_specs,
                     overwrite=False,
                     printouts=printouts,
@@ -251,7 +254,7 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
             force_summarize = sim_cfg.force_summarize or should_run_sim
 
             # summarize results 
-            mission.summarize_results(force_summarize=force_summarize, 
+            mission_name.summarize_results(force_summarize=force_summarize, 
                                       printouts=not sim_cfg.quiet,
                                       calc_bounds_opt=calc_bounds_opt)
             
@@ -273,9 +276,9 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
         # ------------------------------------------------------------
         # Stage 5: Cleanup resources if needed (e.g., close memmaps, etc) 
         # ------------------------------------------------------------
-        if mission is not None:
+        if mission_name is not None:
             # ensure any open resources are closed
-            mission.close()  
+            mission_name.close()  
 
         status = sim_status
         if "skipped" in status:
@@ -417,10 +420,10 @@ def serial_run_trials(trials_df: pd.DataFrame, run_cfg: RunConfig, sim_cfg: Simu
         for i, row in enumerate(trial_rows):
             if not sim_cfg.quiet:
                 # Unpack trial row
-                #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,Scenario,Data Processing,Constellation,Date,in_centralization`
-                trial_id,preplanner,replanner,connectivity,scenario,data_processing,constellation,date, *_ = row
+                #   Schema -> `Trial ID,Preplanner,Replanner,Connectivity,Mission,Data Processing,Date,in_testing,in_abridged,in_year_2019,calcBoundsOpt`
+                trial_id,preplanner,replanner,connectivity,mission,data_processing,date, *_ = row
 
-                print(f"\n=== Running trial {i+1}/{len(trial_rows)} === \n - trial_id={trial_id}\n - preplanner={preplanner}\n - replanner={replanner}\n - connectivity={connectivity}\n - scenario={scenario}\n - data_processing={data_processing}\n - constellation={constellation}\n - date={date}\n - reduced={sim_cfg.reduced}\n")
+                tqdm.write(f"\n===== Running trial {i+1}/{len(trial_rows)} ===== \n - filename:\t\t{sim_cfg.trials_file}\n - trial_id:\t\t{trial_id}\n - preplanner:\t\t{preplanner}\n - replanner:\t\t{replanner}\n - connectivity:\t{connectivity}\n - mission:\t\t{mission}\n - data_processing:\t{data_processing}\n - date:\t\t{date}\n - reduced:\t\t{sim_cfg.reduced}\n")
 
             # run one trial
             res = run_one_trial(row, run_cfg, sim_cfg, pbar_pos=1)

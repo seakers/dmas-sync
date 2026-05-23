@@ -57,41 +57,102 @@ def apply_rules(df: pd.DataFrame, rules: List[Callable[[pd.DataFrame], pd.Series
 if __name__ == "__main__":
     # print welcome
     print_scenario_banner('Trial generator for Centralized vs Decentralized Planning Study')
-    
+       
+
     # define experiment parameters
-    abridged_params = {
+    testing_params = {
         "Preplanner" : [
             "None",
             "DP",
             "Centralized-MILP_priority",
-            # "Centralized-MILP_assignment" 
-            # "Centralized-Metaheuristics" # TODO
         ],
         "Replanner": [
             "None",
             "Greedy", 
             "CBBA", 
-            "CBBA (Augmented)", # TODO
+            # "CBBA (Augmented)",
         ],
         "Connectivity": [
-            "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
-            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
             "GS",                   # sats can only talk to ground station (no inter-sat comms)
         ],
-        "Scenario": [
-            "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
+        "Mission": [
+            "Urgency",
+            "Revisits",
+            "Co-observations"
+        ],
+        "Data Processing" : [
+            "Instant",              # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
+        ],
+        "Date" : [       
+            "2019-02-15", 
+        ], 
+    }
+
+    abridged_params = {
+        "Preplanner" : [
+            "None",
+            "DP",
+            "Centralized-MILP_priority",
+        ],
+        "Replanner": [
+            "None",
+            "Greedy", 
+            "CBBA", 
+            # "CBBA (Augmented)", # TODO
+        ],
+        "Connectivity": [
+            "GS",                   # sats can only talk to ground station (no inter-sat comms)
+            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
+            "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
+        ],
+        "Mission": [
+            "Urgency",
+            "Revisits",
+            "Co-observations"
         ],
         "Data Processing" : [
             "Instant",              # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
             "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
             "Onboard",              # sats must discover events using default mission tasks
         ],
-        "Constellation" : [
-            "Walker-Delta",
+        "Date" : [            
+            # 2019 dates 
+            "2019-02-15",   # Winter NH
+        ], 
+    }    
+    year_2019_params = {
+        "Preplanner" : [
+            "None",
+            "DP",
+            "Centralized-MILP_priority",
+        ],
+        "Replanner": [
+            "None",
+            "Greedy", 
+            "CBBA", 
+            # "CBBA (Augmented)",
+        ],
+        "Connectivity": [
+            "GS",                   # sats can only talk to ground station (no inter-sat comms)
+            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
+            "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
+        ],
+        "Mission": [
+            "Urgency",
+            "Revisits",
+            "Co-observations"
+        ],
+        "Data Processing" : [
+            "Instant",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
+            "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
+            "Onboard",              # sats must discover events using default mission tasks
         ],
         "Date" : [            
             # 2019 dates 
             "2019-02-15",   # Winter NH
+            "2019-05-15",   # Spring NH
+            "2019-08-10",   # Summer NH / peak fire season
+            "2019-11-10"    # Fall NH
         ], 
     }    
     full_params = {
@@ -99,41 +160,35 @@ if __name__ == "__main__":
             "None",
             "DP",
             "Centralized-MILP_priority",
-            # "Centralized-MILP_assignment" 
-            # "Centralized-Metaheuristics" # TODO
         ],
         "Replanner": [
             "None",
             "Greedy", 
             "CBBA", 
-            "CBBA (Augmented)", # TODO
-            # "Metaheuristic"
+            # "CBBA (Augmented)", 
         ],
         "Connectivity": [
-            "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
-            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
             "GS",                   # sats can only talk to ground station (no inter-sat comms)
+            "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
+            "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
         ],
-        "Scenario": [
-            # "Water-Quality",        # water quality monitoring (algal blooms + high-flow events = water quality)
-            "Comprehensive"         # comprehensive monitoring (water quality + fire monitoring)
+        "Mission": [
+            "Urgency",
+            "Revisits",
+            "Co-observations"
         ],
         "Data Processing" : [
             "Instant",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
             "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
             "Onboard",              # sats must discover events using default mission tasks
         ],
-        "Constellation" : [
-            # "Commercial",
-            "Walker-Delta",
-        ],
         "Date" : [
             # 2018 dates 
             # TODO include if cases from 2019 show seasonal trends that we want to compare against (e.g. fire season)
-            # "2018-02-15",   # Winter NH
-            # "2018-05-15",   # Spring NH
-            # "2018-08-10",   # Summer NH / peak fire season
-            # "2018-11-10",   # Fall NH
+            "2018-02-15",   # Winter NH
+            "2018-05-15",   # Spring NH
+            "2018-08-10",   # Summer NH / peak fire season
+            "2018-11-10",   # Fall NH
             
             # 2019 dates 
             "2019-02-15",   # Winter NH
@@ -144,22 +199,27 @@ if __name__ == "__main__":
     }    
 
     # define experiment parameter rules
-    rules = [        
+    rules = [
         # centralized preplanners must have `none` replanenrs (i.e. replanning is only relevant for decentralized strategies)
         lambda d: (d["Preplanner"] != "Centralized-MILP_priority") | (d["Replanner"] == "None"),
         lambda d: (d["Preplanner"] != "Centralized-MILP_assignment") | (d["Replanner"] == "None"),
         # None preplanner cannot have a none replanner (i.e. if no initial plan, must have some kind of replanning strategy)
         # lambda d: (d["Preplanner"] != "None") | (d["Replanner"] != "None"),
-        
+        # there can only be one None x None trial per date
+        lambda d: ~((d["Preplanner"] == "None") & (d["Replanner"] == "None")) | (~d.duplicated(subset=["Date", "Preplanner", "Replanner"])),
     ]
 
     # 1) generate full enumeration of trials per experiment
+    testing_trials = generate_full_tactorial_trials(testing_params)
     abridged_trials = generate_full_tactorial_trials(abridged_params)
+    year_2019_trials = generate_full_tactorial_trials(year_2019_params)
     full_trials = generate_full_tactorial_trials(full_params)
 
     trial_dfs = {
+        "testing" : testing_trials,
         "abridged": abridged_trials,
-        "full": full_trials
+        "year_2019": year_2019_trials,
+        # "full": full_trials
     }
 
     # merge trials, tagging which experiment(s) they belong to
@@ -173,11 +233,13 @@ if __name__ == "__main__":
     #    (abridged first, then full)
     phase = np.select(
         [
+            all_trials["in_testing"],
             all_trials["in_abridged"],
-            all_trials["in_full"],
+            all_trials["in_year_2019"],
+            # all_trials["in_full"],
         ],
-        [0, 1],
-        default=2,   # should be rare / indicates "belongs to none"
+        [0, 1, 2],
+        default=3,   # should be rare / indicates "belongs to none"
     )
     all_trials["Phase"] = phase
     all_trials["_none_none"] = ((all_trials["Preplanner"] == "None") & (all_trials["Replanner"] == "None")).astype(int)
@@ -195,34 +257,39 @@ if __name__ == "__main__":
     all_trials["calcBoundsOpt"] = 0
     
     # get combinations of scenario, constellation, and date
-    combos = all_trials[["Scenario", "Constellation", "Date", "in_abridged", "in_full"]].drop_duplicates()
+    combos = all_trials[["Mission", "Date"]].drop_duplicates()
     
     for _,combo_row in combos.iterrows():
         # create mask for trials matching the combo
-        mask = ((all_trials["Scenario"] == combo_row["Scenario"]) &
-                (all_trials["Constellation"] == combo_row["Constellation"]) &
-                (all_trials["Date"] == combo_row["Date"]) &
-                (all_trials["in_abridged"] == combo_row["in_abridged"]) &
-                (all_trials["in_full"] == combo_row["in_full"]))
+        mask = ((all_trials["Mission"] == combo_row["Mission"]) &
+                (all_trials["Date"] == combo_row["Date"]) 
+                # & (all_trials["in_testing"] == combo_row["in_testing"]) &
+                # (all_trials["in_abridged"] == combo_row["in_abridged"]) &
+                # (all_trials["in_year_2019"] == combo_row["in_year_2019"]) 
+                # & (all_trials["in_full"] == combo_row["in_full"])
+                )
         
         # get slice of trials matching the combo
         combo_trials = all_trials.loc[mask]
         
         # set `calcBoundsOpt` to non-zero only for the highest trial ids among the slice 
         if not combo_trials.empty:
-            # get the max trial id for each data processing type in the combo
-            n_data_processing_types = len(combo_trials["Data Processing"].unique())
+            max_dp_trial_id = combo_trials["Trial ID"].max()
+            all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "calcBoundsOpt"] = 2
             
-            # set `calcBoundsOpt` to 1 for the max trial id of each data processing type in the combo
-            # and to 2 if the data processing type is "Oracle"
-            for dp_type in combo_trials["Data Processing"].unique():
-                dp_trials = combo_trials[combo_trials["Data Processing"] == dp_type]
-                if not dp_trials.empty:
-                    max_dp_trial_id = dp_trials["Trial ID"].max()
-                    if dp_type == "Oracle" or dp_type == "Instant":  # treat "Instant" the same as "Oracle" for this purpose since it represents perfect information, just with a different flavor of realism
-                        all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "calcBoundsOpt"] = 2
-                    else:
-                        all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "calcBoundsOpt"] = 1
+            # # get the max trial id for each data processing type in the combo
+            # n_data_processing_types = len(combo_trials["Data Processing"].unique())
+
+            # # set `calcBoundsOpt` to 1 for the max trial id of each data processing type in the combo
+            # # and to 2 if the data processing type is "Oracle"
+            # for dp_type in combo_trials["Data Processing"].unique():
+            #     dp_trials = combo_trials[combo_trials["Data Processing"] == dp_type]
+            #     if not dp_trials.empty:
+            #         max_dp_trial_id = dp_trials["Trial ID"].max()
+            #         all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "calcBoundsOpt"] = 2
+            #         if dp_type == "Oracle" or dp_type == "Instant":  # treat "Instant" the same as "Oracle" for this purpose since it represents perfect information, just with a different flavor of realism
+            #         else:
+            #             all_trials.loc[all_trials["Trial ID"] == max_dp_trial_id, "calcBoundsOpt"] = 1
 
     # generate results directory
     out_dir = os.path.join('.', 'experiments','2_centralized_vs_decentralized', 'resources', 'trials')
