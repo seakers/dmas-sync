@@ -303,28 +303,28 @@ class SimulationEnvironment(object):
             gp_to_task_info: dict = {}
             if action.obs_opp is not None and action.t_imgs:
                 for task in action.obs_opp.tasks:
-                    committed = action.t_imgs.get(task.id)
-                    if committed is None:
+                    t_committed = action.t_imgs.get(task.id)
+                    if t_committed is None:
                         continue
                     parameter = getattr(task, 'parameter', None)
                     for loc in task.location:
-                        gp_to_task_info.setdefault((int(loc[2]), int(loc[3])), (committed, parameter))
+                        gp_to_task_info.setdefault((int(loc[2]), int(loc[3])), (t_committed, parameter))
 
             # annotate each record with the per-task committed imaging time and parameter
             for obs_rec in new_observation_data:
                 key = (int(obs_rec['grid index']), int(obs_rec['GP index']))
                 info = gp_to_task_info.get(key)
                 if info is not None:
-                    committed, parameter = info
+                    t_committed, parameter = info
                 else:
-                    committed, parameter = obs_rec['t_start'], None
+                    t_committed, parameter = obs_rec['t_start'], None
                 # On partial execution steps t_end_query = t_curr, which can be earlier than
                 # the committed imaging time. Only stamp committed t_img when the record's
                 # window actually covers it; otherwise the planned imaging moment hasn't been
                 # reached yet — mark as unintentional and use t_start so that downstream
                 # processing doesn't count this partial record as the intended observation.
-                reached = (info is not None) and (committed <= obs_rec['t_end'] + 1e-9)
-                obs_rec['t_img'] = committed if reached else obs_rec['t_start']
+                reached = (info is not None) and (t_committed <= obs_rec['t_end'] + 1e-9)
+                obs_rec['t_img'] = t_committed if reached else obs_rec['t_start']
                 obs_rec['intentional'] = reached
                 obs_rec['parameter'] = parameter if reached else None
 

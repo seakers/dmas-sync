@@ -1251,27 +1251,43 @@ class ResultsProcessor:
             merged_rows = []
             prev = None
             for i, row in data.iterrows():
+                # unpack row to dict for easier access during merging
                 row_d = row.to_dict()
-                if prev is None:
-                    prev = row_d
-                # elif (row_d['agent name'] == prev['agent name']
-                #       and row_d['instrument'] == prev['instrument']
-                #       and row_d['t_start'] <= prev['t_end'] + 1e-9):
-                #     prev['t_end'] = max(prev['t_end'], row_d['t_end'])
-                #     if row_d.get('intentional', False):
-                #         prev['intentional'] = True
+
+                # skip if first row
+                if prev is None: prev = row_d
+
+                # merge adjacent/overlapping windows from the same (agent, instrument).
+                # parameter and intentional are intentionally excluded from the condition:
+                # partial records logged before the committed imaging time have intentional=False
+                # and parameter=None, while the completing record has the correct values.
                 elif (row_d['agent name'] == prev['agent name']
                         and row_d['instrument'] == prev['instrument']
-                        and row_d['t_start'] <= prev['t_end'] + 1e-9
-                        and row_d.get('intentional', False) == prev.get('intentional', False)
-                        and row_d.get('parameter', False) == prev.get('parameter', False)
-                        and abs(row_d.get('t_img', 0) - prev.get('t_img', 0)) <= 1e-9):
+                        and row_d['t_start'] <= prev['t_end'] + 1e-9):
+
+                    # extend the window
                     prev['t_end'] = max(prev['t_end'], row_d['t_end'])
 
+                    # intentional=True if any merged record was intentional
+                    prev['intentional'] = prev.get('intentional', False) or row_d.get('intentional', False)
+
+                    # adopt parameter from the intentional record (the one that reached committed t_img)
+                    if row_d.get('intentional', False) and row_d.get('parameter') is not None:
+                        prev['parameter'] = row_d['parameter']
+
+                    # keep the earliest committed imaging time across the merged window
+                    if (row_d.get('t_img') is not None
+                            and (prev.get('t_img') is None or row_d['t_img'] < prev['t_img'])):
+                        prev['t_img'] = row_d['t_img']
+
+                # if not, close out the previous interval and start a new one
                 else:
                     merged_rows.append(prev)
                     prev = row_d
+            
+            # check if no merging was needed
             if prev is not None:
+                # add the last interval
                 merged_rows.append(prev)
 
             # re-sort by t_start for all downstream consumers
