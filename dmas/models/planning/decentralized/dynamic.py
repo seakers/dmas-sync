@@ -208,9 +208,6 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
         # remove dummy task from best value
         best_value -= 1 
 
-        if best_value < 0:
-            x= 1
-
         # Reconstruct best sequence
         sequence : List[Tuple[ObservationOpportunity, ...]]= []
         current = best_terminal_obs
@@ -307,11 +304,21 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                             ):
             
             # find all proceeding observation opportunities 
-            succeeding_obs = [ obs_j for j,obs_j in enumerate(obs_opps[i+1:], start=i+1)
-                                if obs_i.accessibility.left < obs_j.accessibility.right
-                                and obs_i.accessibility.left + d_imgs[i] + slew_times[i][j] < obs_j.accessibility.right - d_imgs[j]
-                            #   and not obs_i.is_mutually_exclusive(obs_j)
-                            ]
+            if i > 0:
+                # compare with each future observation 
+                succeeding_obs = [ obs_j for j,obs_j in enumerate(obs_opps[i+1:], start=i+1)
+                                    if obs_i.accessibility.left < obs_j.accessibility.right
+                                    and obs_i.accessibility.left + d_imgs[i] + slew_times[i][j] < obs_j.accessibility.right - d_imgs[j]
+                                    and not obs_i.is_mutually_exclusive(obs_j)
+                                ]
+            else:
+                # comparing to the `dummy` observation; check if each obs is reachable from initial state given slew time and observation duration constraints, 
+                # and not exclusive with the most recent observations performed
+                succeeding_obs = [ obs_j for j,obs_j in enumerate(obs_opps[i+1:], start=i+1)
+                                    if obs_i.accessibility.left < obs_j.accessibility.right
+                                    and obs_i.accessibility.left + d_imgs[i] + slew_times[i][j] < obs_j.accessibility.right - d_imgs[j]                                    
+                                    and all(not obs_j.is_mutually_exclusive(prev_obj) for prev_obj in self.latest_performed_observations)  
+                                ]
             
             # update adjacency list
             adjacency[obs_i] = succeeding_obs              
