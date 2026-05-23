@@ -32,7 +32,7 @@
             "@mode": "milp",
             "model": "static",
             "licensePath": "./gurobi.lic",            
-            "period" : 250,
+            "period" : 500,
             "horizon" : 3600,
             "maxTasks": 100,
             "debug" : "False"
@@ -42,7 +42,7 @@
             "@mode": "milp",
             "model": "assignment",
             "licensePath": "./gurobi.lic",            
-            "period" : 250,
+            "period" : 500,
             "horizon" : 3600,
             "maxTasks": 100,
             "debug" : "False"
