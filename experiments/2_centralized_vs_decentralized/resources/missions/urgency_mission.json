@@ -180,7 +180,7 @@
                 {
                     "objective_type": "event_driven",
                     "parameter": "Temperature [K]",
-                    "weight": 0.25,
+                    "weight": 0.50,
                     "event_type": "wildfire",
                     "requirements": [
                         {
@@ -209,36 +209,8 @@
                 },
                 {
                     "objective_type": "event_driven",
-                    "parameter": "Temperature [K]",
-                    "weight": 0.25,
-                    "event_type": "wildfire",
-                    "requirements": [
-                        {
-                            "req_type": "capability",
-                            "attribute": "instrument",
-                            "strategy": "categorical",
-                            "valid_values": {
-                                "OroraTech OTC-P1 SAFIRE Thermal Camera (MIR-FR-U)" : 1.0
-                            }
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "response_time [norm]",
-                            "strategy": "exp_decay",
-                            "decay_rate": 1.386294361
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "n_obs",
-                            "strategy": "diminishing_returns",
-                            "half_life": 3.0
-                        }
-                    ]
-                },
-                {
-                    "objective_type": "event_driven",
                     "parameter": "Fire Extent",
-                    "weight": 0.25,
+                    "weight": 0.50,
                     "event_type": "wildfire",
                     "requirements": [
                         {
@@ -249,34 +221,7 @@
                                 "HawkEye-class Ocean Color Imager (VNIR-WQ-U)" : 0.50,
                                 "Planet SuperDove-class Wide VNIR (VNIR-FL-U)" : 0.50,
                                 "Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T)" : 0.75,
-                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 1.0
-                            }
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "response_time [norm]",
-                            "strategy": "exp_decay",
-                            "decay_rate": 1.386294361
-                        },
-                        {
-                            "req_type": "performance",
-                            "attribute": "n_obs",
-                            "strategy": "diminishing_returns",
-                            "half_life": 3.0
-                        }
-                    ]
-                },
-                {
-                    "objective_type": "event_driven",
-                    "parameter": "Fire Extent",
-                    "weight": 0.25,
-                    "event_type": "wildfire",
-                    "requirements": [
-                        {
-                            "req_type": "capability",
-                            "attribute": "instrument",
-                            "strategy": "categorical",
-                            "valid_values": {
+                                "Dragonfly Chameleon-MS+SWIR Combined Imager (VNIR-FR-T)" : 1.0,
                                 "Capella X-SAR (SAR-FR-T)": 1.0
                             }
                         },
