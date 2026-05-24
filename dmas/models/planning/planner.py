@@ -141,9 +141,15 @@ class AbstractPlanner(ABC):
                     t_start = t
                     t_end = t
                     interval_indices = [idx]
+
+            if t_start == t_end: 
+                t_end += orbitdata.time_step
+                interval = Interval(t_start, t_end, right_open=True)
+            else:
+                interval = Interval(t_start, t_end)
             
             # add last interval
-            merged_access_intervals.append( (Interval(t_start, t_end), interval_indices) )
+            merged_access_intervals.append( (interval, interval_indices) )
 
             # extract access data for each interval
             for access_interval,interval_indices in merged_access_intervals:
