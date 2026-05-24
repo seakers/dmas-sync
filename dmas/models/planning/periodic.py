@@ -115,6 +115,9 @@ class AbstractPeriodicPlanner(AbstractPlanner):
                         observation_history : TaskObservationTracker,
                     ) -> Plan:
         """ Generates a new plan for the agent """
+        # get current simulatio ntime
+        t_curr = state.get_time()
+
         # compile instrument field of view specifications   
         cross_track_fovs : dict = self._collect_fov_specs(specs)
 
@@ -122,7 +125,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         max_slew_rate, max_torque = self._collect_agility_specs(specs)
 
         # Outline planning horizon interval
-        planning_horizon = Interval(state.get_time(), state.get_time() + self._horizon)
+        planning_horizon = Interval(t_curr, t_curr + self._horizon)
 
         # get only available tasks
         available_tasks : list[GenericObservationTask] = self.get_available_tasks(tasks, planning_horizon)
@@ -149,10 +152,10 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         maneuvers : list = self._schedule_maneuvers(state, specs, observations, orbitdata)
         
         # wait for next planning period to start
-        replan : list = self._schedule_periodic_replan(state, state.get_time()+self._period)
+        replan : list = self._schedule_periodic_replan(state, t_curr + self._period)
         
         # generate plan from actions
-        self._plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, replan, t=state.get_time(), horizon=self._horizon, t_next=state.get_time()+self._period)    
+        self._plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, replan, t=t_curr, horizon=self._horizon, t_next=t_curr+self._period)    
 
         # return plan and save local copy
         return self._plan.copy()
