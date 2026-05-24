@@ -155,7 +155,7 @@ class AbstractPeriodicPlanner(AbstractPlanner):
         replan : list = self._schedule_periodic_replan(state, t_curr + self._period)
         
         # generate plan from actions
-        self._plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, replan, t=t_curr, horizon=self._horizon, t_next=t_curr+self._period)    
+        self._plan : PeriodicPlan = PeriodicPlan(observations, maneuvers, broadcasts, replan, t=t_curr, horizon=self._horizon, t_next=t_curr + self._period)    
 
         # return plan and save local copy
         return self._plan.copy()
