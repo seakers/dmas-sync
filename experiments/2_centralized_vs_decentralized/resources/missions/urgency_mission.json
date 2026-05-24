@@ -30,8 +30,8 @@
                             "req_type": "performance",
                             "attribute": "n_obs",
                             "strategy": "diminishing_returns",
-                            "half_life": 3.0
-                        },                        
+                            "half_life": 2.0
+                        },                       
                        
                         {
                             "req_type": "performance",
