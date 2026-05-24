@@ -724,6 +724,8 @@ class ResultsProcessor:
         agent_arrays = []   # list of {col: np.ndarray}, one entry per non-empty agent
         all_cols = []       # ordered union of all columns seen across agents
 
+        empty_agent_accesses = []
+
         for agent_orbit_data in compiled_orbitdata.values():
             # get access data for this agent
             access = agent_orbit_data.gp_access_data.lookup_interval(
@@ -735,6 +737,8 @@ class ResultsProcessor:
             # check if access data is empty
             t = access.get("time [s]", None)
             if t is None or len(t) == 0:
+                if "GS" not in agent_orbit_data.agent_name and "tdrss" not in agent_orbit_data.agent_name:
+                    empty_agent_accesses.append(agent_orbit_data.agent_name)
                 continue
 
             agent_arr = {c: np.asarray(v) for c, v in access.items()}
@@ -744,6 +748,13 @@ class ResultsProcessor:
             for c in agent_arr:
                 if c not in all_cols:
                     all_cols.append(c)
+
+        if printouts: 
+            warning_out = f'[results processor] Warning: No access data found for agents:'
+            for agent_name in empty_agent_accesses:
+                warning_out += f'\n  - {agent_name}'
+            if empty_agent_accesses:
+                tqdm.write(warning_out)
 
         # check if any access data was found
         if not agent_arrays:
@@ -809,7 +820,7 @@ class ResultsProcessor:
             # apply permutation to every column
             for col in data:
                 data[col] = data[col][order]
-
+                
         # return final output
         return out
 
@@ -838,19 +849,17 @@ class ResultsProcessor:
         accesses_per_event = dict()
 
         # pre-build instrument capability requirement by event type (avoid rebuilding per event)
-        cap_req_by_event_type: Dict[str, object] = {}
+        cap_req_by_event_type: Dict[str, set] = {}
         for event_type_key in {e.event_type.lower() for e in events}:
+            reqs: dict = dict()
             for agent_name, mission in agent_missions.items():
                 for objective in mission:
                     if (isinstance(objective, EventDrivenObjective)
-                            and objective.event_type.lower() == event_type_key
-                            and event_type_key not in cap_req_by_event_type):
-                        cap_reqs = [req for req in objective
+                            and objective.event_type.lower() == event_type_key):
+                        reqs.update({req.id : req for req in objective
                                     if isinstance(req, CapabilityRequirement)
-                                    and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
-                        cap_req_by_event_type[event_type_key] = cap_reqs[0] if cap_reqs else None
-            if event_type_key not in cap_req_by_event_type:
-                cap_req_by_event_type[event_type_key] = None
+                                    and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value})
+            cap_req_by_event_type[event_type_key] = list(reqs.values())
 
         # look for accesses to each event for each agent
         for event in tqdm(events,
@@ -863,21 +872,21 @@ class ResultsProcessor:
             event_gp_idx = int(event_gp_idx)
             event_type = event.event_type.lower()
 
-            cap_req = cap_req_by_event_type.get(event_type, None)
+            cap_reqs = cap_req_by_event_type.get(event_type, [])
 
             # get matching accesses for this location
             location_key = (event_grid_idx, event_gp_idx)
             location_access : Dict[str, np.ndarray] = accesses_per_gp.get(location_key, None)
-            
+
             # check if there are any accesses for this location
             if location_access is None: continue # no accesses found; skip
-            
+
             # unpack access information
             t = location_access["time [s]"]
             agent = location_access["agent name"]
             instr = location_access["instrument"]
-            
-            # filter data that exists within the task's availability window and matches instrument capability requirements            
+
+            # filter data that exists within the task's availability window and matches instrument capability requirements
             availability_mask = (
                 (t >= event.availability.left) &
                 (t <= event.availability.right)
@@ -885,11 +894,12 @@ class ResultsProcessor:
 
             idx = np.nonzero(availability_mask)[0]
 
-            # Build compatibility mask only over the narrowed slice
-            if cap_req is not None:
+            # instrument passes if it satisfies any of the event type's capability requirements
+            if cap_reqs:
                 compat = np.fromiter(
-                    (cap_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value,
-                                             str(instr[i]).lower()) >= 0.5
+                    (any(cap_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value,
+                                                 str(instr[i]).lower()) >= 0.5
+                         for cap_req in cap_reqs)
                      for i in idx),
                     dtype=bool, count=idx.size
                 )
@@ -1311,19 +1321,17 @@ class ResultsProcessor:
         observations_per_event_df_data = []
 
         # pre-build instrument capability requirement by event type (avoid rebuilding per event)
-        cap_req_by_event_type: Dict[str, object] = {}
+        cap_req_by_event_type: Dict[str, set] = {}
         for event_type_key in {e.event_type.lower() for e in events}:
+            reqs: dict = dict()
             for agent_name, mission in agent_missions.items():
                 for objective in mission:
                     if (isinstance(objective, EventDrivenObjective)
-                            and objective.event_type.lower() == event_type_key
-                            and event_type_key not in cap_req_by_event_type):
-                        cap_reqs = [req for req in objective
+                            and objective.event_type.lower() == event_type_key):
+                        reqs.update({req.id : req for req in objective
                                     if isinstance(req, CapabilityRequirement)
-                                    and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value]
-                        cap_req_by_event_type[event_type_key] = cap_reqs[0] if cap_reqs else None
-            if event_type_key not in cap_req_by_event_type:
-                cap_req_by_event_type[event_type_key] = None
+                                    and req.attribute == CapabilityRequirementAttributes.INSTRUMENT.value})
+            cap_req_by_event_type[event_type_key] = list(reqs.values())
 
         earliest_req_time: Dict[GeophysicalEvent, float] = {
             req.task.event: min([r.t_req for r in task_reqs 
@@ -1344,7 +1352,7 @@ class ResultsProcessor:
             event_gp_idx = int(event_gp_idx)
             event_type = event.event_type.lower()
 
-            cap_req = cap_req_by_event_type.get(event_type, None)
+            cap_reqs = cap_req_by_event_type.get(event_type, [])
 
             # get event observations for this event's location
             if (event_grid_idx, event_gp_idx) not in observations_per_gp:
@@ -1367,12 +1375,13 @@ class ResultsProcessor:
             )
             matching_observations = matching_observations[time_mask]
 
-            # find observations that match the event's instrument capability requirements
+            # find observations that match any of the event's instrument capability requirements
             inst_lower = matching_observations["instrument"].str.lower()
 
-            if cap_req is not None:
+            if cap_reqs:
                 instrument_mask = np.fromiter(
-                    (cap_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value, i) >= 0.5
+                    (any(cap_req.calc_preference(CapabilityRequirementAttributes.INSTRUMENT.value, i) >= 0.5
+                         for cap_req in cap_reqs)
                      for i in inst_lower),
                     dtype=bool, count=len(inst_lower)
                 )
@@ -1958,11 +1967,11 @@ class ResultsProcessor:
                     ['Events Fully Co-observable', n_events_co_observable_fully],
                     ['Events Fully Co-observed', n_events_fully_co_obs],
                     ['Events Tasked Fully Co-observed', n_events_co_obs_tasked_fully],
-                    ['Event Full Co-observations', n_total_event_fully_co_obs],
+                    # ['Event Full Co-observations', n_total_event_fully_co_obs], # TODO
                     ['Events Only Partially Co-observable', n_events_co_observable_partially],
                     ['Events Partially Co-observed', n_events_partially_co_obs],
                     ['Events Tasked Partially Co-observed', n_events_co_obs_tasked_partially],
-                    ['Event Partial Co-observations', n_total_event_partially_co_obs],
+                    # ['Event Partial Co-observations', n_total_event_partially_co_obs], # TODO
                     
                     ['Tasks Available', n_tasks],
                     ['Event-Driven Tasks Available', n_event_tasks],
@@ -2296,6 +2305,7 @@ class ResultsProcessor:
         events_co_observable = set()
         events_co_observable_fully = set()
         events_co_observable_partially = set()
+        best_co_obs_group = []
 
         # evaluate events co-observable based on accesses
         for event, observations in co_observation_acesses.items():
@@ -2333,6 +2343,8 @@ class ResultsProcessor:
                     events_co_observable_fully.add(event)
                 else:
                     events_co_observable_partially.add(event)
+
+                best_co_obs_group.append((event, best_params_in_group, set(event_to_required_observations[event].keys())))
 
         # classify observations
         possible_co_observations = defaultdict(list)
@@ -2376,7 +2388,7 @@ class ResultsProcessor:
             for i,(a,param) in enumerate(observations):
                 # get observations within the desired decorrelation time of the anchor
                 co_obs_group = [b for b in observations[i:]
-                                if b[0]['t_start'] <= a['t_end'] + t_corr]
+                                if b[0]['t_img'] <= a['t_img'] + t_corr]
 
                 params_in_group = {b[1] for b in co_obs_group}
                 tasked_params_in_group = {b[1] for b in co_obs_group 
