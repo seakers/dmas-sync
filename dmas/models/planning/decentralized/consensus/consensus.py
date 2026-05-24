@@ -1237,6 +1237,12 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
             # schedule periodic replan
             preplan_waits : list = self._schedule_periodic_replan(state, t_next)
+
+            # check for any action that may be scheduled to start at the same time as the replan action
+            for action in maneuvers + observations + broadcasts:    
+                if abs(action.t_start - preplan_waits[0].t_start) < 1e-6:
+                    action.t_start += 5e-3  # add small buffer to ensure replan action is executed first
+                    action.t_end += 5e-3
             
             # compile and generate plan
             self._plan = ReactivePlan(maneuvers, observations, broadcasts, preplan_waits, t=state.get_time(), t_next=t_next)
@@ -2149,7 +2155,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
     def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:
         """ Creates and schedules a waitForMessage action such that it triggers a periodic replan """
         # ensure next planning time is in the future
-        assert state.get_time() <= t_next, "Next planning time must be in the future."
+        assert state.get_time() <= t_next, \
+            "Next planning time must be in the future."
         # schedule wait action for next planning time
         return [WaitAction(t_next,t_next)] if not np.isinf(t_next) else []
 
