@@ -144,7 +144,8 @@ class AbstractPlanner(ABC):
 
             if t_start == t_end: 
                 t_end += orbitdata.time_step
-                interval = Interval(t_start, t_end, right_open=True)
+                # interval = Interval(t_start, t_end, right_open=True)
+                interval = Interval(t_start, t_end)
             else:
                 interval = Interval(t_start, t_end)
             
