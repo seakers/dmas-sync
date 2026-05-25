@@ -111,27 +111,41 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                            ) -> dict:
         """Build the co_obs dict for _estimate_task_value.
 
-        Returns {parameter: committed_t_img} for every partner instrument that
-        has already committed to observe the same event strictly before t_obs
-        and within self._co_obs_window seconds of t_obs.
+        Implements the coalition definition:
+          - Repeat: if any prior committed observation of the same parameter
+            type X exists within t_corr (t_prior < t_obs, t_obs - t_prior <=
+            t_corr), this observation adds no new coverage → returns {} (n_co=0).
+          - Not a repeat: returns {param_Y: t_prior} for each distinct partner
+            parameter type Y ≠ X that has at least one qualifying prior committed
+            bid.  n_co = len(co_obs) and r_co is computed by the mission.
 
-        Only backward-in-time partners are included: a bid at t_partner
-        qualifies iff t_partner < t_obs and (t_obs - t_partner) <= co_obs_window.
-        This means the first instrument to commit for an event sees no partners
-        (no prior observations exist yet) and receives no co-obs bonus.
-        Subsequent instruments accumulate partner context from earlier committed
-        bids.  This ordering ensures that modifying a later bid never
-        retroactively changes the evaluated value of an earlier committed bid.
-
-        If a partner parameter has multiple qualifying bids, the most recent
-        one (closest to t_obs) is kept.  Returns {} for non-event tasks or
-        tasks with no associated event.
+        Only backward-in-time prior observations qualify (t_prior < t_obs), so
+        the first instrument to commit for an event receives no co-obs bonus and
+        modifying a later bid never retroactively changes an earlier one.
+        The most-recent qualifying t_prior is kept per partner type.
+        Returns {} for non-event tasks or tasks with no associated event.
         """
         if not isinstance(task, EventObservationTask) or task.event is None:
             return {}
 
+        co_obs_window = self._co_obs_window_for(task)
+        event_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+
+        # Repeat check: if any prior committed observation of the same parameter
+        # type exists within the co-obs window, this observation adds no new
+        # parameter coverage → n_co = 0, return empty co_obs dict.
+        for same_param_task in event_tasks.get(task.parameter, []):
+            for bid in self._results.get(same_param_task, []):
+                if (bid.has_winner()
+                        and not bid.was_performed()
+                        and bid.t_img < t_obs
+                        and (t_obs - bid.t_img) <= co_obs_window):
+                    return {}
+
+        # Not a repeat: one entry per distinct partner parameter type Y ≠ X.
+        # Only existence matters; keep the most-recent qualifying t_prior per type.
         co_obs: Dict[str, float] = {}
-        for param, partner_tasks in self._event_to_tasks_by_instrument.get(task.event.id, {}).items():
+        for param, partner_tasks in event_tasks.items():
             if param == task.parameter:
                 continue
             for partner_task in partner_tasks:
@@ -139,9 +153,8 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                     if (bid.has_winner()
                             and not bid.was_performed()
                             and bid.t_img < t_obs
-                            and (t_obs - bid.t_img) <= self._co_obs_window_for(task)):
-                        if (param not in co_obs
-                                or bid.t_img > co_obs[param]):
+                            and (t_obs - bid.t_img) <= co_obs_window):
+                        if param not in co_obs or bid.t_img > co_obs[param]:
                             co_obs[param] = bid.t_img
         return co_obs
 
@@ -173,11 +186,26 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
 
                 t_img = bid.t_img
                 co_obs_window = self._co_obs_window_for(task)
+                event_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+
+                # Repeat check: same parameter type already committed before t_img
+                # within the window → n_co=0 regardless of partner bids; new partners
+                # cannot change the value, so skip release.
+                is_repeat = any(
+                    bid_same.has_winner()
+                    and not bid_same.was_performed()
+                    and bid_same.t_img < t_img
+                    and (t_img - bid_same.t_img) <= co_obs_window
+                    for same_param_task in event_tasks.get(task.parameter, [])
+                    for bid_same in self._results.get(same_param_task, [])
+                )
+                if is_repeat:
+                    continue
+
                 known_deps = self._coalition_deps.get((task, n_obs), set())
 
                 new_partner_found = False
-                for param, partner_tasks in \
-                        self._event_to_tasks_by_instrument.get(task.event.id, {}).items():
+                for param, partner_tasks in event_tasks.items():
                     if param == task.parameter:
                         continue
                     for partner_task in partner_tasks:

@@ -264,9 +264,24 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                         or bid.was_performed()):
                     continue
                 t_img = bid.t_img
+                co_obs_window = self._co_obs_window_for(task)
+                event_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+
+                # Repeat check: bid was evaluated with n_co=0 (same param type had
+                # a qualifying prior committed bid at planning time) → no co-obs deps.
+                is_repeat = any(
+                    pbid.has_winner()
+                    and not pbid.was_performed()
+                    and pbid.t_img < t_img
+                    and (t_img - pbid.t_img) <= co_obs_window
+                    for same_param_task in event_tasks.get(task.parameter, [])
+                    for pbid in self._results.get(same_param_task, [])
+                )
+                if is_repeat:
+                    continue
+
                 deps: Set[Tuple[GenericObservationTask, int]] = set()
-                for param, partner_tasks in \
-                        self._event_to_tasks_by_instrument.get(task.event.id, {}).items():
+                for param, partner_tasks in event_tasks.items():
                     if param == task.parameter:
                         continue
                     for partner_task in partner_tasks:
@@ -274,7 +289,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                             if (pbid.has_winner()
                                     and not pbid.was_performed()
                                     and pbid.t_img < t_img
-                                    and (t_img - pbid.t_img) <= self._co_obs_window_for(task)):
+                                    and (t_img - pbid.t_img) <= co_obs_window):
                                 deps.add((partner_task, p_n_obs))
                 if deps:
                     self._coalition_deps[(task, n_obs)] = deps
