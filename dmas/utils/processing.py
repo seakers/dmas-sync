@@ -190,18 +190,43 @@ class ResultsProcessor:
                 # get matching mission for observing agent
                 agent_mission : Mission = agent_missions[observing_agent]
 
-                # build co_obs dict: {parameter: latest_t_img} for partner instruments that
-                # observed the same event strictly before t_img and within the co-obs window
+                # # build co_obs dict: {parameter: latest_t_img} for partner instruments that
+                # # observed the same event strictly before t_img and within the co-obs window
+                # co_obs = {}
+                # if _co_req is not None:
+                #     _co_obs_window = float(_co_req.decorrelation_time)
+                #     for _param, _t_list in event_obs_index.get(task.event.id, {}).items():
+                #         if _param == task.parameter:
+                #             continue
+                #         _qualifying = [t for t in _t_list if t < t_img and (t_img - t) <= _co_obs_window]
+                #         if _qualifying:
+                #             co_obs[_param] = max(_qualifying)
+
+                # build co_obs dict: {parameter: earliest_t_img} for partner instruments that
+                # observed the same event strictly before t_img and within the co-obs window.
+                # A repeat observation (same parameter type already observed within t_corr)
+                # contributes no new information and receives an empty coalition (n_co=0).
                 co_obs = {}
                 if _co_req is not None:
                     _co_obs_window = float(_co_req.decorrelation_time)
-                    for _param, _t_list in event_obs_index.get(task.event.id, {}).items():
-                        if _param == task.parameter:
-                            continue
-                        _qualifying = [t for t in _t_list if t < t_img and (t_img - t) <= _co_obs_window]
-                        if _qualifying:
-                            co_obs[_param] = max(_qualifying)
 
+                    # check if current parameter has a prior observation within t_corr
+                    _prior_same_param_in_window = [
+                        t for t in event_obs_index.get(task.event.id, {}).get(task.parameter, [])
+                        if t < t_img and (t_img - t) <= _co_obs_window
+                    ]
+                    _is_repeat = len(_prior_same_param_in_window) > 0
+
+                    if not _is_repeat:
+                        # fresh observation: count distinct earlier partner types within window
+                        for _param, _t_list in event_obs_index.get(task.event.id, {}).items():
+                            if _param == task.parameter:
+                                continue
+                            _qualifying = [t for t in _t_list if t < t_img and (t_img - t) <= _co_obs_window]
+                            if _qualifying:
+                                co_obs[_param] = min(_qualifying)  # earliest occurrence of this partner type
+                    # if _is_repeat: co_obs stays empty -> n_co=0 -> r_co=floor
+                    
                 # augment task observation performance
                 measurement_performance = ResultsProcessor.__augment_observation_performance_metrics(
                     task, agent_specs[observing_agent], obs_perf, t_img, t_prev, d_img, n_obs,
