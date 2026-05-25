@@ -35,7 +35,7 @@
                         {
                             "req_type": "coordination",
                             "attribute": "co_observations",
-                            "decorrelation_time [s]": 600,
+                            "decorrelation_time [s]": 300,
                             "strategy": "sigmoid",
                             "slope" : 3.0,
                             "threshold": 1.0,
@@ -85,7 +85,7 @@
                         {
                             "req_type": "coordination",
                             "attribute": "co_observations",
-                            "decorrelation_time [s]": 600,
+                            "decorrelation_time [s]": 300,
                             "strategy": "sigmoid",
                             "slope" : 3.0,
                             "threshold": 1.0,
@@ -132,7 +132,7 @@
                         {
                             "req_type": "coordination",
                             "attribute": "co_observations",
-                            "decorrelation_time [s]": 600,
+                            "decorrelation_time [s]": 300,
                             "strategy": "sigmoid",
                             "slope" : 3.0,
                             "threshold": 1.0,
@@ -185,7 +185,7 @@
                         {
                             "req_type": "coordination",
                             "attribute": "co_observations",
-                            "decorrelation_time [s]": 600,
+                            "decorrelation_time [s]": 300,
                             "strategy": "sigmoid",
                             "slope" : 3.0,
                             "threshold": 1.0,
@@ -232,7 +232,7 @@
                         {
                             "req_type": "coordination",
                             "attribute": "co_observations",
-                            "decorrelation_time [s]": 600,
+                            "decorrelation_time [s]": 300,
                             "strategy": "sigmoid",
                             "slope" : 3.0,
                             "threshold": 1.0,
@@ -284,7 +284,7 @@
                         {
                             "req_type": "coordination",
                             "attribute": "co_observations",
-                            "decorrelation_time [s]": 600,
+                            "decorrelation_time [s]": 300,
                             "strategy": "sigmoid",
                             "slope" : 3.0,
                             "threshold": 1.0,
@@ -333,7 +333,7 @@
                         {
                             "req_type": "coordination",
                             "attribute": "co_observations",
-                            "decorrelation_time [s]": 600,
+                            "decorrelation_time [s]": 300,
                             "strategy": "sigmoid",
                             "slope" : 3.0,
                             "threshold": 1.0,
@@ -386,7 +386,7 @@
                         {
                             "req_type": "coordination",
                             "attribute": "co_observations",
-                            "decorrelation_time [s]": 600,
+                            "decorrelation_time [s]": 300,
                             "strategy": "sigmoid",
                             "slope" : 3.0,
                             "threshold": 1.0,
