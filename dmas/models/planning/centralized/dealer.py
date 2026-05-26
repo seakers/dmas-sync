@@ -19,7 +19,7 @@ from dmas.models.planning.plan import Plan, PeriodicPlan
 from dmas.models.planning.periodic import AbstractPeriodicPlanner
 from dmas.models.trackers import TaskObservationTracker
 from dmas.models.states import SatelliteAgentState, SimulationAgentState
-from dmas.core.messages import  AgentStateMessage, PlanMessage
+from dmas.core.messages import  AgentStateMessage, BusMessage, PlanMessage
 from dmas.utils.orbitdata import OrbitData
 from dmas.utils.series import TargetGridTable
 
@@ -149,7 +149,6 @@ class DealerPlanner(AbstractPeriodicPlanner):
         agent_state_messages : list[AgentStateMessage] = [msg for msg in misc_messages 
                                                           if isinstance(msg, AgentStateMessage)
                                                           and msg.src in self.client_states]
-        
         # NOTE consider plan messages from clients?
 
         # TODO update observation history if needed
@@ -690,7 +689,7 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
                     # add to client broadcast list
                     # client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
-                    client_broadcasts[client].extend([task_requests_msg])
+                    client_broadcasts[client].extend([state_msg, task_requests_msg])
 
             elif self._sharing == self.GROUND_BASED:
                 # get access intervals with the client agent within the planning horizon
@@ -720,12 +719,9 @@ class DealerPlanner(AbstractPeriodicPlanner):
 
                     # add to client broadcast list
                     # client_broadcasts[client].extend([state_msg, observations_msg, task_requests_msg])
-                    client_broadcasts[client].extend([task_requests_msg])
+                    client_broadcasts[client].extend([state_msg, task_requests_msg])
 
             elif self._sharing == self.PERIODIC:
-                # determine current time        
-                t_curr : float  = state._t
-
                 # determine number of periods within the planning horizon
                 n_periods = int(self._horizon // self._period)
 
@@ -816,9 +812,6 @@ class DealerPlanner(AbstractPeriodicPlanner):
                 broadcasts.append(plan_broadcast)
 
             elif self._sharing == self.PERIODIC:
-                # determine current time        
-                t_curr : float  = state._t 
-
                 # determine number of periods within the planning horizon
                 n_periods = int(self._horizon // self._period)
 
@@ -850,6 +843,22 @@ class DealerPlanner(AbstractPeriodicPlanner):
     def _schedule_observations(self, *_) -> list:
         """ Boilerplate method for scheduling observations for dealer agent. """
         return [] # dealer does not schedule its own observations, only its clients'
+    
+    def _schedule_periodic_replan(self, state : SimulationAgentState, t_next : float) -> list:
+        """
+        Creates a broadcast action that serves as a wait until the next planning time, 
+        ensuring the dealer replans at the specified period while allowing other agents to 
+        broadcast their states right before the next planning time. 
+        
+        This is necessary to prevent the dealer's state from drifting too far from the clients' 
+        states due to lack of updates, which can cause errors in maneuver execution.
+        """    
+        # ensure next planning time is in the future
+        assert state.get_time() <= t_next, "Next planning time must be in the future."
+        # schedule empty broadcast action for next planning time
+        blank_bus = BusMessage(state.agent_name, state.agent_name, [])
+        return [BroadcastMessageAction(blank_bus, t_next)]
+
 
 class TestingDealer(DealerPlanner):
     """
