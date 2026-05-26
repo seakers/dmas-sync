@@ -464,6 +464,7 @@ class SimulationAgent(object):
                 reward_grid_msgs.append(msg)
             elif mt == _AGENT_STATE and msg.src != _my_name:
                 external_states.append(msg)
+                misc_messages.append(msg) # TODO <- change how external states are passed to agents
             elif mt == _AGENT_ACTION:
                 external_action_statuses.append(msg)
             else:
