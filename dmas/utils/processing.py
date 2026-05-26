@@ -222,10 +222,13 @@ class ResultsProcessor:
                         for _param, _t_list in event_obs_index.get(task.event.id, {}).items():
                             if _param == task.parameter:
                                 continue
-                            _qualifying = [t for t in _t_list if t < t_img and (t_img - t) <= _co_obs_window]
+                            _qualifying = [t for t in _t_list if t <= t_img and (t_img - t) <= _co_obs_window]
                             if _qualifying:
                                 co_obs[_param] = min(_qualifying)  # earliest occurrence of this partner type
-                    # if _is_repeat: co_obs stays empty -> n_co=0 -> r_co=floor
+                    else:
+                        # if _is_repeat: co_obs stays empty -> n_co=NONE -> r_co=floor * (1-penalty)
+                        # if printouts: tqdm.write("[results processor] Detected coalition repeat observation for task {}, parameter {} at time {:.1f}s and n_obs={}. Marking as co-observation with n_co=`None`.".format(task.id, task.parameter, t_img, n_obs))
+                        co_obs = None
                     
                 # augment task observation performance
                 measurement_performance = ResultsProcessor.__augment_observation_performance_metrics(
@@ -1607,6 +1610,9 @@ class ResultsProcessor:
                     # skip to next event if no matching observations found
                     continue
 
+                # filter to only observations targeting this specific task's parameter
+                matching_observations = matching_observations[matching_observations["parameter"] == task.parameter]
+
                 # Response times (all remaining observations are tasked after the filter above)
                 matching_observations["resp time [s]"] = matching_observations["t_start"] - task.availability.left
                 matching_observations["resp time [norm]"] = matching_observations["resp time [s]"] / task.availability.span()
@@ -1619,7 +1625,7 @@ class ResultsProcessor:
 
                 prev_row = None
                 for n_obs,row in enumerate(matching_observations):
-                    t_rev = row['t_start'] - prev_row['t_start'] if prev_row is not None else np.Inf
+                    t_rev = row['t_img'] - prev_row['t_img'] if prev_row is not None else np.Inf
                     
                     task_observations_df_data.append({
                         'task id' : task.id,
@@ -3320,8 +3326,8 @@ class ResultsProcessor:
     @staticmethod
     def __calculate_task_priorities(accesses_per_task: Dict[GenericObservationTask, List]) -> Tuple:
         total_task_priority = sum([task.priority for task in accesses_per_task.keys()])
-        total_observable_task_priority = sum([task.priority*int(len(accesses) > 0) for task,accesses in accesses_per_task.items()])
-        # total_observable_task_priority = sum([task.priority*len(accesses) for task,accesses in accesses_per_task.items()])
+        # total_observable_task_priority = sum([task.priority*int(len(accesses) > 0) for task,accesses in accesses_per_task.items()])
+        total_observable_task_priority = sum([task.priority*len(accesses) for task,accesses in accesses_per_task.items()])
         
         return total_task_priority, total_observable_task_priority
 
@@ -4052,7 +4058,7 @@ class ResultsProcessor:
             SpatialCoverageRequirementAttributes.LOCATION.value : [loc],
             TemporalRequirementAttributes.DURATION.value : d_img,
             TemporalRequirementAttributes.REVISIT_TIME.value : t_img - t_prev,
-            TemporalRequirementAttributes.CO_OBSERVATIONS.value : co_obs if co_obs is not None else dict(),
+            TemporalRequirementAttributes.CO_OBSERVATIONS.value : co_obs, # if co_obs is not None else dict(),
             TemporalRequirementAttributes.RESPONSE_TIME.value : t_img - task.availability.left,
             TemporalRequirementAttributes.RESPONSE_TIME_NORM.value : (t_img - task.availability.left) / task.availability.span() if task.availability.span() > 0 else 0.0,
             TemporalRequirementAttributes.OBS_TIME.value : t_img,
