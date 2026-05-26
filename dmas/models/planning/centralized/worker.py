@@ -1,4 +1,4 @@
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
 from execsatm.tasks import GenericObservationTask, Interval
 from tqdm import tqdm
@@ -63,7 +63,10 @@ class WorkerPlanner(AbstractPeriodicPlanner):
         # return self.plan_message is not None
         return self._new_plan_received
 
-    def generate_plan(self, state : SimulationAgentState, *_) -> Plan:
+    def generate_plan(self, state : SimulationAgentState, specs : object, orbitdata : object, *_) -> Plan:
+        # get current simulation time
+        t_curr = state.get_time()
+        
         # get actions from latest plan message
         planner_actions : list[AgentAction] = []
         for action in self.plan_message.plan:
@@ -73,9 +76,28 @@ class WorkerPlanner(AbstractPeriodicPlanner):
                 planner_actions.append(action)
             else:
                 raise ValueError(f"Unrecognized action format in plan message: {action}")
-        
+
         # only keep actions that start after the current time
-        actions = [action for action in planner_actions if action.t_start >= state._t]
+        actions = [action for action in planner_actions if action.t_start >= t_curr]
+
+        # separate observations from maneuvers and other actions
+        # maneuvers are discarded — they will be reconstructed from the actual current state
+        observations : List[ObservationAction] = sorted(
+            [a for a in actions if isinstance(a, ObservationAction)],
+            key=lambda a: a.t_start,
+        )
+        other_actions : List[AgentAction] = [
+            a for a in actions if not isinstance(a, (ObservationAction, ManeuverAction))
+        ]
+
+        # validate observation sequence against actual current state and prune if infeasible
+        valid_observations = self._validate_and_prune_observations(state, specs, observations)
+
+        # reconstruct maneuvers from the actual current state for the pruned observation set
+        try:
+            maneuvers = self._schedule_maneuvers(state, specs, valid_observations, orbitdata)
+        except (ValueError, NotImplementedError):
+            maneuvers = []
 
         # if the satellite is mid-maneuver at plan receipt, insert a zero-duration
         # stop ManeuverAction so the execution engine resets attitude_rates to zero
@@ -87,13 +109,13 @@ class WorkerPlanner(AbstractPeriodicPlanner):
                 list(state.attitude),
                 list(state.attitude),
                 [0.0, 0.0, 0.0],
-                state._t,
-                state._t,
+                t_curr,
+                t_curr+1e-5,  # add a tiny epsilon to ensure t_end > t_start for execution engine
             )
-            actions.insert(0, stop)
+            maneuvers.insert(0, stop)
 
-        # create a plan from plan message actions
-        self._plan = PeriodicPlan(actions, t=self.plan_message.t_plan)
+        # create a plan from validated, maneuver-corrected actions
+        self._plan = PeriodicPlan(valid_observations, maneuvers, other_actions, t=self.plan_message.t_plan)
 
         # # remove the plan message after processing
         # del self.plan_message
@@ -119,11 +141,40 @@ class WorkerPlanner(AbstractPeriodicPlanner):
         return self._plan.copy()
         
 
+    def _validate_and_prune_observations(
+        self,
+        state : SimulationAgentState,
+        specs : object,
+        observations : List[ObservationAction],
+    ) -> List[ObservationAction]:
+        """
+        Validates the observation sequence against the actual current satellite state.
+
+        If the sequence is infeasible, the EARLIEST observation is dropped and the
+        sequence is re-validated from the current state. This repeats until the remaining
+        sequence is fully feasible or no observations remain.
+
+        Dropping the earliest observation (rather than the failing one) is intentional:
+        when dead-reckoning drift puts the satellite behind schedule, the first observation
+        is usually what creates the cascade of infeasibility for the rest of the sequence.
+        """
+        valid_obs = list(observations)
+
+        while valid_obs:
+            try:
+                if self.is_observation_path_valid(state, valid_obs, specs=specs):
+                    break
+            except NotImplementedError:
+                break  # non-satellite agent; skip validation
+            valid_obs.pop(0)
+
+        return valid_obs
+
     def _schedule_observations(self, *_):
         """ Boilerplate method for scheduling observations."""
         # does not schedule observations for worker agent
         return []
-    
+
     def _schedule_broadcasts(self, *_):
         """ Boilerplate method for scheduling broadcasts."""
         # does not schedule broadcasts for worker agent
