@@ -4582,6 +4582,9 @@ class ResultsProcessor:
 
                     # merge all tasks in the clique into a single task p
                     # p = p.merge(q, must_overlap=must_overlap, max_duration=threshold)  # max duration of 5 minutes
+                    if not p.can_merge(q, must_overlap=must_overlap):
+                        continue
+                    
                     p = p.merge(q, must_overlap=must_overlap)
 
                     # update progress bar
