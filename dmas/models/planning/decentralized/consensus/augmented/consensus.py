@@ -34,7 +34,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
           incrementally as tasks enter the event index and cleaned up when
           they expire.  Look up via _co_obs_window_for(task).
 
-      _event_to_tasks_by_instrument : event_id → parameter → [task]
+      _event_to_tasks_by_parameter : event_id → parameter → [task]
           Index rebuilt after each consensus round when the task registry
           changes.  Used during bundle-building to find partner tasks and
           during the coalition-dependency check.
@@ -68,7 +68,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         self._co_obs_windows: Dict[str, float] = {}
 
         # event_id -> parameter -> List[EventObservationTask]
-        self._event_to_tasks_by_instrument: Dict[str, Dict[str, List[EventObservationTask]]] = \
+        self._event_to_tasks_by_parameter: Dict[str, Dict[str, List[EventObservationTask]]] = \
             defaultdict(lambda: defaultdict(list))
 
         # (task, n_obs) -> set of (partner_task, partner_n_obs) whose bids
@@ -194,8 +194,9 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                     to_invalidate.append((task, n_obs))
                     break
                 partner_bid = self._results[partner_task][partner_n_obs]
+                # A performed partner bid is a STRONGER commitment than a committed one
+                # (it cannot be reset or stolen), so it is always still_valid if timing holds.
                 still_valid = (partner_bid.has_winner()
-                               and not partner_bid.was_performed()
                                and partner_bid.t_img < bid.t_img
                                and (bid.t_img - partner_bid.t_img) <= self._co_obs_window_for(task))
                 if not still_valid:
@@ -265,13 +266,12 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                     continue
                 t_img = bid.t_img
                 co_obs_window = self._co_obs_window_for(task)
-                event_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+                event_tasks = self._event_to_tasks_by_parameter.get(task.event.id, {})
 
-                # Repeat check: bid was evaluated with n_co=0 (same param type had
-                # a qualifying prior committed bid at planning time) → no co-obs deps.
+                # Repeat check: same param type had a qualifying prior bid at planning time
+                # (committed or performed) → n_co=0, no coalition deps to record.
                 is_repeat = any(
                     pbid.has_winner()
-                    and not pbid.was_performed()
                     and pbid.t_img < t_img
                     and (t_img - pbid.t_img) <= co_obs_window
                     for same_param_task in event_tasks.get(task.parameter, [])
@@ -286,8 +286,10 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                         continue
                     for partner_task in partner_tasks:
                         for p_n_obs, pbid in enumerate(self._results.get(partner_task, [])):
+                            # Include performed partner bids: a performed observation is a
+                            # confirmed co-obs partner and must persist in _coalition_deps so
+                            # _check_co_obs_constraints does not invalidate B's bid when A performs.
                             if (pbid.has_winner()
-                                    and not pbid.was_performed()
                                     and pbid.t_img < t_img
                                     and (t_img - pbid.t_img) <= co_obs_window):
                                 deps.add((partner_task, p_n_obs))
@@ -339,7 +341,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
             self._co_obs_windows.pop(task.id, None)
             if not isinstance(task, EventObservationTask) or task.event is None:
                 continue
-            param_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+            param_tasks = self._event_to_tasks_by_parameter.get(task.event.id, {})
             bucket = param_tasks.get(task.parameter)
             if bucket is None:
                 continue
@@ -350,7 +352,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
             if not bucket:
                 param_tasks.pop(task.parameter, None)
             if not param_tasks:
-                self._event_to_tasks_by_instrument.pop(task.event.id, None)
+                self._event_to_tasks_by_parameter.pop(task.event.id, None)
 
     def _update_event_index(self, task_updates: list) -> None:
         """Incrementally insert newly announced EventObservationTasks into the index.
@@ -366,25 +368,25 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
             if window is not None:
                 self._co_obs_windows[task.id] = window
             if isinstance(task, EventObservationTask) and task.event is not None:
-                param_list = self._event_to_tasks_by_instrument[task.event.id][task.parameter]
+                param_list = self._event_to_tasks_by_parameter[task.event.id][task.parameter]
                 if task not in param_list:
                     param_list.append(task)
 
     def _rebuild_event_index(self) -> None:
-        """Rebuild the event-instrument index from the current results table.
+        """Rebuild the event-parameter index from the current results table.
 
-        Clears and repopulates _event_to_tasks_by_instrument so it reflects
+        Clears and repopulates _event_to_tasks_by_parameter so it reflects
         exactly the EventObservationTasks that are currently tracked in
         self._results. Called automatically after each consensus round.
         """
-        self._event_to_tasks_by_instrument.clear()
+        self._event_to_tasks_by_parameter.clear()
         self._co_obs_windows.clear()
         for task in self._results:
             window = self._extract_co_obs_window(task)
             if window is not None:
                 self._co_obs_windows[task.id] = window
             if isinstance(task, EventObservationTask) and task.event is not None:
-                self._event_to_tasks_by_instrument[task.event.id][task.parameter].append(task)
+                self._event_to_tasks_by_parameter[task.event.id][task.parameter].append(task)
 
     # ------------------------------------------------------------------
     # CO-OBS HELPERS (available to subclasses during bundle-building)
@@ -408,13 +410,13 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         if not isinstance(task, EventObservationTask) or task.event is None:
             return []
         partners = []
-        for param, partner_tasks in self._event_to_tasks_by_instrument.get(task.event.id, {}).items():
+        for param, partner_tasks in self._event_to_tasks_by_parameter.get(task.event.id, {}).items():
             if param == task.parameter:
                 continue
             for partner_task in partner_tasks:
                 for bid in self._results.get(partner_task, []):
                     if (bid.has_winner()
-                            and not bid.was_performed()
+                            # and not bid.was_performed()
                             and bid.t_img < t_img
                             and (t_img - bid.t_img) <= co_obs_window):
                         partners.append(bid)

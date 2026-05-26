@@ -5,6 +5,7 @@ from execsatm.tasks import EventObservationTask, GenericObservationTask
 from execsatm.observations import ObservationOpportunity
 from execsatm.mission import Mission
 
+from dmas.models.actions import ObservationAction
 from dmas.models.planning.decentralized.consensus.heuristic import HeuristicInsertionConsensusPlanner
 from dmas.models.planning.decentralized.consensus.augmented.consensus import AugmentedConsensusPlanner
 from dmas.models.states import SimulationAgentState
@@ -78,6 +79,14 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                          debug, logger, printouts,
                          co_obs_window=co_obs_window, **kwargs)
 
+        # (task, n_obs) → Set[(partner_task, p_n_obs)] of ALL partner bids whose
+        # co-obs window overlaps with the task's access window at the last planning
+        # phase.  Superset of _coalition_deps: includes partners that were considered
+        # but did not shift t_img.  Used by _release_stale_bundle_items to avoid
+        # re-triggering re-evaluations for partners the agent already decided to
+        # ignore (preventing infinite re-evaluation loops).
+        self._reachable_partners: Dict = {}
+
     def _estimate_task_value(self,
                               task: GenericObservationTask,
                               instrument_name: str,
@@ -98,7 +107,7 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
         injects it into the measurement performance dict for
         mission.calc_task_value to evaluate.
         """
-        co_obs = self._build_co_obs_dict(task, t_img)
+        co_obs = self._build_co_obs_dict(task, t_img)    
         return super()._estimate_task_value(
             task, instrument_name, th_img, t_img, d_img,
             specs, cross_track_fovs, orbitdata, mission,
@@ -107,19 +116,19 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
 
     def _build_co_obs_dict(self,
                             task: GenericObservationTask,
-                            t_obs: float
+                            t_img: float
                            ) -> dict:
         """Build the co_obs dict for _estimate_task_value.
 
         Implements the coalition definition:
           - Repeat: if any prior committed observation of the same parameter
-            type X exists within t_corr (t_prior < t_obs, t_obs - t_prior <=
+            type X exists within t_corr (t_prior < t_img, t_img - t_prior <=
             t_corr), this observation adds no new coverage → returns {} (n_co=0).
           - Not a repeat: returns {param_Y: t_prior} for each distinct partner
             parameter type Y ≠ X that has at least one qualifying prior committed
             bid.  n_co = len(co_obs) and r_co is computed by the mission.
 
-        Only backward-in-time prior observations qualify (t_prior < t_obs), so
+        Only backward-in-time prior observations qualify (t_prior < t_img), so
         the first instrument to commit for an event receives no co-obs bonus and
         modifying a later bid never retroactively changes an earlier one.
         The most-recent qualifying t_prior is kept per partner type.
@@ -129,7 +138,7 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
             return {}
 
         co_obs_window = self._co_obs_window_for(task)
-        event_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+        event_tasks = self._event_to_tasks_by_parameter.get(task.event.id, {})
 
         # Repeat check: if any prior committed observation of the same parameter
         # type exists within the co-obs window, this observation adds no new
@@ -137,9 +146,8 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
         for same_param_task in event_tasks.get(task.parameter, []):
             for bid in self._results.get(same_param_task, []):
                 if (bid.has_winner()
-                        and not bid.was_performed()
-                        and bid.t_img < t_obs
-                        and (t_obs - bid.t_img) <= co_obs_window):
+                        and bid.t_img < t_img
+                        and (t_img - bid.t_img) <= co_obs_window):
                     return {}
 
         # Not a repeat: one entry per distinct partner parameter type Y ≠ X.
@@ -151,26 +159,86 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
             for partner_task in partner_tasks:
                 for bid in self._results.get(partner_task, []):
                     if (bid.has_winner()
-                            and not bid.was_performed()
-                            and bid.t_img < t_obs
-                            and (t_obs - bid.t_img) <= co_obs_window):
-                        if param not in co_obs or bid.t_img > co_obs[param]:
+                            and bid.t_img < t_img
+                            and (t_img - bid.t_img) <= co_obs_window):
+                        if param not in co_obs or bid.t_img < co_obs[param]:
                             co_obs[param] = bid.t_img
         return co_obs
+
+    # ------------------------------------------------------------------
+    # COALITION DEP REBUILD — extended with reachable-partner tracking
+    # ------------------------------------------------------------------
+
+    def _rebuild_coalition_deps(self, state: SimulationAgentState) -> None:
+        """Rebuild coalition deps then populate _reachable_partners.
+
+        Calls the base _rebuild_coalition_deps to record actual co-obs deps
+        (partners within co_obs_window of the committed t_img), then iterates
+        _bundle to record ALL geometrically reachable partners per bundle entry.
+        _release_stale_bundle_items checks against the union of both sets so
+        that partners already evaluated-but-rejected don't trigger infinite
+        re-evaluation loops.
+        """
+        super()._rebuild_coalition_deps(state)
+        self._rebuild_reachable_partners()
+
+    def _rebuild_reachable_partners(self) -> None:
+        """Populate _reachable_partners from the current _bundle state.
+
+        For each owned bundle entry (task, n_obs), records all partner bids
+        whose co-obs window [t_partner, t_partner + co_obs_window] overlaps
+        with the task's access window [t_access_l, t_access_u].  This superset
+        of _coalition_deps is used by _release_stale_bundle_items to skip
+        partners that were already evaluated at the last planning phase.
+        """
+        self._reachable_partners.clear()
+        for obs_opp, task_dict in self._bundle:
+            for task, n_obs in task_dict.items():
+                if not isinstance(task, EventObservationTask) or task.event is None:
+                    continue
+                if n_obs >= len(self._results.get(task, [])):
+                    continue
+                bid = self._results[task][n_obs]
+                if not bid.has_winner():
+                    continue
+
+                t_access = obs_opp.task_accessibility.get(task.id)
+                if t_access is None:
+                    continue
+                t_access_l = t_access.left
+                t_access_u = t_access.right
+                co_obs_window = self._co_obs_window_for(task)
+                event_tasks = self._event_to_tasks_by_parameter.get(task.event.id, {})
+
+                reachable: Set = set()
+                for param, partner_tasks in event_tasks.items():
+                    if param == task.parameter:
+                        continue
+                    for partner_task in partner_tasks:
+                        for p_n_obs, pbid in enumerate(self._results.get(partner_task, [])):
+                            if (pbid.has_winner()
+                                    # and not pbid.was_performed()
+                                    and pbid.t_img + co_obs_window > t_access_l
+                                    and pbid.t_img < t_access_u):
+                                reachable.add((partner_task, p_n_obs))
+
+                if reachable:
+                    self._reachable_partners[(task, n_obs)] = reachable
 
     def _release_stale_bundle_items(self, state: SimulationAgentState) -> list:
         """Release bundle items whose co-obs context has improved since last planning.
 
         After consensus updates _results, scans _bundle for EventObservationTask entries
-        won by this agent that now have qualifying co-obs partner bids which weren't
-        present when _coalition_deps was last built. Removes their ObservationOpportunity
-        from _bundle and _path so the planning phase re-evaluates them with the updated
-        co-obs context (via _build_co_obs_dict) and raises the bid to capture the bonus.
+        won by this agent that now have geometrically-reachable co-obs partner bids which
+        weren't present when _coalition_deps / _reachable_partners were last built.
+        Removes their ObservationOpportunity from _bundle and _path and resets the
+        winning bid so the planning phase re-evaluates and may commit a co-obs-adjusted
+        time and raised bid value.
 
-        The backward-time asymmetry (only partners strictly before t_img qualify) means
-        only the later observer re-evaluates, bounding cascade depth to one direction.
-        No bid is reset — the agent retains its current winning bid until the planning
-        phase produces a higher one.
+        The trigger uses the access window ([t_access_l, t_access_u]) so that partners
+        requiring a time shift are detected, not only partners already within co_obs_window
+        of the committed t_img.  _reachable_partners prevents infinite re-evaluation loops
+        for partners the agent already considered-but-rejected at the last planning phase.
         """
         obs_opps_to_release: Set[ObservationOpportunity] = set()
 
@@ -186,14 +254,23 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
 
                 t_img = bid.t_img
                 co_obs_window = self._co_obs_window_for(task)
-                event_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+                event_tasks = self._event_to_tasks_by_parameter.get(task.event.id, {})
 
-                # Repeat check: same parameter type already committed before t_img
-                # within the window → n_co=0 regardless of partner bids; new partners
-                # cannot change the value, so skip release.
+                # Access window for this task within this obs_opp — used to decide
+                # whether a partner bid is geometrically reachable for co-obs, independent
+                # of where t_img currently sits.
+                t_access = obs_opp.task_accessibility.get(task.id)
+                if t_access is None:
+                    continue
+                t_access_l = t_access.left
+                t_access_u = t_access.right
+
+                # Repeat check: same parameter type already committed strictly before
+                # t_img within the window → n_co=0; new partners cannot help.
+                # Repeat check: same parameter type committed/performed strictly before
+                # t_img within the window → n_co=0; new partners cannot help.
                 is_repeat = any(
                     bid_same.has_winner()
-                    and not bid_same.was_performed()
                     and bid_same.t_img < t_img
                     and (t_img - bid_same.t_img) <= co_obs_window
                     for same_param_task in event_tasks.get(task.parameter, [])
@@ -202,7 +279,14 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                 if is_repeat:
                     continue
 
-                known_deps = self._coalition_deps.get((task, n_obs), set())
+                # Partners already seen at the last planning phase — union of actual
+                # coalition deps and all geometrically-reachable partners.  Checking
+                # against both prevents re-triggering for partners the agent already
+                # evaluated-but-rejected (i.e., co-obs bonus wasn't worth shifting for).
+                already_considered = (
+                    self._coalition_deps.get((task, n_obs), set())
+                    | self._reachable_partners.get((task, n_obs), set())
+                )
 
                 new_partner_found = False
                 for param, partner_tasks in event_tasks.items():
@@ -210,11 +294,14 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                         continue
                     for partner_task in partner_tasks:
                         for p_n_obs, pbid in enumerate(self._results.get(partner_task, [])):
+                            # A partner bid (committed or performed) qualifies if its
+                            # co-obs window overlaps with our access window.  Performed
+                            # bids are included: a performed observation is a confirmed
+                            # partner and may be a first-time arrival via propagation.
                             if (pbid.has_winner()
-                                    and not pbid.was_performed()
-                                    and pbid.t_img < t_img
-                                    and (t_img - pbid.t_img) <= co_obs_window
-                                    and (partner_task, p_n_obs) not in known_deps):
+                                    and pbid.t_img + co_obs_window > t_access_l
+                                    and pbid.t_img < t_access_u
+                                    and (partner_task, p_n_obs) not in already_considered):
                                 new_partner_found = True
                                 break
                         if new_partner_found:
@@ -254,3 +341,193 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
 
         # released bids
         return [bid for _, _, bid in released_info]
+    
+    def _find_best_imaging_time(self, task, instrument_name, th_img, t_img_l, t_img_u,
+                             duration, specs, cross_track_fovs, orbitdata, mission,
+                             n_obs, t_prev, n_grid=7, tol=1.0):
+        """Override to inject partner bid times as candidate evaluation points."""
+        co_obs_window = self._co_obs_window_for(task)
+        is_event_task = co_obs_window > 0 and isinstance(task, EventObservationTask) and task.event is not None
+
+        # collect partner t_img values to avoid in the base search
+        partner_t_imgs = set()
+        if is_event_task:
+            event_tasks = self._event_to_tasks_by_parameter.get(task.event.id, {})
+            for param, partner_tasks in event_tasks.items():
+                if param == task.parameter:
+                    continue
+                for partner_task in partner_tasks:
+                    for bid in self._results.get(partner_task, []):
+                        if bid.has_winner() and t_img_l <= bid.t_img <= t_img_u:
+                            partner_t_imgs.add(bid.t_img)
+
+        if not partner_t_imgs:
+            # no partners in range — base search covers full interval as before
+            return super()._find_best_imaging_time(
+                task, instrument_name, th_img, t_img_l, t_img_u,
+                duration, specs, cross_track_fovs, orbitdata, mission,
+                n_obs, t_prev, n_grid, tol
+            )
+
+        # build exclusion zones: [t_partner - tol, t_partner + tol]
+        # split [t_img_l, t_img_u] into sub-intervals that avoid those zones
+        exclusion_points = sorted(partner_t_imgs)
+        intervals = []
+        lo = t_img_l
+        for t_excl in exclusion_points:
+            hi = t_excl - tol
+            if hi > lo:
+                intervals.append((lo, hi))
+            lo = t_excl + tol
+        if lo < t_img_u:
+            intervals.append((lo, t_img_u))
+
+        # search each sub-interval and take the best non-simultaneous base result
+        best_value, best_t = np.NINF, None
+        for sub_lo, sub_hi in intervals:
+            val, t = super()._find_best_imaging_time(
+                task, instrument_name, th_img, sub_lo, sub_hi,
+                duration, specs, cross_track_fovs, orbitdata, mission,
+                n_obs, t_prev, n_grid, tol=tol
+            )
+            if val > best_value:
+                best_value = val
+                best_t = t
+
+        # now search partner-anchored windows for co-obs bonus
+        for t_cand in exclusion_points:
+            sub_lo = max(t_img_l, t_cand + tol)
+            sub_hi = min(t_img_u, t_cand + co_obs_window)
+            if sub_hi <= sub_lo:
+                continue
+            val, t = super()._find_best_imaging_time(
+                task, instrument_name, th_img, sub_lo, sub_hi,
+                duration, specs, cross_track_fovs, orbitdata, mission,
+                n_obs, t_prev, n_grid, tol
+            )
+            if val > best_value:
+                best_value = val
+                best_t = t
+
+        return best_value, best_t
+    
+    # def _find_best_imaging_time(self, task, instrument_name, th_img, t_img_l, t_img_u,
+    #                          duration, specs, cross_track_fovs, orbitdata, mission,
+    #                          n_obs, t_prev, n_grid=7, tol=1e-3):
+    #     """Override to inject partner bid times as candidate evaluation points."""
+    #     # Get base result first
+    #     base_value, base_t = super()._find_best_imaging_time(
+    #         task, instrument_name, th_img, t_img_l, t_img_u,
+    #         duration, specs, cross_track_fovs, orbitdata, mission,
+    #         n_obs, t_prev, n_grid, tol=1.0
+    #     )
+
+    #     # If no co-obs requirement, return base result immediately
+    #     co_obs_window = self._co_obs_window_for(task)
+    #     if co_obs_window <= 0 or not isinstance(task, EventObservationTask) or task.event is None:
+    #         return base_value, base_t
+
+    #     # Collect candidate t_img values just after each partner bid
+    #     # (partner_t_prior + epsilon) so t_img is strictly after partner
+    #     # and within the co_obs_window
+    #     partner_candidates = []
+    #     event_tasks = self._event_to_tasks_by_parameter.get(task.event.id, {})
+    #     for param, partner_tasks in event_tasks.items():
+    #         if param == task.parameter:
+    #             continue
+    #         for partner_task in partner_tasks:
+    #             for bid in self._results.get(partner_task, []):
+    #                 # if not bid.has_winner() or bid.was_performed():
+    #                 if not bid.has_winner():
+    #                     continue
+    #                 # candidate: image just after partner, within window
+    #                 t_candidate = bid.t_img
+    #                 if (t_candidate <= t_img_u 
+    #                     and t_img_l <= bid.t_img + co_obs_window):
+    #                     partner_candidates.append(t_candidate)
+
+    #     if not partner_candidates:
+    #         return base_value, base_t
+        
+    #     # base_co = self._build_co_obs_dict(task, base_t)
+
+    #     # Evaluate at each partner-anchored candidate
+    #     best_value, best_t = base_value, base_t
+    #     for t_cand in partner_candidates:
+    #         # refine locally around this candidate
+    #         lo = max(t_img_l, t_cand + tol) # prevent simultaneous `t_img` with partner
+    #         hi = min(t_img_u, t_cand + co_obs_window)
+    #         if hi <= lo:
+    #             continue
+    #         val, t = super()._find_best_imaging_time(
+    #             task, instrument_name, th_img, lo, hi,
+    #             duration, specs, cross_track_fovs, orbitdata, mission,
+    #             n_obs, t_prev, n_grid, tol
+    #         )
+    #         if val > best_value:
+    #             best_value = val
+    #             best_t = t
+
+    #     return best_value, best_t
+
+    # def _find_best_imaging_time(self, task, instrument_name, th_img, t_img_l, t_img_u,
+    #                          duration, specs, cross_track_fovs, orbitdata, mission,
+    #                          n_obs, t_prev, n_grid=7, tol=1.0):
+    #     """Override to inject partner bid times as candidate evaluation points."""
+
+    #     # get base result (no co-obs awareness)
+    #     base_value, base_t = super()._find_best_imaging_time(
+    #         task, instrument_name, th_img, t_img_l, t_img_u,
+    #         duration, specs, cross_track_fovs, orbitdata, mission,
+    #         n_obs, t_prev, n_grid, tol
+    #     )
+
+    #     co_obs_window = self._co_obs_window_for(task)
+    #     if co_obs_window <= 0 or not isinstance(task, EventObservationTask) or task.event is None:
+    #         return base_value, base_t
+
+    #     # collect partner bid times
+    #     partner_t_imgs = []
+    #     event_tasks = self._event_to_tasks_by_instrument.get(task.event.id, {})
+    #     for param, partner_tasks in event_tasks.items():
+    #         if param == task.parameter:
+    #             continue
+    #         for partner_task in partner_tasks:
+    #             for bid in self._results.get(partner_task, []):
+    #                 # if bid.has_winner() and not bid.was_performed():
+    #                 #     partner_t_imgs.append(bid.t_img)
+    #                 # elif bid.has_winner():
+    #                 #     x = 1
+    #                 if bid.has_winner() and t_prev < bid.t_img <= t_img_u:
+    #                     partner_t_imgs.append(bid.t_img)
+
+    #     if not partner_t_imgs:
+    #         return base_value, base_t
+
+    #     best_value, best_t = base_value, base_t
+
+    #     for t_partner in partner_t_imgs:
+    #         # co-obs window starts strictly after the partner observation
+    #         # sample uniformly within [t_partner + tol, t_partner + co_obs_window]
+    #         # clamped to the feasible access interval [t_img_l, t_img_u]
+    #         window_lo = max(t_img_l, t_partner)
+    #         window_hi = min(t_img_u, t_partner + co_obs_window)
+
+    #         if window_hi <= window_lo:
+    #             continue
+
+    #         # evaluate on a fine grid over the co-obs window
+    #         # use n_grid points so the sample density matches the base search
+    #         candidates = [window_lo + i * (window_hi - window_lo) / (n_grid - 1)
+    #                     for i in range(n_grid)]
+
+    #         for t_cand in candidates:
+    #             val = self._estimate_task_value(
+    #                 task, instrument_name, th_img, t_cand, duration,
+    #                 specs, cross_track_fovs, orbitdata, mission, n_obs, t_prev
+    #             )
+    #             if val > best_value:
+    #                 best_value = val
+    #                 best_t = t_cand
+
+    #     return best_value, best_t
