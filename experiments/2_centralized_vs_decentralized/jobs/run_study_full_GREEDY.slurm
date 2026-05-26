@@ -6,11 +6,13 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=64G
-# #SBATCH --array=24-47
+# #SBATCH --array=432-863
 
-# #SBATCH --array=24-30
-# #SBATCH --array=31-37
-# #SBATCH --array=43-47
+# #SBATCH --array=432-499
+# #SBATCH --array=500-599
+# #SBATCH --array=600-699
+# #SBATCH --array=700-799
+# #SBATCH --array=800-863
 
 set -euo pipefail
 
@@ -37,13 +39,11 @@ ulimit -n 65535
 
 # --- Trial ID lists per job (fastest -> slowest) ---
 i=$SLURM_ARRAY_TASK_ID
-start=$((i * 18))
-end=$((start + 18))
 
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
       -t full_factorial_trials_2026-05-25 \
-      --trial-range "${start}:${end}" \
+      --single-trial "${i}" \
       --quiet --single-thread \
       --force-postprocess --force-summarize
       # --force-simulate --only-simulate
