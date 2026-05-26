@@ -78,10 +78,7 @@ def compile_results_summaries(trial_name : str,
 
     # fill missing parameter values in trial definitions to None
     results_df["Preplanner"] = results_df["Preplanner"].fillna("None")
-    results_df["Replanner"] = results_df["Replanner"].fillna("None")
-    
-    # # fill in missing values for Ground Segment with "None (In-Orbit Requester)" to indicate no ground segment 
-    # results_df["Ground Segment"] = results_df["Ground Segment"].fillna("None (In-Orbit Requester)")
+    results_df["Replanner"] = results_df["Replanner"].fillna("None")       
     
     # fill missing probabilities with -1 to indicate not applicable / no data
     for col in results_df.columns:
@@ -99,76 +96,82 @@ def compile_results_summaries(trial_name : str,
     # sort by Trial ID for easier comparison across trials
     results_df = results_df.sort_values(by=id_col).reset_index(drop=True)
 
+    # filter out by trial subset name
+    # mission_subset_name = "Urgency"  
+    # mission_subset_name = "Revisits"  
+    # mission_subset_name = "Co-observations"  
+    # results_df = results_df[results_df['Mission'] == mission_subset_name].reset_index(drop=True)
+
     # fill Task Reward Dual Bound: propagate first non-NaN within (Scenario, Date)
     if 'Task Reward Dual Bound' in results_df.columns:
-        for (group_scenario, group_date), group_data in results_df.groupby(['Scenario', 'Date']):
-            group_mask = (results_df['Scenario'] == group_scenario) & (results_df['Date'] == group_date)
+        for (group_mission, group_date), group_data in results_df.groupby(['Mission', 'Date']):
+            group_mask = (results_df['Mission'] == group_mission) & (results_df['Date'] == group_date)
             non_nan = group_data['Task Reward Dual Bound'].dropna()
             if not non_nan.empty:
                 results_df.loc[group_mask, 'Task Reward Dual Bound'] = non_nan.iloc[0]
             else:
                 results_df.loc[group_mask, 'Task Reward Dual Bound'] = results_df.loc[group_mask, 'Task Reward Dual Bound'].fillna('NaN')
 
-    # fill Known Task Reward Dual Bound, Known Task Reward Primal Bound, and Task Reward Primal Bound
-    # grouped by (Connectivity, Data Processing, Date)
-    subgroup_cols = ['Connectivity', 'Data Processing', 'Date']
-    for (group_connectivity, group_dp, group_date), group_data in results_df.groupby(subgroup_cols):
-        group_mask = (
-            (results_df['Connectivity'] == group_connectivity) &
-            (results_df['Data Processing'] == group_dp) &
-            (results_df['Date'] == group_date)
-        )
+    # # fill Known Task Reward Dual Bound, Known Task Reward Primal Bound, and Task Reward Primal Bound
+    # # grouped by (Connectivity, Data Processing, Date)
+    # subgroup_cols = ['Connectivity', 'Data Processing', 'Date']
+    # for (group_connectivity, group_dp, group_date), group_data in results_df.groupby(subgroup_cols):
+    #     group_mask = (
+    #         (results_df['Connectivity'] == group_connectivity) &
+    #         (results_df['Data Processing'] == group_dp) &
+    #         (results_df['Date'] == group_date)
+    #     )
 
-        # Known Task Reward Dual Bound: propagate first non-NaN in group
-        if 'Known Task Reward Dual Bound' in results_df.columns:
-            non_nan = group_data['Known Task Reward Dual Bound'].dropna()
-            if not non_nan.empty:
-                results_df.loc[group_mask, 'Known Task Reward Dual Bound'] = non_nan.iloc[0]
-            else:
-                results_df.loc[group_mask, 'Known Task Reward Dual Bound'] = results_df.loc[group_mask, 'Known Task Reward Dual Bound'].fillna('NaN')
+    #     # Known Task Reward Dual Bound: propagate first non-NaN in group
+    #     if 'Known Task Reward Dual Bound' in results_df.columns:
+    #         non_nan = group_data['Known Task Reward Dual Bound'].dropna()
+    #         if not non_nan.empty:
+    #             results_df.loc[group_mask, 'Known Task Reward Dual Bound'] = non_nan.iloc[0]
+    #         else:
+    #             results_df.loc[group_mask, 'Known Task Reward Dual Bound'] = results_df.loc[group_mask, 'Known Task Reward Dual Bound'].fillna('NaN')
 
-        # Known Task Reward Primal Bound and Task Reward Primal Bound:
-        # use Total Obtained Utility from the Preplanner=None x Replanner=None row in this group
-        none_none_rows = group_data[
-            (group_data['Preplanner'] == 'None') & (group_data['Replanner'] == 'None')
-        ]['Total Obtained Utility'].dropna()
+    #     # Known Task Reward Primal Bound and Task Reward Primal Bound:
+    #     # use Total Obtained Utility from the Preplanner=None x Replanner=None row in this group
+    #     none_none_rows = group_data[
+    #         (group_data['Preplanner'] == 'None') & (group_data['Replanner'] == 'None')
+    #     ]['Total Obtained Utility'].dropna()
 
-        if not none_none_rows.empty:
-            primal_value = none_none_rows.iloc[0]
-            if 'Known Task Reward Primal Bound' in results_df.columns:
-                results_df.loc[group_mask, 'Known Task Reward Primal Bound'] = primal_value
-            if 'Task Reward Primal Bound' in results_df.columns:
-                results_df.loc[group_mask, 'Task Reward Primal Bound'] = primal_value
-        else:
-            if 'Known Task Reward Primal Bound' in results_df.columns:
-                results_df.loc[group_mask, 'Known Task Reward Primal Bound'] = results_df.loc[group_mask, 'Known Task Reward Primal Bound'].fillna('NaN')
-            if 'Task Reward Primal Bound' in results_df.columns:
-                results_df.loc[group_mask, 'Task Reward Primal Bound'] = results_df.loc[group_mask, 'Task Reward Primal Bound'].fillna('NaN')
+    #     if not none_none_rows.empty:
+    #         primal_value = none_none_rows.iloc[0]
+    #         if 'Known Task Reward Primal Bound' in results_df.columns:
+    #             results_df.loc[group_mask, 'Known Task Reward Primal Bound'] = primal_value
+    #         if 'Task Reward Primal Bound' in results_df.columns:
+    #             results_df.loc[group_mask, 'Task Reward Primal Bound'] = primal_value
+    #     else:
+    #         if 'Known Task Reward Primal Bound' in results_df.columns:
+    #             results_df.loc[group_mask, 'Known Task Reward Primal Bound'] = results_df.loc[group_mask, 'Known Task Reward Primal Bound'].fillna('NaN')
+    #         if 'Task Reward Primal Bound' in results_df.columns:
+    #             results_df.loc[group_mask, 'Task Reward Primal Bound'] = results_df.loc[group_mask, 'Task Reward Primal Bound'].fillna('NaN')
 
-    # perform normalization of metrics if desired (e.g. normalize rewards by number of tasks)
-    if 'Total Obtained Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
-        results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Task Reward Dual Bound']
-        results_df['Task Reward Primal Bound [norm]'] = results_df['Task Reward Primal Bound'] / results_df['Task Reward Dual Bound']
-        # results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Total Observable Task Priority']
+    # # perform normalization of metrics if desired (e.g. normalize rewards by number of tasks)
+    # if 'Total Obtained Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
+    #     results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Task Reward Dual Bound']
+    #     results_df['Task Reward Primal Bound [norm]'] = results_df['Task Reward Primal Bound'] / results_df['Task Reward Dual Bound']
+    #     # results_df['Total Obtained Reward [norm]'] = results_df['Total Obtained Reward'] / results_df['Total Observable Task Priority']
     
-    # if 'Total Obtained Reward' in results_df.columns and 'Known Task Reward Dual Bound' in results_df.columns:
-        # results_df['Total Obtained Reward [known_norm]'] = results_df['Total Obtained Reward'] / results_df['Known Task Reward Dual Bound']
-        # results_df['Known Task Reward Primal Bound [known_norm]'] = results_df['Known Task Reward Primal Bound'] / results_df['Known Task Reward Dual Bound']
+    # # if 'Total Obtained Reward' in results_df.columns and 'Known Task Reward Dual Bound' in results_df.columns:
+    #     # results_df['Total Obtained Reward [known_norm]'] = results_df['Total Obtained Reward'] / results_df['Known Task Reward Dual Bound']
+    #     # results_df['Known Task Reward Primal Bound [known_norm]'] = results_df['Known Task Reward Primal Bound'] / results_df['Known Task Reward Dual Bound']
         
-    if 'Total Obtained Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
-        results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Task Reward Dual Bound']
-        # results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Total Observable Task Priority']
+    # if 'Total Obtained Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
+    #     results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Task Reward Dual Bound']
+    #     # results_df['Total Obtained Utility [norm]'] = results_df['Total Obtained Utility'] / results_df['Total Observable Task Priority']
 
-    if 'Total Planned Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
-        results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Task Reward Dual Bound']
-        # results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Total Observable Task Priority']
+    # if 'Total Planned Reward' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
+    #     results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Task Reward Dual Bound']
+    #     # results_df['Total Planned Reward [norm]'] = results_df['Total Planned Reward'] / results_df['Total Observable Task Priority']
 
-    if 'Total Planned Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
-        results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Task Reward Dual Bound']
-        # results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Total Observable Task Priority']
+    # if 'Total Planned Utility' in results_df.columns and 'Task Reward Dual Bound' in results_df.columns:
+    #     results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Task Reward Dual Bound']
+    #     # results_df['Total Planned Utility [norm]'] = results_df['Total Planned Utility'] / results_df['Total Observable Task Priority']
 
-    if 'Total Messages Broadcasted' in results_df.columns and 'Tasks Available' in results_df.columns:
-        results_df['Average Messages Broadcasted per Task'] = results_df['Total Messages Broadcasted'] / results_df['Tasks Available']
+    # if 'Total Messages Broadcasted' in results_df.columns and 'Tasks Available' in results_df.columns:
+    #     results_df['Average Messages Broadcasted per Task'] = results_df['Total Messages Broadcasted'] / results_df['Tasks Available']
 
 
     # define output paths for compiled results
@@ -192,10 +195,10 @@ def compile_results_summaries(trial_name : str,
 
 if __name__ == "__main__":
     # define trial parameters
-    base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-17_archive_v5"
+    base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-22_archive"
 
     # trial_name = "full_factorial_trials_2026-05-11"
-    trial_name = "full_factorial_trials_2026-05-17"
+    trial_name = "full_factorial_trials_2026-05-22"
     
     # compile and save compiled results summaries for this trial
     compile_results_summaries(trial_name, 

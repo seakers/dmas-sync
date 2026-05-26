@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=cbba_study_exp_2_run
-#SBATCH --output=experiments/2_centralized_vs_decentralized/logs/outputs/study_2_run_%A_%a.out
-#SBATCH --error=experiments/2_centralized_vs_decentralized/logs/errors/study_2_run_%A_%a.err
+#SBATCH --job-name=cbba_study_exp_2_full_dp_run
+#SBATCH --output=experiments/2_centralized_vs_decentralized/logs/outputs/study_2_full_dp_run_%A_%a.out
+#SBATCH --error=experiments/2_centralized_vs_decentralized/logs/errors/study_2_full_dp_run_%A_%a.err
 #SBATCH --time=06:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=3
+#SBATCH --cpus-per-task=1
 #SBATCH --mem=64G
-# #SBATCH --array=18-71
+#SBATCH --array=60-71
 
 set -euo pipefail
 
@@ -33,14 +33,14 @@ ulimit -n 65535
 
 # --- Trial ID lists per job (fastest -> slowest) ---
 i=$SLURM_ARRAY_TASK_ID
-start=$((i * 3))
-end=$((start + 3))
+start=$((i * 18))
+end=$((start + 18))
 
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
       -t full_factorial_trials_2026-05-14 \
       --trial-range "${start}:${end}" \
-      --quiet \
+      --quiet --single-thread \
       --force-simulate --force-postprocess --force-summarize
-      # --only-simulate --force-simulate 
+      # --only-simulate
       # --exceptions --profile-cpu --profile-mem
