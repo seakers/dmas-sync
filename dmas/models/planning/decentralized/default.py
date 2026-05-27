@@ -338,20 +338,6 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                     # if mutually exclusive, skip this observation opportunity
                     continue
 
-                # --- original approach (kept for A/B comparison) ---
-                # idx_prev = bisect.bisect_right(scheduled_t_ends, obs.accessibility.right + 1e-6) - 1
-                # if idx_prev >= 0:
-                #     t_prev_obs = scheduled_actions[idx_prev].t_end
-                # else:
-                #     t_prev_obs = t_curr
-                
-                # idx_next = bisect.bisect_left(scheduled_t_starts, obs.accessibility.left - 1e-6)
-                # if idx_next < len(scheduled_actions):
-                #     t_next_obs = scheduled_actions[idx_next].t_start
-                # else:
-                #     t_next_obs = obs.accessibility.right
-                # --- end original approach ---
-
                 # Use bisect to find all actions that start within the accessibility window
                 # (scheduled_t_starts is sorted by t_start), then take the max t_end among
                 # them. A simple bisect on scheduled_t_ends is not sufficient here because
