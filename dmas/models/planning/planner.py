@@ -154,6 +154,15 @@ class AbstractPlanner(ABC):
 
             # extract access data for each interval
             for access_interval,interval_indices in merged_access_intervals:
+                # clip access to planning horizon
+                access_interval = access_interval.intersection(planning_horizon)
+
+                # confirm the access interval is still within the planning horizon
+                if (access_interval.is_empty() 
+                    or access_interval.span() < orbitdata.time_step - self.EPS):
+                    # intersection with planning horizon is too short; skip 
+                    continue
+
                 # unpack interval information
                 instrument_name = target_coverage_data['instrument'][interval_indices[0]]
                 access_times = [target_coverage_data['time [s]'][i] for i in interval_indices]
