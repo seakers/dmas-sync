@@ -1093,11 +1093,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                     min_bundle_violation_idx = bundle_idx
                     break # stop searching for constraint violations for this task
 
-                # Constraint 3: If assigned, previous imaging time must be a valid (non-negative) time.
-                if bid.has_winner() and prev_bid.t_img < 0:
-                    min_bundle_violation_idx = bundle_idx
-                    break
-
             if min_bundle_violation_idx is not None: break
 
         # check if any updates were found
@@ -1467,29 +1462,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
             # update results
             self._results[task][n_obs] = bid_to_reset
-
-        # cascade-release: after resetting removed bids, any remaining bundle
-        # bid whose predecessor was just reset now violates the sequential
-        # constraint (if this bid has a winner, the predecessor must too).
-        # Bundle insertion order does not match n_obs order, so a higher-n_obs
-        # entry can sit earlier in the bundle than the removed entry, making it
-        # unreachable by the forward-split logic in __update_bundle_from_results.
-        t_curr = state.get_time()
-        newly_reset = set(bids_removed_from_bundle)
-        while newly_reset:
-            next_reset = set()
-            for task, n_obs in newly_reset:
-                k = n_obs + 1
-                if k >= len(self._results[task]):
-                    continue
-                bid_k : Bid = self._results[task][k]
-                if bid_k.winner != state.agent_name or bid_k.was_performed():
-                    continue  # not our active bid; nothing to cascade
-                # predecessor was reset — sequential constraint violated; release this bid
-                bid_k.reset(t_curr)
-                self._results[task][k] = bid_k
-                next_reset.add((task, k))
-            newly_reset = next_reset
 
         # ==========================================================
         #  ENSURE RESULTS CONSISTENCY
