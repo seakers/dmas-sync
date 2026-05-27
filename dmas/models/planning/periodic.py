@@ -100,7 +100,9 @@ class AbstractPeriodicPlanner(AbstractPlanner):
             or state.get_time() >= self._plan.t_next):    # or periodic planning period has been reached
             
             pending_actions = [action for action in current_plan
-                               if action.t_start <= self._plan.t_next]
+                            #    if action.t_start <= self._plan.t_next
+                                if action.t_end <= self._plan.t_next
+                            ]
             
             return not bool(pending_actions)     # no actions left to do before the end of the replanning period 
         return False
