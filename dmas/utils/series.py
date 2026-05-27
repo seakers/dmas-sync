@@ -806,31 +806,34 @@ class AccessTable(AbstractTable):
       - rows.npy    (M,K) where columns are defined by schema["layout"].
 
     Notes on performance:
+      - _offsets is loaded into RAM (always tiny: 8641 * 8 bytes = ~69KB per instance).
+      - _time_step is cached as a float attribute to avoid repeated dict lookups.
+      - lookup_interval reads _rows[s] ONCE per call (single contiguous memmap read),
+        then builds mask and extracts columns from the in-RAM block. This reduces
+        memmap __getitem__ calls from O(K) to O(1) per lookup.
       - Filtering is applied BEFORE decoding vocab columns.
       - Vocab decoding uses np.take on a small object array (fast).
       - decode=False returns vocab columns as integer codes (fastest).
       - columns=... allows projection to only the fields you need.
     """
-    _offsets: np.ndarray              # (T+1,) int64 memmap
-    _rows: np.ndarray                 # (M,K)  memmap
+    _offsets: np.ndarray              # (T+1,) int64 — plain array in RAM (not memmap)
+    _rows: np.ndarray                 # (M,K)  memmap — large, stays on disk
     _col: Dict[str, int]              # safe-name -> column index in _rows
-    _extras: Dict[str, np.ndarray]    # safe-name -> view into _rows col
+    _extras: Dict[str, int]           # safe-name -> column index in _rows (was: view into _rows)
     _meta: Dict[str, Any]
+    _time_step: float                 # cached from meta to avoid repeated dict access
 
-    # Required base columns as views into _rows
-    _t: np.ndarray
-    _t_idx: np.ndarray
-    _lat: np.ndarray
-    _lon: np.ndarray
-    _grid_idx: np.ndarray
-    _gp_idx: np.ndarray
+    # Required base column indices into _rows
+    _t_idx_col: int                   # column index of "t" in _rows
+    _t_index_col: int                 # column index of "t_index" in _rows
+    _lat_col: int
+    _lon_col: int
+    _grid_idx_col: int
+    _gp_idx_col: int
 
     # Vocab acceleration
     _vocab_arr: Dict[str, np.ndarray]       # safe-name -> object array indexed by code
     _rev_vocab: Dict[str, Dict[Any, int]]   # safe-name -> {label -> code}
-
-    # Optional: share vocab arrays across instances (useful if schema objects are reused)
-    # _VOCAB_CACHE = {}  # type: Dict[Tuple[str, int], np.ndarray]
 
     @classmethod
     def _get_vocab_arr_cached(cls, _VOCAB_CACHE, safe: str, vocab: Dict[str, Any]) -> np.ndarray:
@@ -885,29 +888,22 @@ class AccessTable(AbstractTable):
         required = ["t", "t_index", "lat_deg", "lon_deg", "grid_index", "GP_index"]
         base_set = set(required)
 
+        # Cache time_step as a float once — avoids repeated dict + float() on every call
+        time_step = float(schema["time_step"])
+
+        col = dict((name, i) for i, name in enumerate(layout))
+
         # Empty table fast path
         if n == 0:
-            offsets = np.empty((0,), dtype=np.int64)
+            offsets = np.empty((0,), dtype=np.int64)  # already tiny
             dtype = np.dtype(schema.get("packed_dtype", np.float64))
             rows = np.empty((0, k), dtype=dtype)
-
-            col = dict((name, i) for i, name in enumerate(layout))
-
-            def empty_view(name: str) -> np.ndarray:
-                return rows[:, col[name]] if name in col else np.empty((0,), dtype=dtype)
-
-            t = empty_view("t")
-            t_idx = empty_view("t_index")
-            lat = empty_view("lat_deg")
-            lon = empty_view("lon_deg")
-            grid_idx = empty_view("grid_index")
-            gp_idx = empty_view("GP_index")
 
             extras = {}
             for name in layout:
                 if name in base_set:
                     continue
-                extras[name] = rows[:, col[name]]
+                extras[name] = col[name]  # store index, not view
 
             return cls(
                 _offsets=offsets,
@@ -915,21 +911,26 @@ class AccessTable(AbstractTable):
                 _col=col,
                 _extras=extras,
                 _meta=schema,
-                _t=t,
-                _t_idx=t_idx,
-                _lat=lat,
-                _lon=lon,
-                _grid_idx=grid_idx,
-                _gp_idx=gp_idx,
+                _time_step=time_step,
+                _t_idx_col=col["t"],
+                _t_index_col=col["t_index"],
+                _lat_col=col["lat_deg"],
+                _lon_col=col["lon_deg"],
+                _grid_idx_col=col["grid_index"],
+                _gp_idx_col=col["GP_index"],
                 _vocab_arr={},
                 _rev_vocab={},
             )
 
-        # Load memmaps
-        offsets = np.load(os.path.join(in_dir, files["offsets"]), mmap_mode=mmap_mode)
-        rows = np.load(os.path.join(in_dir, files["rows"]), mmap_mode=mmap_mode)
+        # Load offsets as a plain in-RAM array — always safe regardless of M.
+        # Size is fixed at (n_steps + 1,) int64 = 8641 * 8 bytes = ~69KB per instance,
+        # so 200 instances = ~13MB total. Not subject to the memory constraints on _rows.
+        offsets = np.array(
+            np.load(os.path.join(in_dir, files["offsets"]), mmap_mode=mmap_mode)
+        )
 
-        col = dict((name, i) for i, name in enumerate(layout))
+        # _rows stays as memmap — M can be millions of rows across 3k+ ground points
+        rows = np.load(os.path.join(in_dir, files["rows"]), mmap_mode=mmap_mode)
 
         missing = [r for r in required if r not in col]
         if missing:
@@ -942,27 +943,30 @@ class AccessTable(AbstractTable):
         if offsets.shape[0] != int(schema["n_steps"]) + 1:
             raise AssertionError("expected offsets %d, got %d" % (int(schema["n_steps"]) + 1, offsets.shape[0]))
 
-        # Base views (no copy)
-        t = rows[:, col["t"]]
-        t_idx = rows[:, col["t_index"]]
-        lat = rows[:, col["lat_deg"]]
-        lon = rows[:, col["lon_deg"]]
-        grid_idx = rows[:, col["grid_index"]]
-        gp_idx = rows[:, col["GP_index"]]
+        # Store column indices for base fields — no views into memmap.
+        # All data access goes through _rows[s] as a single contiguous read.
+        t_idx_col     = col["t"]
+        t_index_col   = col["t_index"]
+        lat_col       = col["lat_deg"]
+        lon_col       = col["lon_deg"]
+        grid_idx_col  = col["grid_index"]
+        gp_idx_col    = col["GP_index"]
 
-        # Extras (views)
+        # Extras: store column indices, not memmap views.
+        # Previously these were views (rows[:, col[name]]) which caused K separate
+        # memmap __getitem__ calls per lookup. Now they're just ints.
         extras = {}
         for name in layout:
             if name in base_set:
                 continue
-            extras[name] = rows[:, col[name]]
+            extras[name] = col[name]
 
-        # Build vocab accelerators
+        # Build vocab accelerators (unchanged)
         vocab_arr = {}
         rev_vocab = {}
         columns_meta = schema.get("columns", {})
 
-        _VOCAB_CACHE = {}   
+        _VOCAB_CACHE = {}
         for safe in extras.keys():
             col_meta = columns_meta.get(safe, {})
             vocab = col_meta.get("vocab", None)
@@ -972,13 +976,11 @@ class AccessTable(AbstractTable):
             arr = cls._get_vocab_arr_cached(_VOCAB_CACHE, safe, vocab)
             vocab_arr[safe] = arr
 
-            # Reverse map for filter-by-label (small dict)
             rv = {}
             for k_str, label in vocab.items():
                 rv[label] = int(k_str)
             rev_vocab[safe] = rv
 
-        # ensure vocab array matches reverse vocab 
         for safe in vocab_arr.keys():
             arr = vocab_arr[safe]
             rv = rev_vocab[safe]
@@ -992,18 +994,61 @@ class AccessTable(AbstractTable):
             _col=col,
             _extras=extras,
             _meta=schema,
-            _t=t,
-            _t_idx=t_idx,
-            _lat=lat,
-            _lon=lon,
-            _grid_idx=grid_idx,
-            _gp_idx=gp_idx,
+            _time_step=time_step,
+            _t_idx_col=t_idx_col,
+            _t_index_col=t_index_col,
+            _lat_col=lat_col,
+            _lon_col=lon_col,
+            _grid_idx_col=grid_idx_col,
+            _gp_idx_col=gp_idx_col,
             _vocab_arr=vocab_arr,
             _rev_vocab=rev_vocab,
         )
 
     def __len__(self) -> int:
-        return int(self._t.shape[0])
+        # _rows is the memmap; shape access does not page in data
+        return int(self._rows.shape[0])
+
+    # ---------------------------
+    # Backward-compatible column view properties
+    #
+    # The original implementation stored these as memmap views (e.g. _t, _grid_idx).
+    # The new implementation stores only column indices to avoid per-column memmap
+    # __getitem__ calls in the hot lookup path.
+    #
+    # These properties restore the original attribute interface for external code
+    # (e.g. __count_observations) that accesses columns directly on the table object.
+    # Each property returns a strided memmap view — same as before — so callers like
+    #   tab._grid_idx.astype(np.int64, copy=False)
+    # continue to work without modification.
+    #
+    # These are NOT used inside the class itself; all internal access goes through
+    # _rows[s] as a single contiguous block read.
+    # ---------------------------
+
+    @property
+    def _t(self) -> np.ndarray:
+        return self._rows[:, self._t_idx_col]
+
+    @property
+    def _t_idx(self) -> np.ndarray:
+        return self._rows[:, self._t_index_col]
+
+    @property
+    def _lat(self) -> np.ndarray:
+        return self._rows[:, self._lat_col]
+
+    @property
+    def _lon(self) -> np.ndarray:
+        return self._rows[:, self._lon_col]
+
+    @property
+    def _grid_idx(self) -> np.ndarray:
+        return self._rows[:, self._grid_idx_col]
+
+    @property
+    def _gp_idx(self) -> np.ndarray:
+        return self._rows[:, self._gp_idx_col]
 
     # ---------------------------
     # Public lookup API
@@ -1021,6 +1066,10 @@ class AccessTable(AbstractTable):
     ) -> Dict[str, np.ndarray]:
         """
         Lookup rows in [t_start, t_end] with optional filters applied BEFORE decoding.
+
+        Performance: reads _rows[s] exactly ONCE as a contiguous memmap block, then
+        builds the mask and extracts all columns from the in-RAM result. This replaces
+        the previous pattern of K separate memmap column-view reads per call.
 
         filters:
           - {"safe_col": value}                equality
@@ -1041,7 +1090,6 @@ class AccessTable(AbstractTable):
           - if True, apply (t_start <= t <= t_end) at row level.
             This is usually needed because bucket slices may include boundary rows.
         """
-        # validate
         if not isinstance(t_start, (int, float)) or t_start < 0.0:
             raise ValueError("time t_start must be a non-negative number")
         if not isinstance(t_end, (int, float)) or t_end < 0.0:
@@ -1049,11 +1097,10 @@ class AccessTable(AbstractTable):
         if t_start > t_end + 1e-6:
             raise ValueError("time t_start must be <= time t_end")
 
-        if len(self._t) == 0:
-            return self.__rows_from_slice(slice(0, 0), include_extras, columns, decode, None)
+        if self._rows.shape[0] == 0:
+            return self._empty_result(include_extras, columns, decode)
 
         ti0 = self._time_to_index_floor(t_start)
-        # ti0 -= 1 if ti0 > 0 else 0  # include previous bucket for boundary conditions
         ti1 = self._time_to_index_floor(t_end)
 
         if ti0 == ti1:
@@ -1062,18 +1109,18 @@ class AccessTable(AbstractTable):
             s = self._slice_for_index_range(ti0, ti1)
 
         if s.start == s.stop:
-            return self.__rows_from_slice(s, include_extras, columns, decode, None)
+            return self._empty_result(include_extras, columns, decode)
 
-        # Build mask inside the slice BEFORE decoding
-        mask = self._build_mask(
+        return self.__rows_from_slice(
             s=s,
+            include_extras=include_extras,
+            columns=columns,
+            decode=decode,
+            filters=filters,
             t_start=t_start,
             t_end=t_end,
-            filters=filters,
             exact_time_filter=exact_time_filter,
         )
-
-        return self.__rows_from_slice(s, include_extras, columns, decode, mask)
 
     def lookup_time(
         self,
@@ -1089,38 +1136,55 @@ class AccessTable(AbstractTable):
         if not isinstance(t, (int, float)) or t < 0.0:
             raise ValueError("time `t` must be a non-negative number")
 
-        if len(self._t) == 0:
-            return self.__rows_from_slice(slice(0, 0), include_extras, columns, decode, None)
+        if self._rows.shape[0] == 0:
+            return self._empty_result(include_extras, columns, decode)
 
-        if float(self._t[-1]) < t - 1e-6:
-            s_last = slice(len(self._t) - 1, len(self._t))
-            return self.__rows_from_slice(s_last, include_extras, columns, decode, None)
+        # Use _rows[:, _t_idx_col] for searchsorted — single memmap column read,
+        # but only done once and only for lookup_time (less hot than lookup_interval).
+        t_col = self._rows[:, self._t_idx_col]
+        if float(t_col[-1]) < t - 1e-6:
+            # past the end — return last row
+            last = int(self._rows.shape[0]) - 1
+            s = slice(last, last + 1)
+            return self.__rows_from_slice(
+                s=s,
+                include_extras=include_extras,
+                columns=columns,
+                decode=decode,
+                filters=None,
+                t_start=-np.Inf,
+                t_end=np.Inf,
+                exact_time_filter=False,
+            )
 
-        i = int(np.searchsorted(self._t, t, side="left"))
-        ti = int(self._t_idx[i])
+        i = int(np.searchsorted(t_col, t, side="left"))
+        t_index_col = self._rows[:, self._t_index_col]
+        ti = int(t_index_col[i])
         s = self.__slice_for_time_index(ti)
 
         if s.start == s.stop:
-            return self.__rows_from_slice(s, include_extras, columns, decode, None)
+            return self._empty_result(include_extras, columns, decode)
 
-        mask = self._build_mask(
+        return self.__rows_from_slice(
             s=s,
+            include_extras=include_extras,
+            columns=columns,
+            decode=decode,
+            filters=filters,
             t_start=-np.Inf,
             t_end=np.Inf,
-            filters=filters,
             exact_time_filter=False,
         )
-        return self.__rows_from_slice(s, include_extras, columns, decode, mask)
 
     # ---------------------------
     # Core helpers
     # ---------------------------
 
     def _time_to_index_floor(self, t: float) -> int:
-        dt = float(self._meta["time_step"])
+        # _time_step cached as float at construction — no dict access here
         if np.isinf(t):
             return int(len(self._offsets) - 1)
-        return int(t // dt)
+        return int(t // self._time_step)
 
     def _slice_for_index_range(self, ti0: int, ti1: int) -> slice:
         if ti1 < ti0:
@@ -1129,6 +1193,7 @@ class AccessTable(AbstractTable):
         ti1 = self._clamp_index(ti1)
         if ti1 < ti0:
             return slice(0, 0)
+        # _offsets is a plain array — no memmap overhead
         a = int(self._offsets[ti0])
         b = int(self._offsets[ti1 + 1])
         return slice(a, b)
@@ -1144,94 +1209,232 @@ class AccessTable(AbstractTable):
     def __slice_for_time_index(self, ti: int) -> slice:
         if ti < 0 or ti >= (len(self._offsets) - 1):
             return slice(0, 0)
+        # _offsets is a plain array — no memmap overhead
         a = int(self._offsets[ti])
         b = int(self._offsets[ti + 1])
         return slice(a, b)
 
-    def _build_mask(
+    # ---------------------------
+    # Empty result helper
+    # ---------------------------
+
+    def _empty_result(
+        self,
+        include_extras: bool,
+        columns: Optional[List[str]],
+        decode: bool,
+    ) -> Dict[str, Any]:
+        """
+        Return a correctly-shaped empty result dict — same keys as a non-empty
+        result, but with zero-length arrays. Preserves compatibility with
+        downstream code that expects consistent keys regardless of whether any
+        rows were found.
+        """
+        want = set(columns) if columns is not None else None
+        dtype = np.dtype(self._meta.get("packed_dtype", np.float64))
+
+        out = {}  # type: Dict[str, Any]
+
+        if want is None or "time [s]" in want:
+            out["time [s]"] = np.empty((0,), dtype=dtype)
+        if want is None or "lat [deg]" in want:
+            out["lat [deg]"] = np.empty((0,), dtype=dtype)
+        if want is None or "lon [deg]" in want:
+            out["lon [deg]"] = np.empty((0,), dtype=dtype)
+        if want is None or "grid index" in want:
+            out["grid index"] = np.empty((0,), dtype=np.int32)
+        if want is None or "GP index" in want:
+            out["GP index"] = np.empty((0,), dtype=np.int32)
+
+        if not include_extras:
+            return out
+
+        columns_meta = self._meta.get("columns", {})
+
+        for safe in self._extras.keys():
+            col_meta = columns_meta.get(safe, {})
+            col_name = col_meta.get("col_name", safe)
+
+            if want is not None and (col_name not in want and safe not in want):
+                continue
+
+            if safe in self._vocab_arr:
+                if decode:
+                    out[col_name] = np.empty((0,), dtype=object)
+                else:
+                    out[col_name] = np.empty((0,), dtype=np.int32)
+            else:
+                out[col_name] = np.empty((0,), dtype=dtype)
+
+        return out
+
+    # ---------------------------
+    # Row materialization
+    # ---------------------------
+
+    def __rows_from_slice(
         self,
         s: slice,
+        include_extras: bool,
+        columns: Optional[List[str]],
+        decode: bool,
+        filters: Optional[Dict[str, FilterSpec]],
         t_start: float,
         t_end: float,
-        filters: Optional[Dict[str, FilterSpec]],
         exact_time_filter: bool,
-    ) -> Optional[np.ndarray]:
+    ) -> Dict[str, Any]:
         """
-        Build a boolean mask for rows within slice s.
-        Applied BEFORE decoding to avoid wasted work.
+        Core read path. Performs exactly ONE memmap read (_rows[s]), then builds
+        the mask and materializes all columns from the resulting in-RAM block.
 
-        Note: slice s already narrows to time *buckets*; exact_time_filter
-        applies row-level [t_start, t_end] bounds when needed.
+        Previously: K separate memmap reads (one per column view) + 1 for _t[s] in
+        _build_mask = K+1 memmap __getitem__ calls per lookup.
+        Now: 1 memmap read total, regardless of K.
         """
-        n = int(s.stop - s.start)
-        if n <= 0:
-            return None
+        n = s.stop - s.start
+        if n == 0:
+            return self._empty_result(include_extras, columns, decode)
 
+        # -------------------------------------------------------
+        # THE SINGLE MEMMAP READ
+        # _rows is row-major (C order), so _rows[s] is a contiguous
+        # read of n rows. The OS maps one page range instead of K
+        # separate strided column accesses.
+        # block shape: (n, K), dtype matches packed_dtype, now in RAM.
+        # -------------------------------------------------------
+        block = self._rows[s]
+
+        # -------------------------------------------------------
+        # Build mask entirely from the in-RAM block.
+        # No second memmap access — t_col comes from block, not self._rows.
+        # -------------------------------------------------------
         mask = None  # type: Optional[np.ndarray]
 
-        # Fine-grained time bounds within the bucket slice (often needed)
         if exact_time_filter and (not np.isinf(t_start) or not np.isinf(t_end)):
-            dt = float(self._meta["time_step"])
-            tview = self._t[s]
-            m = (tview >= t_start - dt) & (tview <= t_end)
-            mask = m if mask is None else (mask & m)
-            if mask is not None and (not mask.any()):
-                return mask
+            t_col = block[:, self._t_idx_col]
+            mask = (t_col >= t_start - self._time_step) & (t_col <= t_end)
+            if not mask.any():
+                return self._empty_result(include_extras, columns, decode)
+            if mask.all():
+                mask = None
 
-        if not filters:
-            return mask
+        # if exact_time_filter and (not np.isinf(t_start) or not np.isinf(t_end)):
+        #     t_col = block[:, self._t_idx_col]
+        #     # Fast path: if the entire slice is already within bounds, skip mask
+        #     if float(t_col[0]) >= t_start and float(t_col[-1]) <= t_end:
+        #         pass  # all rows qualify, no mask needed
+        #     else:
+        #         mask = (t_col >= t_start) & (t_col <= t_end)
+        #         if not mask.any():
+        #             return self._empty_result(include_extras, columns, decode)
 
-        for key, spec in filters.items():
-            arr, is_vocab = self._resolve_filter_array(key, s)
+        if filters:
+            for key, spec in filters.items():
+                col_idx, is_vocab = self._resolve_filter_col_index(key)
+                arr = block[:, col_idx]
+                m = self._mask_for_spec(key, arr, is_vocab, spec)
+                mask = m if mask is None else (mask & m)
+                if not mask.any():
+                    return self._empty_result(include_extras, columns, decode)
 
-            m = self._mask_for_spec(key, arr, is_vocab, spec)
-            mask = m if mask is None else (mask & m)
+        # Apply mask once to the whole block — cheaper than masking per-column
+        if mask is not None:
+            block = block[mask]
 
-            if mask is not None and (not mask.any()):
-                return mask
+        if block.shape[0] == 0:
+            return self._empty_result(include_extras, columns, decode)
 
-        return mask
+        # -------------------------------------------------------
+        # Column extraction — pure numpy from here, no memmap.
+        # -------------------------------------------------------
+        want = set(columns) if columns is not None else None
 
-    def _resolve_filter_array(self, key: str, s: slice) -> Tuple[np.ndarray, bool]:
+        def col(idx: int) -> np.ndarray:
+            return block[:, idx]
+
+        out = {}  # type: Dict[str, Any]
+
+        if want is None or "time [s]" in want:
+            out["time [s]"] = col(self._t_idx_col)
+        if want is None or "lat [deg]" in want:
+            out["lat [deg]"] = col(self._lat_col)
+        if want is None or "lon [deg]" in want:
+            out["lon [deg]"] = col(self._lon_col)
+        if want is None or "grid index" in want:
+            out["grid index"] = col(self._grid_idx_col).astype(np.int32, copy=False)
+        if want is None or "GP index" in want:
+            out["GP index"] = col(self._gp_idx_col).astype(np.int32, copy=False)
+
+        if not include_extras:
+            return out
+
+        columns_meta = self._meta.get("columns", {})
+
+        for safe, col_idx in self._extras.items():
+            col_meta = columns_meta.get(safe, {})
+            col_name = col_meta.get("col_name", safe)
+
+            if want is not None and (col_name not in want and safe not in want):
+                continue
+
+            arr = col(col_idx)
+
+            if safe in self._vocab_arr:
+                codes = arr.astype(np.int32, copy=False)
+                if decode:
+                    out[col_name] = np.take(self._vocab_arr[safe], codes)
+                else:
+                    out[col_name] = codes
+            else:
+                out[col_name] = arr
+
+        return out
+
+    # ---------------------------
+    # Filter helpers (updated)
+    # ---------------------------
+
+    def _resolve_filter_col_index(self, key: str) -> Tuple[int, bool]:
         """
-        Resolve a filter key to an array view inside slice s.
-        Recommended: pass safe names for extras ("instrument_code", etc.).
+        Resolve a filter key to a column index in _rows and a vocab flag.
+        Returns (col_idx, is_vocab).
+
+        Previously _resolve_filter_array took a slice s and returned a memmap view.
+        Now it just returns the column index — the block read in __rows_from_slice
+        handles the actual data access.
         """
         if key in self._extras:
-            return self._extras[key][s], (key in self._vocab_arr)
+            return self._extras[key], (key in self._vocab_arr)
 
-        # allow filtering on base fields via safe-ish names
         if key in ("t", "time [s]"):
-            return self._t[s], False
+            return self._t_idx_col, False
         if key in ("lat_deg", "lat [deg]"):
-            return self._lat[s], False
+            return self._lat_col, False
         if key in ("lon_deg", "lon [deg]"):
-            return self._lon[s], False
+            return self._lon_col, False
         if key in ("grid_index", "grid index"):
-            return self._grid_idx[s], False
+            return self._grid_idx_col, False
         if key in ("GP_index", "GP index"):
-            return self._gp_idx[s], False
+            return self._gp_idx_col, False
 
         raise KeyError("Unknown filter column: %s" % key)
 
     def _mask_for_spec(self, safe: str, arr: np.ndarray, is_vocab: bool, spec: FilterSpec) -> np.ndarray:
         """
-        Convert a FilterSpec to a boolean mask over arr (already sliced).
+        Convert a FilterSpec to a boolean mask over arr (already sliced from block).
+        Unchanged from original — arr is now an in-RAM column slice, not a memmap view.
         """
-        # range
         if isinstance(spec, tuple) and len(spec) == 3 and spec[0] == "between":
             lo = spec[1]
             hi = spec[2]
             return (arr >= lo) & (arr <= hi)
 
-        # membership
         if isinstance(spec, (set, list, tuple)) and not (isinstance(spec, tuple) and len(spec) == 3 and spec[0] == "between"):
             if is_vocab:
                 codes = self._labels_or_codes_to_codes(safe, spec)
                 return np.isin(arr.astype(np.int32, copy=False), codes)
             return np.isin(arr, spec)
 
-        # equality
         if is_vocab:
             code = self._label_or_code_to_code(safe, spec)
             return arr.astype(np.int32, copy=False) == code
@@ -1254,75 +1457,6 @@ class AccessTable(AbstractTable):
         return np.array(out, dtype=np.int32)
 
     # ---------------------------
-    # Row materialization (fast)
-    # ---------------------------
-
-    def __rows_from_slice(
-        self,
-        s: slice,
-        include_extras: bool,
-        columns: Optional[List[str]],
-        decode: bool,
-        mask: Optional[np.ndarray],
-    ) -> Dict[str, Any]:
-        """
-        Materialize rows for slice s with optional boolean mask, projection, and vocab decoding.
-        Avoids expensive work when possible:
-          - applies mask before decoding
-          - avoids astype(float) copies unless needed
-        """
-        def sel(a: np.ndarray) -> np.ndarray:
-            v = a[s]
-            if mask is None:
-                return v
-            return v[mask]
-
-        want = None  # type: Optional[set]
-        if columns is not None:
-            want = set(columns)
-
-        out = {}  # type: Dict[str, Any]
-
-        # Base columns
-        if want is None or "time [s]" in want:
-            out["time [s]"] = sel(self._t)
-        if want is None or "lat [deg]" in want:
-            out["lat [deg]"] = sel(self._lat)
-        if want is None or "lon [deg]" in want:
-            out["lon [deg]"] = sel(self._lon)
-        if want is None or "grid index" in want:
-            out["grid index"] = sel(self._grid_idx).astype(np.int32, copy=False)
-        if want is None or "GP index" in want:
-            out["GP index"] = sel(self._gp_idx).astype(np.int32, copy=False)
-
-        if not include_extras:
-            return out
-
-        columns_meta = self._meta.get("columns", {})
-
-        for safe, arr_full in self._extras.items():
-            col_meta = columns_meta.get(safe, {})
-            col_name = col_meta.get("col_name", safe)
-
-            # projection: accept either display name or safe name for extras
-            if want is not None and (col_name not in want and safe not in want):
-                continue
-
-            arr = sel(arr_full)
-
-            # vocab?
-            if safe in self._vocab_arr:
-                codes = arr.astype(np.int32, copy=False)
-                if decode:
-                    out[col_name] = np.take(self._vocab_arr[safe], codes)
-                else:
-                    out[col_name] = codes
-            else:
-                out[col_name] = arr
-
-        return out
-
-    # ---------------------------
     # Iteration
     # ---------------------------
 
@@ -1330,27 +1464,30 @@ class AccessTable(AbstractTable):
         """
         Iterates row-by-row (still slower than vectorized methods).
         Uses vocab arrays for O(1) decode per row.
+        Unchanged from original — iteration is not a hot path.
         """
         columns_meta = self._meta.get("columns", {})
-        for i in range(len(self._t)):
+        n = int(self._rows.shape[0])
+        for i in range(n):
+            row = self._rows[i]  # one memmap read per row — unavoidable in row iteration
             out = {
-                "lat [deg]": float(self._lat[i]),
-                "lon [deg]": float(self._lon[i]),
-                "grid index": int(self._grid_idx[i]),
-                "GP index": int(self._gp_idx[i]),
+                "lat [deg]": float(row[self._lat_col]),
+                "lon [deg]": float(row[self._lon_col]),
+                "grid index": int(row[self._grid_idx_col]),
+                "GP index": int(row[self._gp_idx_col]),
             }
-            for safe, arr in self._extras.items():
+            for safe, col_idx in self._extras.items():
                 col_meta = columns_meta.get(safe, {})
                 col_name = col_meta.get("col_name", safe)
 
                 if safe in self._vocab_arr:
-                    code = int(arr[i])
+                    code = int(row[col_idx])
                     va = self._vocab_arr[safe]
                     out[col_name] = va[code] if 0 <= code < len(va) else None
                 else:
-                    out[col_name] = float(arr[i])
+                    out[col_name] = float(row[col_idx])
 
-            yield float(self._t[i]), out
+            yield float(row[self._t_idx_col]), out
 
 # @dataclass
 # class AccessTable(AbstractTable):
@@ -1360,13 +1497,20 @@ class AccessTable(AbstractTable):
 #     Files:
 #       - offsets.npy (T+1,)
 #       - rows.npy    (M,K) where columns are defined by schema["layout"].
+
+#     Notes on performance:
+#       - Filtering is applied BEFORE decoding vocab columns.
+#       - Vocab decoding uses np.take on a small object array (fast).
+#       - decode=False returns vocab columns as integer codes (fastest).
+#       - columns=... allows projection to only the fields you need.
 #     """
 #     _offsets: np.ndarray              # (T+1,) int64 memmap
 #     _rows: np.ndarray                 # (M,K)  memmap
-#     _col: Dict[str, int]              # name -> column index in _rows
-#     _extras: Dict[str, np.ndarray]    # views into _rows for extra columns (by safe-name)
+#     _col: Dict[str, int]              # safe-name -> column index in _rows
+#     _extras: Dict[str, np.ndarray]    # safe-name -> view into _rows col
 #     _meta: Dict[str, Any]
 
+#     # Required base columns as views into _rows
 #     _t: np.ndarray
 #     _t_idx: np.ndarray
 #     _lat: np.ndarray
@@ -1374,48 +1518,94 @@ class AccessTable(AbstractTable):
 #     _grid_idx: np.ndarray
 #     _gp_idx: np.ndarray
 
+#     # Vocab acceleration
+#     _vocab_arr: Dict[str, np.ndarray]       # safe-name -> object array indexed by code
+#     _rev_vocab: Dict[str, Dict[Any, int]]   # safe-name -> {label -> code}
+
+#     # Optional: share vocab arrays across instances (useful if schema objects are reused)
+#     # _VOCAB_CACHE = {}  # type: Dict[Tuple[str, int], np.ndarray]
+
 #     @classmethod
-#     def from_schema(cls, schema: Dict, mmap_mode: str = "r") -> "AccessTable":
+#     def _get_vocab_arr_cached(cls, _VOCAB_CACHE, safe: str, vocab: Dict[str, Any]) -> np.ndarray:
+#         """
+#         Build (or reuse) an object array such that arr[code] -> label.
+#         Cache key uses id(vocab) which works well if schema/vocab dict is reused across sats.
+#         """
+#         key = (safe, id(vocab))
+#         arr = _VOCAB_CACHE.get(key)
+#         if arr is not None:
+#             return arr
+
+#         if not vocab:
+#             arr = np.empty((0,), dtype=object)
+#             _VOCAB_CACHE[key] = arr
+#             return arr
+
+#         codes = [int(k) for k in vocab.keys()]
+#         max_code = max(codes) if codes else -1
+#         arr = np.empty((max_code + 1,), dtype=object)
+#         arr[:] = None
+#         for k, v in vocab.items():
+#             arr[int(k)] = v
+
+#         _VOCAB_CACHE[key] = arr
+#         return arr
+
+#     @classmethod
+#     def from_schema(cls, schema: Dict[str, Any], mmap_mode: str = "r") -> "AccessTable":
 #         # validate inputs
 #         super().from_schema(schema, mmap_mode=mmap_mode)
 
-#         # extract in_dir from schema
 #         in_dir = schema.get("dir", None)
-
-#         # ensure required fields are in layout
 #         if in_dir is None:
 #             raise ValueError("schema missing 'dir'")
+
 #         if "files" not in schema:
 #             raise ValueError("Packed AccessTable schema must include 'files' with 'offsets' and 'rows'")
 #         files = schema.get("files", {})
 #         if "offsets" not in files or "rows" not in files:
 #             raise ValueError("Packed AccessTable schema must include files['offsets'] and files['rows']")
 
-#         # get number of rows in table from schema
-#         n,k = int(schema["shape"][0]), int(schema["shape"][1])
+#         n = int(schema["shape"][0])
+#         k = int(schema["shape"][1])
 #         layout = schema.get("layout", None)
 #         if not layout:
-#             raise ValueError("Packed IntervalTable schema must include 'layout' list")
-#         assert k == len(layout), f"expected {k} columns based on schema shape, got {len(layout)} in layout"
+#             raise ValueError("Packed AccessTable schema must include 'layout' list")
+#         if k != len(layout):
+#             raise AssertionError("expected %d columns based on schema shape, got %d in layout"
+#                                  % (k, len(layout)))
 
-#         # check if table is empty
+#         required = ["t", "t_index", "lat_deg", "lon_deg", "grid_index", "GP_index"]
+#         base_set = set(required)
+
+#         # Empty table fast path
 #         if n == 0:
-#             # empty table; define empty `ndarray` for offsets and rows
 #             offsets = np.empty((0,), dtype=np.int64)
 #             dtype = np.dtype(schema.get("packed_dtype", np.float64))
 #             rows = np.empty((0, k), dtype=dtype)
-#             t = rows[:, layout.index("t")] if "t" in layout else np.empty((0,), dtype=dtype)
-#             t_idx = rows[:, layout.index("t_index")] if "t_index" in layout else np.empty((0,), dtype=dtype)
-#             lat = rows[:, layout.index("lat_deg")] if "lat_deg" in layout else np.empty((0,), dtype=dtype)
-#             lon = rows[:, layout.index("lon_deg")] if "lon_deg" in layout else np.empty((0,), dtype=dtype)
-#             grid_idx = rows[:, layout.index("grid_index")] if "grid_index" in layout else np.empty((0,), dtype=dtype)
-#             gp_idx = rows[:, layout.index("GP_index")] if "GP_index" in layout else np.empty((0,), dtype=dtype) 
-#             extras = {name: rows[:, layout.index(name)] for name in layout if name not in ("t", "t_index", "lat_deg", "lon_deg", "grid_index", "GP_index")}
+
+#             col = dict((name, i) for i, name in enumerate(layout))
+
+#             def empty_view(name: str) -> np.ndarray:
+#                 return rows[:, col[name]] if name in col else np.empty((0,), dtype=dtype)
+
+#             t = empty_view("t")
+#             t_idx = empty_view("t_index")
+#             lat = empty_view("lat_deg")
+#             lon = empty_view("lon_deg")
+#             grid_idx = empty_view("grid_index")
+#             gp_idx = empty_view("GP_index")
+
+#             extras = {}
+#             for name in layout:
+#                 if name in base_set:
+#                     continue
+#                 extras[name] = rows[:, col[name]]
 
 #             return cls(
 #                 _offsets=offsets,
 #                 _rows=rows,
-#                 _col={name: i for i, name in enumerate(layout)},
+#                 _col=col,
 #                 _extras=extras,
 #                 _meta=schema,
 #                 _t=t,
@@ -1424,31 +1614,28 @@ class AccessTable(AbstractTable):
 #                 _lon=lon,
 #                 _grid_idx=grid_idx,
 #                 _gp_idx=gp_idx,
+#                 _vocab_arr={},
+#                 _rev_vocab={},
 #             )
 
-#         # load offsets and rows as memmaps
+#         # Load memmaps
 #         offsets = np.load(os.path.join(in_dir, files["offsets"]), mmap_mode=mmap_mode)
 #         rows = np.load(os.path.join(in_dir, files["rows"]), mmap_mode=mmap_mode)
-    
-#         # enumerate columns in layout for indexing
-#         col = {name: i for i, name in enumerate(layout)}
 
-#         # enlist required base cols
-#         required = ["t", "t_index", "lat_deg", "lon_deg", "grid_index", "GP_index"]
-        
-#         # ensure required columns are present in layout
+#         col = dict((name, i) for i, name in enumerate(layout))
+
 #         missing = [r for r in required if r not in col]
-#         if missing: raise ValueError(f"layout missing required columns: {missing}")
+#         if missing:
+#             raise ValueError("layout missing required columns: %s" % missing)
 
-#         # basic shape checks
 #         if rows.shape[0] != n:
-#             raise AssertionError(f"expected rows {n}, got {rows.shape[0]}")
+#             raise AssertionError("expected rows %d, got %d" % (n, rows.shape[0]))
 #         if rows.shape[1] != k:
-#             raise AssertionError(f"expected columns {k} based on schema shape, got {rows.shape[1]}")
-#         if offsets.shape[0] != schema['n_steps'] + 1:
-#             raise AssertionError(f"expected offsets {schema['n_steps'] + 1}, got {offsets.shape[0]}")
+#             raise AssertionError("expected columns %d based on schema shape, got %d" % (k, rows.shape[1]))
+#         if offsets.shape[0] != int(schema["n_steps"]) + 1:
+#             raise AssertionError("expected offsets %d, got %d" % (int(schema["n_steps"]) + 1, offsets.shape[0]))
 
-#         # extract required data into packed array
+#         # Base views (no copy)
 #         t = rows[:, col["t"]]
 #         t_idx = rows[:, col["t_index"]]
 #         lat = rows[:, col["lat_deg"]]
@@ -1456,17 +1643,42 @@ class AccessTable(AbstractTable):
 #         grid_idx = rows[:, col["grid_index"]]
 #         gp_idx = rows[:, col["GP_index"]]
 
-#         # package additional data
-#         base_set = set(required)
-#         extras: Dict[str, np.ndarray] = {}
+#         # Extras (views)
+#         extras = {}
 #         for name in layout:
-#             # skip base column; already packaged
-#             if name in base_set: continue
-
-#             # package extra column as view into rows
+#             if name in base_set:
+#                 continue
 #             extras[name] = rows[:, col[name]]
 
-#         # return `AccessTable` object
+#         # Build vocab accelerators
+#         vocab_arr = {}
+#         rev_vocab = {}
+#         columns_meta = schema.get("columns", {})
+
+#         _VOCAB_CACHE = {}   
+#         for safe in extras.keys():
+#             col_meta = columns_meta.get(safe, {})
+#             vocab = col_meta.get("vocab", None)
+#             if not vocab:
+#                 continue
+
+#             arr = cls._get_vocab_arr_cached(_VOCAB_CACHE, safe, vocab)
+#             vocab_arr[safe] = arr
+
+#             # Reverse map for filter-by-label (small dict)
+#             rv = {}
+#             for k_str, label in vocab.items():
+#                 rv[label] = int(k_str)
+#             rev_vocab[safe] = rv
+
+#         # ensure vocab array matches reverse vocab 
+#         for safe in vocab_arr.keys():
+#             arr = vocab_arr[safe]
+#             rv = rev_vocab[safe]
+#             for label, code in rv.items():
+#                 if code >= len(arr) or arr[code] != label:
+#                     raise AssertionError("vocab array and reverse vocab out of sync for column '%s'" % safe)
+
 #         return cls(
 #             _offsets=offsets,
 #             _rows=rows,
@@ -1479,53 +1691,130 @@ class AccessTable(AbstractTable):
 #             _lon=lon,
 #             _grid_idx=grid_idx,
 #             _gp_idx=gp_idx,
+#             _vocab_arr=vocab_arr,
+#             _rev_vocab=rev_vocab,
 #         )
 
-#     def __len__(self):
-#         return len(self._t)
+#     def __len__(self) -> int:
+#         return int(self._t.shape[0])
 
-#     def lookup_interval(self, t_start: float, t_end: float = np.Inf, include_extras : bool = True) -> Dict[str, np.ndarray]:
-#         # validate inputs
+#     # ---------------------------
+#     # Public lookup API
+#     # ---------------------------
+
+#     def lookup_interval(
+#         self,
+#         t_start: float,
+#         t_end: float = np.Inf,
+#         include_extras: bool = True,
+#         filters: Optional[Dict[str, FilterSpec]] = None,
+#         columns: Optional[List[str]] = None,
+#         decode: bool = True,
+#         exact_time_filter: bool = True,
+#     ) -> Dict[str, np.ndarray]:
+#         """
+#         Lookup rows in [t_start, t_end] with optional filters applied BEFORE decoding.
+
+#         filters:
+#           - {"safe_col": value}                equality
+#           - {"safe_col": {v1,v2}}              membership
+#           - {"safe_col": ("between", lo, hi)}  numeric range
+#           For vocab columns you may provide:
+#             - label (str) or set/list of labels -> auto-mapped to codes
+#             - integer code(s) directly
+#         columns:
+#           - projection list. Uses *output* names:
+#               base: "time [s]", "lat [deg]", "lon [deg]", "grid index", "GP index"
+#               extras: schema["columns"][safe]["col_name"] if present else safe
+#             You can also include safe names for extras.
+#         decode:
+#           - if True, vocab extras are decoded to labels (strings)
+#           - if False, vocab extras are returned as int codes (fast)
+#         exact_time_filter:
+#           - if True, apply (t_start <= t <= t_end) at row level.
+#             This is usually needed because bucket slices may include boundary rows.
+#         """
+#         # validate
 #         if not isinstance(t_start, (int, float)) or t_start < 0.0:
 #             raise ValueError("time t_start must be a non-negative number")
 #         if not isinstance(t_end, (int, float)) or t_end < 0.0:
 #             raise ValueError("time t_end must be a non-negative number")
 #         if t_start > t_end + 1e-6:
-#             raise ValueError("time t_start must be less than or equal to time t_end")
+#             raise ValueError("time t_start must be <= time t_end")
 
-#         # check if there is any data
 #         if len(self._t) == 0:
-#             s_empty = slice(0, 0)
-#             return self.__rows_from_slice(s_empty, include_extras=include_extras)
+#             return self.__rows_from_slice(slice(0, 0), include_extras, columns, decode, None)
 
-#         # get start and end indices for time range
 #         ti0 = self._time_to_index_floor(t_start)
+#         # ti0 -= 1 if ti0 > 0 else 0  # include previous bucket for boundary conditions
 #         ti1 = self._time_to_index_floor(t_end)
 
-#         # check if start and end time are in the same time index bucket
 #         if ti0 == ti1:
-#             # if so, return the rows for that bucket
-#             return self.lookup_time(t_start, include_extras=include_extras)
+#             s = self.__slice_for_time_index(ti0)
+#         else:
+#             s = self._slice_for_index_range(ti0, ti1)
 
-#         # get slice for time index range
-#         s = self._slice_for_index_range(ti0, ti1)
+#         if s.start == s.stop:
+#             return self.__rows_from_slice(s, include_extras, columns, decode, None)
 
-#         # construct output dictionary
-#         out = self.__rows_from_slice(s, include_extras=include_extras)
+#         # Build mask inside the slice BEFORE decoding
+#         mask = self._build_mask(
+#             s=s,
+#             t_start=t_start,
+#             t_end=t_end,
+#             filters=filters,
+#             exact_time_filter=exact_time_filter,
+#         )
 
-#         # filter out any rows that are outside the time range 
-#         if s.start != s.stop:
-#             mask = (t_start <= out["time [s]"]) & (out["time [s]"] <= t_end)
-#             for k in list(out.keys()):
-#                 out[k] = out[k][mask]
+#         return self.__rows_from_slice(s, include_extras, columns, decode, mask)
 
-#         # return ouput
-#         return out
+#     def lookup_time(
+#         self,
+#         t: float,
+#         include_extras: bool = False,
+#         filters: Optional[Dict[str, FilterSpec]] = None,
+#         columns: Optional[List[str]] = None,
+#         decode: bool = True,
+#     ) -> Dict[str, np.ndarray]:
+#         """
+#         Find nearest/first occurrence and return its bucket, with optional filtering.
+#         """
+#         if not isinstance(t, (int, float)) or t < 0.0:
+#             raise ValueError("time `t` must be a non-negative number")
+
+#         if len(self._t) == 0:
+#             return self.__rows_from_slice(slice(0, 0), include_extras, columns, decode, None)
+
+#         if float(self._t[-1]) < t - 1e-6:
+#             s_last = slice(len(self._t) - 1, len(self._t))
+#             return self.__rows_from_slice(s_last, include_extras, columns, decode, None)
+
+#         i = int(np.searchsorted(self._t, t, side="left"))
+#         ti = int(self._t_idx[i])
+#         s = self.__slice_for_time_index(ti)
+
+#         if s.start == s.stop:
+#             return self.__rows_from_slice(s, include_extras, columns, decode, None)
+
+#         mask = self._build_mask(
+#             s=s,
+#             t_start=-np.Inf,
+#             t_end=np.Inf,
+#             filters=filters,
+#             exact_time_filter=False,
+#         )
+#         return self.__rows_from_slice(s, include_extras, columns, decode, mask)
+
+#     # ---------------------------
+#     # Core helpers
+#     # ---------------------------
 
 #     def _time_to_index_floor(self, t: float) -> int:
 #         dt = float(self._meta["time_step"])
-#         return int(t // dt) if not np.isinf(t) else len(self._offsets) - 1
-    
+#         if np.isinf(t):
+#             return int(len(self._offsets) - 1)
+#         return int(t // dt)
+
 #     def _slice_for_index_range(self, ti0: int, ti1: int) -> slice:
 #         if ti1 < ti0:
 #             return slice(0, 0)
@@ -1538,91 +1827,204 @@ class AccessTable(AbstractTable):
 #         return slice(a, b)
 
 #     def _clamp_index(self, ti: int) -> int:
-#         T = len(self._offsets) - 1
+#         T = int(len(self._offsets) - 1)
 #         if ti < 0:
 #             return 0
 #         if ti > T - 1:
 #             return T - 1
-#         return ti    
-
-#     def __rows_from_slice(self, s: slice, include_extras: bool = False) -> Dict[str, Any]:
-#         out = {
-#             "time [s]": self._t[s].astype(float),
-#             "lat [deg]": self._lat[s].astype(float),
-#             "lon [deg]": self._lon[s].astype(float),
-#             "grid index": self._grid_idx[s].astype(int, copy=False),
-#             "GP index": self._gp_idx[s].astype(int, copy=False),
-#         }
-
-#         if include_extras:
-#             for safe, arr in self._extras.items():
-#                 # safe is the key used in schema["columns"]
-#                 col_meta = self._meta.get("columns", {}).get(safe, {})
-#                 col_name = col_meta.get("col_name", safe)
-
-#                 if "vocab" in col_meta:
-#                     # get vocab for column
-#                     vocab: dict = col_meta["vocab"]
-
-#                     # cast to codes if not already int
-#                     codes = arr[s].astype(np.int32, copy=False)  
-                    
-#                     # decode using vocab
-#                     out[col_name] = np.array([vocab.get(str(int(c)), None) for c in codes])
-                
-#                 else:
-#                     # no vocab, return raw values as float
-#                     out[col_name] = arr[s].astype(float)
-
-#         # return output dictionary with arrays for each column
-#         return out
-
-#     def lookup_time(self, t: float, include_extras: bool = False) -> Dict[str, Any]:
-#         """
-#         Find nearest / first occurrence; but you still need the corresponding time index bucket.
-#         If you trust that each bucket has constant t value, you can map by search then use t_idx:
-#         """
-
-#         # validate inputs
-#         if not isinstance(t, (int, float)) or t < 0.0:
-#             raise ValueError("time `t` must be a non-negative number")
-
-#         # check if there is any data    
-#         if len(self._t) == 0:
-#             s_empty = slice(0, 0)
-#             return self.__rows_from_slice(s_empty, include_extras=include_extras)
-
-#         # check if time `t` is beyond the data in the table
-#         if self._t[-1] < t - 1e-6:
-#             # if so, return last row
-#             s_last = slice(len(self._t) - 1, len(self._t))
-#             return self.__rows_from_slice(s_last, include_extras=include_extras)
-
-#         # find location in time array
-#         i = int(np.searchsorted(self._t, t, side="left"))
-
-#         # convert to time index and get rows for that time index
-#         ti = int(self._t_idx[i]) 
-#         return self.__rows_at_index(ti, include_extras=include_extras)
-
-#     def __rows_at_index(self, ti: int, include_extras: bool = False) -> Dict[str, Any]:
-#         s = self.__slice_for_time_index(ti)
-#         return self.__rows_from_slice(s, include_extras=include_extras)
+#         return int(ti)
 
 #     def __slice_for_time_index(self, ti: int) -> slice:
-#         # bounds check 
 #         if ti < 0 or ti >= (len(self._offsets) - 1):
-#             # time index is out of bounds; return empty slice
 #             return slice(0, 0)
-        
-#         # compute slice for time index from offsets
 #         a = int(self._offsets[ti])
 #         b = int(self._offsets[ti + 1])
-
-#         # return slice object
 #         return slice(a, b)
 
+#     def _build_mask(
+#         self,
+#         s: slice,
+#         t_start: float,
+#         t_end: float,
+#         filters: Optional[Dict[str, FilterSpec]],
+#         exact_time_filter: bool,
+#     ) -> Optional[np.ndarray]:
+#         """
+#         Build a boolean mask for rows within slice s.
+#         Applied BEFORE decoding to avoid wasted work.
+
+#         Note: slice s already narrows to time *buckets*; exact_time_filter
+#         applies row-level [t_start, t_end] bounds when needed.
+#         """
+#         n = int(s.stop - s.start)
+#         if n <= 0:
+#             return None
+
+#         mask = None  # type: Optional[np.ndarray]
+
+#         # Fine-grained time bounds within the bucket slice (often needed)
+#         if exact_time_filter and (not np.isinf(t_start) or not np.isinf(t_end)):
+#             dt = float(self._meta["time_step"])
+#             tview = self._t[s]
+#             m = (tview >= t_start - dt) & (tview <= t_end)
+#             mask = m if mask is None else (mask & m)
+#             if mask is not None and (not mask.any()):
+#                 return mask
+
+#         if not filters:
+#             return mask
+
+#         for key, spec in filters.items():
+#             arr, is_vocab = self._resolve_filter_array(key, s)
+
+#             m = self._mask_for_spec(key, arr, is_vocab, spec)
+#             mask = m if mask is None else (mask & m)
+
+#             if mask is not None and (not mask.any()):
+#                 return mask
+
+#         return mask
+
+#     def _resolve_filter_array(self, key: str, s: slice) -> Tuple[np.ndarray, bool]:
+#         """
+#         Resolve a filter key to an array view inside slice s.
+#         Recommended: pass safe names for extras ("instrument_code", etc.).
+#         """
+#         if key in self._extras:
+#             return self._extras[key][s], (key in self._vocab_arr)
+
+#         # allow filtering on base fields via safe-ish names
+#         if key in ("t", "time [s]"):
+#             return self._t[s], False
+#         if key in ("lat_deg", "lat [deg]"):
+#             return self._lat[s], False
+#         if key in ("lon_deg", "lon [deg]"):
+#             return self._lon[s], False
+#         if key in ("grid_index", "grid index"):
+#             return self._grid_idx[s], False
+#         if key in ("GP_index", "GP index"):
+#             return self._gp_idx[s], False
+
+#         raise KeyError("Unknown filter column: %s" % key)
+
+#     def _mask_for_spec(self, safe: str, arr: np.ndarray, is_vocab: bool, spec: FilterSpec) -> np.ndarray:
+#         """
+#         Convert a FilterSpec to a boolean mask over arr (already sliced).
+#         """
+#         # range
+#         if isinstance(spec, tuple) and len(spec) == 3 and spec[0] == "between":
+#             lo = spec[1]
+#             hi = spec[2]
+#             return (arr >= lo) & (arr <= hi)
+
+#         # membership
+#         if isinstance(spec, (set, list, tuple)) and not (isinstance(spec, tuple) and len(spec) == 3 and spec[0] == "between"):
+#             if is_vocab:
+#                 codes = self._labels_or_codes_to_codes(safe, spec)
+#                 return np.isin(arr.astype(np.int32, copy=False), codes)
+#             return np.isin(arr, spec)
+
+#         # equality
+#         if is_vocab:
+#             code = self._label_or_code_to_code(safe, spec)
+#             return arr.astype(np.int32, copy=False) == code
+#         return arr == spec
+
+#     def _label_or_code_to_code(self, safe: str, x: Any) -> int:
+#         if isinstance(x, (int, np.integer)):
+#             return int(x)
+#         rv = self._rev_vocab.get(safe, None)
+#         if rv is None:
+#             raise KeyError("No reverse vocab for column: %s" % safe)
+#         if x not in rv:
+#             raise KeyError("Unknown vocab label %r for column %s" % (x, safe))
+#         return int(rv[x])
+
+#     def _labels_or_codes_to_codes(self, safe: str, xs: Union[Set[Any], List[Any], Tuple[Any]]) -> np.ndarray:
+#         out = []  # type: List[int]
+#         for x in xs:
+#             out.append(self._label_or_code_to_code(safe, x))
+#         return np.array(out, dtype=np.int32)
+
+#     # ---------------------------
+#     # Row materialization (fast)
+#     # ---------------------------
+
+#     def __rows_from_slice(
+#         self,
+#         s: slice,
+#         include_extras: bool,
+#         columns: Optional[List[str]],
+#         decode: bool,
+#         mask: Optional[np.ndarray],
+#     ) -> Dict[str, Any]:
+#         """
+#         Materialize rows for slice s with optional boolean mask, projection, and vocab decoding.
+#         Avoids expensive work when possible:
+#           - applies mask before decoding
+#           - avoids astype(float) copies unless needed
+#         """
+#         def sel(a: np.ndarray) -> np.ndarray:
+#             v = a[s]
+#             if mask is None:
+#                 return v
+#             return v[mask]
+
+#         want = None  # type: Optional[set]
+#         if columns is not None:
+#             want = set(columns)
+
+#         out = {}  # type: Dict[str, Any]
+
+#         # Base columns
+#         if want is None or "time [s]" in want:
+#             out["time [s]"] = sel(self._t)
+#         if want is None or "lat [deg]" in want:
+#             out["lat [deg]"] = sel(self._lat)
+#         if want is None or "lon [deg]" in want:
+#             out["lon [deg]"] = sel(self._lon)
+#         if want is None or "grid index" in want:
+#             out["grid index"] = sel(self._grid_idx).astype(np.int32, copy=False)
+#         if want is None or "GP index" in want:
+#             out["GP index"] = sel(self._gp_idx).astype(np.int32, copy=False)
+
+#         if not include_extras:
+#             return out
+
+#         columns_meta = self._meta.get("columns", {})
+
+#         for safe, arr_full in self._extras.items():
+#             col_meta = columns_meta.get(safe, {})
+#             col_name = col_meta.get("col_name", safe)
+
+#             # projection: accept either display name or safe name for extras
+#             if want is not None and (col_name not in want and safe not in want):
+#                 continue
+
+#             arr = sel(arr_full)
+
+#             # vocab?
+#             if safe in self._vocab_arr:
+#                 codes = arr.astype(np.int32, copy=False)
+#                 if decode:
+#                     out[col_name] = np.take(self._vocab_arr[safe], codes)
+#                 else:
+#                     out[col_name] = codes
+#             else:
+#                 out[col_name] = arr
+
+#         return out
+
+#     # ---------------------------
+#     # Iteration
+#     # ---------------------------
+
 #     def __iter__(self):
+#         """
+#         Iterates row-by-row (still slower than vectorized methods).
+#         Uses vocab arrays for O(1) decode per row.
+#         """
+#         columns_meta = self._meta.get("columns", {})
 #         for i in range(len(self._t)):
 #             out = {
 #                 "lat [deg]": float(self._lat[i]),
@@ -1631,14 +2033,14 @@ class AccessTable(AbstractTable):
 #                 "GP index": int(self._gp_idx[i]),
 #             }
 #             for safe, arr in self._extras.items():
-#                 col_meta = self._meta.get("columns", {}).get(safe, {})
+#                 col_meta = columns_meta.get(safe, {})
 #                 col_name = col_meta.get("col_name", safe)
 
-#                 if "vocab" in col_meta:
-#                     vocab: dict = col_meta["vocab"]
-#                     out[col_name] = vocab.get(str(int(arr[i])), None)
+#                 if safe in self._vocab_arr:
+#                     code = int(arr[i])
+#                     va = self._vocab_arr[safe]
+#                     out[col_name] = va[code] if 0 <= code < len(va) else None
 #                 else:
 #                     out[col_name] = float(arr[i])
 
-#             yield float(self._t[i]), out    
-            
+#             yield float(self._t[i]), out
