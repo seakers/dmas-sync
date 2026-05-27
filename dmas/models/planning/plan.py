@@ -70,6 +70,11 @@ class Plan(ABC):
             # check feasiblity
             try:
                 self.__is_feasible(actions)
+            except ValueError as e:
+                print(f"Per-list feasibility failed for list of {len(actions)} actions:")
+                for i, a in enumerate(actions):
+                    print(f"  [{i}] {type(a).__name__} t=[{a.t_start:.6f}, {a.t_end:.6f}]")
+                raise
             except RuntimeError:
                 raise RuntimeError("Cannot update plan: new plan is unfeasible.")
         
@@ -80,7 +85,12 @@ class Plan(ABC):
         self.t = t            
 
         # check feasibility of new plan
-        assert self.__is_feasible(self.actions)
+        try:
+            assert self.__is_feasible(self.actions)
+        except (ValueError, AssertionError) as e:
+            for i, a in enumerate(self.actions):
+                print(f"  [{i}] {type(a).__name__} t=[{a.t_start:.3f}, {a.t_end:.3f}]")
+            raise
         
     def add_all(self, actions : List[AgentAction], t : float, printouts : bool = False) -> None:
         """ adds a set of actions to plan """
