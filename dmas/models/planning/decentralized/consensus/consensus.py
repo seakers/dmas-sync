@@ -305,14 +305,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # check for further updates
             if not results_bundle_updates and not constraint_violations:
                 break # no more updates; exit loop       
-
-        # extra cycle for debugging -------------------------
-        if (state.agent_name == 'Flood Monitoring - Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T) Sat 14'
-            and state.get_time() >= 50_000.00
-            and bundle_updates):
-            x = 1 # breakpoint
-        # ---------------------------------------------------
-        
+               
         # collect performed observation opportunities
         performed_bundle_observations : List[ObservationOpportunity] \
             = [obs_opp for obs_opp,_ in performed_bundle_updates]
@@ -918,22 +911,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                      state : SimulationAgentState
                                     ) -> Tuple[list, List[List[Bid]]]:
         """ Update bundle according to latest results. """
-
-        # ---------------------------------------------------
-        # if (state.agent_name == 'Flood Monitoring - Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T) Sat 14'
-        #     and state.get_time() >= 50_000.00
-        #     and self._bundle
-        #     ):
-        #     x = 1 # breakpoint
-            
-        #     self._bundle, self._path, results_bundle_updates \
-        #             = self.__update_bundle_from_results(state)
-        #     self._bundle, self._path, constraint_violations \
-        #         = self._check_bundle_constraints(state)
-        
-        #     x = 1 # breakpoint
-        # ---------------------------------------------------
-
         # initialize list of bundle updates
         bundle_updates = []
 
@@ -973,20 +950,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         if min_updated_idx is None:
             # no updates to bids in bundle; return original bundle
             return self._bundle, self._path, bundle_updates
-        
-        # -------------------------------
-        # DEBUG BREAKPOINTS
-        # for task, n_obs in self._bundle[min_updated_idx][1].items():
-        #     if len(self._results[task]) <= n_obs:
-        #         x = 1 # debug breakpoint
-        #     elif not self._results[task][n_obs].is_bidder_winning():
-        #         x = 1 # debug breakpoint
-        #     elif abs(self._results[task][n_obs].t_img - t_img_bundle[min_updated_idx][task]) > self.EPS:
-        #         x = 1 # debug breakpoint
-        #     elif self._results[task][n_obs].was_performed():
-        #         x = 1 # debug breakpoint    
-        # -------------------------------
-        
+                
         # split bundle at first updated task
         revised_bundle = self._bundle[:min_updated_idx]       
 
@@ -1034,18 +998,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         assert len(revised_bundle) + len(self._bundle[min_updated_idx:]) == init_bundle_size, \
             "Revised bundle size does not match initial bundle size."
         
-        # -------------------------------
-        # DEBUG PRINTOUTS
-        # for task, bids in self.results.items():
-        #     for bid in bids:
-        #         if not bid.has_winner():
-        #             x=1 # debug breakpoint    
-        
-        # if bundle_updates and self._debug:
-        #     self._log_results('CONSENSUS PHASE - RESULTS (AFTER BUNDLE UPDATE)', state, self.results)
-        #     x = 1 # debug breakpoint
-        # -------------------------------
-
         # ensure number of bids match bundle entries
         ## get bids won by this agent from results
         winning_bids = [bid for bids in self._results.values()
@@ -1888,8 +1840,8 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 n_obs_i[task] = matching_bid.n_obs
                 t_prev_i[task] = prev_bid.t_img if prev_bid is not None else np.NINF
 
-                if n_obs_i[task] > 0 and t_prev_i[task] < 0:
-                    x = 1 # breakpoint
+                # if n_obs_i[task] > 0 and t_prev_i[task] < 0:
+                #     x = 1 # breakpoint
 
         # ensure every parent task in path has values for `n_obs` and `t_prev`
         assert all(
