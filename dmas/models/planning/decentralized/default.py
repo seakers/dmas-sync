@@ -333,18 +333,33 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                             desc=f'{state.agent_id}-PLANNER: Pre-Scheduling Observations',
                             leave=False,
                             disable=(len(observation_opportunities) < 10) or not self._printouts):
+                # check for mutual exclusivity with already scheduled actions
+                if any(acc.obs_opp.is_mutually_exclusive(obs) for acc in scheduled_actions):
+                    # if mutually exclusive, skip this observation opportunity
+                    continue
 
-                idx_prev = bisect.bisect_right(scheduled_t_ends, obs.accessibility.right + 1e-6) - 1
-                if idx_prev >= 0:
-                    t_prev_obs = scheduled_actions[idx_prev].t_end
-                else:
-                    t_prev_obs = t_curr
+                # --- original approach (kept for A/B comparison) ---
+                # idx_prev = bisect.bisect_right(scheduled_t_ends, obs.accessibility.right + 1e-6) - 1
+                # if idx_prev >= 0:
+                #     t_prev_obs = scheduled_actions[idx_prev].t_end
+                # else:
+                #     t_prev_obs = t_curr
+                
+                # idx_next = bisect.bisect_left(scheduled_t_starts, obs.accessibility.left - 1e-6)
+                # if idx_next < len(scheduled_actions):
+                #     t_next_obs = scheduled_actions[idx_next].t_start
+                # else:
+                #     t_next_obs = obs.accessibility.right
+                # --- end original approach ---
 
-                idx_next = bisect.bisect_left(scheduled_t_starts, obs.accessibility.left - 1e-6)
-                if idx_next < len(scheduled_actions):
-                    t_next_obs = scheduled_actions[idx_next].t_start
-                else:
-                    t_next_obs = obs.accessibility.right
+                # Use bisect to find all actions that start within the accessibility window
+                # (scheduled_t_starts is sorted by t_start), then take the max t_end among
+                # them. A simple bisect on scheduled_t_ends is not sufficient here because
+                # that list is sorted by t_start, not t_end: merged obs with large spans
+                # make scheduled_t_ends non-monotonic, so bisect returns the wrong index
+                # and t_prev_obs misses the merged obs, allowing overlapping obs to be scheduled.
+                n_prev = bisect.bisect_right(scheduled_t_starts, obs.accessibility.right + 1e-6)
+                t_prev_obs = max(scheduled_t_ends[:n_prev], default=t_curr)
 
                 th_img = np.average((obs.slew_angles.left, obs.slew_angles.right))
                 t_img = max(t_prev_obs, obs.accessibility.left)
@@ -352,6 +367,15 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
                 if t_img + d_img not in obs.accessibility:
                     continue
+
+                # Find the first already-scheduled action that starts after this obs ends.
+                # Use t_img + d_img (the actual claimed slot) rather than accessibility.left
+                # so the check accounts for where the obs will actually be placed.
+                idx_next = bisect.bisect_right(scheduled_t_starts, t_img + d_img - 1e-6)
+                if idx_next < len(scheduled_t_starts):
+                    t_next_obs = scheduled_t_starts[idx_next]
+                else:
+                    t_next_obs = obs.accessibility.right
 
                 prev_action_feasible: bool = (t_prev_obs <= t_img - 1e-6)
                 curr_action_feasible: bool = (abs(th_img) <= self._cross_track_fovs[obs.instrument_name] / 2.0)
@@ -470,12 +494,10 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                     carryover_broadcasts = [action for action in self._plan
                                             if isinstance(action, BroadcastMessageAction)
                                             and action.t_start >= t_curr]
-                    
-                    if carryover_broadcasts:
-                        x = 1
 
                     broadcasts += carryover_broadcasts
 
+            broadcasts.sort(key=lambda a: a.t_start)
             waits = self._schedule_periodic_replan(state, t_next)
 
             self._plan = ReactivePlan(observations, broadcasts, waits, t=t_curr, t_next=t_next)
