@@ -339,8 +339,41 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                 bid.reset(t_curr)
                 self._results[task][n_obs] = bid
 
-        # released bids
-        return [bid for _, _, bid in released_info]
+        # cascade-release: any bundle bid at n_obs+1, n_obs+2, ... for the same task
+        # whose predecessor was just reset now violates the sequential constraint.
+        # _release_stale_bundle_items runs after super()._consensus_phase(), so the
+        # while loop won't catch these; we must cascade here explicitly.
+        cascade_obs_opps = set()
+        cascade_bids = []
+        newly_reset = [(task, n_obs) for task, n_obs, bid in released_info
+                       if not self._results[task][n_obs].has_winner()]
+        while newly_reset:
+            next_reset = []
+            for task, n_obs in newly_reset:
+                k = n_obs + 1
+                if k >= len(self._results.get(task, [])):
+                    continue
+                bid_k = self._results[task][k]
+                if not bid_k.is_bidder_winning() or bid_k.was_performed():
+                    continue
+                bid_k.reset(t_curr)
+                self._results[task][k] = bid_k
+                cascade_bids.append(bid_k)
+                # find the obs_opp this bid lives at in the bundle
+                for opp, task_dict in self._bundle:
+                    if task in task_dict and task_dict[task] == k:
+                        cascade_obs_opps.add(opp)
+                        break
+                next_reset.append((task, k))
+            newly_reset = next_reset
+
+        if cascade_obs_opps:
+            self._bundle = [(opp, td) for opp, td in self._bundle
+                            if opp not in cascade_obs_opps]
+            self._path = [action for action in self._path
+                          if action.obs_opp not in cascade_obs_opps]
+
+        return [bid for _, _, bid in released_info] + cascade_bids
     
     def _find_best_imaging_time(self, task, instrument_name, th_img, t_img_l, t_img_u,
                              duration, specs, cross_track_fovs, orbitdata, mission,

@@ -142,7 +142,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # -------------------------------
         # DEBUG PRINTOUTS
         # debug_case = state._t >= 19_999.00 an ("(VNIR-FR-T) Sat 4" in state.agent_name)
-        debug_case = state.get_time() >= 65_000.00
+        # debug_case = state.get_time() >= 65_000.00
         # if debug_case and incoming_bids:
         # if incoming_bids:
         if self._debug and incoming_bids:
@@ -296,7 +296,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
             # enforce constraints in results
             self._bundle, self._path, constraint_violations \
-                = self._check_results_constraints(state)
+                = self._check_bundle_constraints(state)
 
             # append updates to compiling lists
             bundle_updates.extend(results_bundle_updates)
@@ -305,6 +305,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # check for further updates
             if not results_bundle_updates and not constraint_violations:
                 break # no more updates; exit loop       
+
+        # extra cycle for debugging -------------------------
+        if (state.agent_name == 'Flood Monitoring - Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T) Sat 14'
+            and state.get_time() >= 50_000.00
+            and bundle_updates):
+            x = 1 # breakpoint
+        # ---------------------------------------------------
         
         # collect performed observation opportunities
         performed_bundle_observations : List[ObservationOpportunity] \
@@ -912,6 +919,21 @@ class ConsensusPlanner(AbstractReactivePlanner):
                                     ) -> Tuple[list, List[List[Bid]]]:
         """ Update bundle according to latest results. """
 
+        # ---------------------------------------------------
+        # if (state.agent_name == 'Flood Monitoring - Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T) Sat 14'
+        #     and state.get_time() >= 50_000.00
+        #     and self._bundle
+        #     ):
+        #     x = 1 # breakpoint
+            
+        #     self._bundle, self._path, results_bundle_updates \
+        #             = self.__update_bundle_from_results(state)
+        #     self._bundle, self._path, constraint_violations \
+        #         = self._check_bundle_constraints(state)
+        
+        #     x = 1 # breakpoint
+        # ---------------------------------------------------
+
         # initialize list of bundle updates
         bundle_updates = []
 
@@ -1078,7 +1100,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # return updated bundle and list of updates
         return revised_bundle, revised_path, bundle_updates
     
-    def _check_results_constraints(self, state : SimulationAgentState) -> List[Bid]:
+    def _check_bundle_constraints(self, state : SimulationAgentState) -> List[Bid]:
         """ Check results for constraint violations and return list of affected bids. """
         # get current time 
         t_curr = state.get_time()
@@ -1117,8 +1139,13 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # Constraint 2: If assigned, imaging time must be after previous imaging time
                 if bid.has_winner() and prev_bid.t_img > bid.t_img:
                     min_bundle_violation_idx = bundle_idx
-                    break # stop searching for constraint violations for this task         
-            
+                    break # stop searching for constraint violations for this task
+
+                # Constraint 3: If assigned, previous imaging time must be a valid (non-negative) time.
+                if bid.has_winner() and prev_bid.t_img < 0:
+                    min_bundle_violation_idx = bundle_idx
+                    break
+
             if min_bundle_violation_idx is not None: break
 
         # check if any updates were found
@@ -1276,6 +1303,14 @@ class ConsensusPlanner(AbstractReactivePlanner):
         #     self._log_results('PLANNING PHASE - RESULTS (BEFORE)', state, self._results)
         #     self._log_bundle('PLANNING PHASE - BUNDLE (BEFORE)', state, self._bundle)
         #     x = 1 # breakpoint
+
+        if (state.agent_name == 'Flood Monitoring - Dragonfly Caiman/Komodo-class MS Imager (VNIR-FL-T) Sat 14'
+            and state.get_time() >= 50_000.00
+            ):
+            if self._bundle_changes_performed:
+                x = 1 # breakpoint
+            else:
+                x = 1 # breakpoint
         # -------------------------------
 
         # check if relevant changes were made to bundle or tasks
@@ -1306,7 +1341,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
             # update results with initial periodic plan bundle
             self.__update_results_from_bundle(state, new_bids)
 
-             # -------------------------------
+            # -------------------------------
             # DEBUG PRINTOUTS
             # if self._debug and new_bids:
             # if new_bids and state._t > 32_299.0:
@@ -1480,6 +1515,29 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
             # update results
             self._results[task][n_obs] = bid_to_reset
+
+        # cascade-release: after resetting removed bids, any remaining bundle
+        # bid whose predecessor was just reset now violates the sequential
+        # constraint (if this bid has a winner, the predecessor must too).
+        # Bundle insertion order does not match n_obs order, so a higher-n_obs
+        # entry can sit earlier in the bundle than the removed entry, making it
+        # unreachable by the forward-split logic in __update_bundle_from_results.
+        t_curr = state.get_time()
+        newly_reset = set(bids_removed_from_bundle)
+        while newly_reset:
+            next_reset = set()
+            for task, n_obs in newly_reset:
+                k = n_obs + 1
+                if k >= len(self._results[task]):
+                    continue
+                bid_k : Bid = self._results[task][k]
+                if bid_k.winner != state.agent_name or bid_k.was_performed():
+                    continue  # not our active bid; nothing to cascade
+                # predecessor was reset — sequential constraint violated; release this bid
+                bid_k.reset(t_curr)
+                self._results[task][k] = bid_k
+                next_reset.add((task, k))
+            newly_reset = next_reset
 
         # ==========================================================
         #  ENSURE RESULTS CONSISTENCY
@@ -1727,8 +1785,6 @@ class ConsensusPlanner(AbstractReactivePlanner):
         # iterate through path to populate observation numbers and previous observation times
         for obs_idx, obs_act in enumerate(path):
             # calculate start time for this observation action 
-            # t_start = max(obs_act.t_start, t_curr)
-            t_start = obs_act.t_start
             t_obs = max(obs_act.t_start, t_curr)
 
             # get trackers for this observation action
@@ -1831,6 +1887,9 @@ class ConsensusPlanner(AbstractReactivePlanner):
                 # update previous observation counts
                 n_obs_i[task] = matching_bid.n_obs
                 t_prev_i[task] = prev_bid.t_img if prev_bid is not None else np.NINF
+
+                if n_obs_i[task] > 0 and t_prev_i[task] < 0:
+                    x = 1 # breakpoint
 
         # ensure every parent task in path has values for `n_obs` and `t_prev`
         assert all(

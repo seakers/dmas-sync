@@ -131,7 +131,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
     # CONSTRAINT CHECK — co-obs coalition validity
     # ------------------------------------------------------------------
 
-    def _check_results_constraints(self,
+    def _check_bundle_constraints(self,
                                     state: SimulationAgentState
                                    ) -> Tuple[List, List, List[Bid]]:
         """Base ordering constraint check + co-obs coalition validity check.
@@ -148,7 +148,7 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         same violation.
         """
         # perform regular constraint checks for intra-task related constraints
-        self._bundle, self._path, bids_in_violation  = super()._check_results_constraints(state)
+        self._bundle, self._path, bids_in_violation  = super()._check_bundle_constraints(state)
         
         # update violations with any co-obs coalition constraint violations
         self._bundle, self._path, co_obs_bids_in_violation = self._check_co_obs_constraints(state)

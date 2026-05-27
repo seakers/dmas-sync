@@ -64,13 +64,14 @@ class HeuristicInsertionConsensusPlanner(ConsensusPlanner):
                                     ) -> tuple:    
         """ Build bundle from latest periodic preplan. """        
         # release all bids in bundle to prepare for new bundle building phase
+        t_curr = state.get_time()
         for _,obs_tasks in self._bundle:
             for task,n_obs in obs_tasks.items():
                 # get bid to reset
                 bid_to_reset : Bid = self._results[task][n_obs]
 
                 # reset bid
-                bid_to_reset.reset(state.get_time())
+                bid_to_reset.reset(t_curr)
 
                 # update results
                 self._results[task][n_obs] = bid_to_reset
