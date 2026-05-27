@@ -37,13 +37,11 @@ ulimit -n 65535
 
 # --- Trial ID lists per job (fastest -> slowest) ---
 i=$SLURM_ARRAY_TASK_ID
-start=$((i * 18))
-end=$((start + 18))
 
 # --- Run ---
 python ./experiments/2_centralized_vs_decentralized/study.py \
       -t full_factorial_trials_2026-05-25 \
-      --trial-range "${start}:${end}" \
+      --single-trial "${i}" \
       --quiet --single-thread \
       --force-postprocess --force-summarize
       # --force-simulate --only-simulate
