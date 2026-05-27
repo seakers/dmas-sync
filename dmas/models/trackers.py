@@ -37,6 +37,7 @@ class DataSink:
 
     _buffer: List[Dict[str, Any]] = field(default_factory=list)
     _writer: Optional[pq.ParquetWriter] = None
+    _schema: Optional[pa.Schema] = None
     _path: Optional[str] = None
     _flush_count: int = 0
 
@@ -90,7 +91,12 @@ class DataSink:
         # if writer is not initialized, create it with the schema of the first table
         if self._writer is None:
             self._path = os.path.join(self.out_dir, f"{self.data_name}.parquet")
-            self._writer = pq.ParquetWriter(self._path, table.schema, compression="zstd")
+            self._schema = table.schema
+            self._writer = pq.ParquetWriter(self._path, self._schema, compression="zstd")
+        elif table.schema != self._schema:
+            # align table to the established schema: add null columns for missing fields,
+            # drop columns not in the established schema, and reorder to match
+            table = self._align_to_schema(table, self._schema)
 
         # write the table to the parquet file and clear the buffer
         self._writer.write_table(table)
@@ -105,6 +111,16 @@ class DataSink:
 
         # increment flush count
         self._flush_count += 1
+
+    @staticmethod
+    def _align_to_schema(table: pa.Table, schema: pa.Schema) -> pa.Table:
+        columns = []
+        for field in schema:
+            if field.name in table.schema.names:
+                columns.append(table.column(field.name).cast(field.type, safe=False))
+            else:
+                columns.append(pa.nulls(len(table), type=field.type))
+        return pa.table({field.name: col for field, col in zip(schema, columns)})
 
     def close(self) -> None:
         """ Close the sink, flushing any remaining data and releasing resources."""
