@@ -156,8 +156,8 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
                 updated_task_states[task.id] = (n_obs_prev + 1, t_obs_i)
 
             # DEBUG --------------------------
-            if i > 0:
-                x = 1
+            # if i > 0:
+            #     x = 1
             # ---------------------------------
 
             # calculate reward for this observation opportunity
@@ -167,8 +167,8 @@ class DynamicProgrammingPlanner(AbstractPeriodicPlanner):
             ) if i > 0 else 1  # dummy observation has no reward but intrinsic value of 1 to ensure that reachable observations are selected as starting points for paths
 
             # DEBUG --------------------------
-            if i > 0:
-                x = 1
+            # if i > 0:
+            #     x = 1
             # ---------------------------------
 
             # calculate cumulative reward for this observation opportunity
