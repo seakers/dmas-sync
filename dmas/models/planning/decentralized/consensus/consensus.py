@@ -948,8 +948,14 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # check if any updates were found
         if min_updated_idx is None:
-            # no updates to bids in bundle; return original bundle
-            return self._bundle, self._path, bundle_updates
+            # no bid updates needed, but still trim path to match the current bundle —
+            # __remove_expired_tasks_and_bids may have shortened self._bundle without
+            # updating self._path, leaving stale ObservationActions whose t_imgs
+            # reference task IDs that were just removed from _id_to_tasks.
+            obs_opps_in_bundle = {obs_opp for obs_opp, _ in self._bundle}
+            revised_path = [a for a in self._path if a.obs_opp in obs_opps_in_bundle]
+
+            return self._bundle, revised_path, bundle_updates
                 
         # split bundle at first updated task
         revised_bundle = self._bundle[:min_updated_idx]       
