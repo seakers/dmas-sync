@@ -1,7 +1,7 @@
 import argparse
 from dataclasses import dataclass
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 
 import numpy as np
 
@@ -17,6 +17,7 @@ class SimulationConfig:
     trial_start: int = 0
     trial_end: Optional[int] = None
     trial_range: Optional[str] = None
+    trial_ids: Optional[List[int]] = None
 
     single_thread: bool = False
     reduced: bool = False
@@ -101,8 +102,8 @@ def parse_study_args() -> SimulationConfig:
     parser.add_argument("--single-trial", type=int, default=None,
                         help="Single trial index to run")
 
-    # parser.add_argument("--trial-ids", nargs="+", type=int,
-    #                     help="Specific trial IDs to run (overrides start/end and range)")
+    parser.add_argument("--trial-ids", nargs="+", type=int,
+                        help="Specific trial IDs to run (overrides start/end and range)")
 
     # --------------------------------------------------------------
     # Profiling
@@ -173,11 +174,11 @@ def parse_study_args() -> SimulationConfig:
     if args.single_trial is not None:
         trial_start = args.single_trial
         trial_end = args.single_trial + 1
-        
-    # if args.trial_ids is not None:
-    #     trials = sorted(set(args.trial_ids))
-    # else:
-    #     trials = None  # Will be determined by trial_start and trial_end later
+
+    trial_ids = sorted(set(args.trial_ids)) if args.trial_ids else None
+    if trial_ids is not None:
+        trial_start = 0
+        trial_end = np.Inf
 
     # --------------------------------------------------------------
     # Force logic
@@ -213,6 +214,7 @@ def parse_study_args() -> SimulationConfig:
         trials_file=args.trials,
         trial_start=trial_start,
         trial_end=trial_end,
+        trial_ids=trial_ids,
 
         profile_cpu=args.profile_cpu,
         profile_mem=args.profile_mem,

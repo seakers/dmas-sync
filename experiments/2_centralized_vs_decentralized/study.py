@@ -36,9 +36,13 @@ def main_study(sim_cfg: SimulationConfig) -> List[Dict]:
     # If load_trials expects the stem without ".csv", pass trial_stem:
     trials: pd.DataFrame = load_trials(base_path, trial_stem, sim_cfg.trial_start, sim_cfg.trial_end)
 
+    if sim_cfg.trial_ids is not None:
+        trials = trials[trials['Trial ID'].isin(sim_cfg.trial_ids)].reset_index(drop=True)
+
     if not sim_cfg.quiet:
         end_disp = sim_cfg.trial_end if sim_cfg.trial_end is not None else "end"
-        print(" - Loaded {0} trials from `{1}`: [{2}:{3})".format(len(trials), sim_cfg.trials_file, sim_cfg.trial_start, end_disp))
+        id_disp = f" (filtered to IDs: {sim_cfg.trial_ids})" if sim_cfg.trial_ids else ""
+        print(" - Loaded {0} trials from `{1}`: [{2}:{3}){4}".format(len(trials), sim_cfg.trials_file, sim_cfg.trial_start, end_disp, id_disp))
 
     # load templates
     mission_specs_template, ground_operator_specs_template, \
@@ -48,7 +52,7 @@ def main_study(sim_cfg: SimulationConfig) -> List[Dict]:
 
     # duration/step size
     # duration = 60_000 / 3600 / 24.0 if sim_cfg.reduced else 1.0  # [days]
-    duration = 8.0 / 24.0 if sim_cfg.reduced else 1.0  # [days]
+    duration = 4.0 / 24.0 if sim_cfg.reduced else 1.0  # [days]
     duration = min(duration, 1.0)
     step_size = 10  # [s]
 
