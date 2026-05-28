@@ -6,14 +6,6 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=64G
-# #SBATCH --array=0-431
-
-# #SBATCH --array=0-99
-
-# #SBATCH --array=100-199
-# #SBATCH --array=200-299
-# #SBATCH --array=300-399
-# #SBATCH --array=400-431
 
 set -euo pipefail
 

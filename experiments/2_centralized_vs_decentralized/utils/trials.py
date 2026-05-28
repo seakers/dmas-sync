@@ -87,7 +87,8 @@ if __name__ == "__main__":
         ], 
     }
 
-
+    # RQ 1: How do decentralized task allocation methods compare to centralized ones 
+    # in terms of optimality and runtime in reactive planning for dynamic event observation?
     rq1_params = {
         "Preplanner" : [
             "None",
@@ -100,7 +101,9 @@ if __name__ == "__main__":
             "CBBA", 
         ],
         "Connectivity": [
+            # "GS",                   # sats can only talk to ground station (no inter-sat comms)
             "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
+            # "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
         ],
         "Mission": [
             "Urgency",
@@ -115,12 +118,14 @@ if __name__ == "__main__":
         "Date" : [            
             # 2019 dates 
             "2019-02-15",   # Winter NH
-            "2019-05-15",   # Spring NH
-            "2019-08-10",   # Summer NH / peak fire season
-            "2019-11-10"    # Fall NH
+            # "2019-05-15",   # Spring NH
+            # "2019-08-10",   # Summer NH / peak fire season
+            # "2019-11-10"    # Fall NH
         ], 
     }    
 
+    # RQ 2: How does communication architecture affect the trade-offs between decentralized 
+    # and centralized task allocation methods in reactive planning for dynamic event observation?
     rq2_params = {
         "Preplanner" : [
             "None",
@@ -143,15 +148,16 @@ if __name__ == "__main__":
             "Co-observations"
         ],
         "Data Processing" : [
+            "Instant",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
             "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
             "Onboard",              # sats must discover events using default mission tasks
         ],
         "Date" : [            
             # 2019 dates 
             "2019-02-15",   # Winter NH
-            "2019-05-15",   # Spring NH
-            "2019-08-10",   # Summer NH / peak fire season
-            "2019-11-10"    # Fall NH
+            # "2019-05-15",   # Spring NH
+            # "2019-08-10",   # Summer NH / peak fire season
+            # "2019-11-10"    # Fall NH
         ], 
     }    
 
@@ -159,13 +165,17 @@ if __name__ == "__main__":
         "Preplanner" : [
             "None",
             "DP",
+            "Centralized-MILP_priority",
         ],
         "Replanner": [
+            "None",
             "Greedy", 
             "CBBA", 
         ],
         "Connectivity": [
+            "GS",                   # sats can only talk to ground station (no inter-sat comms)
             "Intraconstellation",   # sats can talk to each other within the same constellation and to ground stations, but not across constellations
+            "Interconstellation",   # sats can talk to each other across constellations and to ground stations using multi-hop ISL messaging or TDRSS relays
         ],
         "Mission": [
             "Urgency",
@@ -174,13 +184,21 @@ if __name__ == "__main__":
         ],
         "Data Processing" : [
             "Instant",               # the ground is able to perfectly identify which tasks are active at each time step, and can communicate this to the satellites (i.e. perfect event detection and classification)
+            "Ground",               # information is processed on the ground, so replanning can only occur after a full round of data collection and downlink (i.e. replanning occurs at a much slower cadence than onboard processing)
+            "Onboard",              # sats must discover events using default mission tasks
         ],
         "Date" : [
             # 2018 dates 
-            "2018-02-15",   # Winter NH
-            "2018-05-15",   # Spring NH
-            "2018-08-10",   # Summer NH / peak fire season
-            "2018-11-10",   # Fall NH
+            # "2018-02-15",   # Winter NH
+            # "2018-05-15",   # Spring NH
+            # "2018-08-10",   # Summer NH / peak fire season
+            # "2018-11-10",   # Fall NH
+            
+            # 2019 dates 
+            "2019-02-15",   # Winter NH
+            "2019-05-15",   # Spring NH
+            "2019-08-10",   # Summer NH / peak fire season
+            "2019-11-10"    # Fall NH
         ], 
     }    
     
