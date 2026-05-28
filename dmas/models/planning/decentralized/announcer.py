@@ -159,7 +159,8 @@ class InstantEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
                                            requester=state.agent_name,
                                            mission_name=mission_name,
                                            t_req=event.t_start)
-                task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
+                # task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
+                task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request)
                 task_requests.append((event, task_request, task_request_msg))       
 
         # group messages by event so coverage tracking is per-event
@@ -473,7 +474,8 @@ class GroundProcessorEventAnnouncerPlanner(AbstractEventAnnouncerPlanner):
                                            requester=state.agent_name,
                                            mission_name=mission_name,
                                            t_req=t_detect)
-                task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
+                # task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request.to_dict())
+                task_request_msg = MeasurementRequestMessage(state.agent_name, state.agent_name, task_request)
                 msgs.append(task_request_msg)
 
             if not msgs:
