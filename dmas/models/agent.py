@@ -506,28 +506,40 @@ class SimulationAgent(object):
         unique_new_req_dicts = {}   # req_key  → req_dict
         candidate_task_dicts = {}   # task_key → task_dict (tasks not yet in _known_tasks)
         for msg in incoming_reqs:
-            req_dict = msg.req
-            req_key  = self._req_key(req_dict)
-            task_key = self._task_key(req_dict['task'])
+            # unpack request based on type
+            req = msg.req            
+            if isinstance(msg.req, TaskRequest):
+                req_task = req.task
+                req_key = self._req_key(req)
+                task_key = self._task_key(req.task)
+            elif isinstance(msg.req, dict):
+                req_task = msg.req['task']
+                req_key  = self._req_key(msg.req)
+                task_key = self._task_key(req_task)
+            else:
+                raise ValueError(f"Unknown request type in message: {type(msg.req)}")
+
             if req_key not in self._known_reqs:
-                unique_new_req_dicts[req_key] = req_dict
+                unique_new_req_dicts[req_key] = req
             if task_key not in self._known_tasks:
-                candidate_task_dicts[task_key] = req_dict['task']
+                candidate_task_dicts[task_key] = req_task
 
         # deserialize new tasks first so every request below can hit the cache
-        new_tasks = {task_key: GenericObservationTask.from_dict(task_dict)
-                     for task_key, task_dict in candidate_task_dicts.items()}
+        new_tasks = {task_key: GenericObservationTask.from_dict(req_task) \
+                                if isinstance(req_task, dict) else req_task
+                     for task_key, req_task in candidate_task_dicts.items()}
         self._known_tasks.update(new_tasks)
 
         # unpack new requests; task is now guaranteed to be in _known_tasks
         new_reqs = {}
-        for req_key, req_dict in unique_new_req_dicts.items():
-            task_key = self._task_key(req_dict['task'])
-            req = TaskRequest(self._known_tasks[task_key],
-                              req_dict['requester'],
-                              req_dict['mission_name'],
-                              req_dict['t_req'],
-                              req_dict.get('id'))
+        for req_key, req in unique_new_req_dicts.items():
+            if isinstance(req, dict):
+                task_key = self._task_key(req['task'])
+                req = TaskRequest(self._known_tasks[task_key],
+                                req['requester'],
+                                req['mission_name'],
+                                req['t_req'],
+                                req.get('id'))
             new_reqs[req_key] = req
 
         self._known_reqs.update(new_reqs)
@@ -832,7 +844,8 @@ class SimulationAgent(object):
                     continue
 
             # add measurement request message
-            msgs.append(MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict()))
+            # msgs.append(MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict()))
+            msgs.append(MeasurementRequestMessage(state.agent_name, state.agent_name, req))
         
         # return compiled messages
         return msgs
@@ -933,18 +946,36 @@ class SimulationAgent(object):
     def _validate_actions(self, actions : List[AgentAction], t: float):
         assert actions, "No actions were returned from `get_next_actions()`."
 
-        assert all(a.t_start <= t + 1e-3 for a in actions), \
-            "All returned actions must start at or before the current time."
-        assert all(not isinstance(a, FutureBroadcastMessageAction) for a in actions), \
-            "No future broadcast message actions should be present in the output plan."
-
         d0 = actions[0].t_end - actions[0].t_start
+        check_duration = not np.isinf(d0)
+
+        for a in actions:
+            assert a.t_start <= t + 1e-3, \
+                f"Action {a} starts after current time {t}."
+            assert not isinstance(a, FutureBroadcastMessageAction), \
+                "No future broadcast message actions should be present in the output plan."
+            if check_duration:
+                assert abs((a.t_end - a.t_start) - d0) < 1e-6, \
+                    "All returned actions must have the same duration."
+
         if np.isinf(d0):
             assert len(actions) == 1, \
                 "If an action has infinite duration, it must be the only action returned."
-        else:
-            assert all(abs((a.t_end - a.t_start) - d0) < 1e-6 for a in actions), \
-                "All returned actions must have the same duration."
+            
+        # assert actions, "No actions were returned from `get_next_actions()`."
+
+        # assert all(a.t_start <= t + 1e-3 for a in actions), \
+        #     "All returned actions must start at or before the current time."
+        # assert all(not isinstance(a, FutureBroadcastMessageAction) for a in actions), \
+        #     "No future broadcast message actions should be present in the output plan."
+
+        # d0 = actions[0].t_end - actions[0].t_start
+        # if np.isinf(d0):
+        #     assert len(actions) == 1, \
+        #         "If an action has infinite duration, it must be the only action returned."
+        # else:
+        #     assert all(abs((a.t_end - a.t_start) - d0) < 1e-6 for a in actions), \
+        #         "All returned actions must have the same duration."
     
     def get_latest_observations(self, 
                                 state : SimulationAgentState,
@@ -1033,7 +1064,7 @@ class SimulationAgent(object):
         # --- previous version (A/B reference) ---
         try:
             return (d["task_type"], d["parameter"], round(d["priority"], 6), d["id"])
-        except KeyError:
+        except TypeError:
             return (d.task_type, d.parameter, round(d.priority, 6), d.id)
 
     @staticmethod
