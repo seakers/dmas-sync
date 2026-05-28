@@ -492,19 +492,20 @@
                 // "--single-trial", "47", // Oracle, None+Greedy
                 // "--single-trial", "37",
 
-                // "-t", "full_factorial_trials_2026-05-22",
+                "-t", "full_factorial_trials_2026-05-22",
                 // "--single-trial", "0", // GS, GS, MILP + None
                 // "--single-trial", "9", // GS, GS, DP + None
-                // "--single-trial", "12", // GS, GS, None + CBBA (Augmented) 
+                "--single-trial", "12", // GS, GS, None + CBBA (Augmented) 
                 // "--single-trial", "13", // GS, GS, None + CBBA 
                 // "--single-trial", "15", // GS, GS, None + Greedy
                 // "--trial-range", "0:18",
                 // "--single-trial", "3",
 
-                "-t", "full_factorial_trials_2026-05-25",
-                "--single-trial", "92",
+                // "-t", "full_factorial_trials_2026-05-25",
+                // "--single-trial", "227",
+                // "--trial-ids", "5", "13", "15", "27", "36", "45", "47",
 
-                // "--profile-cpu",
+                "--profile-cpu",
                 // "--profile-mem",
                 
                 "--single-thread",
@@ -513,7 +514,7 @@
                 // "--only-simulate",
                 // "--only-postprocess",
 
-                // "--force-simulate",
+                "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
 

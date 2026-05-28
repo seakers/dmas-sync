@@ -71,10 +71,12 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
         self._event_to_tasks_by_parameter: Dict[str, Dict[str, List[EventObservationTask]]] = \
             defaultdict(lambda: defaultdict(list))
 
-        # (task, n_obs) -> set of (partner_task, partner_n_obs) whose bids
-        # contributed co-obs value to this agent's winning bid
+        # (task, n_obs) -> set of partner_task_id strings.
+        # Keyed by partner ID only (not n_obs slot or exact t_img) so that
+        # partner bid renumbering or t_img drift does not trigger false violations.
+        # The constraint check asks: does this partner still have ANY qualifying bid?
         self._coalition_deps: Dict[Tuple[GenericObservationTask, int],
-                                    Set[Tuple[GenericObservationTask, int]]] = {}
+                                    Set[str]] = {}
 
     # ------------------------------------------------------------------
     # CONSENSUS PHASE
@@ -188,18 +190,24 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                 self._coalition_deps.pop((task, n_obs), None)
                 continue
 
-            # check every recorded partner
-            for (partner_task, partner_n_obs) in deps:
-                if partner_n_obs >= len(self._results.get(partner_task, [])):
+            # check every recorded partner (keyed by partner task ID only)
+            # The coalition is valid as long as the partner still has ANY qualifying
+            # bid — immune to n_obs renumbering and t_img drift.
+            for partner_task_id in deps:
+                partner_task = self._id_to_tasks.get(partner_task_id)
+                if partner_task is None:
+                    # partner task expired; coalition broken
                     to_invalidate.append((task, n_obs))
                     break
-                partner_bid = self._results[partner_task][partner_n_obs]
-                # A performed partner bid is a STRONGER commitment than a committed one
-                # (it cannot be reset or stolen), so it is always still_valid if timing holds.
-                still_valid = (partner_bid.has_winner()
-                               and partner_bid.t_img < bid.t_img
-                               and (bid.t_img - partner_bid.t_img) <= self._co_obs_window_for(task))
-                if not still_valid:
+                # coalition holds if any partner bid is still winning, strictly
+                # before this bid's t_img, and within the co-obs window
+                has_qualifying = any(
+                    b.has_winner()
+                    and b.t_img < bid.t_img
+                    and (bid.t_img - b.t_img) <= self._co_obs_window_for(task)
+                    for b in self._results.get(partner_task, [])
+                )
+                if not has_qualifying:
                     to_invalidate.append((task, n_obs))
                     break
 
@@ -280,19 +288,19 @@ class AugmentedConsensusPlanner(ConsensusPlanner):
                 if is_repeat:
                     continue
 
-                deps: Set[Tuple[GenericObservationTask, int]] = set()
+                deps: Set[str] = set()
                 for param, partner_tasks in event_tasks.items():
                     if param == task.parameter:
                         continue
                     for partner_task in partner_tasks:
-                        for p_n_obs, pbid in enumerate(self._results.get(partner_task, [])):
-                            # Include performed partner bids: a performed observation is a
-                            # confirmed co-obs partner and must persist in _coalition_deps so
-                            # _check_co_obs_constraints does not invalidate B's bid when A performs.
+                        for pbid in self._results.get(partner_task, []):
+                            # Record partner task ID only; constraint check asks whether the
+                            # partner still has ANY qualifying bid, so exact t_img is not stored.
                             if (pbid.has_winner()
                                     and pbid.t_img < t_img
                                     and (t_img - pbid.t_img) <= co_obs_window):
-                                deps.add((partner_task, p_n_obs))
+                                deps.add(partner_task.id)
+                                break  # one qualifying bid is enough to record the dep
                 if deps:
                     self._coalition_deps[(task, n_obs)] = deps
 

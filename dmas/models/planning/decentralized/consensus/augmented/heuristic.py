@@ -1,4 +1,4 @@
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 import numpy as np
 
 from execsatm.tasks import EventObservationTask, GenericObservationTask
@@ -79,13 +79,12 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                          debug, logger, printouts,
                          co_obs_window=co_obs_window, **kwargs)
 
-        # (task, n_obs) → Set[(partner_task, p_n_obs)] of ALL partner bids whose
+        # (task, n_obs) → Set[partner_task_id: str] of all partner task IDs whose
         # co-obs window overlaps with the task's access window at the last planning
-        # phase.  Superset of _coalition_deps: includes partners that were considered
-        # but did not shift t_img.  Used by _release_stale_bundle_items to avoid
-        # re-triggering re-evaluations for partners the agent already decided to
-        # ignore (preventing infinite re-evaluation loops).
-        self._reachable_partners: Dict = {}
+        # phase. Keyed by ID only (not t_img) so that t_img drift between consensus
+        # rounds does not make an already-evaluated partner appear new and trigger
+        # infinite re-evaluation loops in _release_stale_bundle_items.
+        self._reachable_partners: Dict[Tuple, Set[str]] = {}
 
     def _estimate_task_value(self,
                               task: GenericObservationTask,
@@ -215,12 +214,12 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                     if param == task.parameter:
                         continue
                     for partner_task in partner_tasks:
-                        for p_n_obs, pbid in enumerate(self._results.get(partner_task, [])):
+                        for pbid in self._results.get(partner_task, []):
                             if (pbid.has_winner()
-                                    # and not pbid.was_performed()
                                     and pbid.t_img + co_obs_window > t_access_l
                                     and pbid.t_img < t_access_u):
-                                reachable.add((partner_task, p_n_obs))
+                                reachable.add(partner_task.id)
+                                break  # one qualifying bid is enough
 
                 if reachable:
                     self._reachable_partners[(task, n_obs)] = reachable
@@ -283,7 +282,9 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                 # coalition deps and all geometrically-reachable partners.  Checking
                 # against both prevents re-triggering for partners the agent already
                 # evaluated-but-rejected (i.e., co-obs bonus wasn't worth shifting for).
-                already_considered = (
+                # Both _coalition_deps and _reachable_partners store partner task IDs (str).
+                # A partner is "already considered" if its task ID appeared at the last planning phase.
+                already_considered: Set[str] = (
                     self._coalition_deps.get((task, n_obs), set())
                     | self._reachable_partners.get((task, n_obs), set())
                 )
@@ -293,15 +294,14 @@ class AugmentedHeuristicInsertionConsensusPlanner(HeuristicInsertionConsensusPla
                     if param == task.parameter:
                         continue
                     for partner_task in partner_tasks:
-                        for p_n_obs, pbid in enumerate(self._results.get(partner_task, [])):
-                            # A partner bid (committed or performed) qualifies if its
-                            # co-obs window overlaps with our access window.  Performed
-                            # bids are included: a performed observation is a confirmed
-                            # partner and may be a first-time arrival via propagation.
+                        for pbid in self._results.get(partner_task, []):
+                            # A partner bid qualifies if its co-obs window overlaps the
+                            # access window AND the partner ID was not already evaluated.
                             if (pbid.has_winner()
                                     and pbid.t_img + co_obs_window > t_access_l
                                     and pbid.t_img < t_access_u
-                                    and (partner_task, p_n_obs) not in already_considered):
+                                    and partner_task.id not in already_considered
+                                    ):
                                 new_partner_found = True
                                 break
                         if new_partner_found:
