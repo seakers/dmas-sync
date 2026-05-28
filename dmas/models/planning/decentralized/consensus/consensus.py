@@ -1722,8 +1722,16 @@ class ConsensusPlanner(AbstractReactivePlanner):
             t_prev_i : dict = t_prev[obs_idx]
 
             # iterate through parent tasks
-            for task_id, task_t_earliest in obs_act.t_imgs.items():
-                task = self._id_to_tasks[task_id]
+            for task_id, task_t_earliest in obs_act.t_imgs.items():                                
+                assert task_id in self._id_to_tasks or task_id in obs_act.obs_opp.id_to_task, \
+                    f"Task with ID {task_id} is not found in either `id_to_task` maps from the agent or the observation opportunity."
+
+                # get current task from task ID
+                try:
+                    task = self._id_to_tasks[task_id]                               
+                except KeyError:
+                    task = obs_act.obs_opp.id_to_task[task_id]
+
                 # calculate earliest possible end time for this observation task
                 t_end = task_t_earliest + obs_act.obs_opp.task_min_duration[task_id]
                 # ignore if task observation would have already been completed for this observation opportunity
