@@ -80,9 +80,9 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
     # Lazy initializer
 
     def _initialize_from_events(self,
-                                 state: SimulationAgentState,
-                                 mission: Mission,
-                                 orbitdata: OrbitData) -> None:
+                             state: SimulationAgentState,
+                             mission: Mission,
+                             orbitdata: OrbitData) -> None:
         """
         Load events from CSV, build EventObservationTasks, and permanently filter to those
         this satellite can observe at any point during the simulation.
@@ -95,21 +95,38 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
         t_curr = state.get_time()
 
-        # load events (held only for the duration of this call)
+        # Load CSV and extract columns once — avoids per-row Series boxing from iterrows
         events_df = pd.read_csv(self._events_path)
+
+        col_event_type = events_df['event type'].tolist()
+        col_lat        = events_df['lat [deg]'].tolist()
+        col_lon        = events_df['lon [deg]'].tolist()
+        col_grid       = events_df['grid index'].tolist() if 'grid index' in events_df.columns else [0] * len(events_df)
+        col_gp         = events_df['gp_index'].tolist()
+        col_t_start    = events_df['start time [s]'].tolist()
+        col_duration   = events_df['duration [s]'].tolist()
+        col_severity   = events_df['severity'].tolist()
+        col_id         = events_df['id'].tolist() if 'id' in events_df.columns else [None] * len(events_df)
+
+        # Pre-filter mission to only EventDrivenObjectives — avoids re-checking isinstance every row
+        event_driven = [(obj.event_type, obj) for obj in mission if isinstance(obj, EventDrivenObjective)]
+
         tasks: Set[EventObservationTask] = set()
-        for _, row in events_df.iterrows():
+        for event_type, lat, lon, grid_idx, gp_index, t_start, duration, severity, event_id in zip(
+            col_event_type, col_lat, col_lon, col_grid, col_gp,
+            col_t_start, col_duration, col_severity, col_id
+        ):
             event = GeophysicalEvent(
-                row['event type'],
-                (row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['gp_index']),
-                row['start time [s]'],
-                row['duration [s]'],
-                row['severity'],
-                row['start time [s]'],
-                row.get('id', None)
+                event_type,
+                (lat, lon, grid_idx, gp_index),
+                t_start,
+                duration,
+                severity,
+                t_start,
+                event_id,
             )
-            for objective in mission:
-                if isinstance(objective, EventDrivenObjective) and event.event_type == objective.event_type:
+            for obj_event_type, objective in event_driven:
+                if event_type == obj_event_type:
                     tasks.add(EventObservationTask(objective.parameter, event=event, objective=objective))
 
         # drop tasks that have already expired
@@ -137,6 +154,65 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
 
         # full_accesses and events_df go out of scope here; per-period cache stays empty
         self._new_task_requests = True
+
+    # def _initialize_from_events(self,
+    #                              state: SimulationAgentState,
+    #                              mission: Mission,
+    #                              orbitdata: OrbitData) -> None:
+    #     """
+    #     Load events from CSV, build EventObservationTasks, and permanently filter to those
+    #     this satellite can observe at any point during the simulation.
+
+    #     Raw event data and the full-horizon access table are local variables and are released
+    #     the moment this method returns — only the filtered task set is retained.
+    #     """
+    #     if self._events_path is None or mission is None:
+    #         return
+
+    #     t_curr = state.get_time()
+
+    #     # load events (held only for the duration of this call)
+    #     events_df = pd.read_csv(self._events_path)
+    #     tasks: Set[EventObservationTask] = set()
+    #     for _, row in events_df.iterrows():
+    #         event = GeophysicalEvent(
+    #             row['event type'],
+    #             (row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['gp_index']),
+    #             row['start time [s]'],
+    #             row['duration [s]'],
+    #             row['severity'],
+    #             row['start time [s]'],
+    #             row.get('id', None)
+    #         )
+    #         for objective in mission:
+    #             if isinstance(objective, EventDrivenObjective) and event.event_type == objective.event_type:
+    #                 tasks.add(EventObservationTask(objective.parameter, event=event, objective=objective))
+
+    #     # drop tasks that have already expired
+    #     tasks = {task for task in tasks if not task.availability.ends_before(t_curr)}
+    #     if not tasks:
+    #         return
+
+    #     # one-time full-horizon access check: permanently discard events this satellite can never reach
+    #     t_full_end = max(task.availability.right for task in tasks)
+    #     full_horizon = Interval(t_curr, t_full_end)
+    #     full_accesses = super().calculate_access_opportunities(tasks, full_horizon, orbitdata)
+
+    #     accessible_locs = {loc for loc, opps in full_accesses.items() if opps}
+    #     self._future_tasks = {
+    #         task for task in tasks
+    #         if any((int(gi), int(gp)) in accessible_locs for *__, gi, gp in task.location)
+    #     }
+
+    #     # merge with any IDs already seen from incoming requests before first plan
+    #     self._known_task_ids |= {task.id for task in self._future_tasks}
+
+    #     # check if any task has a duplicate ID
+    #     if len(self._known_task_ids) < len(self._future_tasks):
+    #         print("WARNING: Duplicate task IDs detected in events data; ID-based request tracking may be unreliable.")
+
+    #     # full_accesses and events_df go out of scope here; per-period cache stays empty
+    #     self._new_task_requests = True
 
     # ------------------------------------------------------------------
     # Percept update
@@ -404,7 +480,8 @@ class FixedPointingDefaultPlanner(AbstractReactivePlanner):
                 if self._pending_announcements:
                     task_items = list(self._pending_announcements.items())
                     task_msgs = [
-                        MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict())
+                        # MeasurementRequestMessage(state.agent_name, state.agent_name, req.to_dict())
+                        MeasurementRequestMessage(state.agent_name, state.agent_name, req)
                         for _, req in task_items
                     ]
 
