@@ -144,28 +144,62 @@ class LookupProcessor(ObservationDataProcessor):
         # initialize update timer
         self.t_update = None
 
-    def load_events(self, events_path : str) -> pd.DataFrame:
-
+    def load_events(self, events_path: str) -> list:
         if not os.path.isfile(events_path):
             raise ValueError('`events_path` must point to an existing file.')
-        
-        events_df : pd.DataFrame = pd.read_csv(events_path)
 
-        events = []
-        for _,row in events_df.iterrows():
-            # convert event to GeophysicalEvent
-            event = GeophysicalEvent(
-                event_type=row['event type'],
-                location=(row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['gp_index']),
-                t_detect=row['start time [s]'],
-                d_exp=row['duration [s]'],
-                t_start=row['start time [s]'],
-                severity=row['severity'],
-                id=row['id']
+        events_df = pd.read_csv(events_path)
+
+        # Use .get() equivalent for optional column — fill missing with 0
+        grid_index = events_df['grid index'] if 'grid index' in events_df.columns else pd.Series(0, index=events_df.index)
+
+        events = [
+            GeophysicalEvent(
+                event_type=event_type,
+                location=(lat, lon, grid_idx, gp_index),
+                t_detect=t_start,
+                d_exp=duration,
+                t_start=t_start,
+                severity=severity,
+                id=event_id,
             )
-            events.append(event)
+            for event_type, lat, lon, grid_idx, gp_index, t_start, duration, severity, event_id in zip(
+                events_df['event type'],
+                events_df['lat [deg]'],
+                events_df['lon [deg]'],
+                grid_index,
+                events_df['gp_index'],
+                events_df['start time [s]'],
+                events_df['duration [s]'],
+                events_df['severity'],
+                events_df['id'],
+            )
+        ]
 
         return events
+
+    # def load_events(self, events_path : str) -> pd.DataFrame:
+
+    #     if not os.path.isfile(events_path):
+    #         raise ValueError('`events_path` must point to an existing file.')
+        
+    #     events_df : pd.DataFrame = pd.read_csv(events_path)
+
+    #     events = []
+    #     for _,row in events_df.iterrows():
+    #         # convert event to GeophysicalEvent
+    #         event = GeophysicalEvent(
+    #             event_type=row['event type'],
+    #             location=(row['lat [deg]'], row['lon [deg]'], row.get('grid index', 0), row['gp_index']),
+    #             t_detect=row['start time [s]'],
+    #             d_exp=row['duration [s]'],
+    #             t_start=row['start time [s]'],
+    #             severity=row['severity'],
+    #             id=row['id']
+    #         )
+    #         events.append(event)
+
+    #     return events
     
     def event_detector(self, 
                         instrument : str,
