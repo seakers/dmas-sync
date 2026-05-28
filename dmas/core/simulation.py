@@ -153,7 +153,7 @@ class Simulation:
 
             # define start and end times in seconds
             t, tf = 0.0, timedelta(days=self._duration).total_seconds()
-            # t = 43_000.0 # TODO comment out or remove after testing; fails @ t=50_000.01s
+            # t = 57_600.00 # TODO comment out or remove after testing; fails @ t=70_430.00s
             # t_check = 0.0
             # dt_progress = 0.0
             
@@ -190,9 +190,11 @@ class Simulation:
                         = self._environment.step(state_action_pairs, t)
 
                     # validate that all agents' states were updated
-                    assert all(agent.name in agent_observations for agent in self._agents), \
-                        "Not all agents received senses from the environment."
-                                        # initialize agent state-action
+                    if __debug__:
+                        assert all(agent.name in agent_observations for agent in self._agents), \
+                            "Not all agents received senses from the environment."
+                    
+                    # initialize agent state-action
                     state_action_pairs = dict()
                     
                     # agent think
@@ -213,14 +215,13 @@ class Simulation:
                     # -----------------------------------
 
                     # validate that all agents generated actions
-                    assert all(agent.name in state_action_pairs for agent in self._agents), \
-                        "Not all agents generated actions during think phase."
-                    assert all(isinstance(state_action_pairs[agent.name][0], SimulationAgentState)
-                               for agent in self._agents), \
-                        "Not all agents generated valid states during think phase."
-                    assert all((state_action_pairs[agent.name][1] is None or isinstance(state_action_pairs[agent.name][1], AgentAction))
-                                 for agent in self._agents), \
-                        "Not all agents generated valid actions during think phase."
+                    if __debug__:
+                        assert all(isinstance(state_action_pairs[agent.name][0], SimulationAgentState)
+                                for agent in self._agents), \
+                            "Not all agents generated valid states during think phase."
+                        assert all((state_action_pairs[agent.name][1] is None or isinstance(state_action_pairs[agent.name][1], AgentAction))
+                                    for agent in self._agents), \
+                            "Not all agents generated valid actions during think phase."
                     
                     # determine next time 
                     t_next_min = min([action.t_end for _,action in state_action_pairs.values()], 
