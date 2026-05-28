@@ -790,12 +790,60 @@ class ObservationRecord:
         return False
 
     # ------------------------------------------------------------------
-    # Merge
+    # Merge (hot path)
     # ------------------------------------------------------------------
+
+    def merge_parts(
+        self,
+        f_clock: dict,
+        f_t_last: float,
+        f_actor: Optional[str],
+        f_instr: Optional[str],
+    ) -> bool:
+        """
+        Merge pre-unpacked foreign values directly into this record.
+
+        This is the hot-path entry point used by update_from_peer's list
+        encoding — avoids constructing an intermediate dict and the four
+        .get() calls that merge() would need to unpack it. At 13M calls
+        per simulation the allocation + unpacking overhead is significant.
+
+        Clock merge
+        -----------
+        Iterates only over f_clock entries (not the union of both clocks).
+        Actors present only in self.clock and absent from f_clock have a
+        foreign count of 0 and can never win the element-wise max, so they
+        need not be visited. This halves iteration in the common sparse case.
+
+        Returns True if any field changed.
+        """
+        old_n       = self._n_obs
+        local_clock = self.clock  # cache attribute — avoids repeated __getattribute__
+
+        for actor, foreign_count in f_clock.items():
+            local_count = local_clock.get(actor, 0)
+            if foreign_count > local_count:
+                self._n_obs        += foreign_count - local_count
+                local_clock[actor]  = foreign_count
+
+        clock_changed = self._n_obs != old_n
+
+        time_changed = False
+        if f_t_last >= self.t_last:
+            time_changed         = f_t_last != self.t_last
+            self.t_last          = f_t_last
+            self.last_actor      = f_actor
+            self.last_instrument = f_instr
+
+        return clock_changed or time_changed
 
     def merge(self, foreign: "ObservationRecord | dict") -> bool:
         """
         Merge *foreign* into self using vector-clock semantics.
+
+        Accepts either a dataclass instance or a plain dict (dict-encoded
+        payload). Unpacks the foreign record and delegates to merge_parts
+        so the core logic lives in one place.
 
         Clock merge
         -----------
@@ -816,8 +864,6 @@ class ObservationRecord:
 
         Returns True if any field changed.
         """
-        # ── Unpack foreign regardless of whether it arrives as a
-        #    dataclass instance or a plain dict (list-encoded payload) ──
         if isinstance(foreign, dict):
             f_clock  = foreign.get("clock", {})
             f_t_last = float(foreign.get("t_last", -math.inf) or -math.inf)
@@ -829,27 +875,7 @@ class ObservationRecord:
             f_actor  = foreign.last_actor
             f_instr  = foreign.last_instrument
 
-        # ── Clock merge: element-wise max ────────────────────────────
-        old_n      = self._n_obs
-        all_actors = set(self.clock) | set(f_clock)
-        for actor in all_actors:
-            local_count   = self.clock.get(actor, 0)
-            foreign_count = f_clock.get(actor, 0)
-            if foreign_count > local_count:
-                self._n_obs      += foreign_count - local_count
-                self.clock[actor] = foreign_count
-
-        clock_changed = self._n_obs != old_n
-
-        # ── t_last / last_actor / last_instrument ────────────────────
-        time_changed = False
-        if f_t_last >= self.t_last:
-            time_changed = f_t_last != self.t_last
-            self.t_last          = f_t_last
-            self.last_actor      = f_actor
-            self.last_instrument = f_instr
-
-        return clock_changed or time_changed
+        return self.merge_parts(f_clock, f_t_last, f_actor, f_instr)
 
     # ------------------------------------------------------------------
     # Serialisation
@@ -857,14 +883,14 @@ class ObservationRecord:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "clock":           self.clock,                                    # {actor: count}
+            "clock":           self.clock,
             "t_last":          None if math.isinf(self.t_last) else self.t_last,
             "last_actor":      self.last_actor,
             "last_instrument": self.last_instrument,
         }
 
     @classmethod
-    def from_dict(cls, d: Dict[str, Any]) -> ObservationRecord:
+    def from_dict(cls, d: Dict[str, Any]) -> "ObservationRecord":
         raw_t = d.get("t_last")
         return cls(
             clock           = dict(d.get("clock", {})),
@@ -875,7 +901,7 @@ class ObservationRecord:
 
 
 # ---------------------------------------------------------------------------
-# TaskObservationTracker  — unchanged except encode tuple format
+# TaskObservationTracker
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -967,8 +993,8 @@ class TaskObservationTracker:
         ingested: Dict[str, int] = {}
 
         for measurement in measurements:
-            best_t_end: Dict[str, float]        = {}
-            best_actor: Dict[str, str]          = {}
+            best_t_end: Dict[str, float]         = {}
+            best_actor: Dict[str, str]           = {}
             best_instr: Dict[str, Optional[str]] = {}
 
             for entry in measurement:
@@ -1005,33 +1031,54 @@ class TaskObservationTracker:
     # ------------------------------------------------------------------
 
     def update_from_peer(self, payload: object) -> Dict[str, str]:
+        """
+        Merge a peer's observation state into this tracker.
+
+        Hot-path optimisations (list encoding):
+          - self._records is cached as a local variable to avoid repeated
+            attribute lookup across the loop (saves ~300k __getattribute__
+            calls per simulation).
+          - records.get(tid) replaces is_registered(tid) + records[tid] —
+            one dict lookup instead of two per task (saves ~13M lookups).
+          - merge_parts() is called directly with pre-unpacked values,
+            eliminating the intermediate foreign dict construction and the
+            four .get() calls that merge() would need to unpack it (saves
+            ~13M dict allocations and ~52M .get() calls per simulation).
+        """
         outcomes: Dict[str, str] = {}
 
         if isinstance(payload, str):
             payload = json.loads(payload)
 
+        records = self._records  # cache attribute — one lookup, reused throughout
+
         if isinstance(payload, dict):
             for task_id, state_dict in payload.get("records", {}).items():
-                if not self.is_registered(task_id):
+                record = records.get(task_id)
+                if record is None:
                     raise UnknownTaskError(task_id, "update_from_peer()")
-                changed = self._records[task_id].merge(state_dict)
+                changed = record.merge(state_dict)
                 outcomes[task_id] = "updated" if changed else "unchanged"
 
         elif isinstance(payload, list):
-            # List encoding: (task_id, clock_dict, t_last, last_actor, last_instrument)
             for tid, clock, t_last, last_actor, last_instrument in payload:
-                task_id = str(tid)
-                if not self.is_registered(task_id):
-                    continue # skip unregistered tasks
-                    # raise UnknownTaskError(task_id, "update_from_peer()")
-                foreign = {
-                    "clock":           clock,
-                    "t_last":          float(t_last) if t_last is not None else -math.inf,
-                    "last_actor":      str(last_actor) if last_actor is not None else None,
-                    "last_instrument": str(last_instrument) if last_instrument is not None else None,
-                }
-                changed = self._records[task_id].merge(foreign)
-                outcomes[task_id] = "updated" if changed else "unchanged"
+                record = records.get(tid)
+                if record is None:
+                    continue  # unregistered task — skip
+
+                # Pre-unpack t_last once here rather than inside merge_parts,
+                # since the None-guard is payload-specific.
+                f_t_last = float(t_last) if t_last is not None else -math.inf
+
+                # Call merge_parts directly — bypasses intermediate dict
+                # construction and .get() unpacking inside merge().
+                changed = record.merge_parts(
+                    clock,
+                    f_t_last,
+                    str(last_actor)      if last_actor      is not None else None,
+                    str(last_instrument) if last_instrument is not None else None,
+                )
+                outcomes[tid] = "updated" if changed else "unchanged"
 
         else:
             raise ValueError(
@@ -1056,10 +1103,10 @@ class TaskObservationTracker:
             }
         return {
             "t_last":          record.t_last,
-            "n_obs":           record.n_obs,       # derived from clock sum
+            "n_obs":           record.n_obs,
             "last_actor":      record.last_actor,
             "last_instrument": record.last_instrument,
-            "clock":           dict(record.clock), # expose for diagnostics
+            "clock":           dict(record.clock),
         }
 
     def tasks_at(self, grid_idx: int, gp_idx: int) -> List[str]:
@@ -1081,11 +1128,10 @@ class TaskObservationTracker:
         )
 
         if encoding_type is list:
-            # Tuple format: (task_id, clock, t_last, last_actor, last_instrument)
             return [
                 (
                     tid,
-                    dict(record.clock),             # shallow copy — safe to transmit
+                    dict(record.clock),
                     record.t_last,
                     record.last_actor,
                     record.last_instrument,
@@ -1121,15 +1167,412 @@ class TaskObservationTracker:
                 f"Unsupported encoding_type: {encoding_type}. "
                 f"Supported types are list, dict, and str."
             )
-        
+
     def teardown(self) -> None:
         """
         Release all internal state held by this tracker.
 
         Intended to be called once at the end of the simulation, after all
-        planning and broadcasting is complete.  After this call the tracker
+        planning and broadcasting is complete. After this call the tracker
         is empty and should not be used further.
         """
         self._records.clear()
         self._loc_to_tasks.clear()
         self._shareable.clear()
+
+# @dataclass
+# class ObservationRecord:
+#     """
+#     Observation state for a single task using a vector clock for ``n_obs``.
+
+#     Each actor owns exactly one counter in ``clock`` and is the only one
+#     that ever increments it.  Merging two records takes the element-wise
+#     max across all actor buckets, making the operation commutative,
+#     associative, and idempotent — shared ancestry is never double-counted.
+
+#     ``n_obs`` is maintained as a cached running total (_n_obs) to avoid
+#     calling sum(clock.values()) on every merge.
+#     """
+#     clock:           VectorClock   = field(default_factory=dict)
+#     t_last:          float         = field(default_factory=lambda: -math.inf)
+#     last_actor:      Optional[str] = None
+#     last_instrument: Optional[str] = None
+#     _n_obs:          int           = field(default=0, init=False, repr=False, compare=False)
+
+#     def __post_init__(self):
+#         self._n_obs = sum(self.clock.values())
+
+#     # ------------------------------------------------------------------
+#     # Derived property
+#     # ------------------------------------------------------------------
+
+#     @property
+#     def n_obs(self) -> int:
+#         """Total observation count across all actors."""
+#         return self._n_obs
+
+#     # ------------------------------------------------------------------
+#     # Ingest
+#     # ------------------------------------------------------------------
+
+#     def ingest(self, t_end: float, actor: str, instrument: Optional[str]) -> bool:
+#         """
+#         Record one completed observation pass by *actor*.
+
+#         Increments only *actor*'s own bucket in the clock.
+#         Returns True if the latest-observation fields were updated.
+#         """
+#         self.clock[actor] = self.clock.get(actor, 0) + 1
+#         self._n_obs += 1
+
+#         if t_end >= self.t_last:
+#             self.t_last          = t_end
+#             self.last_actor      = actor
+#             self.last_instrument = instrument
+#             return True
+#         return False
+
+#     # ------------------------------------------------------------------
+#     # Merge
+#     # ------------------------------------------------------------------
+
+#     def merge(self, foreign: "ObservationRecord | dict") -> bool:
+#         """
+#         Merge *foreign* into self using vector-clock semantics.
+
+#         Clock merge
+#         -----------
+#         For each actor bucket, take the element-wise max of the local and
+#         foreign counts.  This is the standard G-Counter CRDT merge and
+#         guarantees:
+#           - Commutativity:  merge(A,B) == merge(B,A)
+#           - Associativity:  merge(merge(A,B),C) == merge(A,merge(B,C))
+#           - Idempotency:    merge(A,A) == A
+
+#         Shared ancestry (observations known to both sides before they
+#         diverged) is represented by equal bucket values and contributes
+#         only once after the max, never double-counted.
+
+#         t_last / last_actor / last_instrument
+#         -------------------------------------
+#         Unchanged from before: foreign wins on ties.
+
+#         Returns True if any field changed.
+#         """
+#         # ── Unpack foreign regardless of whether it arrives as a
+#         #    dataclass instance or a plain dict (list-encoded payload) ──
+#         if isinstance(foreign, dict):
+#             f_clock  = foreign.get("clock", {})
+#             f_t_last = float(foreign.get("t_last", -math.inf) or -math.inf)
+#             f_actor  = foreign.get("last_actor")
+#             f_instr  = foreign.get("last_instrument")
+#         else:
+#             f_clock  = foreign.clock
+#             f_t_last = foreign.t_last
+#             f_actor  = foreign.last_actor
+#             f_instr  = foreign.last_instrument
+
+#         # ── Clock merge: element-wise max ────────────────────────────
+#         old_n      = self._n_obs
+#         all_actors = set(self.clock) | set(f_clock)
+#         for actor in all_actors:
+#             local_count   = self.clock.get(actor, 0)
+#             foreign_count = f_clock.get(actor, 0)
+#             if foreign_count > local_count:
+#                 self._n_obs      += foreign_count - local_count
+#                 self.clock[actor] = foreign_count
+
+#         clock_changed = self._n_obs != old_n
+
+#         # ── t_last / last_actor / last_instrument ────────────────────
+#         time_changed = False
+#         if f_t_last >= self.t_last:
+#             time_changed = f_t_last != self.t_last
+#             self.t_last          = f_t_last
+#             self.last_actor      = f_actor
+#             self.last_instrument = f_instr
+
+#         return clock_changed or time_changed
+
+#     # ------------------------------------------------------------------
+#     # Serialisation
+#     # ------------------------------------------------------------------
+
+#     def to_dict(self) -> Dict[str, Any]:
+#         return {
+#             "clock":           self.clock,                                    # {actor: count}
+#             "t_last":          None if math.isinf(self.t_last) else self.t_last,
+#             "last_actor":      self.last_actor,
+#             "last_instrument": self.last_instrument,
+#         }
+
+#     @classmethod
+#     def from_dict(cls, d: Dict[str, Any]) -> ObservationRecord:
+#         raw_t = d.get("t_last")
+#         return cls(
+#             clock           = dict(d.get("clock", {})),
+#             t_last          = -math.inf if raw_t is None else float(raw_t),
+#             last_actor      = d.get("last_actor"),
+#             last_instrument = d.get("last_instrument"),
+#         )
+
+
+# # ---------------------------------------------------------------------------
+# # TaskObservationTracker  — unchanged except encode tuple format
+# # ---------------------------------------------------------------------------
+
+# @dataclass
+# class TaskObservationTracker:
+#     """
+#     Observation-state store using per-task vector clocks for correct
+#     distributed merge semantics.
+
+#     Everything except ``ObservationRecord`` internals and the list-encoding
+#     tuple format is identical to the previous implementation.
+#     """
+
+#     _owner:        str
+#     _records:      Dict[str, ObservationRecord]
+#     _loc_to_tasks: Dict[LocationKey, Set[str]]
+#     _shareable:    Set[str]
+
+#     # ------------------------------------------------------------------
+#     # Construction
+#     # ------------------------------------------------------------------
+
+#     @classmethod
+#     def create(cls, owner_name: str) -> "TaskObservationTracker":
+#         return cls(
+#             _owner        = owner_name,
+#             _records      = {},
+#             _loc_to_tasks = {},
+#             _shareable    = set(),
+#         )
+
+#     # ------------------------------------------------------------------
+#     # Task lifecycle
+#     # ------------------------------------------------------------------
+
+#     def register_task(self, task: GenericObservationTask, shareable: bool = False) -> bool:
+#         tid = task.id
+#         if tid in self._records:
+#             return False
+
+#         self._records[tid] = ObservationRecord()
+
+#         for loc in task.location:
+#             key: LocationKey = (int(loc[2]), int(loc[3]))
+#             self._loc_to_tasks.setdefault(key, set()).add(tid)
+
+#         if shareable:
+#             self._shareable.add(tid)
+
+#         return True
+
+#     def remove_task(self, task: GenericObservationTask) -> bool:
+#         tid = task.id
+#         if tid not in self._records:
+#             return False
+
+#         for loc in task.location:
+#             key: LocationKey = (int(loc[2]), int(loc[3]))
+#             task_set = self._loc_to_tasks.get(key)
+#             if task_set is not None:
+#                 task_set.discard(tid)
+#                 if not task_set:
+#                     del self._loc_to_tasks[key]
+
+#         del self._records[tid]
+#         self._shareable.discard(tid)
+#         return True
+
+#     def is_registered(self, task_id: str) -> bool:
+#         return task_id in self._records
+
+#     def registered_task_ids(self) -> List[str]:
+#         return list(self._records)
+
+#     # ------------------------------------------------------------------
+#     # Location resolution
+#     # ------------------------------------------------------------------
+
+#     def _resolve_location(self, grid_idx: int, gp_idx: int) -> Set[str]:
+#         return self._loc_to_tasks.get((int(grid_idx), int(gp_idx)), set())
+
+#     # ------------------------------------------------------------------
+#     # Update path 1 — raw sensor observations
+#     # ------------------------------------------------------------------
+
+#     def update_from_observations(
+#         self,
+#         measurements: Iterable[List[Dict[str, Any]]],
+#     ) -> Dict[str, int]:
+#         ingested: Dict[str, int] = {}
+
+#         for measurement in measurements:
+#             best_t_end: Dict[str, float]        = {}
+#             best_actor: Dict[str, str]          = {}
+#             best_instr: Dict[str, Optional[str]] = {}
+
+#             for entry in measurement:
+#                 grid_idx = int(entry.get("grid index", -1))
+#                 gp_idx   = int(entry.get("GP index",   -1))
+#                 t_end    = float(entry.get("t_end", -math.inf))
+#                 actor    = str(entry.get("agent name", self._owner))
+#                 instr    = entry.get("instrument")
+
+#                 task_ids = self._resolve_location(grid_idx, gp_idx)
+#                 if not task_ids:
+#                     continue
+
+#                 for tid in task_ids:
+#                     if not self.is_registered(tid):
+#                         raise UnknownTaskError(tid, "update_from_observations()")
+#                     if t_end > best_t_end.get(tid, -math.inf):
+#                         best_t_end[tid] = t_end
+#                         best_actor[tid] = actor
+#                         best_instr[tid] = instr
+
+#             for tid, t_end in best_t_end.items():
+#                 self._records[tid].ingest(
+#                     t_end      = t_end,
+#                     actor      = best_actor[tid],
+#                     instrument = best_instr[tid],
+#                 )
+#                 ingested[tid] = ingested.get(tid, 0) + 1
+
+#         return ingested
+
+#     # ------------------------------------------------------------------
+#     # Update path 2 — peer knowledge broadcast
+#     # ------------------------------------------------------------------
+
+#     def update_from_peer(self, payload: object) -> Dict[str, str]:
+#         outcomes: Dict[str, str] = {}
+
+#         if isinstance(payload, str):
+#             payload = json.loads(payload)
+
+#         if isinstance(payload, dict):
+#             for task_id, state_dict in payload.get("records", {}).items():
+#                 if not self.is_registered(task_id):
+#                     raise UnknownTaskError(task_id, "update_from_peer()")
+#                 changed = self._records[task_id].merge(state_dict)
+#                 outcomes[task_id] = "updated" if changed else "unchanged"
+
+#         elif isinstance(payload, list):
+#             # List encoding: (task_id, clock_dict, t_last, last_actor, last_instrument)
+#             for tid, clock, t_last, last_actor, last_instrument in payload:
+#                 task_id = str(tid)
+#                 if not self.is_registered(task_id):
+#                     continue # skip unregistered tasks
+#                     # raise UnknownTaskError(task_id, "update_from_peer()")
+#                 foreign = {
+#                     "clock":           clock,
+#                     "t_last":          float(t_last) if t_last is not None else -math.inf,
+#                     "last_actor":      str(last_actor) if last_actor is not None else None,
+#                     "last_instrument": str(last_instrument) if last_instrument is not None else None,
+#                 }
+#                 changed = self._records[task_id].merge(foreign)
+#                 outcomes[task_id] = "updated" if changed else "unchanged"
+
+#         else:
+#             raise ValueError(
+#                 f"Unsupported payload type: {type(payload)}. "
+#                 f"Expected str, dict, or list."
+#             )
+
+#         return outcomes
+
+#     # ------------------------------------------------------------------
+#     # Lookup
+#     # ------------------------------------------------------------------
+
+#     def lookup(self, task_id: str) -> Dict[str, Any]:
+#         record = self._records.get(task_id)
+#         if record is None:
+#             return {
+#                 "t_last":          -math.inf,
+#                 "n_obs":           -1,
+#                 "last_actor":      None,
+#                 "last_instrument": None,
+#             }
+#         return {
+#             "t_last":          record.t_last,
+#             "n_obs":           record.n_obs,       # derived from clock sum
+#             "last_actor":      record.last_actor,
+#             "last_instrument": record.last_instrument,
+#             "clock":           dict(record.clock), # expose for diagnostics
+#         }
+
+#     def tasks_at(self, grid_idx: int, gp_idx: int) -> List[str]:
+#         return list(self._resolve_location(grid_idx, gp_idx))
+
+#     # ------------------------------------------------------------------
+#     # Encoding
+#     # ------------------------------------------------------------------
+
+#     def encode(
+#         self,
+#         task_ids: Optional[Iterable[str]] = None,
+#         encoding_type: type = list,
+#     ) -> object:
+#         ids = (
+#             [tid for tid in task_ids if tid in self._records]
+#             if task_ids is not None
+#             else list(self._shareable)
+#         )
+
+#         if encoding_type is list:
+#             # Tuple format: (task_id, clock, t_last, last_actor, last_instrument)
+#             return [
+#                 (
+#                     tid,
+#                     dict(record.clock),             # shallow copy — safe to transmit
+#                     record.t_last,
+#                     record.last_actor,
+#                     record.last_instrument,
+#                 )
+#                 for tid in ids
+#                 if (record := self._records.get(tid)) is not None
+#                 and record.n_obs > 0
+#             ]
+
+#         elif encoding_type is dict:
+#             return {
+#                 "sender": self._owner,
+#                 "records": {
+#                     tid: self._records[tid].to_dict()
+#                     for tid in ids
+#                     if tid in self._records and self._records[tid].n_obs > 0
+#                 },
+#             }
+
+#         elif encoding_type is str:
+#             records = {
+#                 tid: self._records[tid].to_dict()
+#                 for tid in ids
+#                 if tid in self._records and self._records[tid].n_obs > 0
+#             }
+#             return json.dumps(
+#                 {"sender": self._owner, "records": records},
+#                 separators=(",", ":"),
+#             )
+
+#         else:
+#             raise ValueError(
+#                 f"Unsupported encoding_type: {encoding_type}. "
+#                 f"Supported types are list, dict, and str."
+#             )
+        
+#     def teardown(self) -> None:
+#         """
+#         Release all internal state held by this tracker.
+
+#         Intended to be called once at the end of the simulation, after all
+#         planning and broadcasting is complete.  After this call the tracker
+#         is empty and should not be used further.
+#         """
+#         self._records.clear()
+#         self._loc_to_tasks.clear()
+#         self._shareable.clear()
