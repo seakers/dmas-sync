@@ -10,6 +10,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from dmas.core.messages import BusMessage, MeasurementRequestMessage, SimulationMessage, message_from_dict
+from dmas.models.science.requests import TaskRequest
 from dmas.models.trackers import DataSink
 from dmas.utils.orbitdata import OrbitData
 
@@ -245,11 +246,20 @@ class SimulationEnvironment(object):
         if isinstance(msg_out, BusMessage):
             for msg in msg_out.msgs:
                 if isinstance(msg, MeasurementRequestMessage):
-                    # save measurement request to history
-                    self._task_reqs.append(msg.req)
+                    if isinstance(msg.req, TaskRequest):
+                        self._task_reqs.append(msg.req.to_dict())
+                    elif isinstance(msg.req, dict):
+                        self._task_reqs.append(msg.req)
+                    else:
+                        raise ValueError(f"Unknown request type in message: {type(msg_out.req)}")
         elif isinstance(msg_out, MeasurementRequestMessage):
             # save measurement request to history
-            self._task_reqs.append(msg_out.req)
+            if isinstance(msg_out.req, TaskRequest):
+                self._task_reqs.append(msg_out.req.to_dict())
+            elif isinstance(msg_out.req, dict):
+                self._task_reqs.append(msg_out.req)
+            else:
+                raise ValueError(f"Unknown request type in message: {type(msg_out.req)}")                
 
         # convert to dict before saving
         msg_dict : dict = {
