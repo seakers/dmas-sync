@@ -212,6 +212,8 @@ def load_and_prepare(csv_path: str,
         df['Events Tasked Co-observed'] / co_able)
     df['P(Event Tasked Fully Co-observed | Fully Co-observable)'] = (
         df['Events Tasked Fully Co-observed'] / full_able)
+    df['Average Co-observations per Task'] = df['Event Co-observations'] / df['Events Co-observed']
+    df['Average Tasked Co-observations per Task'] = df['Tasked Event Co-observations'] / df['Events Tasked Co-observed']
 
     # --- MILP normalisation (reward / MILP reward for same Date×Mission×Conn×DP) ---
     milp_rows = df[df['Algorithm'] == 'MILP'][
@@ -627,11 +629,9 @@ def plot_decomposition_heatmap(
         sharey='row')
 
     # Single shared colormap image for one global colorbar
-    sm = plt.cm.ScalarMappable(
-                                # cmap='YlOrRd',
+    sm = plt.cm.ScalarMappable(# cmap='YlOrRd',
                                 cmap='rocket_r',
-                               norm=plt.Normalize(vmin=vmin, vmax=vmax)
-                               )
+                               norm=plt.Normalize(vmin=vmin, vmax=vmax))
     sm.set_array([])
 
     for row_i, mission in enumerate(MISSION_ORDER):
@@ -1023,20 +1023,21 @@ def plot_urgency_requirements(
             ax.scatter(asub[x_col], asub[y_col],
                        color=ALGO_PALETTE[algo],
                     #    marker=MARKER_SHAPES[algo],
+                        # marker=asub['Mission'],
                        s=70, alpha=0.75,
                        edgecolors='white', linewidths=0.4,
                        zorder=3, label=algo)
 
         # Utopia: low response time, high coverage
-        x_utopia = data[x_col].min() * 0.95
-        y_utopia = data[y_col].max() * 1.02
-        ax.scatter(x_utopia, min(y_utopia, 1.0), marker='*', s=300,
-                   color='gold', edgecolors='black',
-                   linewidths=0.8, zorder=6)
-        ax.annotate('Utopia', xy=(x_utopia, min(y_utopia, 1.0)),
-                    xytext=(x_utopia + (data[x_col].max() * 0.02),
-                            min(y_utopia, 1.0) - 0.02),
-                    fontsize=7, color='#333333')
+        x_utopia = 0.0 # data[x_col].min() * 0.95
+        y_utopia = 1.0 # data[y_col].max() * 1.02
+        # ax.scatter(x_utopia, min(y_utopia, 1.0), marker='*', s=300,
+        #            color='gold', edgecolors='black',
+        #            linewidths=0.8, zorder=6)
+        # ax.annotate('Utopia', xy=(x_utopia, min(y_utopia, 1.0)),
+        #             xytext=(x_utopia + (data[x_col].max() * 0.02),
+        #                     min(y_utopia, 1.0) - 0.02),
+        #             fontsize=7, color='#333333')
 
         ax.set_xlabel('Median Norm. Response Time\n(lower = faster)', fontsize=9)
         ax.set_ylabel('P(Task Observed | Observable)'
@@ -1112,27 +1113,80 @@ def plot_revisit_requirements(
 #  third axis or facet showing how many co-obs were "earned" vs redundant.
 # =============================================================================
 
+# def plot_coobs_requirements(
+#     df: pd.DataFrame,
+#     save_dir: str,
+# ) -> None:
+#     x_col = 'Average Observations per Task'
+#     y_col = 'P(Event Tasked Co-observed | Co-observable)'
+#     data  = df[(df['Mission'] == 'Co-observations') &
+#                (df['Algorithm'] != 'None-None')].copy()
+
+#     if not _col_ok(data, x_col, 'Fig 6c') or \
+#        not _col_ok(data, y_col, 'Fig 6c'):
+#         return
+
+#     n_conn = len(CONN_ORDER)
+#     fig, axes = plt.subplots(1, n_conn,
+#                              figsize=(5 * n_conn, 5),
+#                              sharey=True, sharex=True)
+
+#     for ax, conn in zip(axes, CONN_ORDER):
+#         sub = data[data['Connectivity'] == conn]
+
+#         for algo in ALGO_ORDER:
+#             asub = sub[sub['Algorithm'] == algo].dropna(
+#                 subset=[x_col, y_col])
+#             if asub.empty:
+#                 continue
+#             ax.scatter(asub[x_col], asub[y_col],
+#                        color=ALGO_PALETTE[algo],
+#                     #    marker=MARKER_SHAPES[algo],
+#                        s=70, alpha=0.75,
+#                        edgecolors='white', linewidths=0.4,
+#                        zorder=3, label=algo)
+#         ax.set_xlabel('Avg. Observations per Task', fontsize=9)
+#         ax.set_ylabel('P(Tasked Co-obs | Co-observable)'
+#                       if conn == CONN_ORDER[0] else '')
+#         ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
+#         ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
+
+#         if conn == CONN_ORDER[-1]:
+#             ax.legend(title='Algorithm', fontsize=7,
+#                       title_fontsize=8, loc='best')
+
+#     plt.suptitle(
+#         f'{MISSION_FULL_LABELS["Co-observations"]} — '
+#         f'Requirement Satisfaction\n'
+#         f'(NOTE: this plot will gain additional context once per-trial\n'
+#         f' redundant co-observation counts are added to the summary)',
+#         fontsize=12, y=1.03)
+#     plt.tight_layout()
+#     save_plot(save_dir, 'Plot4_6_3-Coobs_Requirements.png')
+#     plt.close()
+
 def plot_coobs_requirements(
     df: pd.DataFrame,
     save_dir: str,
 ) -> None:
-    x_col = 'Average Observations per Task'
+    # x_col = 'Average Co-observations per Task'
+    x_col = 'Average Tasked Co-observations per Task'
     y_col = 'P(Event Tasked Co-observed | Co-observable)'
     data  = df[(df['Mission'] == 'Co-observations') &
                (df['Algorithm'] != 'None-None')].copy()
-
+ 
     if not _col_ok(data, x_col, 'Fig 6c') or \
        not _col_ok(data, y_col, 'Fig 6c'):
         return
-
+ 
     n_conn = len(CONN_ORDER)
     fig, axes = plt.subplots(1, n_conn,
                              figsize=(5 * n_conn, 5),
                              sharey=True, sharex=True)
-
+ 
     for ax, conn in zip(axes, CONN_ORDER):
         sub = data[data['Connectivity'] == conn]
-
+ 
         for algo in ALGO_ORDER:
             asub = sub[sub['Algorithm'] == algo].dropna(
                 subset=[x_col, y_col])
@@ -1144,25 +1198,26 @@ def plot_coobs_requirements(
                        s=70, alpha=0.75,
                        edgecolors='white', linewidths=0.4,
                        zorder=3, label=algo)
-        ax.set_xlabel('Avg. Observations per Task', fontsize=9)
+        ax.set_xlabel('Avg. Co-observations per Task', fontsize=9)
         ax.set_ylabel('P(Tasked Co-obs | Co-observable)'
                       if conn == CONN_ORDER[0] else '')
         ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
         ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
-
+ 
         if conn == CONN_ORDER[-1]:
             ax.legend(title='Algorithm', fontsize=7,
                       title_fontsize=8, loc='best')
-
+ 
     plt.suptitle(
         f'{MISSION_FULL_LABELS["Co-observations"]} — '
-        f'Requirement Satisfaction\n'
-        f'(NOTE: this plot will gain additional context once per-trial\n'
-        f' redundant co-observation counts are added to the summary)',
+        f'Requirement Satisfaction\n',
+        # f'(NOTE: this plot will gain additional context once per-trial\n'
+        # f' redundant co-observation counts are added to the summary)',
         fontsize=12, y=1.03)
     plt.tight_layout()
     save_plot(save_dir, 'Plot4_6_3-Coobs_Requirements.png')
     plt.close()
+
 
 
 # =============================================================================
@@ -1348,6 +1403,43 @@ def plot_unified_normalised_reward(
     save_plot(save_dir, 'Plot4_1b_1-Mission_Reward_Norm_Unified.png')
     plt.close()
 
+def plot_unified_reward(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    metric = 'Total Obtained Reward'
+    data   = df[df['Algorithm'] != 'None-None'].copy()
+
+    if metric not in data.columns or data[metric].isna().all():
+        print('  [Fig 1b] Total Obtained Reward column absent or all-NaN — skipping.')
+        return
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    make_boxplot(data, metric, ax,
+                 ylabel='Total Obtained Reward',
+                 milp_line=True)
+
+    ax.axhline(1.0, color=ALGO_PALETTE['MILP'], linewidth=1.4,
+               linestyle='--', alpha=0.8)
+    ax.text(len(_algo_present(data)) - 0.5, 1.01,
+            'MILP = 1.0', fontsize=7.5,
+            color=ALGO_PALETTE['MILP'], ha='right', va='bottom')
+    ax.set_xlabel('Algorithm Configuration', fontsize=10)
+
+    # Add legend for MILP reference line
+    milp_handle = matplotlib.lines.Line2D(
+        [], [], color=ALGO_PALETTE['MILP'], linewidth=1.4,
+        linestyle='--', alpha=0.8, label='MILP reference (1.0)')
+    ax.legend(handles=[milp_handle], fontsize=8, loc='upper left')
+
+    plt.suptitle(
+        'Mission Reward by Algorithm — MILP-Normalised\n'
+        '(all missions, connectivity levels, data processing modes combined)',
+        fontsize=12, y=1.02)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_1b_2-Mission_Reward_Unified.png')
+    plt.close()
+
 
 # =============================================================================
 #  FIGURE 2b — Normalised Decomposition Heatmap
@@ -1390,7 +1482,6 @@ def plot_normalised_decomposition_heatmap(
                                            vcenter=1.0,
                                            vmax=1.0 + vmax)
     cmap = 'RdYlGn'   # green = above MILP, red = below MILP
-    # cmap = 'YlOrRd'
 
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
     sm.set_array([])
@@ -1459,7 +1550,7 @@ def plot_normalised_decomposition_heatmap(
     cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.70])
     cb = fig.colorbar(sm, cax=cbar_ax, label='Reward / MILP Reward')
     cb.ax.axhline(1.0, color='black', linewidth=1.0, linestyle='--')
-    # cb.ax.text(2.5, 1.0, 'MILP', fontsize=6, va='center', color='black')
+    cb.ax.text(2.5, 1.0, 'MILP', fontsize=6, va='center', color='black')
 
     plt.suptitle(
         'Reward Decomposition (MILP-Normalised): Preplanner × Replanner\n',
@@ -1468,6 +1559,8 @@ def plot_normalised_decomposition_heatmap(
         fontsize=12, y=1.01)
     save_plot(save_dir, 'Plot4_2b_1-Decomposition_Heatmap_Norm.png')
     plt.close()
+
+
 
 # =============================================================================
 #  FIGURE 2c — Cumulative Normalised Heatmap
@@ -1559,6 +1652,141 @@ def plot_cumulative_normalised_heatmap(
     plt.close()
 
 # =============================================================================
+#  FIGURE 6d — Co-observations: Strategy Analysis  (1 row × 3 cols)
+#  All connectivity levels collapsed into one plot per panel.
+#  y-axis: P(Event Co-observed | Co-observable) — coverage probability
+#  x-axes:
+#    Panel 1: Event Co-observations          (total volume)
+#    Panel 2: Unique Event Co-observations   (genuine coordination)
+#    Panel 3: Repeated Event Co-observations (redundant passes)
+#  Colour = algorithm.
+# =============================================================================
+ 
+def plot_coobs_strategy(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    y_col = 'P(Event Co-observed | Co-observable)'
+    panels = [
+        ('Event Co-observations',
+         'Total Tasked Event Co-observations\n(all passes)'),
+        ('Unique Tasked Event Co-observations',
+         'Unique Tasked Event Co-observations\n(genuine coordination)'),
+        ('Repeated Tasked Event Co-observations',
+         'Repeated Tasked Event Co-observations\n(redundant passes)'),
+    ]
+ 
+    data = df[(df['Mission'] == 'Co-observations') &
+              (df['Algorithm'] != 'None-None')].copy()
+ 
+    for col, _ in panels:
+        if not _col_ok(data, col, 'Fig 6d'):
+            return
+    if not _col_ok(data, y_col, 'Fig 6d'):
+        return
+ 
+    fig, axes = plt.subplots(
+        1, 3,
+        figsize=(6 * 3, 5),
+        sharey=True,
+        # sharex=True
+    )
+ 
+    for ax, (x_col, xlabel) in zip(axes, panels):
+        for algo in ALGO_ORDER:
+            asub = data[data['Algorithm'] == algo].dropna(
+                subset=[x_col, y_col])
+            if asub.empty:
+                continue
+            ax.scatter(asub[x_col], asub[y_col],
+                       color=ALGO_PALETTE[algo],
+                    #    marker=MARKER_SHAPES[algo],
+                       s=70, alpha=0.70,
+                       edgecolors='white', linewidths=0.4,
+                       zorder=3, label=algo)
+ 
+        ax.set_xlabel(xlabel, fontsize=9)
+        ax.set_ylabel('P(Event Co-observed | Co-observable)'
+                      if ax is axes[0] else '')
+        ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
+ 
+    # Legend on last panel
+    algo_handles = [
+        plt.scatter([], [], color=ALGO_PALETTE[a],
+                    #    marker=MARKER_SHAPES[a],
+                       s=70, label=a)
+        for a in ALGO_ORDER
+    ]
+    axes[-1].legend(handles=algo_handles, title='Algorithm',
+                    fontsize=7, title_fontsize=8, loc='best')
+ 
+    plt.suptitle(
+        f'{MISSION_FULL_LABELS["Co-observations"]} — Scheduling Strategy\n',
+        # f'(all connectivity levels combined; colour = algorithm)',
+        fontsize=12, y=1.02)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_6d_1-Coobs_Strategy.png')
+    plt.close()
+
+     
+# def plot_coobs_strategy(
+#     df: pd.DataFrame,
+#     save_dir: str,
+# ) -> None:
+    x_col = 'P(Tasked Co-observation Unique)'
+    y_col = 'P(Event Co-observed | Co-observable)'
+ 
+    data = df[(df['Mission'] == 'Co-observations') &
+              (df['Algorithm'] != 'None-None')].copy()
+ 
+    if not _col_ok(data, x_col, 'Fig 6d') or \
+       not _col_ok(data, y_col, 'Fig 6d'):
+        return
+ 
+    fig, ax = plt.subplots(figsize=(7, 5))
+ 
+    for algo in ALGO_ORDER:
+        asub = data[data['Algorithm'] == algo].dropna(subset=[x_col, y_col])
+        if asub.empty:
+            continue
+        ax.scatter(asub[x_col], asub[y_col],
+                   color=ALGO_PALETTE[algo],
+                #    marker=MARKER_SHAPES[algo],
+                   s=80, alpha=0.75,
+                   edgecolors='white', linewidths=0.4,
+                   zorder=3, label=algo)
+ 
+    ax.set_xlabel(
+        'P(Tasked Co-observation Unique)\n'
+        '← carpet-bombing                              efficient coordination →',
+        fontsize=9)
+    ax.set_ylabel(
+        'P(Event Tasked Co-observed | Co-observable)\n'
+        '(tasked coverage of co-observable events)',
+        fontsize=9)
+    ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
+ 
+    algo_handles = [
+        plt.scatter([], [], color=ALGO_PALETTE[a],
+                    # marker=MARKER_SHAPES[a], 
+                    s=80, label=a)
+        for a in ALGO_ORDER
+    ]
+    ax.legend(handles=algo_handles, title='Algorithm',
+              fontsize=8, title_fontsize=9, loc='best')
+ 
+    plt.suptitle(
+        f'{MISSION_FULL_LABELS["Co-observations"]} — '
+        f'Tasked Coverage vs Coordination Efficiency\n'
+        f'(all connectivity levels and data processing modes combined)',
+        fontsize=11, y=1.02)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_6d_2-Coobs_Strategy_Merged.png')
+    plt.close()
+
+
+
+# =============================================================================
 #  MAIN DRIVER
 # =============================================================================
 
@@ -1590,6 +1818,9 @@ def generate_plots(
     print(f'  Date filter: {filter_date or "all"}')
     print(f'  Output: {save_dir}')
     print(f'{"="*65}')
+
+    print('  Fig 1a -- Unified Reward (all conditions)')
+    plot_unified_reward(df, save_dir)
 
     print('  Fig 1b -- Unified Normalised Reward (all conditions)')
     plot_unified_normalised_reward(df, save_dir)
@@ -1624,6 +1855,9 @@ def generate_plots(
 
     print('  Fig 6c -- Co-observations Requirements')
     plot_coobs_requirements(df, save_dir)
+
+    print('  Fig 6d -- Co-observations Strategy (unique vs repeated)')
+    plot_coobs_strategy(df, save_dir)
 
     print('  Fig 7 -- Communication Load')
     plot_communication_load(df, save_dir)
