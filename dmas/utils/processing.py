@@ -1799,7 +1799,9 @@ class ResultsProcessor:
         if printouts: tqdm.write('[results summary] classifying co-observations')
         events_co_observable, events_co_observable_fully, events_co_observable_partially, \
             events_co_obs, events_co_obs_fully, events_co_obs_partially, \
-            events_co_obs_tasked, events_co_obs_tasked_fully, events_co_obs_tasked_partially \
+            events_co_obs_tasked, events_co_obs_tasked_fully, events_co_obs_tasked_partially, \
+            unique_co_obs_per_event, repeat_co_obs_per_event, \
+            unique_co_obs_per_event_tasked, repeat_co_obs_per_event_tasked \
                 = ResultsProcessor.__classify_event_coobservations(accesses_per_event, observations_per_event, all_tasks)
 
         # tasked co-obs counts (at least one tasked observation in the co-obs window)
@@ -2448,9 +2450,48 @@ class ResultsProcessor:
                     if best_group_has_tasked:
                         events_co_obs_tasked_partially.add(event)
 
+        # classify individual co-observations as unique or repeat per event.
+        # An observation is unique if no prior observation of the same parameter
+        # exists within t_corr of the *earliest* unique member of the current
+        # coalition (the coalition-start time).  Repeats do not reset the clock.
+        # The _tasked variants only consider tasked observations; non-tasked ones
+        # are invisible to the tasked coalition clock.
+        unique_co_obs_per_event : Dict[GeophysicalEvent, List[dict]] = defaultdict(list)
+        repeat_co_obs_per_event : Dict[GeophysicalEvent, List[dict]] = defaultdict(list)
+        unique_co_obs_per_event_tasked : Dict[GeophysicalEvent, List[dict]] = defaultdict(list)
+        repeat_co_obs_per_event_tasked : Dict[GeophysicalEvent, List[dict]] = defaultdict(list)
+
+        for event, observations in possible_co_observations.items():
+            if len(event_to_required_observations.get(event, {})) < 2:
+                continue  # single-parameter event; co-obs classification not applicable
+
+            # param -> t_img of the earliest unique observation in the current coalition
+            coalition_start : Dict[str, float] = {}
+            coalition_start_tasked : Dict[str, float] = {}
+
+            for obs_dict, param in observations:  # already sorted by t_img
+                t = obs_dict['t_img']
+
+                # all-observations variant
+                if param in coalition_start and (t - coalition_start[param]) <= t_corr:
+                    repeat_co_obs_per_event[event].append(obs_dict)
+                else:
+                    unique_co_obs_per_event[event].append(obs_dict)
+                    coalition_start[param] = t
+
+                # tasked-only variant: non-tasked observations are invisible to the clock
+                if obs_dict.get('tasked', False):
+                    if param in coalition_start_tasked and (t - coalition_start_tasked[param]) <= t_corr:
+                        repeat_co_obs_per_event_tasked[event].append(obs_dict)
+                    else:
+                        unique_co_obs_per_event_tasked[event].append(obs_dict)
+                        coalition_start_tasked[param] = t
+
         return events_co_observable, events_co_observable_fully, events_co_observable_partially, \
             events_co_obs, events_co_obs_fully, events_co_obs_partially, \
-                events_co_obs_tasked, events_co_obs_tasked_fully, events_co_obs_tasked_partially
+                events_co_obs_tasked, events_co_obs_tasked_fully, events_co_obs_tasked_partially, \
+                    unique_co_obs_per_event, repeat_co_obs_per_event, \
+                        unique_co_obs_per_event_tasked, repeat_co_obs_per_event_tasked
 
     @staticmethod
     def __count_observations(orbitdata : Dict[str, OrbitData], 
