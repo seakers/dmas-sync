@@ -173,6 +173,10 @@ def run_one_trial(trial_row: Tuple[Any, ...],   # (scenario_id, num_sats, gnd_se
 
         mission_name = None
         if should_run_sim:
+
+            # TODO TEMPORARY EXCEPTION: skip sim if simulation is needed
+            # raise Exception(f"Simulation execution temporarily disabled. Reprocessing previous data. Avoiding overriding results. Remove this exception when ready to run simulations again.")
+
             mission_name = Simulation.from_dict(
                 mission_specs,
                 overwrite=sim_cfg.force_simulate,
