@@ -429,13 +429,24 @@ class ConsensusPlanner(AbstractReactivePlanner):
         
         # extract tasks from incoming bids
         ## find unique tasks in incoming bids (dedup by task id)
-        unique_bid_tasks = list({bid['task']['id']: bid['task']
-                                for bid in incoming_bids}.values())
+        # unique_bid_tasks = list({bid['task']['id']: bid['task']
+        #                         for bid in incoming_bids}.values())
+        unique_bid_tasks = {}
+        for bid in incoming_bids:
+            try:
+                unique_bid_tasks[bid.task.id] = bid.task
+            except TypeError:
+                raise 
+                # TODO restore support for bid dictionaries when re-enabled
+                # unique_bid_tasks[bid['task']['id']] = bid['task']
+        unique_bid_tasks = list(unique_bid_tasks.values())
 
         ## unpack unique bid tasks
-        incoming_bid_tasks = set([GenericObservationTask.from_dict(task_dict) 
-                                  for task_dict in unique_bid_tasks
-                                  if task_dict['id'] not in self._id_to_tasks])
+        # incoming_bid_tasks = set([GenericObservationTask.from_dict(task_dict) 
+        #                           for task_dict in unique_bid_tasks
+        #                           if task_dict['id'] not in self._id_to_tasks])
+        incoming_bid_tasks = [bid_task for bid_task in unique_bid_tasks 
+                              if bid_task.id not in self._id_to_tasks]
         ## filter active bid tasks
         active_bid_tasks = set([task for task in incoming_bid_tasks
                                 # check if task is still available
@@ -1220,6 +1231,7 @@ class ConsensusPlanner(AbstractReactivePlanner):
 
             # check for any action that may be scheduled to start at the same time as the replan action
             for action in maneuvers + observations + broadcasts:    
+                if not preplan_waits: break
                 if abs(action.t_start - preplan_waits[0].t_start) < 1e-6:
                     action.t_start += 5e-3  # add small buffer to ensure replan action is executed first
                     action.t_end += 5e-3

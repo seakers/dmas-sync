@@ -859,8 +859,8 @@ class SimulationAgent(object):
         
         # generate bid messages to share bids in results
         compiled_bid_msgs = [
-            MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
-            # MeasurementBidMessage(state.agent_name, state.agent_name, bid)
+            # MeasurementBidMessage(state.agent_name, state.agent_name, bid.to_dict())
+            MeasurementBidMessage(state.agent_name, state.agent_name, bid)
             for task,bids in self._replanner._results.items()
             if isinstance(task, EventObservationTask)  # only share bids for event-driven tasks
             for bid in bids

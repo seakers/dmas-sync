@@ -518,7 +518,7 @@
                 "--force-postprocess",
                 "--force-summarize",
 
-                // "--reduced",
+                "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]
@@ -564,8 +564,8 @@
                 "PYTHONPATH": "${workspaceRoot}"
             },
             "args": [
-                "-t", "full_factorial_trials_2026-05-17",
-                "--trial-range", "0:8",
+                "-t", "full_factorial_trials_2026-05-25",
+                // "--trial-range", "0:8",
                 // "--trial-range", "8:16",
                 // "--trial-range", "16:24",
                 // "--trial-range", "24:32",
@@ -581,8 +581,9 @@
                 // "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
-                // "--quiet",
+                "--quiet",
                 // "--exceptions",
+                // "--reduced",
             ]
         },
     ]
