@@ -113,7 +113,7 @@ class ResultsProcessor:
         observations_per_task_df, observations_per_task = ResultsProcessor.__compile_tasks_observed(all_tasks, observations_per_gp, agent_missions, printouts)
         _write('observations_per_task', observations_per_task_df);  del observations_per_task_df
 
-        obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, agent_specs, cross_track_fovs, compiled_orbitdata, printouts)
+        obtained_rewards_df = ResultsProcessor.__compile_obtained_rewards(observations_per_task, agent_missions, task_reqs, agent_specs, cross_track_fovs, compiled_orbitdata, printouts)
         _write('obtained_rewards', obtained_rewards_df)
 
         # return compiled data for summary generation
@@ -123,8 +123,9 @@ class ResultsProcessor:
                     observations_per_gp, observations_per_event, observations_per_task
     
     @staticmethod
-    def __compile_obtained_rewards(observations_per_task : Dict[GenericObservationTask, List[dict]], 
-                                   agent_missions : Dict[str, Mission], 
+    def __compile_obtained_rewards(observations_per_task : Dict[GenericObservationTask, List[dict]],
+                                   agent_missions : Dict[str, Mission],
+                                   task_reqs : list,
                                    agent_specs : Dict[str, object],
                                    cross_track_fovs : Dict[str, float],
                                    compiled_orbitdata : Dict[str, OrbitData],
@@ -132,6 +133,15 @@ class ResultsProcessor:
                                 ) -> pd.DataFrame:
         # initialize list of obtained rewards
         obtained_rewards_data = []
+
+        # build task_id -> requesting mission name lookup.
+        # For event-driven tasks the mission is that of the agent who requested the task;
+        # take the first request per task id (multiple agents may request the same task,
+        # but within a mission they share the same mission_name).
+        task_id_to_request_mission : Dict[str, str] = {}
+        for req in task_reqs:
+            if req.task.id not in task_id_to_request_mission:
+                task_id_to_request_mission[req.task.id] = req.mission_name
 
         # Pre-build event observation index for co-obs lookup:
         #   event_id -> parameter -> sorted list of t_img values across all taskable observations.
@@ -239,14 +249,22 @@ class ResultsProcessor:
                 # calculate reward for this observation 
                 reward = agent_mission.calc_task_value(task, measurement_performance) 
 
+                # resolve task mission: for event-driven tasks use the requesting
+                # agent's mission; for default tasks it is the observing agent's mission
+                is_event_task = isinstance(task, EventObservationTask) and task.event is not None
+                task_mission  = (task_id_to_request_mission.get(task.id, agent_mission.name)
+                                 if is_event_task else agent_mission.name)
+
                 # add reward information to observation performance information
                 reward_dict = {
-                    'task_id' : task.id,
-                    'n_obs' : n_obs,
-                    't_img' : t_img,
-                    'agent' : observing_agent,
-                    'instrument' : instrument_name,
-                    'reward' : reward,
+                    'task_id'      : task.id,
+                    'n_obs'        : n_obs,
+                    't_img'        : t_img,
+                    'agent'        : observing_agent,
+                    'agent_mission': agent_mission.name,
+                    'task_mission' : task_mission,
+                    'instrument'   : instrument_name,
+                    'reward'       : reward,
                 }
                 obtained_rewards_data.append(reward_dict)
                 
@@ -261,7 +279,7 @@ class ResultsProcessor:
             # sort by task id, observation time
             obtained_rewards_df = obtained_rewards_df.sort_values(by=['task_id', 't_img']).reset_index(drop=True)
         else:
-            obtained_rewards_df = pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent', 'instrument', 'reward'])
+            obtained_rewards_df = pd.DataFrame(columns=['task_id', 'n_obs', 't_img', 'agent', 'agent_mission', 'task_mission', 'instrument', 'reward'])
         
         # ----------------------------------
         # DEBUG PRINTOUTS
@@ -1986,6 +2004,47 @@ class ResultsProcessor:
         obtained_by_agent = obtained_rewards_df.groupby('agent')['reward'].sum() \
             if obtained_rewards_df is not None else None
 
+        # task_id -> requesting mission (event tasks) or observing agent's mission (default tasks)
+        _task_id_to_req_mission: Dict[str, str] = {}
+        for _req in task_reqs:
+            if _req.task.id not in _task_id_to_req_mission:
+                _task_id_to_req_mission[_req.task.id] = _req.mission_name
+
+        # per-mission totals: sum of obtained rewards grouped by task_mission
+        reward_per_mission = (
+            obtained_rewards_df.groupby('task_mission')['reward'].sum().round(precision)
+            if obtained_rewards_df is not None and len(obtained_rewards_df) > 0
+            else pd.Series(dtype=float)
+        )
+
+        # per-mission totals: sum of planned rewards grouped by task_mission
+        if planned_rewards_df is not None and len(planned_rewards_df) > 0:
+            _planned = planned_rewards_df.copy()
+            _planned['task_mission'] = _planned.apply(
+                lambda r: _task_id_to_req_mission.get(
+                    r['task_id'], agent_missions[r['agent']].name
+                ),
+                axis=1
+            )
+            planned_reward_per_mission = _planned.groupby('task_mission')['planned reward'].sum().round(precision)
+        else:
+            planned_reward_per_mission = pd.Series(dtype=float)
+
+        # average obtained reward per agent
+        avg_obtained_reward_per_agent = (
+            np.round(obtained_by_agent.mean(), precision)
+            if obtained_by_agent is not None and len(obtained_by_agent) > 0
+            else 0.0
+        )
+
+        # P(observation performed by agent outside its task's mission)
+        _n_obs_total = len(obtained_rewards_df) if obtained_rewards_df is not None else 0
+        _n_cross_mission = (
+            int((obtained_rewards_df['agent_mission'] != obtained_rewards_df['task_mission']).sum())
+            if _n_obs_total > 0 else 0
+        )
+        p_cross_mission_obs = _n_cross_mission / _n_obs_total if _n_obs_total > 0 else 0.0
+
         # Generate summary
         summary_headers = ['Metric', 'Value']
         summary_data = [
@@ -2064,7 +2123,6 @@ class ResultsProcessor:
                     ['P(Event at a GP)', np.round(p_event_at_gp,precision)],
 
                     # Event Observation Probabilities
-                    # TODO add co-observation probabilities
                     ['P(Event Observable)', np.round(p_event_observable,precision)],
                     ['P(Event Re-observable)', np.round(p_event_re_observable,precision)],
                     ['P(Event Co-observable)', np.round(p_event_co_observable,precision)],
@@ -2085,7 +2143,8 @@ class ResultsProcessor:
                     ['P(Event Re-observation | Observation)', np.round(p_event_re_obs_if_obs,precision)],
                     ['P(Tasked Event Observation | Event Observation)', np.round(p_tasked_event_obs,precision)],
                     ['P(Passive Event Observation | Event Observation)', np.round(p_passive_event_obs,precision)],
-                    # ['P(Event Co-observation | Observation)', np.round(p_event_co_obs_if_obs,precision)],
+                    ['P(Observation by Agent Outside Task Mission)', np.round(p_cross_mission_obs, precision)],
+                    ['P(Event Co-observation | Observation)', np.round(p_event_co_obs_if_obs,precision)],
                     # ['P(Event Full Co-observation | Observation)', np.round(p_event_co_obs_partially_if_obs,precision)],
                     # ['P(Event Partial Co-observation | Observation)', np.round(p_event_co_obs_fully_if_obs,precision)],
 
@@ -2112,7 +2171,6 @@ class ResultsProcessor:
                     ['P(Event-Driven Task Known)', np.round(p_event_task_known,precision)],
                     ['P(Default Mission Task Known)', np.round(p_default_task_known,precision)],
 
-                    # TODO add co-observation probabilities
                     ['P(Task Observable)', np.round(p_task_observable,precision)],
                     ['P(Task Observed)', np.round(p_task_observed,precision)],
                     ['P(Task Observed | Task Known)', np.round(p_task_observed_if_known,precision)],
@@ -2239,16 +2297,22 @@ class ResultsProcessor:
                     ['Median Observations per Task', n_obs_per_task['median']],
 
 
-                    # Reward Statistics 
+                    # Reward Statistics
                     ['Total Planned Reward', total_planned_reward],
+                    *[[f'Total Planned Reward (Mission: {mission})', value]
+                      for mission, value in planned_reward_per_mission.items()],
 
                     ['Total Obtained Reward', total_obtained_reward],
+                    *[[f'Total Obtained Reward (Mission: {mission})', value]
+                      for mission, value in reward_per_mission.items()],
                     ['Total Obtained Task Observations', len(obtained_rewards_df) if obtained_rewards_df is not None else 0],
-                    
+
                     ['Average Planned Reward per Task Observation', avg_planned_reward],
                     ['Standard Deviation of Planned Reward per Task Observation', std_planned_reward],
                     ['Median Planned Reward per Task Observation', median_planned_reward],
-                    
+
+                    ['Average Obtained Reward per Agent', avg_obtained_reward_per_agent],
+
                     ['Average Planned Reward per Agent', np.round(planned_by_agent.mean(), precision) if planned_by_agent is not None else 0.0],
                     ['Standard Deviation of Planned Reward per Agent', np.round(planned_by_agent.std(), precision) if planned_by_agent is not None else 0.0],
                     ['Median Planned Reward per Agent', np.round(planned_by_agent.median(), precision) if planned_by_agent is not None else 0.0],
@@ -2283,6 +2347,9 @@ class ResultsProcessor:
                     # Results dir
                     # ['Results Directory', results_path]
                 ]
+
+        # add mission-dependent statistics
+
 
         return pd.DataFrame(summary_data, columns=summary_headers)    
 
