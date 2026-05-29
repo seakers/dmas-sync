@@ -1809,6 +1809,17 @@ class ResultsProcessor:
         n_events_co_obs_tasked_fully = len(events_co_obs_tasked_fully)
         n_events_co_obs_tasked_partially = len(events_co_obs_tasked_partially)
 
+        # count unique and repeated co-observations (all and tasked-only)
+        n_unique_co_obs         = sum(len(v) for v in unique_co_obs_per_event.values())
+        n_repeat_co_obs         = sum(len(v) for v in repeat_co_obs_per_event.values())
+        n_total_co_obs          = n_unique_co_obs + n_repeat_co_obs
+        n_unique_co_obs_tasked  = sum(len(v) for v in unique_co_obs_per_event_tasked.values())
+        n_repeat_co_obs_tasked  = sum(len(v) for v in repeat_co_obs_per_event_tasked.values())
+        n_total_co_obs_tasked   = n_unique_co_obs_tasked + n_repeat_co_obs_tasked
+
+        p_co_obs_unique        = n_unique_co_obs        / n_total_co_obs        if n_total_co_obs        > 0 else 0.0
+        p_co_obs_tasked_unique = n_unique_co_obs_tasked / n_total_co_obs_tasked if n_total_co_obs_tasked > 0 else 0.0
+
         # count observations performed
         # n_events, n_unique_event_obs, n_total_event_obs,
         n_observations, n_gps, n_gps_accessible, n_gps_reobserved, n_gps_observed, n_gps_with_events, \
@@ -1996,7 +2007,12 @@ class ResultsProcessor:
                     ['Events Co-observable', n_events_co_observable],
                     ['Events Co-observed', n_events_co_obs],
                     ['Events Tasked Co-observed', n_events_co_obs_tasked],
-                    ['Event Co-observations', n_total_event_co_obs],
+                    ['Event Co-observations', n_total_co_obs],
+                    ['Unique Event Co-observations', n_unique_co_obs],
+                    ['Repeated Event Co-observations', n_repeat_co_obs],
+                    ['Tasked Event Co-observations', n_total_co_obs_tasked],
+                    ['Unique Tasked Event Co-observations', n_unique_co_obs_tasked],
+                    ['Repeated Tasked Event Co-observations', n_repeat_co_obs_tasked],
                     ['Events Fully Co-observable', n_events_co_observable_fully],
                     ['Events Fully Co-observed', n_events_fully_co_obs],
                     ['Events Tasked Fully Co-observed', n_events_co_obs_tasked_fully],
@@ -2062,6 +2078,8 @@ class ResultsProcessor:
                     ['P(Event Co-observed)', np.round(p_event_co_obs,precision)],
                     ['P(Event Fully Co-observed)', np.round(p_event_co_obs_fully,precision)],
                     ['P(Event Partially Co-observed)', np.round(p_event_co_obs_partial,precision)],
+                    ['P(Co-observation Unique)', np.round(p_co_obs_unique, precision)],
+                    ['P(Tasked Co-observation Unique)', np.round(p_co_obs_tasked_unique, precision)],
 
                     ['P(Event Observation | Observation)', np.round(p_event_obs_if_obs,precision)],
                     ['P(Event Re-observation | Observation)', np.round(p_event_re_obs_if_obs,precision)],
