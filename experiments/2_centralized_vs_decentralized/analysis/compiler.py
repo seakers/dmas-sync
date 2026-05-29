@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import pandas as pd
 
 
@@ -82,6 +83,8 @@ def compile_results_summaries(trial_name : str,
     
     # fill missing probabilities with -1 to indicate not applicable / no data
     for col in results_df.columns:
+        if not isinstance(col, str) and np.isnan(col):
+            continue  # skip NaN column names if any
         if "P(" in col:
             results_df[col] = results_df[col].fillna(-1)  
 
@@ -197,8 +200,7 @@ if __name__ == "__main__":
     # define trial parameters
     base_dir = "/home/aslan15/Documents/GitHub/dmas-sync_bkp/results/merged/full_factorial_trials_2026-05-22_archive"
 
-    # trial_name = "full_factorial_trials_2026-05-11"
-    trial_name = "full_factorial_trials_2026-05-22"
+    trial_name = "full_factorial_trials_2026-05-25"
     
     # compile and save compiled results summaries for this trial
     compile_results_summaries(trial_name, 

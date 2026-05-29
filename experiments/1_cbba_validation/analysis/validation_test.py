@@ -279,9 +279,9 @@ def generate_plots(trial_name: str,
     algo_palette = {
         'DP':      '#999999',  # gray
         'GR':      '#E69F00',  # orange
-        'DP-GR':   '#56B4E9',  # sky blue
-        'CBBA':    '#009E73',  # teal
-        'DP-CBBA': '#0072B2',  # deep blue
+        'DP-GR':   '#009E73',  # teal
+        'SC-CBBA':    '#56B4E9',  # sky blue
+        'DP-SC-CBBA': '#0072B2',  # deep blue
     }
 
     linestyles = {

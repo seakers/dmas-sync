@@ -1,27 +1,24 @@
 """
-centralization_plots.py
-=======================
+figures.py
+==========
 Generates all analysis plots for the Centralized vs Decentralized
-satellite scheduling experiment.
+satellite scheduling experiment — multi-mission, multi-connectivity,
+multi-data-processing factorial dataset.
+
+Algorithm naming convention:
+  SC-CBBA    = Sequence-Constrained Consensus Bundle-Based Algorithm
+  DP-SC-CBBA = DP preplanner + SC-CBBA replanner
+  None-None  excluded from all plots except the decomposition heatmap
+              (grayed / hatched).
+
+Colorblind-friendly palette: Wong (2011).
 
 Usage
 -----
-    python centralization_plots.py                        # abridged set only
-    python centralization_plots.py --full                 # full set only
-    python centralization_plots.py --abridged --full      # both
-
-    python centralization_plots.py --csv path/to/file.csv  # custom CSV path
-
-Notes (2026-05-17 dataset)
---------------------------
-- Data Processing label is now 'Instant' (was 'Oracle') in the raw CSV.
-- P(Event Announced Before Expiry) not yet in dataset; Plot 7 stage activates
-  automatically once the column appears.
-- None-None Primal Bound embedded in Task Reward Primal Bound [norm] at
-  compile time — no separate lookup required.
-- Known Task Reward bounds excluded (values unreliable).
-- Response time now measured from announcement to observation (passive bias
-  removed); annotation updated accordingly.
+    python figures.py
+    python figures.py --csv path/to/results.csv
+    python figures.py --date 2019-02-15
+    python figures.py --complete-date 2019-02-15
 """
 
 from __future__ import annotations
@@ -31,18 +28,23 @@ import os
 from datetime import datetime
 
 import matplotlib
+import matplotlib.lines
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from scipy import stats
 
 matplotlib.rcParams.update({
+    'font.family':           'sans-serif',
     'font.size':             10,
     'axes.titlesize':        11,
     'axes.labelsize':        10,
     'legend.fontsize':        8,
     'legend.title_fontsize':  9,
+    'figure.dpi':            150,
 })
 
 
@@ -51,84 +53,87 @@ matplotlib.rcParams.update({
 # =============================================================================
 
 ALGO_ORDER: list[str] = [
-    'None-None', 'MILP', 'DP', 'DP-GR', 'GR', 'DP-CBBA', 'CBBA',
+    'MILP', 'DP', 'DP-GR', 'GR', 'DP-SC-CBBA', 'SC-CBBA',
 ]
 
+# Wong (2011) colorblind-safe palette
+# MILP = gray (centralised, categorically different)
+# DP   = vermillion (distinct from grays and blues)
 ALGO_PALETTE: dict[str, str] = {
-    'None-None': '#BBBBBB',
-    'MILP':      '#CC79A7',
-    'DP':        '#999999',
-    'DP-GR':     '#E69F00',
-    'GR':        '#F0E442',
-    'DP-CBBA':   '#0072B2',
-    'CBBA':      '#56B4E9',
+    'None-None':  '#BBBBBB',   # light gray   (passive reference / hatched)
+    'MILP':       '#999999',   # mid gray     (centralised benchmark)
+    'DP':         '#D55E00',   # vermillion   (preplanner only)
+    'DP-GR':      '#E69F00',   # amber
+    'GR':         '#009E73',   # teal
+    'DP-SC-CBBA': '#0072B2',   # blue
+    'SC-CBBA':    '#56B4E9',   # sky blue
 }
 
 ALGO_LINESTYLES: dict[str, tuple | str] = {
-    'None-None': (1, 3),
-    'MILP':      (2, 2),
-    'DP':        (4, 2),
-    'DP-GR':     (4, 1, 1, 1),
-    'GR':        (1, 2),
-    'DP-CBBA':   '',
-    'CBBA':      (3, 1),
+    'None-None':  (1, 3),
+    'MILP':       (2, 2),
+    'DP':         (4, 2),
+    'DP-GR':      (4, 1, 1, 1),
+    'GR':         (1, 2),
+    'DP-SC-CBBA': '',
+    'SC-CBBA':    (3, 1),
+}
+
+MISSION_ORDER: list[str] = ['Urgency', 'Revisits', 'Co-observations']
+
+# Short labels used in axis ticks / panel titles
+MISSION_LABELS: dict[str, str] = {
+    'Urgency':         'Urgency',
+    'Revisits':        'Revisits',
+    'Co-observations': 'Co-observations',
+}
+
+# Full labels used in figure titles / suptitles
+MISSION_FULL_LABELS: dict[str, str] = {
+    'Urgency':         'Urgent Priority Mission',
+    'Revisits':        'Revisit Priority Mission',
+    'Co-observations': 'Co-observation Priority Mission',
 }
 
 CONN_ORDER: list[str] = ['GS', 'Intraconstellation', 'Interconstellation']
+
 CONN_LABELS: dict[str, str] = {
     'GS':                 'GS Only',
     'Intraconstellation': 'Intra-\nconstellation',
     'Interconstellation': 'Inter-\nconstellation',
 }
 
-# Legacy -> Instant -> Onboard
-DP_ORDER: list[str] = ['Ground', 'Instant', 'Onboard']
-DP_LABELS: dict[str, str] = {
-    'Ground':  'Legacy Ground\nDetection',
-    'Instant': 'Instant Ground\nDetection',
-    'Onboard': 'Onboard\nDetection',
-}
-DP_LABELS_SHORT: dict[str, str] = {
-    'Ground':  'Legacy Ground',
-    'Instant': 'Instant Ground',
-    'Onboard': 'Onboard',
+CONN_FULL_LABELS: dict[str, str] = {
+    'GS':                 'GS-Only Connectivity',
+    'Intraconstellation': 'Intraconstellation Connectivity',
+    'Interconstellation': 'Interconstellation Connectivity',
 }
 
-METRIC_LABELS: dict[str, str] = {
-    'Total Obtained Reward [norm]':
-        'Total Obtained Reward (normalised)',
-    'P(Task Observed)':
-        'P(Task Observed)',
-    'P(Task Observed | Task Observable)':
-        'P(Task Obs | Observable)',
-    'P(Event Observed | Event Detected)':
-        'P(Event Obs | Detected)',
-    'P(Event Observed | Event Observable and Detected)':
-        'P(Event Obs | Obs.&Det.)',
-    'P(Event Co-observed)':
-        'P(Event Co-obs)',
-    'P(Event Co-observed | Co-observable)':
-        'P(Event Co-obs | Co-obs.)',
-    'P(Event Detected)':
-        'P(Event Detected)',
-    'P(Event Announced)':
-        'P(Event Announced)',
-    'P(Event Announced Before Expiry)':
-        'P(Ann. Before Expiry)',
-    'Average Normalized Earliest Response Time to Event':
-        'Avg. Norm. Earliest Response Time (Event)',
-    'Average Normalized Latest Response Time to Event':
-        'Avg. Norm. Latest Response Time (Event)',
-    'Average Event Announcement Time [norm]':
-        'Avg. Norm. Time to Announcement',
-    'Average Normalized Earliest Time to Image Event':
-        'Avg. Norm. Earliest Time to Image',
-    'Average Normalized Latest Time to Image Event':
-        'Avg. Norm. Latest Time to Image',
-    'Average Observations per Event':
-        'Avg. Observations per Event',
-    'Average Observations per Task':
-        'Avg. Observations per Task',
+# Ground / Onboard = operational; Instant = oracle benchmark
+DP_ORDER: list[str] = ['Ground', 'Onboard', 'Instant']
+
+DP_LABELS: dict[str, str] = {
+    'Ground':  'Ground\nDetection',
+    'Onboard': 'Onboard\nDetection',
+    'Instant': 'Instant\n(Benchmark)',
+}
+
+DP_LABELS_SHORT: dict[str, str] = {
+    'Ground':  'Ground',
+    'Onboard': 'Onboard',
+    'Instant': 'Instant (Benchmark)',
+}
+
+REVISIT_TARGET_S: float = 3600.0
+
+MARKER_SHAPES: dict[str, str] = {
+    'None-None':  'X',
+    'MILP':       'D',
+    'DP':         's',
+    'DP-GR':      '^',
+    'GR':         'v',
+    'DP-SC-CBBA': 'o',
+    'SC-CBBA':    'P',
 }
 
 
@@ -137,29 +142,90 @@ METRIC_LABELS: dict[str, str] = {
 # =============================================================================
 
 def label_algorithm(row: pd.Series) -> str:
-    pre, rep = row['Preplanner'], row['Replanner']
-    if pre == 'Centralized-MILP_priority': return 'MILP'
-    if pre == 'DP'   and rep == 'None':    return 'DP'
-    if pre == 'DP'   and rep == 'CBBA':    return 'DP-CBBA'
-    if pre == 'DP'   and rep == 'Greedy':  return 'DP-GR'
-    if pre == 'None' and rep == 'CBBA':    return 'CBBA'
-    if pre == 'None' and rep == 'Greedy':  return 'GR'
-    if pre == 'None' and rep == 'None':    return 'None-None'
+    pre = row['Preplanner']
+    rep = row['Replanner']
+    if pre == 'Centralized-MILP_priority':  return 'MILP'
+    if pre == 'DP'   and rep == 'None':     return 'DP'
+    if pre == 'DP'   and rep in ('SC-CBBA', 'CBBA'):   return 'DP-SC-CBBA'
+    if pre == 'DP'   and rep == 'Greedy':   return 'DP-GR'
+    if pre == 'None' and rep in ('SC-CBBA', 'CBBA'):   return 'SC-CBBA'
+    if pre == 'None' and rep == 'Greedy':   return 'GR'
+    if pre == 'None' and rep == 'None':     return 'None-None'
     return 'Unknown'
 
 
-def load_and_prepare(csv_path: str) -> pd.DataFrame:
+def load_and_prepare(csv_path: str,
+                     trial_csv_path: str | None = None,
+                     completeness_threshold: float = 0.90) -> pd.DataFrame:
     df = pd.read_csv(csv_path).copy()
-    df['Preplanner'] = df['Preplanner'].fillna('None')
-    df['Replanner']  = df['Replanner'].fillna('None')
-    df['Algorithm']  = df.apply(label_algorithm, axis=1)
-    df['Algorithm']  = pd.Categorical(df['Algorithm'],
-                                       categories=ALGO_ORDER, ordered=True)
-    df['Connectivity'] = pd.Categorical(df['Connectivity'],
-                                         categories=CONN_ORDER, ordered=True)
-    df['Data Processing'] = pd.Categorical(df['Data Processing'],
-                                            categories=DP_ORDER, ordered=True)
-    return df.sort_values(['Algorithm', 'Connectivity', 'Data Processing'])
+    df['Preplanner']      = df['Preplanner'].fillna('None')
+    df['Replanner']       = df['Replanner'].fillna('None')
+    df['Algorithm']       = df.apply(label_algorithm, axis=1)
+    df['Algorithm']       = pd.Categorical(
+        df['Algorithm'], categories=['None-None'] + ALGO_ORDER, ordered=True)
+    df['Connectivity']    = pd.Categorical(
+        df['Connectivity'], categories=CONN_ORDER, ordered=True)
+    df['Data Processing'] = pd.Categorical(
+        df['Data Processing'], categories=DP_ORDER, ordered=True)
+    df['Mission']         = pd.Categorical(
+        df['Mission'], categories=MISSION_ORDER, ordered=True)
+
+    # --- Complete-date filter (mirrors compiler.py logic) ---
+    # Load trial definitions to determine expected count per date
+    if trial_csv_path and os.path.exists(trial_csv_path):
+        trials = pd.read_csv(trial_csv_path)
+        trials['Preplanner'] = trials['Preplanner'].fillna('None')
+        trials['Replanner']  = trials['Replanner'].fillna('None')
+        # Expected non-MILP trials per date
+        expected_per_date = (
+            trials[trials['Preplanner'] != 'Centralized-MILP_priority']
+            .groupby('Date').size()
+        )
+        non_milp = df[df['Preplanner'] != 'Centralized-MILP_priority']
+        actual_per_date = non_milp.groupby('Date').size()
+        complete_dates = [
+            d for d in expected_per_date.index
+            if actual_per_date.get(d, 0) / expected_per_date[d]
+               >= completeness_threshold
+        ]
+        if complete_dates:
+            df = df[df['Date'].isin(complete_dates)].copy()
+            print(f'  [load] Complete dates (≥{completeness_threshold:.0%}): '
+                  f'{complete_dates}')
+        else:
+            print(f'  [load] No fully complete dates found at threshold '
+                  f'{completeness_threshold:.0%}; using all data.')
+    else:
+        print('  [load] No trial CSV provided; skipping completeness filter.')
+
+    # --- Derived columns ---
+    obs       = df['Total Obtained Task Observations'].replace(0, np.nan)
+    tasks_obs = (df['Tasks Observed']
+                 if 'Tasks Observed' in df.columns
+                 else df['Event-Driven Tasks Observed']).replace(0, np.nan)
+    co_able   = df['Events Co-observable'].replace(0, np.nan)
+    full_able = df['Events Fully Co-observable'].replace(0, np.nan)
+
+    df['Reward per Observation'] = df['Total Obtained Reward'] / obs
+    df['Reward per Task']        = df['Total Obtained Reward'] / tasks_obs
+    df['P(Event Tasked Co-observed | Co-observable)'] = (
+        df['Events Tasked Co-observed'] / co_able)
+    df['P(Event Tasked Fully Co-observed | Fully Co-observable)'] = (
+        df['Events Tasked Fully Co-observed'] / full_able)
+
+    # --- MILP normalisation (reward / MILP reward for same Date×Mission×Conn×DP) ---
+    milp_rows = df[df['Algorithm'] == 'MILP'][
+        ['Date', 'Mission', 'Connectivity', 'Data Processing',
+         'Total Obtained Reward']
+    ].rename(columns={'Total Obtained Reward': 'MILP Reward'})
+
+    df = df.merge(milp_rows,
+                  on=['Date', 'Mission', 'Connectivity', 'Data Processing'],
+                  how='left')
+    df['Reward / MILP'] = df['Total Obtained Reward'] / df['MILP Reward'].replace(0, np.nan)
+
+    return df.sort_values(['Algorithm', 'Connectivity',
+                           'Data Processing', 'Mission'])
 
 
 # =============================================================================
@@ -169,20 +235,12 @@ def load_and_prepare(csv_path: str) -> pd.DataFrame:
 def save_plot(save_dir: str, filename: str) -> None:
     path = os.path.join(save_dir, filename)
     plt.savefig(path, dpi=150, bbox_inches='tight')
-    print(f'  Saved -> {path}')
-
-
-def _dp_label(dp: str, short: bool = False) -> str:
-    return (DP_LABELS_SHORT if short else DP_LABELS).get(dp, dp)
-
-
-def _conn_label(conn: str) -> str:
-    return CONN_LABELS.get(conn, conn)
+    print(f'    Saved -> {path}')
 
 
 def _col_ok(df: pd.DataFrame, col: str, ctx: str) -> bool:
     if col not in df.columns:
-        print(f'  [{ctx}] Column not found (will activate when added): {col}')
+        print(f'  [{ctx}] Column absent -- skipping: {col}')
         return False
     return True
 
@@ -193,981 +251,1385 @@ def _apply_linestyle(line, algo: str) -> None:
         line.set_dashes(spec)
 
 
+def _algo_present(df: pd.DataFrame,
+                  exclude_none_none: bool = True) -> list[str]:
+    present = [a for a in ALGO_ORDER if a in df['Algorithm'].values]
+    if not exclude_none_none and 'None-None' in df['Algorithm'].values:
+        present = ['None-None'] + present
+    return present
+
+
+def _make_legend_handles(algos: list[str]) -> list:
+    return [mpatches.Patch(color=ALGO_PALETTE.get(a, '#999'), label=a)
+            for a in algos]
+
+
+def _ci95(series: pd.Series) -> float:
+    n = series.dropna().__len__()
+    if n < 2:
+        return 0.0
+    return series.sem(ddof=1) * stats.t.ppf(0.975, df=n - 1)
+
+
+def _winner_label(algo: str) -> str:
+    """Return algorithm label with winner indicator."""
+    return f'★ {algo}'
+
+
+def _annotate_winner(ax: plt.Axes, metric: str,
+                     data: pd.DataFrame, present: list[str]) -> None:
+    """Bold and prefix winner tick label with ★."""
+    means = {a: data[data['Algorithm'] == a][metric].mean()
+             for a in present
+             if not data[data['Algorithm'] == a][metric].dropna().empty}
+    if not means:
+        return
+    winner = max(means, key=means.get)
+    # Re-set xticklabels with winner prefixed
+    new_labels = [f'★ {a}' if a == winner else a for a in present]
+    ax.set_xticks(range(len(present)))
+    ax.set_xticklabels(new_labels, rotation=25, ha='right', fontsize=8)
+    # Colour and bold the winner tick
+    for lbl in ax.get_xticklabels():
+        if lbl.get_text().startswith('★'):
+            lbl.set_fontweight('bold')
+            lbl.set_color(ALGO_PALETTE.get(winner, '#333'))
+
+
 # =============================================================================
-#  BOX + STRIP  (outline-only, red median, algorithm-coloured edges)
+#  SHARED BOX PLOT BUILDER
+#  Uses matplotlib ax.boxplot for reliable alignment with strip points.
+#  Visual style: solid filled boxes, thin black outlines (lw=0.8), red median.
 # =============================================================================
 
 def make_boxplot(data: pd.DataFrame, metric: str, ax: plt.Axes,
-                 ylabel: str | None = None) -> None:
-    present = [a for a in ALGO_ORDER if a in data['Algorithm'].values]
+                 ylabel: str | None = None,
+                 exclude_none_none: bool = True,
+                 annotate_winner: bool = True,
+                 milp_line: bool = False) -> None:
+    present = _algo_present(data, exclude_none_none=exclude_none_none)
+    xs      = np.arange(len(present))
+    box_w   = 0.85   # wider to compensate for multi-panel figure layout
 
-    sns.boxplot(
-        data=data, x='Algorithm', y=metric,
-        order=present, palette=ALGO_PALETTE,
-        hue='Algorithm', hue_order=present,
-        width=0.5, fliersize=0, legend=False, ax=ax,
-        boxprops=dict(facecolor='none', linewidth=1.2),
-        medianprops=dict(color='red', linewidth=1.8),
-        whiskerprops=dict(linewidth=0.9),
-        capprops=dict(linewidth=0.9),
+    box_data = [data[data['Algorithm'] == a][metric].dropna().values
+                for a in present]
+
+    bp = ax.boxplot(
+        box_data,
+        positions=xs,
+        widths=box_w,
+        patch_artist=True,
+        medianprops=dict(color='red', linewidth=1.5),
+        whiskerprops=dict(linewidth=0.8, color='black'),
+        capprops=dict(linewidth=0.8, color='black'),
+        boxprops=dict(linewidth=0.8, edgecolor='black'),
+        flierprops=dict(marker='', markersize=0),
+        showfliers=False,
     )
-    for patch, algo in zip(ax.patches, present):
-        patch.set_edgecolor(ALGO_PALETTE.get(algo, '#333333'))
-        patch.set_facecolor('none')
-        patch.set_linewidth(1.4)
+
+    for patch, algo in zip(bp['boxes'], present):
+        patch.set_facecolor(ALGO_PALETTE.get(algo, '#999'))
+        patch.set_alpha(0.75)
         if algo == 'None-None':
             patch.set_hatch('//')
 
-    sns.stripplot(
-        data=data, x='Algorithm', y=metric,
-        order=present, palette=ALGO_PALETTE,
-        hue='Algorithm', hue_order=present,
-        size=5, alpha=0.55, jitter=True, dodge=False,
-        legend=False, ax=ax, marker='o',
-        edgecolor='grey', linewidth=0.4,
-    )
-    ax.set_xlabel('Algorithm Configuration')
+    # Strip points at the same integer x-positions — guaranteed aligned
+    rng = np.random.default_rng(seed=42)
+    for xi, algo in enumerate(present):
+        vals = data[data['Algorithm'] == algo][metric].dropna().values
+        if len(vals) == 0:
+            continue
+        jitter = rng.uniform(-box_w * 0.35, box_w * 0.35, size=len(vals))
+        ax.scatter(xi + jitter, vals,
+                   color=ALGO_PALETTE.get(algo, '#999'),
+                   s=14, alpha=0.50, zorder=3,
+                   edgecolors='none', linewidths=0)
+
+    ax.set_xlim(-0.6, len(present) - 0.4)
+    ax.set_xticks(xs)
+    ax.set_xticklabels(present, rotation=25, ha='right', fontsize=8)
+
+    if milp_line:
+        ax.axhline(1.0, color=ALGO_PALETTE['MILP'], linewidth=1.4,
+                   linestyle='--', alpha=0.8, label='MILP = 1.0')
+
+    ax.set_xlabel('')
     ax.set_ylabel(ylabel if ylabel else metric)
-    ax.tick_params(axis='x', rotation=20)
     ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.7)
 
+    if annotate_winner and metric in data.columns:
+        _annotate_winner(ax, metric, data, present)
+
 
 # =============================================================================
-#  FIGURE A (box+strip) + FIGURE B (grouped bars, x=Connectivity, col=DP)
+#  SHARED BAR PLOT BUILDER  (mean ± CI, algorithm-coloured bars)
 # =============================================================================
 
-def plot_metric(
-    df: pd.DataFrame,
-    metrics: str | list[str],
-    ylabels: str | list[str],
+def make_barplot(data: pd.DataFrame, metric: str, ax: plt.Axes,
+                 ylabel: str | None = None,
+                 exclude_none_none: bool = True,
+                 annotate_winner: bool = True,
+                 milp_line: bool = False) -> None:
+    present = _algo_present(data, exclude_none_none=exclude_none_none)
+    xs      = np.arange(len(present))
+    bar_w   = 0.70
+
+    for xi, algo in enumerate(present):
+        vals = data[data['Algorithm'] == algo][metric].dropna()
+        if vals.empty:
+            continue
+        mean = vals.mean()
+        ci   = _ci95(vals)
+        ax.bar(xi, mean, width=bar_w,
+               color=ALGO_PALETTE.get(algo, '#999'),
+               alpha=0.85, edgecolor='white', linewidth=0.5,
+               hatch='//' if algo == 'None-None' else None)
+        ax.errorbar(xi, mean, yerr=ci, fmt='none',
+                    ecolor='#333', capsize=3, linewidth=1.0)
+
+    if milp_line:
+        ax.axhline(1.0, color=ALGO_PALETTE['MILP'], linewidth=1.4,
+                   linestyle='--', alpha=0.8, label='MILP = 1.0')
+
+    ax.set_xticks(xs)
+    ax.set_xticklabels(present, rotation=25, ha='right', fontsize=8)
+    ax.set_xlabel('')
+    ax.set_ylabel(ylabel if ylabel else metric)
+    ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.7)
+
+    if annotate_winner and metric in data.columns:
+        _annotate_winner(ax, metric, data, present)
+
+
+# =============================================================================
+#  FIGURE 1 — Mission Reward Degradation
+#
+#  Per scope (all-dates, per-date) four files are produced:
+#    a) Box — absolute reward, all DP collapsed
+#    b) Box — absolute reward, DP as rows
+#    c) Bar — absolute reward, all DP collapsed        (bar equivalent of a)
+#    d) Bar — absolute reward, DP as rows              (bar equivalent of b)
+#  Per-date additionally:
+#    e) Box — MILP-normalised, all DP collapsed
+#    f) Box — MILP-normalised, DP as rows
+#    g) Bar — MILP-normalised, all DP collapsed
+#    h) Bar — MILP-normalised, DP as rows
+#
+#  Naming suffix key:
+#    (no suffix) = box, absolute   | b = box, by-DP
+#    _bar        = bar, absolute   | b_bar = bar, by-DP
+#    _norm       = box, MILP-norm  | b_norm = box, by-DP, MILP-norm
+#    _norm_bar   = bar, MILP-norm  | b_norm_bar = bar, by-DP, MILP-norm
+# =============================================================================
+
+def _make_degradation_collapsed(
+    data: pd.DataFrame,
+    metric: str,
+    ylabel: str,
     suptitle: str,
     save_dir: str,
-    filename_stem: str,
-    hline_at_one: bool = False,
-    primal_ref: bool = False,
-    response_time_note: bool = False,
+    filename: str,
+    use_barplot: bool = False,
+    is_normalised: bool = False,
 ) -> None:
-    if isinstance(metrics, str):
-        metrics = [metrics]
-        ylabels = [ylabels]
-    n = len(metrics)
+    """1 row × 3 mission cols, shared y-axis across missions."""
+    # For normalised plots: exclude MILP (it IS the reference = 1.0)
+    plot_data = data[data['Algorithm'] != 'MILP'].copy() if is_normalised else data
 
-    # Figure A
-    fig, axes = plt.subplots(n, 1, figsize=(10, 5 * n), sharey=False)
-    if n == 1:
-        axes = [axes]
+    fig, axes = plt.subplots(
+        1, len(MISSION_ORDER),
+        figsize=(5 * len(MISSION_ORDER), 5), sharey=True)
 
-    for i, (ax, metric, ylabel) in enumerate(zip(axes, metrics, ylabels)):
-        if not _col_ok(df, metric, f'{filename_stem} FigA'):
+    plotter = make_barplot if use_barplot else make_boxplot
+
+    for ax, mission in zip(axes, MISSION_ORDER):
+        sub = plot_data[plot_data['Mission'] == mission]
+        if sub.empty:
             ax.set_visible(False)
             continue
-        make_boxplot(df, metric, ax, ylabel=ylabel)
-        if hline_at_one:
-            ax.axhline(1.0, color='#444444', linestyle='--',
-                       linewidth=0.9, alpha=0.6)
-        if df[metric].dropna().max() <= 1.05:
-            ax.set_ylim(-0.02, 1.05)
-        if n > 1:
-            ax.set_title(f'({chr(ord("a") + i)})', loc='left')
-            if i < n - 1:
-                ax.set_xlabel('')
-                ax.tick_params(axis='x', labelbottom=False)
+        plotter(sub, metric, ax,
+                ylabel=ylabel if mission == MISSION_ORDER[0] else '',
+                milp_line=is_normalised)
+        ax.set_title(MISSION_FULL_LABELS[mission], fontsize=10,
+                     fontweight='bold')
+        if is_normalised and mission == MISSION_ORDER[-1]:
+            ax.legend(fontsize=7, loc='best')
 
-    if response_time_note:
-        axes[-1].annotate(
-            'Response time measured from announcement to observation.',
-            xy=(0.01, 0.01), xycoords='axes fraction',
-            fontsize=7, color='#555555', style='italic')
+    plt.suptitle(suptitle, fontsize=13, y=1.02)
+    plt.tight_layout()
+    save_plot(save_dir, filename)
+    plt.close()
+
+
+def _make_degradation_by_dp(
+    data: pd.DataFrame,
+    metric: str,
+    ylabel: str,
+    suptitle: str,
+    save_dir: str,
+    filename: str,
+    use_barplot: bool = False,
+    is_normalised: bool = False,
+) -> None:
+    """3 DP rows × 3 mission cols, shared y-axis within each row."""
+    # For normalised plots: exclude MILP
+    plot_data = data[data['Algorithm'] != 'MILP'].copy() if is_normalised else data
+
+    n_dp      = len(DP_ORDER)
+    n_mission = len(MISSION_ORDER)
+    plotter   = make_barplot if use_barplot else make_boxplot
+
+    fig, axes = plt.subplots(
+        n_dp, n_mission,
+        figsize=(5 * n_mission, 4.5 * n_dp),
+        sharey='row')
+
+    for row_i, dp in enumerate(DP_ORDER):
+        dp_sub = plot_data[plot_data['Data Processing'] == dp]
+        for col_i, mission in enumerate(MISSION_ORDER):
+            ax  = axes[row_i][col_i]
+            sub = dp_sub[dp_sub['Mission'] == mission]
+            if sub.empty:
+                ax.set_visible(False)
+                continue
+            plotter(sub, metric, ax,
+                    ylabel=ylabel if col_i == 0 else '',
+                    milp_line=is_normalised)
+            if row_i == 0:
+                ax.set_title(MISSION_FULL_LABELS[mission], fontsize=10,
+                             fontweight='bold')
+            if col_i == n_mission - 1:
+                ax.yaxis.set_label_position('right')
+                ax.set_ylabel(DP_LABELS[dp], fontsize=9,
+                              rotation=270, labelpad=16, va='bottom')
 
     plt.suptitle(suptitle, fontsize=13, y=1.01)
     plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_by_algorithm.png')
+    save_plot(save_dir, filename)
     plt.close()
 
-    # Figure B
-    n_dp = len(DP_ORDER)
-    fig, axes = plt.subplots(n, n_dp, figsize=(5 * n_dp, 5 * n), sharey='row')
-    if n == 1:
-        axes = np.array([axes])
 
-    for row_i, (metric, ylabel) in enumerate(zip(metrics, ylabels)):
-        if not _col_ok(df, metric, f'{filename_stem} FigB'):
-            for ax in axes[row_i]:
-                ax.set_visible(False)
+def plot_mission_degradation(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    data  = df[df['Algorithm'] != 'None-None'].copy()
+    abs_m = 'Total Obtained Reward'
+    nrm_m = 'Reward / MILP'
+
+    dates = sorted(data['Date'].dropna().unique())
+
+    def _emit(subset, slug_base, date_label):
+        """Emit all variants for a given data subset.
+
+        Naming convention: Plot4_X_Y{SPEC}-Title.png
+          SPEC: (none) = default, b = by-DP, _bar = bar chart,
+                b_bar = by-DP bar, _norm = normalised box,
+                b_norm = normalised by-DP box, etc.
+        """
+        base_title = f'Mission Reward by Algorithm — {date_label}'
+        norm_title = f'Mission Reward by Algorithm (MILP-Normalised) — {date_label}'
+
+        # Absolute — collapsed
+        _make_degradation_collapsed(
+            subset, abs_m, 'Total Obtained Reward',
+            base_title, save_dir, f'{slug_base}.png')
+
+        # Absolute — by DP (b spec)
+        _make_degradation_by_dp(
+            subset, abs_m, 'Total Obtained Reward',
+            base_title + '\n(rows = Data Processing mode)',
+            save_dir, f'{slug_base}b-Mission_Reward_by_DP.png')
+
+        # Bar equivalents
+        _make_degradation_collapsed(
+            subset, abs_m, 'Total Obtained Reward',
+            base_title, save_dir, f'{slug_base}_bar.png',
+            use_barplot=True)
+        _make_degradation_by_dp(
+            subset, abs_m, 'Total Obtained Reward',
+            base_title + '\n(rows = Data Processing mode)',
+            save_dir, f'{slug_base}b_bar-Mission_Reward_by_DP.png',
+            use_barplot=True)
+
+        # MILP-normalised (only if column available)
+        if nrm_m in subset.columns and subset[nrm_m].notna().any():
+            _make_degradation_collapsed(
+                subset, nrm_m, 'Reward / MILP Reward',
+                norm_title, save_dir, f'{slug_base}_norm.png',
+                is_normalised=True)
+            _make_degradation_by_dp(
+                subset, nrm_m, 'Reward / MILP Reward',
+                norm_title + '\n(rows = Data Processing mode)',
+                save_dir, f'{slug_base}b_norm-Mission_Reward_Norm_by_DP.png',
+                is_normalised=True)
+            _make_degradation_collapsed(
+                subset, nrm_m, 'Reward / MILP Reward',
+                norm_title, save_dir, f'{slug_base}_norm_bar.png',
+                use_barplot=True, is_normalised=True)
+            _make_degradation_by_dp(
+                subset, nrm_m, 'Reward / MILP Reward',
+                norm_title + '\n(rows = Data Processing mode)',
+                save_dir, f'{slug_base}b_norm_bar-Mission_Reward_Norm_by_DP.png',
+                use_barplot=True, is_normalised=True)
+
+    # All dates combined
+    _emit(data, 'Plot4_1_1-Mission_Reward_All_Dates', 'All Dates & Conditions')
+
+    # One figure per date
+    for date_i, date in enumerate(dates, start=2):
+        date_sub  = data[data['Date'] == date]
+        if date_sub.empty:
             continue
-
-        for col_i, dp in enumerate(DP_ORDER):
-            ax = axes[row_i][col_i]
-            sub = df[df['Data Processing'] == dp]
-            present = [a for a in ALGO_ORDER if a in sub['Algorithm'].values]
-
-            sns.barplot(
-                data=sub, x='Connectivity', y=metric,
-                hue='Algorithm', hue_order=present,
-                palette=ALGO_PALETTE, order=CONN_ORDER,
-                errorbar='sd', width=0.7, ax=ax,
-            )
-
-            # None-None primal reference lines per connectivity tick
-            if primal_ref and 'Task Reward Primal Bound [norm]' in df.columns:
-                nn = df[(df['Algorithm'] == 'None-None') &
-                        (df['Data Processing'] == dp)]
-                for xi, conn in enumerate(CONN_ORDER):
-                    val = nn[nn['Connectivity'] == conn][
-                        'Task Reward Primal Bound [norm]'].mean()
-                    if pd.notna(val):
-                        ax.plot([xi - 0.35, xi + 0.35], [val, val],
-                                color='#555555', linewidth=1.0,
-                                linestyle=':', alpha=0.7)
-
-            if hline_at_one:
-                for xi in range(len(CONN_ORDER)):
-                    ax.plot([xi - 0.35, xi + 0.35], [1.0, 1.0],
-                            color='black', linewidth=0.8,
-                            linestyle='--', alpha=0.4)
-
-            ax.set_xticks(range(len(CONN_ORDER)))
-            ax.set_xticklabels([_conn_label(c) for c in CONN_ORDER], fontsize=8)
-            ax.set_xlabel('Connectivity')
-            ax.set_ylabel(ylabel if col_i == 0 else '')
-            ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.7)
-            if sub[metric].dropna().max() <= 1.05:
-                ax.set_ylim(0.0, 1.05)
-            if row_i == 0:
-                ax.set_title(_dp_label(dp), fontsize=10, fontweight='bold')
-
-            legend = ax.get_legend()
-            if row_i == 0 and col_i == n_dp - 1:
-                ax.legend(title='Algorithm', fontsize=7,
-                          title_fontsize=8, loc='best')
-            elif legend:
-                legend.remove()
-
-    plt.suptitle(f'{suptitle} -- by Connectivity & Detection Mode',
-                 fontsize=12, y=1.01)
-    plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_grouped.png')
-    plt.close()
+        date_slug = date.replace('-', '')
+        _emit(date_sub,
+              f'Plot4_1_{date_i}-Mission_Reward_{date_slug}',
+              date)
 
 
 # =============================================================================
-#  PLOT 2a -- Decomposition Heatmap
+#  FIGURE 2 — Decomposition Heatmap  (supplemental)
+#  Rows = Mission, Cols = Data Processing
+#  Preplanner on y-axis, Replanner on x-axis.
+#  Single colorbar per row (rightmost panel only).
+#  Per-mission vmin/vmax for better color resolution.
 # =============================================================================
 
 def plot_decomposition_heatmap(
     df: pd.DataFrame,
-    metric: str,
-    ylabel: str,
-    suptitle: str,
     save_dir: str,
-    filename_stem: str,
 ) -> None:
-    row_labels = ['MILP (Centralized)', 'DP (Onboard Pre)', 'None (No Pre)']
-    col_labels = ['No Replanner', 'Greedy', 'CBBA']
+    metric = 'Total Obtained Reward'
+
+    row_labels = ['MILP\n(Centralized)', 'DP\n(Onboard)', 'None\n(No Pre)']
+    col_labels  = ['No\nReplanner', 'Greedy', 'SC-CBBA']
 
     algo_cell = {
-        'MILP':      (0, 0),
-        'DP':        (1, 0),
-        'DP-GR':     (1, 1),
-        'DP-CBBA':   (1, 2),
-        'None-None': (2, 0),
-        'GR':        (2, 1),
-        'CBBA':      (2, 2),
+        'MILP':       (0, 0),
+        'DP':         (1, 0),
+        'DP-GR':      (1, 1),
+        'DP-SC-CBBA': (1, 2),
+        'None-None':  (2, 0),
+        'GR':         (2, 1),
+        'SC-CBBA':    (2, 2),
     }
 
-    vmin, vmax = df[metric].min(), df[metric].max()
-    fig, axes = plt.subplots(1, len(DP_ORDER),
-                              figsize=(5.5 * len(DP_ORDER), 5),
-                              sharey=True)
+    n_missions = len(MISSION_ORDER)
+    n_dp       = len(DP_ORDER)
 
-    for ax, dp in zip(axes, DP_ORDER):
-        sub  = df[df['Data Processing'] == dp]
-        grid = np.full((3, 3), np.nan)
-        text = [[''] * 3 for _ in range(3)]
+    # Global vmin/vmax across all missions and DP modes for consistent colour scale
+    vmin = df[metric].min()
+    vmax = df[metric].max()
 
-        for algo, (ri, ci) in algo_cell.items():
-            vals = sub[sub['Algorithm'] == algo][metric].dropna()
-            if len(vals):
-                m, s = vals.mean(), vals.std(ddof=0)
-                grid[ri, ci] = m
-                text[ri][ci] = f'{m:.3f}\n+/-{s:.3f}'
+    fig, axes = plt.subplots(
+        n_missions, n_dp,
+        figsize=(4.5 * n_dp, 4.2 * n_missions),
+        sharey='row')
 
-        masked = np.ma.masked_invalid(grid)
-        im = ax.imshow(masked, cmap='YlOrRd',
-                       vmin=vmin, vmax=vmax, aspect='auto')
+    # Single shared colormap image for one global colorbar
+    sm = plt.cm.ScalarMappable(
+                                # cmap='YlOrRd',
+                                cmap='rocket_r',
+                               norm=plt.Normalize(vmin=vmin, vmax=vmax)
+                               )
+    sm.set_array([])
 
-        for ri in range(3):
-            for ci in range(3):
-                if text[ri][ci]:
-                    brightness = (masked[ri, ci] - vmin) / max(vmax - vmin, 1e-9)
-                    fc = 'white' if brightness > 0.6 else 'black'
-                    ax.text(ci, ri, text[ri][ci],
-                            ha='center', va='center', fontsize=8, color=fc)
+    for row_i, mission in enumerate(MISSION_ORDER):
+        mission_sub = df[df['Mission'] == mission]
 
-        # Hatch None-None cell
-        nn_r, nn_c = algo_cell['None-None']
-        ax.add_patch(plt.Rectangle(
-            (nn_c - 0.5, nn_r - 0.5), 1, 1,
-            fill=False, hatch='//', edgecolor='#555555', linewidth=0.5))
-        ax.text(nn_c, nn_r + 0.35, 'Passive Ref',
-                ha='center', va='center', fontsize=6,
-                color='#555555', style='italic')
-
-        ax.set_xticks([0, 1, 2])
-        ax.set_xticklabels(col_labels, fontsize=8)
-        ax.set_yticks([0, 1, 2])
-        ax.set_yticklabels(row_labels, fontsize=8)
-        ax.set_title(_dp_label(dp), fontsize=10, fontweight='bold')
-        ax.set_xlabel('Replanner', fontsize=9)
-        if dp == DP_ORDER[0]:
-            ax.set_ylabel('Preplanner', fontsize=9)
-        ax.axhline(0.5, color='white', linewidth=3)
-        plt.colorbar(im, ax=ax, shrink=0.8, label=ylabel)
-
-    plt.suptitle(suptitle, fontsize=12, y=1.02)
-    plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_heatmap.png')
-    plt.close()
-
-
-# =============================================================================
-#  PLOT 2b -- Decomposition Box+Strip by Data Processing
-# =============================================================================
-
-def plot_decomposition_boxplots(
-    df: pd.DataFrame,
-    metric: str,
-    ylabel: str,
-    suptitle: str,
-    save_dir: str,
-    filename_stem: str,
-    hline_at_one: bool = False,
-) -> None:
-    fig, axes = plt.subplots(1, len(DP_ORDER),
-                              figsize=(5 * len(DP_ORDER), 5),
-                              sharey=True)
-    for ax, dp in zip(axes, DP_ORDER):
-        sub = df[df['Data Processing'] == dp]
-        make_boxplot(sub, metric, ax,
-                     ylabel=ylabel if dp == DP_ORDER[0] else '')
-        if hline_at_one:
-            ax.axhline(1.0, color='#444444', linestyle='--',
-                       linewidth=0.9, alpha=0.6)
-        if sub[metric].dropna().max() <= 1.05:
-            ax.set_ylim(-0.02, 1.05)
-        ax.set_title(_dp_label(dp), fontsize=10, fontweight='bold')
-        ax.set_xlabel('')
-
-    plt.suptitle(suptitle, fontsize=12, y=1.02)
-    plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_boxplots.png')
-    plt.close()
-
-
-# =============================================================================
-#  PLOT 4b -- Observations per Event/Task  (mean bar, std whisker, median dot)
-# =============================================================================
-
-def plot_obs_distribution(
-    df: pd.DataFrame,
-    mean_col: str,
-    std_col: str,
-    median_col: str,
-    suptitle: str,
-    ylabel: str,
-    save_dir: str,
-    filename_stem: str,
-) -> None:
-    n_dp = len(DP_ORDER)
-    fig, axes = plt.subplots(1, n_dp, figsize=(5 * n_dp, 5), sharey=True)
-
-    for ax, dp in zip(axes, DP_ORDER):
-        sub    = df[df['Data Processing'] == dp]
-        algos  = [a for a in ALGO_ORDER if a in sub['Algorithm'].values]
-        xs     = np.arange(len(algos))
-        means  = [sub[sub['Algorithm'] == a][mean_col].mean()   for a in algos]
-        stds   = [sub[sub['Algorithm'] == a][std_col].mean()    for a in algos]
-        medians= [sub[sub['Algorithm'] == a][median_col].mean() for a in algos]
-
-        for i, (algo, m, s, med) in enumerate(zip(algos, means, stds, medians)):
-            color = ALGO_PALETTE.get(algo, '#999999')
-            hatch = '//' if algo == 'None-None' else None
-            ax.bar(i, m, color=color, alpha=0.75, width=0.6,
-                   edgecolor='white', linewidth=0.5, hatch=hatch)
-            ax.errorbar(i, m, yerr=s, fmt='none',
-                        ecolor='#333333', capsize=4, linewidth=1.0)
-            ax.plot(i, med, marker='D', color='red', markersize=5,
-                    zorder=5, label='Median' if i == 0 else '')
-
-        ax.set_xticks(xs)
-        ax.set_xticklabels(algos, rotation=20, ha='right', fontsize=8)
-        ax.set_ylabel(ylabel if dp == DP_ORDER[0] else '')
-        ax.set_title(_dp_label(dp), fontsize=10, fontweight='bold')
-        ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.7)
-        if ax.get_legend_handles_labels()[1]:
-            ax.legend(fontsize=7)
-
-    plt.suptitle(suptitle, fontsize=12, y=1.02)
-    plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}.png')
-    plt.close()
-
-
-# =============================================================================
-#  PLOT 5b -- Event Latency Budget (4-component stacked bar)
-# =============================================================================
-
-def plot_latency_budget(
-    df: pd.DataFrame,
-    save_dir: str,
-    filename_stem: str,
-) -> None:
-    """
-    Stacked bars normalised 0-1 by event duration.
-    Components:
-      Detection   = Announcement Time / Event Duration
-      Response    = (Earliest Time to Image - Announcement Time) / Duration
-      Observation = (Latest - Earliest Time to Image) / Duration
-      Slack       = remainder to 1.0
-
-    None-None rows have no Response component (NaN announcement->obs gap).
-    """
-    ann_col   = 'Average Event Announcement Time [norm]'
-    early_col = 'Average Normalized Earliest Time to Image Event'
-    late_col  = 'Average Normalized Latest Time to Image Event'
-
-    for c in [ann_col, early_col, late_col]:
-        if not _col_ok(df, c, 'Plot 5b'):
-            return
-
-    STAGE_COLORS = {
-        'Detection':   '#E69F00',
-        'Response':    '#56B4E9',
-        'Observation': '#009E73',
-        'Slack':       '#DDDDDD',
-    }
-    STAGES = ['Detection', 'Response', 'Observation', 'Slack']
-
-    n_conn = len(CONN_ORDER)
-    n_dp   = len(DP_ORDER)
-    fig, axes = plt.subplots(n_conn, n_dp,
-                              figsize=(5 * n_dp, 4 * n_conn),
-                              sharey=True)
-
-    for row_i, conn in enumerate(CONN_ORDER):
         for col_i, dp in enumerate(DP_ORDER):
-            ax = axes[row_i][col_i]
-            sub   = df[(df['Connectivity'] == conn) &
-                       (df['Data Processing'] == dp)]
-            algos = [a for a in ALGO_ORDER if a in sub['Algorithm'].values]
-            xs    = np.arange(len(algos))
-            bottoms = np.zeros(len(algos))
+            ax  = axes[row_i][col_i]
+            sub = mission_sub[mission_sub['Data Processing'] == dp]
+            grid = np.full((3, 3), np.nan)
+            text = [[''] * 3 for _ in range(3)]
 
-            for stage in STAGES:
-                heights = []
-                for algo in algos:
-                    row = sub[sub['Algorithm'] == algo]
-                    if row.empty:
-                        heights.append(0.0)
-                        continue
-                    ann   = row[ann_col].mean()
-                    early = row[early_col].mean()
-                    late  = row[late_col].mean()
+            for algo, (ri, ci) in algo_cell.items():
+                vals = sub[sub['Algorithm'] == algo][metric].dropna()
+                if len(vals):
+                    m, s = vals.mean(), vals.std(ddof=0)
+                    grid[ri, ci] = m
+                    text[ri][ci] = f'{m:.0f}\n±{s:.0f}'
 
-                    if stage == 'Detection':
-                        h = ann if pd.notna(ann) else 0.0
-                    elif stage == 'Response':
-                        # Gap between announcement and first image
-                        h = max(early - ann, 0.0) if (
-                            pd.notna(early) and pd.notna(ann) and
-                            algo != 'None-None') else 0.0
-                    elif stage == 'Observation':
-                        h = max(late - early, 0.0) if (
-                            pd.notna(late) and pd.notna(early)) else 0.0
-                    else:  # Slack
-                        ann_v   = ann   if pd.notna(ann)   else 0.0
-                        resp_v  = max(early - ann_v, 0.0) if (
-                            pd.notna(early) and algo != 'None-None') else 0.0
-                        obs_v   = max(late - early, 0.0)  if (
-                            pd.notna(late) and pd.notna(early)) else 0.0
-                        h = max(1.0 - ann_v - resp_v - obs_v, 0.0)
+            masked = np.ma.masked_invalid(grid)
+            ax.imshow(masked, cmap='YlOrRd',
+                      vmin=vmin, vmax=vmax, aspect='auto')
 
-                    heights.append(h)
+            for ri in range(3):
+                for ci in range(3):
+                    if text[ri][ci]:
+                        brightness = (masked[ri, ci] - vmin) / max(
+                            vmax - vmin, 1e-9)
+                        fc = 'white' if brightness > 0.65 else 'black'
+                        ax.text(ci, ri, text[ri][ci],
+                                ha='center', va='center',
+                                fontsize=7, color=fc)
 
-                ax.bar(xs, heights, bottom=bottoms,
-                       color=STAGE_COLORS[stage],
-                       label=stage if (row_i == 0 and col_i == 0) else '',
-                       edgecolor='white', linewidth=0.4, alpha=0.85)
-                bottoms = bottoms + np.array(heights)
+            # None-None: gray + hatch
+            nn_r, nn_c = algo_cell['None-None']
+            ax.add_patch(plt.Rectangle(
+                (nn_c - 0.5, nn_r - 0.5), 1, 1,
+                facecolor='#CCCCCC', hatch='//',
+                edgecolor='#777777', linewidth=0.8, zorder=2))
+            ax.text(nn_c, nn_r, 'Passive\n(ref.)',
+                    ha='center', va='center', fontsize=6,
+                    color='#444444', style='italic', zorder=3)
 
-            # Algorithm-coloured outline per bar
-            for xi, algo in enumerate(algos):
-                ax.bar(xi, 1.0, color='none',
-                       edgecolor=ALGO_PALETTE.get(algo, '#333333'),
-                       linewidth=1.2)
+            ax.set_xticks([0, 1, 2])
+            ax.set_xticklabels(col_labels, fontsize=7)
+            ax.set_yticks([0, 1, 2])
+            ax.set_yticklabels(row_labels, fontsize=7)
+            ax.set_xlabel('Replanner', fontsize=8)
+            if col_i == 0:
+                ax.set_ylabel('Preplanner', fontsize=8)
+            ax.axhline(0.5, color='white', linewidth=2)
 
-            ax.set_xticks(xs)
-            ax.set_xticklabels(algos, rotation=25, ha='right', fontsize=7)
-            ax.set_ylim(0, 1.05)
-            ax.axhline(1.0, color='#444444', linestyle='--',
-                       linewidth=0.7, alpha=0.5)
-            ax.set_ylabel('Fraction of Event Duration' if col_i == 0 else '')
-            ax.grid(True, axis='y', linestyle='--', linewidth=0.3, alpha=0.5)
-
+            # Column headers (DP mode) on top row only
             if row_i == 0:
-                ax.set_title(_dp_label(dp), fontsize=10, fontweight='bold')
+                ax.set_title(DP_LABELS[dp], fontsize=9, fontweight='bold')
+
+            # Mission label on rightmost column as right-side y-axis label
             if col_i == n_dp - 1:
                 ax.yaxis.set_label_position('right')
-                ax.set_ylabel(
-                    _conn_label(conn).replace('\n', ' '),
-                    fontsize=9, rotation=270, labelpad=14, va='bottom')
+                ax.set_ylabel(MISSION_FULL_LABELS[mission], fontsize=9,
+                              rotation=270, labelpad=16, va='bottom')
 
-    legend_patches = [mpatches.Patch(color=STAGE_COLORS[s], label=s)
-                      for s in STAGES]
-    fig.legend(handles=legend_patches, title='Event Window Section',
-               loc='lower center', ncol=4, fontsize=8,
-               title_fontsize=9, bbox_to_anchor=(0.5, -0.03))
+    # Single global colorbar — placed outside the grid to the right
+    # Use tight_layout first, then add colorbar in remaining space
+    plt.tight_layout(rect=[0, 0, 0.88, 1])
+    cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.70])
+    fig.colorbar(sm, cax=cbar_ax, label='Total Reward')
 
-    plt.suptitle('Event Latency Budget (normalised by event duration)',
-                 fontsize=12, y=1.01)
-    plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_latency_budget.png')
+    plt.suptitle(
+        'Reward Decomposition: Preplanner × Replanner\n',
+        # '(rows = Mission Priority; cols = Data Processing; '
+        # 'shared colour scale)',
+        fontsize=12, y=1.01)
+    save_plot(save_dir, 'Plot4_2_1-Decomposition_Heatmap.png')
     plt.close()
 
 
 # =============================================================================
-#  PLOT 6 -- Connectivity x Detection Interaction
+#  FIGURE 3 — Two-Strategy Scatter  1×2 per mission (3 rows × 2 cols)
+#  Left col:  Total Observations vs Reward per Observation
+#  Right col: Total Observations vs Reward per Task
+#  No Pareto front — per-mission context makes it more readable.
 # =============================================================================
 
-def plot_interaction(
+def plot_two_strategy_scatter(
     df: pd.DataFrame,
-    metrics: list[str],
-    ylabels: list[str],
-    suptitle: str,
     save_dir: str,
-    filename_stem: str,
-    hline_at_one: bool = False,
 ) -> None:
-    n_metrics = len(metrics)
-    n_conn    = len(CONN_ORDER)
-    dp_pos    = {dp: i for i, dp in enumerate(DP_ORDER)}
+    data  = df[df['Algorithm'] != 'None-None'].copy()
+    x_col = 'Total Obtained Task Observations'
+    panels = [
+        ('Reward per Observation',
+         'Reward per Observation\n(scheduling efficiency)'),
+        ('Reward per Task',
+         'Reward per Task\n(selection quality)'),
+    ]
 
-    fig, axes = plt.subplots(n_metrics, n_conn,
-                              figsize=(5 * n_conn, 4.5 * n_metrics),
-                              sharey='row', sharex=True)
-    if n_metrics == 1:
-        axes = np.array([axes])
+    def _pareto_front(xy: np.ndarray) -> np.ndarray:
+        """
+        Non-dominated set maximising BOTH x (observations) AND y (quality).
+        A point dominates another if it has >= x and >= y with at least one strict.
+        This highlights strategies that lead either axis — the two extremes
+        of volume and quality that together define the frontier of achievable performance.
+        """
+        is_eff = np.ones(len(xy), dtype=bool)
+        for i, c in enumerate(xy):
+            if is_eff[i]:
+                # Dominated if another point has >= on both axes
+                dominated = (xy[:, 0] >= c[0]) & (xy[:, 1] >= c[1])
+                dominated[i] = False
+                if dominated.any():
+                    is_eff[i] = False
+        return xy[is_eff]
 
-    for row_i, (metric, ylabel) in enumerate(zip(metrics, ylabels)):
-        if not _col_ok(df, metric, f'{filename_stem} interaction'):
-            for ax in axes[row_i]:
+    n_rows = len(MISSION_ORDER)
+    n_cols = len(panels)
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             figsize=(7 * n_cols, 5 * n_rows),
+                             sharey=False, sharex='col')
+
+    for row_i, mission in enumerate(MISSION_ORDER):
+        mission_data = data[data['Mission'] == mission]
+
+        for col_i, (y_col, ylabel) in enumerate(panels):
+            ax = axes[row_i][col_i]
+            if not _col_ok(data, y_col, 'Fig 3'):
                 ax.set_visible(False)
-            continue
+                continue
 
-        for col_i, conn in enumerate(CONN_ORDER):
-            ax  = axes[row_i][col_i]
-            sub = df[df['Connectivity'] == conn]
+            # All points use circle — mission distinguished by row
+            for algo in ALGO_ORDER:
+                sub = mission_data[
+                    mission_data['Algorithm'] == algo
+                ].dropna(subset=[x_col, y_col])
+                if sub.empty:
+                    continue
+                ax.scatter(sub[x_col], sub[y_col],
+                           color=ALGO_PALETTE[algo],
+                           marker='o',
+                           s=70, alpha=0.70,
+                           edgecolors='white', linewidths=0.4,
+                           zorder=3)
+
+            # Pareto front per panel
+            pts = mission_data.dropna(
+                subset=[x_col, y_col])[[x_col, y_col]].values
+            if len(pts) > 1:
+                pareto = _pareto_front(pts)
+                pareto = pareto[pareto[:, 0].argsort()]
+                ax.step(pareto[:, 0], pareto[:, 1],
+                        where='post', color='#333333', linewidth=1.2,
+                        linestyle='--', alpha=0.55, zorder=2,
+                        label='Pareto front' if col_i == 0 else '')
+
+            ax.set_xlabel(x_col if row_i == n_rows - 1 else '', fontsize=9)
+            ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
+
+            # Mission label + y-label on left column
+            if col_i == 0:
+                ax.set_ylabel(
+                    f'{MISSION_FULL_LABELS[mission]}\n\n{ylabel}',
+                    fontsize=9)
+            else:
+                ax.set_ylabel(ylabel, fontsize=9)
+
+            # Column headers on top row only
+            if row_i == 0:
+                ax.set_title(ylabel.split('\n')[0], fontsize=10,
+                             fontweight='bold')
+
+    # Algorithm legend at top
+    algo_handles = [
+        plt.scatter([], [], color=ALGO_PALETTE[a], marker='o', s=70, label=a)
+        for a in ALGO_ORDER
+    ]
+    pareto_handle = matplotlib.lines.Line2D(
+        [], [], color='#333333', linewidth=1.2,
+        linestyle='--', alpha=0.55, label='Pareto front')
+    fig.legend(handles=algo_handles + [pareto_handle],
+               title='Algorithm', loc='upper center',
+               ncol=len(ALGO_ORDER) + 1,
+               fontsize=8, title_fontsize=9,
+               bbox_to_anchor=(0.5, 1.01), framealpha=0.9)
+
+    plt.suptitle(
+        'Scheduling Strategy: Volume vs Quality',
+        fontsize=12, y=1.04)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_3_1-Two_Strategy_Scatter.png')
+    plt.close()
+
+
+# =============================================================================
+#  FIGURE 4 — Data Processing Effect
+#  Uses complete_date only. Ground | Onboard  ‖  Instant (benchmark).
+#  No star on Instant — vertical separator line is sufficient.
+# =============================================================================
+
+def plot_data_processing_effect(
+    df: pd.DataFrame,
+    save_dir: str,
+    complete_date: str = '2019-02-15',
+) -> None:
+    metric = 'Total Obtained Reward'
+    data   = df[(df['Date'] == complete_date) &
+                (df['Algorithm'] != 'None-None')].copy()
+
+    if data.empty:
+        print(f'  [Fig 4] No data for date {complete_date} -- skipping.')
+        return
+
+    x_positions = {'Ground': 0, 'Onboard': 1, 'Instant': 3}
+    x_ticks     = [0, 1, 3]
+    x_labels    = ['Ground', 'Onboard', 'Instant']
+
+    bar_width = 0.12
+    n_algos   = len(ALGO_ORDER)
+    offsets   = np.linspace(
+        -(n_algos - 1) * bar_width / 2,
+         (n_algos - 1) * bar_width / 2, n_algos)
+
+    fig, axes = plt.subplots(
+        1, len(MISSION_ORDER),
+        figsize=(6 * len(MISSION_ORDER), 5), sharey=False)
+
+    for ax, mission in zip(axes, MISSION_ORDER):
+        sub = data[data['Mission'] == mission]
+
+        for algo_i, algo in enumerate(ALGO_ORDER):
+            asub = sub[sub['Algorithm'] == algo]
+            for dp in DP_ORDER:
+                dp_sub = asub[asub['Data Processing'] == dp]
+                if dp_sub.empty:
+                    continue
+                xpos = x_positions[dp] + offsets[algo_i]
+                mean = dp_sub[metric].mean()
+                ci   = _ci95(dp_sub[metric])
+                ax.bar(xpos, mean, width=bar_width,
+                       color=ALGO_PALETTE[algo], alpha=0.85,
+                       edgecolor='white', linewidth=0.4)
+                ax.errorbar(xpos, mean, yerr=ci, fmt='none',
+                            ecolor='#333', capsize=2, linewidth=0.8)
+
+        # Separator before Instant — labels pointing AWAY from the line
+        sep_x = (x_positions['Onboard'] + x_positions['Instant']) / 2
+        ax.axvline(sep_x, color='#555555', linewidth=1.0,
+                   linestyle=':', alpha=0.7)
+        ax.text(sep_x - 0.05, ax.get_ylim()[1],
+                '← Operational',
+                fontsize=7, color='#555555', va='top', ha='right')
+        ax.text(sep_x + 0.05, ax.get_ylim()[1],
+                'Benchmark →',
+                fontsize=7, color='#555555', va='top', ha='left')
+
+        ax.set_xticks(x_ticks)
+        ax.set_xticklabels(x_labels, fontsize=9)
+        ax.set_xlabel('Data Processing Mode', fontsize=9)
+        ax.set_ylabel('Total Obtained Reward'
+                      if mission == MISSION_ORDER[0] else '')
+        ax.set_title(MISSION_FULL_LABELS[mission], fontsize=10,
+                     fontweight='bold')
+        ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.6)
+
+    handles = _make_legend_handles(ALGO_ORDER)
+    fig.legend(handles=handles, title='Algorithm',
+               loc='lower center', ncol=len(ALGO_ORDER),
+               fontsize=8, title_fontsize=9,
+               bbox_to_anchor=(0.5, -0.07))
+
+    plt.suptitle(
+        f'Effect of Data Processing Mode on Mission Reward\n'
+        f'(date: {complete_date}; averaged across connectivity)',
+        fontsize=12, y=1.02)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_4_1-Data_Processing_Effect.png')
+    plt.close()
+
+
+# =============================================================================
+#  FIGURE 5 — Connectivity Effect
+#  Faceted by Data Processing (cols) to reduce variance.
+#  One figure per mission.
+# =============================================================================
+
+def plot_connectivity_effect(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    metric   = 'Total Obtained Reward'
+    data     = df[df['Algorithm'] != 'None-None'].copy()
+    conn_pos = {c: i for i, c in enumerate(CONN_ORDER)}
+
+    for mission_i, mission in enumerate(MISSION_ORDER, start=1):
+        mission_data = data[data['Mission'] == mission]
+
+        fig, axes = plt.subplots(
+            1, len(DP_ORDER),
+            figsize=(5 * len(DP_ORDER), 5), sharey=True)
+
+        for ax, dp in zip(axes, DP_ORDER):
+            sub = mission_data[mission_data['Data Processing'] == dp]
 
             for algo in ALGO_ORDER:
                 asub  = sub[sub['Algorithm'] == algo]
-                means = asub.groupby('Data Processing')[metric].mean()
-                stds  = asub.groupby('Data Processing')[metric].std(ddof=0).fillna(0)
-                xs    = [dp_pos[dp] for dp in DP_ORDER if dp in means.index]
-                ys    = [means[dp]  for dp in DP_ORDER if dp in means.index]
-                es    = [stds[dp]   for dp in DP_ORDER if dp in means.index]
+                means = asub.groupby(
+                    'Connectivity', observed=True)[metric].mean()
+                # Use IQR band instead of 95% CI to reduce noise
+                q25   = asub.groupby(
+                    'Connectivity', observed=True)[metric].quantile(0.25)
+                q75   = asub.groupby(
+                    'Connectivity', observed=True)[metric].quantile(0.75)
+
+                xs  = [conn_pos[c] for c in CONN_ORDER if c in means.index]
+                ys  = [means[c]    for c in CONN_ORDER if c in means.index]
+                lo  = [q25[c]      for c in CONN_ORDER if c in means.index]
+                hi  = [q75[c]      for c in CONN_ORDER if c in means.index]
                 if not xs:
                     continue
 
-                spec  = ALGO_LINESTYLES[algo]
-                line, = ax.plot(xs, ys,
-                                color=ALGO_PALETTE[algo], linewidth=1.6,
-                                marker='o', markersize=5,
-                                linestyle='solid' if spec == '' else 'dashed',
-                                label=algo)
+                spec = ALGO_LINESTYLES[algo]
+                line, = ax.plot(
+                    xs, ys,
+                    color=ALGO_PALETTE[algo], linewidth=1.8,
+                    marker='o', markersize=6,
+                    linestyle='solid' if spec == '' else 'dashed',
+                    label=algo)
                 _apply_linestyle(line, algo)
-                ax.fill_between(xs,
-                                [y - e for y, e in zip(ys, es)],
-                                [y + e for y, e in zip(ys, es)],
-                                color=ALGO_PALETTE[algo], alpha=0.10)
+                ax.fill_between(xs, lo, hi,
+                                color=ALGO_PALETTE[algo], alpha=0.13)
 
-            if hline_at_one:
-                ax.axhline(1.0, color='#444444', linestyle='--',
-                           linewidth=0.8, alpha=0.5)
-
-            ax.set_xticks(list(dp_pos.values()))
-            ax.set_xticklabels([_dp_label(dp, short=True) for dp in DP_ORDER],
-                               fontsize=8, rotation=12, ha='right')
-            ax.set_ylabel(ylabel if col_i == 0 else '')
+            ax.set_xticks(list(conn_pos.values()))
+            ax.set_xticklabels(
+                [CONN_LABELS[c].replace('\n', ' ') for c in CONN_ORDER],
+                fontsize=8, rotation=12, ha='right')
+            ax.set_xlabel('Connectivity Architecture', fontsize=9)
+            ax.set_ylabel('Total Obtained Reward'
+                          if dp == DP_ORDER[0] else '')
+            ax.set_title(DP_LABELS[dp], fontsize=10, fontweight='bold')
             ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
-            sub_vals = sub[metric].dropna()
-            if len(sub_vals) and sub_vals.max() <= 1.05:
-                ax.set_ylim(-0.02, 1.05)
 
-            if row_i == 0:
-                ax.set_title(
-                    f'Connectivity: {_conn_label(conn).replace(chr(10), " ")}',
-                    fontsize=10, fontweight='bold')
-            if row_i == 0 and col_i == n_conn - 1:
+            if dp == DP_ORDER[-1]:
                 ax.legend(title='Algorithm', fontsize=7,
                           title_fontsize=8, loc='best')
 
-    plt.suptitle(suptitle, fontsize=12, y=1.01)
-    plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_interaction.png')
-    plt.close()
+        plt.suptitle(
+            f'{MISSION_FULL_LABELS[mission]} — '
+            f'Effect of Connectivity Architecture\n'
+            f'(shading = IQR across dates; cols = data processing mode)',
+            fontsize=12, y=1.02)
+        plt.tight_layout()
+        save_plot(save_dir,
+                  f'Plot4_5_{mission_i}-Connectivity_{mission}.png')
+        plt.close()
 
 
 # =============================================================================
-#  PLOT 7 -- Event Detection Pipeline Cascade (up to 5 stages)
+#  FIGURE 6a — Urgency: Coverage vs Response Time (scatter)
+#  x = Median Normalized Response Time to Task (lower = better)
+#  y = P(Task Observed | Task Observable)      (higher = better)
+#  One panel per connectivity level, colour = algorithm.
+#  Utopia point at bottom-left (fast response, full coverage).
 # =============================================================================
 
-def plot_detection_cascade(
+def plot_urgency_requirements(
     df: pd.DataFrame,
     save_dir: str,
-    filename_stem: str,
 ) -> None:
-    cascade_defs = [
-        ('P(Event Detected)',                     'P(Detected)'),
-        ('P(Event Announced)',                    'P(Announced)'),
-        ('P(Event Announced Before Expiry)',      'P(Ann. Before\nExpiry)'),
-        ('P(Event Observed | Event Detected)',    'P(Obs|Det)'),
-        ('P(Event Co-observed | Event Detected)', 'P(Co-obs|Det)'),
-    ]
-    cascade = [(col, lbl) for col, lbl in cascade_defs if col in df.columns]
-    skipped = [col for col, _ in cascade_defs if col not in df.columns]
-    if skipped:
-        print(f'  [Plot 7] Stages pending (column absent): {skipped}')
-    if not cascade:
-        print('  [Plot 7] No cascade columns found -- skipping.')
+    x_col = 'Median Normalized Response Time to Task'
+    y_col = 'P(Task Observed | Task Observable)'
+    data  = df[(df['Mission'] == 'Urgency') &
+               (df['Algorithm'] != 'None-None')].copy()
+
+    if not _col_ok(data, x_col, 'Fig 6a') or \
+       not _col_ok(data, y_col, 'Fig 6a'):
         return
 
-    n_stages = len(cascade)
-    STAGE_COLORS = ['#0072B2', '#E69F00', '#CC79A7', '#009E73', '#56B4E9'][:n_stages]
+    n_conn = len(CONN_ORDER)
+    fig, axes = plt.subplots(1, n_conn,
+                             figsize=(5 * n_conn, 5),
+                             sharey=True, sharex=True)
 
-    rows = []
-    for _, r in df.iterrows():
-        for col, lbl in cascade:
-            rows.append({
-                'Algorithm':       r['Algorithm'],
-                'Connectivity':    r['Connectivity'],
-                'Data Processing': r['Data Processing'],
-                'Stage':           lbl,
-                'Value':           r[col],
-            })
-    long = pd.DataFrame(rows)
-    long['Stage'] = pd.Categorical(long['Stage'],
-                                    categories=[l for _, l in cascade],
-                                    ordered=True)
-
-    n_dp, n_conn = len(DP_ORDER), len(CONN_ORDER)
-    fig, axes = plt.subplots(n_conn, n_dp,
-                              figsize=(5.5 * n_dp, 4.5 * n_conn),
-                              sharey=True)
-
-    width   = 0.80 / n_stages
-    x_base  = np.arange(len(ALGO_ORDER))
-    offsets = np.linspace(-(n_stages - 1) * width / 2,
-                           (n_stages - 1) * width / 2,
-                           n_stages)
-
-    for row_i, conn in enumerate(CONN_ORDER):
-        for col_i, dp in enumerate(DP_ORDER):
-            ax  = axes[row_i][col_i]
-            sub = long[(long['Connectivity'] == conn) &
-                       (long['Data Processing'] == dp)]
-
-            for s_i, (_, stage_lbl) in enumerate(cascade):
-                vals = [float(sub[(sub['Algorithm'] == a) &
-                                   (sub['Stage'] == stage_lbl)]['Value'].mean())
-                        if a in sub['Algorithm'].values else np.nan
-                        for a in ALGO_ORDER]
-                ax.bar(x_base + offsets[s_i], vals, width=width,
-                       color=STAGE_COLORS[s_i],
-                       label=stage_lbl if (row_i == 0 and col_i == 0) else '',
-                       alpha=0.85, edgecolor='white', linewidth=0.4)
-
-            ax.set_xticks(x_base)
-            ax.set_xticklabels(ALGO_ORDER, fontsize=6.5,
-                               rotation=25, ha='right')
-            ax.set_ylim(0, 1.05)
-            ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.6)
-            ax.set_ylabel('Probability' if col_i == 0 else '')
-            if row_i == 0:
-                ax.set_title(_dp_label(dp), fontsize=10, fontweight='bold')
-            if col_i == n_dp - 1:
-                ax.yaxis.set_label_position('right')
-                ax.set_ylabel(_conn_label(conn).replace('\n', ' '),
-                              fontsize=9, rotation=270,
-                              labelpad=14, va='bottom')
-
-    handles = [mpatches.Patch(color=STAGE_COLORS[i], label=lbl)
-               for i, (_, lbl) in enumerate(cascade)]
-    fig.legend(handles=handles, title='Pipeline Stage',
-               loc='lower center', ncol=n_stages,
-               fontsize=8, title_fontsize=9,
-               bbox_to_anchor=(0.5, -0.03))
-
-    plt.suptitle('Event Detection -> Observation Pipeline by Algorithm',
-                 fontsize=12, y=1.01)
-    plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_cascade.png')
-    plt.close()
-
-
-# =============================================================================
-#  PLOT 8 -- Trade-off Scatter
-# =============================================================================
-
-def plot_tradeoff_scatter(
-    df: pd.DataFrame,
-    save_dir: str,
-    filename_stem: str,
-) -> None:
-    x_col = 'Average Normalized Earliest Response Time to Event'
-    y_col = 'Total Obtained Reward [norm]'
-    if not _col_ok(df, x_col, 'Plot 8'):
-        return
-
-    marker_shapes = {
-        'None-None': 'X', 'MILP': 'D', 'DP': 's',
-        'DP-GR': '^', 'GR': 'v', 'DP-CBBA': 'o', 'CBBA': 'P',
-    }
-    conn_sizes = {'GS': 50, 'Intraconstellation': 100, 'Interconstellation': 180}
-
-    fig, axes = plt.subplots(1, len(DP_ORDER),
-                              figsize=(6 * len(DP_ORDER), 6),
-                              sharey=True, sharex=True)
-
-    for ax, dp in zip(axes, DP_ORDER):
-        sub = df[df['Data Processing'] == dp]
+    for ax, conn in zip(axes, CONN_ORDER):
+        sub = data[data['Connectivity'] == conn]
 
         for algo in ALGO_ORDER:
-            for conn in CONN_ORDER:
-                pts = sub[(sub['Algorithm'] == algo) &
-                           (sub['Connectivity'] == conn)].dropna(subset=[x_col])
-                if pts.empty:
-                    continue
-                ax.scatter(pts[x_col], pts[y_col],
-                           color=ALGO_PALETTE[algo],
-                           marker=marker_shapes[algo],
-                           s=conn_sizes[conn],
-                           alpha=0.5 if algo == 'None-None' else 0.80,
-                           edgecolors='white', linewidths=0.5, zorder=3)
+            asub = sub[sub['Algorithm'] == algo].dropna(
+                subset=[x_col, y_col])
+            if asub.empty:
+                continue
+            ax.scatter(asub[x_col], asub[y_col],
+                       color=ALGO_PALETTE[algo],
+                    #    marker=MARKER_SHAPES[algo],
+                       s=70, alpha=0.75,
+                       edgecolors='white', linewidths=0.4,
+                       zorder=3, label=algo)
 
-        ax.scatter(0, 1, marker='*', s=300, color='gold',
-                   edgecolors='black', linewidths=0.8, zorder=6)
-        ax.annotate('Utopia', xy=(0, 1), xytext=(0.02, 0.96),
-                    fontsize=7, color='black')
+        # Utopia: low response time, high coverage
+        x_utopia = data[x_col].min() * 0.95
+        y_utopia = data[y_col].max() * 1.02
+        ax.scatter(x_utopia, min(y_utopia, 1.0), marker='*', s=300,
+                   color='gold', edgecolors='black',
+                   linewidths=0.8, zorder=6)
+        ax.annotate('Utopia', xy=(x_utopia, min(y_utopia, 1.0)),
+                    xytext=(x_utopia + (data[x_col].max() * 0.02),
+                            min(y_utopia, 1.0) - 0.02),
+                    fontsize=7, color='#333333')
 
-        milp_sub = sub[sub['Algorithm'] == 'MILP'].dropna(subset=[x_col])
-        if not milp_sub.empty:
-            mx, my = milp_sub[x_col].mean(), milp_sub[y_col].mean()
-            ax.axvline(mx, color=ALGO_PALETTE['MILP'],
-                       linestyle=':', linewidth=0.9, alpha=0.5)
-            ax.axhline(my, color=ALGO_PALETTE['MILP'],
-                       linestyle=':', linewidth=0.9, alpha=0.5)
-            ax.annotate('MILP\nmean', xy=(mx, my),
-                        xytext=(mx + 0.02, my - 0.04),
-                        fontsize=6.5, color=ALGO_PALETTE['MILP'])
-
-        ax.set_xlim(-0.02, 1.02)
-        ax.set_ylim(-0.02, 1.05)
-        ax.set_xlabel('Avg. Norm. Earliest Response Time (Event)')
-        ax.set_ylabel('Total Obtained Reward (normalised)'
-                       if dp == DP_ORDER[0] else '')
+        ax.set_xlabel('Median Norm. Response Time\n(lower = faster)', fontsize=9)
+        ax.set_ylabel('P(Task Observed | Observable)'
+                      if conn == CONN_ORDER[0] else '')
+        ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
         ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
-        ax.set_title(_dp_label(dp), fontsize=10, fontweight='bold')
 
-    algo_handles = [plt.scatter([], [], color=ALGO_PALETTE[a],
-                                marker=marker_shapes[a], s=80, label=a)
-                    for a in ALGO_ORDER]
-    conn_handles = [plt.scatter([], [], color='grey', marker='o',
-                                s=conn_sizes[c],
-                                label=_conn_label(c).replace('\n', ' '))
-                    for c in CONN_ORDER]
-    axes[-1].legend(
-        handles=algo_handles + [mpatches.Patch(visible=False)] + conn_handles,
-        title='Algorithm / Connectivity', fontsize=7,
-        title_fontsize=8, loc='lower right')
+        if conn == CONN_ORDER[-1]:
+            ax.legend(title='Algorithm', fontsize=7,
+                      title_fontsize=8, loc='best')
 
-    plt.suptitle('Trade-off: Mission Reward vs Earliest Response Time',
-                 fontsize=12, y=1.01)
+    plt.suptitle(
+        f'{MISSION_FULL_LABELS["Urgency"]} — Requirement Satisfaction\n'
+        f'(efficient algorithms appear bottom-right with high coverage '
+        f'and fast response)',
+        fontsize=12, y=1.02)
     plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_scatter.png')
+    save_plot(save_dir, 'Plot4_6_1-Urgency_Requirements.png')
     plt.close()
 
 
 # =============================================================================
-#  PLOT 9 -- Communication Load
+#  FIGURE 6b — Revisits: Reobservation Time vs 3600s target
+# =============================================================================
+
+def plot_revisit_requirements(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    metric = 'Median Task Reobservation Time [s]'
+    data   = df[(df['Mission'] == 'Revisits') &
+                (df['Algorithm'] != 'None-None')].copy()
+
+    if not _col_ok(data, metric, 'Fig 6b'):
+        return
+
+    n_conn = len(CONN_ORDER)
+    fig, axes = plt.subplots(1, n_conn, figsize=(5 * n_conn, 5), sharey=True)
+
+    for ax, conn in zip(axes, CONN_ORDER):
+        sub = data[data['Connectivity'] == conn]
+        make_boxplot(sub, metric, ax,
+                     ylabel='Median Reobservation Time'
+                     if conn == CONN_ORDER[0] else '')
+        ax.axhline(REVISIT_TARGET_S, color='#009E73',
+                   linewidth=1.4, linestyle='--', alpha=0.85)
+        ax.text(0.98, REVISIT_TARGET_S,
+                f'Target: {REVISIT_TARGET_S/60:.0f} min',
+                transform=ax.get_yaxis_transform(),
+                fontsize=7, color='#009E73', va='bottom', ha='right')
+        ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
+        ax.yaxis.set_major_formatter(
+            mticker.FuncFormatter(lambda x, _: f'{x/60:.0f} min'))
+
+    plt.suptitle(
+        f'{MISSION_FULL_LABELS["Revisits"]} — Requirement Satisfaction\n'
+        f'(taskable observations only; green dashed = 60 min target)',
+        fontsize=12, y=1.01)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_6_2-Revisit_Requirements.png')
+    plt.close()
+
+
+# =============================================================================
+#  FIGURE 6c — Co-observations: Coverage vs Observation Efficiency (scatter)
+#  x = Average Observations per Task (proxy for carpet-bombing)
+#  y = P(Event Tasked Co-observed | Co-observable)
+#  One panel per connectivity level, colour = algorithm.
+#
+#  NOTE: A future improvement is to compute per-trial the count of repeat
+#  same-parameter observations within t_corr (redundant co-obs) from the
+#  raw parquet files and add it as a summary column. This would allow a
+#  third axis or facet showing how many co-obs were "earned" vs redundant.
+# =============================================================================
+
+def plot_coobs_requirements(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    x_col = 'Average Observations per Task'
+    y_col = 'P(Event Tasked Co-observed | Co-observable)'
+    data  = df[(df['Mission'] == 'Co-observations') &
+               (df['Algorithm'] != 'None-None')].copy()
+
+    if not _col_ok(data, x_col, 'Fig 6c') or \
+       not _col_ok(data, y_col, 'Fig 6c'):
+        return
+
+    n_conn = len(CONN_ORDER)
+    fig, axes = plt.subplots(1, n_conn,
+                             figsize=(5 * n_conn, 5),
+                             sharey=True, sharex=True)
+
+    for ax, conn in zip(axes, CONN_ORDER):
+        sub = data[data['Connectivity'] == conn]
+
+        for algo in ALGO_ORDER:
+            asub = sub[sub['Algorithm'] == algo].dropna(
+                subset=[x_col, y_col])
+            if asub.empty:
+                continue
+            ax.scatter(asub[x_col], asub[y_col],
+                       color=ALGO_PALETTE[algo],
+                    #    marker=MARKER_SHAPES[algo],
+                       s=70, alpha=0.75,
+                       edgecolors='white', linewidths=0.4,
+                       zorder=3, label=algo)
+        ax.set_xlabel('Avg. Observations per Task', fontsize=9)
+        ax.set_ylabel('P(Tasked Co-obs | Co-observable)'
+                      if conn == CONN_ORDER[0] else '')
+        ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
+        ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
+
+        if conn == CONN_ORDER[-1]:
+            ax.legend(title='Algorithm', fontsize=7,
+                      title_fontsize=8, loc='best')
+
+    plt.suptitle(
+        f'{MISSION_FULL_LABELS["Co-observations"]} — '
+        f'Requirement Satisfaction\n'
+        f'(NOTE: this plot will gain additional context once per-trial\n'
+        f' redundant co-observation counts are added to the summary)',
+        fontsize=12, y=1.03)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_6_3-Coobs_Requirements.png')
+    plt.close()
+
+
+# =============================================================================
+#  FIGURE 7 — Communication Load (messages, not runtime)
 # =============================================================================
 
 def plot_communication_load(
     df: pd.DataFrame,
     save_dir: str,
-    filename_stem: str,
 ) -> None:
     metrics = [
-        ('Total Messages Broadcasted',            'Total Messages Broadcasted'),
-        ('Average Messages Broadcasted per Task',  'Avg. Messages per Task'),
+        ('Total Messages Broadcasted',
+         'Total Messages Broadcasted',
+         'Total_Messages', 1),
+        ('P(Message Broadcasted | Bid Message)',
+         'P(Bid Message | All Messages)',
+         'Bid_Message_Ratio', 2),
     ]
-    n_dp = len(DP_ORDER)
-    fig, axes = plt.subplots(2, n_dp, figsize=(5 * n_dp, 9), sharey='row')
+    data = df[df['Algorithm'] != 'None-None'].copy()
 
-    for row_i, (metric, ylabel) in enumerate(metrics):
-        if not _col_ok(df, metric, 'Plot 9'):
-            for ax in axes[row_i]:
-                ax.set_visible(False)
+    for metric, ylabel, slug, sub_idx in metrics:
+        if not _col_ok(data, metric, 'Fig 7'):
             continue
-        for col_i, dp in enumerate(DP_ORDER):
-            ax  = axes[row_i][col_i]
-            sub = df[df['Data Processing'] == dp]
-            present = [a for a in ALGO_ORDER if a in sub['Algorithm'].values]
 
-            sns.barplot(data=sub, x='Connectivity', y=metric,
-                        hue='Algorithm', hue_order=present,
-                        palette=ALGO_PALETTE, order=CONN_ORDER,
-                        errorbar='sd', width=0.7, ax=ax)
-            ax.set_xlabel('Connectivity')
-            ax.set_xticks(range(len(CONN_ORDER)))
-            ax.set_xticklabels([_conn_label(c) for c in CONN_ORDER], fontsize=8)
-            ax.set_ylabel(ylabel if col_i == 0 else '')
-            ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.6)
-            if row_i == 0:
-                ax.set_title(_dp_label(dp), fontsize=10, fontweight='bold')
-            legend = ax.get_legend()
-            if row_i == 0 and col_i == n_dp - 1:
-                ax.legend(title='Algorithm', fontsize=7,
-                          title_fontsize=8, loc='best')
-            elif legend:
-                legend.remove()
+        n_missions = len(MISSION_ORDER)
+        n_conn     = len(CONN_ORDER)
+        fig, axes  = plt.subplots(
+            n_missions, n_conn,
+            figsize=(4.5 * n_conn, 4 * n_missions),
+            sharey='row')
 
-    plt.suptitle('Communication Load by Algorithm', fontsize=12, y=1.01)
-    plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_communication.png')
-    plt.close()
+        for row_i, mission in enumerate(MISSION_ORDER):
+            for col_i, conn in enumerate(CONN_ORDER):
+                ax  = axes[row_i][col_i]
+                sub = data[(data['Mission'] == mission) &
+                           (data['Connectivity'] == conn)]
+                make_boxplot(sub, metric, ax,
+                             ylabel=ylabel if col_i == 0 else '',
+                             annotate_winner=False)
+                if row_i == 0:
+                    ax.set_title(CONN_FULL_LABELS[conn], fontsize=8,
+                                 fontweight='bold')
+                if col_i == n_conn - 1:
+                    ax.yaxis.set_label_position('right')
+                    ax.set_ylabel(MISSION_FULL_LABELS[mission], fontsize=8,
+                                  rotation=270, labelpad=14, va='bottom')
+
+        plt.suptitle(f'Communication Load — {ylabel}', fontsize=12, y=1.01)
+        plt.tight_layout()
+        save_plot(save_dir, f'Plot4_7_{sub_idx}-{slug}.png')
+        plt.close()
 
 
 # =============================================================================
-#  PLOT 10 -- Seasonal Sensitivity (full dataset only)
+#  FIGURE 8 — Seasonal Sensitivity
+#  Lines per Algorithm, one panel per Mission.
+#  August dates marked with a different marker (peak fire season).
 # =============================================================================
 
 def plot_seasonal_sensitivity(
     df: pd.DataFrame,
     save_dir: str,
-    filename_stem: str,
 ) -> None:
-    if df['Date'].nunique() < 2:
-        print('  [Plot 10] Skipped -- requires full multi-date dataset.')
+    metric = 'Total Obtained Reward'
+    data   = df[df['Algorithm'] != 'None-None'].copy()
+    dates  = sorted(data['Date'].dropna().unique())
+
+    if len(dates) < 2:
+        print('  [Fig 8] Skipped -- requires multiple dates.')
         return
 
-    n_conn = len(CONN_ORDER)
-    fig, axes = plt.subplots(1, n_conn, figsize=(6 * n_conn, 5), sharey=True)
+    fig, axes = plt.subplots(
+        1, len(MISSION_ORDER),
+        figsize=(6 * len(MISSION_ORDER), 5), sharey=False)
 
-    for ax, conn in zip(axes, CONN_ORDER):
-        sub = df[df['Connectivity'] == conn].sort_values('Date')
+    for ax, mission in zip(axes, MISSION_ORDER):
+        sub = data[data['Mission'] == mission].sort_values('Date')
+
         for algo in ALGO_ORDER:
             asub  = sub[sub['Algorithm'] == algo]
-            means = asub.groupby('Date')['Total Obtained Reward [norm]'].mean()
-            stds  = asub.groupby('Date')['Total Obtained Reward [norm]'].std(
-                ddof=0).fillna(0)
-            dates, ys, es = means.index.tolist(), means.values, stds.values
-            spec  = ALGO_LINESTYLES[algo]
-            line, = ax.plot(dates, ys, color=ALGO_PALETTE[algo],
-                            linewidth=1.6, marker='o', markersize=5,
+            means = asub.groupby('Date', observed=True)[metric].mean()
+            q25   = asub.groupby('Date', observed=True)[metric].quantile(0.25)
+            q75   = asub.groupby('Date', observed=True)[metric].quantile(0.75)
+
+            d_list = [d for d in dates if d in means.index]
+            ys     = [means[d] for d in d_list]
+            lo     = [q25[d]   for d in d_list]
+            hi     = [q75[d]   for d in d_list]
+            if not ys:
+                continue
+
+            spec = ALGO_LINESTYLES[algo]
+            xs = list(range(len(d_list)))
+
+            # Draw line first
+            line, = ax.plot(xs, ys,
+                            color=ALGO_PALETTE[algo], linewidth=1.6,
                             linestyle='solid' if spec == '' else 'dashed',
-                            label=algo)
+                            label=algo, zorder=2)
             _apply_linestyle(line, algo)
-            ax.fill_between(dates, ys - es, ys + es,
+            ax.fill_between(xs, lo, hi,
                             color=ALGO_PALETTE[algo], alpha=0.10)
 
-        ax.set_title(f'Connectivity: {_conn_label(conn).replace(chr(10), " ")}',
-                     fontsize=10, fontweight='bold')
-        ax.set_xlabel('Simulation Date')
-        ax.set_ylabel('Total Obtained Reward (normalised)'
-                       if conn == CONN_ORDER[0] else '')
-        ax.tick_params(axis='x', rotation=30)
+            # Overlay markers — star for August, circle otherwise
+            for xi, (d, y) in enumerate(zip(d_list, ys)):
+                is_august = d[5:7] == '08'   # check MM portion of YYYY-MM-DD
+                mkr = '*' if is_august else 'o'
+                mks = 11  if is_august else 5
+                ax.plot(xi, y, marker=mkr, markersize=mks,
+                        color=ALGO_PALETTE[algo],
+                        markeredgecolor='white' if not is_august else 'black',
+                        markeredgewidth=0.4, zorder=4)
+
+        ax.set_xticks(range(len(d_list)))
+        ax.set_xticklabels(d_list, rotation=35, ha='right', fontsize=7)
+        ax.set_xlabel('Simulation Date', fontsize=9)
+        ax.set_ylabel('Total Obtained Reward'
+                      if mission == MISSION_ORDER[0] else '')
+        ax.set_title(MISSION_FULL_LABELS[mission], fontsize=10,
+                     fontweight='bold')
         ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
-        ax.set_ylim(-0.02, 1.05)
-        if conn == CONN_ORDER[-1]:
+
+        if mission == MISSION_ORDER[-1]:
             ax.legend(title='Algorithm', fontsize=7,
                       title_fontsize=8, loc='best')
 
-    plt.suptitle('Seasonal Sensitivity of Mission Reward by Algorithm',
-                 fontsize=12, y=1.01)
+    # Star marker note
+    fig.text(0.5, -0.03,
+             '★ = August date (peak fire season)',
+             ha='center', fontsize=8, color='#555555', style='italic')
+
+    plt.suptitle(
+        'Seasonal Sensitivity of Mission Reward\n'
+        '(shading = IQR across connectivity × data processing)',
+        fontsize=12, y=1.02)
     plt.tight_layout()
-    save_plot(save_dir, f'{filename_stem}_seasonal.png')
+    save_plot(save_dir, 'Plot4_8_1-Seasonal_Sensitivity.png')
     plt.close()
 
+
+# =============================================================================
+#  FIGURE 1b — Unified MILP-Normalised Reward by Algorithm
+#  Single plot, all missions combined, no faceting by connectivity/DP/date.
+#  Analogous to the prior experiment's normalised reward overview.
+#  MILP excluded from bars; gray dashed line at y=1.0 is the MILP reference.
+# =============================================================================
+
+def plot_unified_normalised_reward(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    metric = 'Reward / MILP'
+    data   = df[(df['Algorithm'] != 'None-None') &
+                (df['Algorithm'] != 'MILP')].copy()
+
+    if metric not in data.columns or data[metric].isna().all():
+        print('  [Fig 1b] Reward / MILP column absent or all-NaN — skipping.')
+        return
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+    make_boxplot(data, metric, ax,
+                 ylabel='Reward / MILP Reward',
+                 milp_line=True)
+
+    ax.axhline(1.0, color=ALGO_PALETTE['MILP'], linewidth=1.4,
+               linestyle='--', alpha=0.8)
+    ax.text(len(_algo_present(data)) - 0.5, 1.01,
+            'MILP = 1.0', fontsize=7.5,
+            color=ALGO_PALETTE['MILP'], ha='right', va='bottom')
+    ax.set_xlabel('Algorithm Configuration', fontsize=10)
+
+    # Add legend for MILP reference line
+    milp_handle = matplotlib.lines.Line2D(
+        [], [], color=ALGO_PALETTE['MILP'], linewidth=1.4,
+        linestyle='--', alpha=0.8, label='MILP reference (1.0)')
+    ax.legend(handles=[milp_handle], fontsize=8, loc='upper left')
+
+    plt.suptitle(
+        'Mission Reward by Algorithm — MILP-Normalised\n'
+        '(all missions, connectivity levels, data processing modes combined)',
+        fontsize=12, y=1.02)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_1b_1-Mission_Reward_Norm_Unified.png')
+    plt.close()
+
+
+# =============================================================================
+#  FIGURE 2b — Normalised Decomposition Heatmap
+#  Same 3×3 Preplanner×Replanner grid as Fig 2, but values are Reward / MILP.
+#  MILP row is retained since MILP is the reference — it will show 1.0.
+#  Color scale: yellow = below MILP, red = above MILP, centred at 1.0.
+# =============================================================================
+
+def plot_normalised_decomposition_heatmap(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    metric = 'Reward / MILP'
+
+    row_labels = ['MILP\n(Centralized)', 'DP\n(Onboard)', 'None\n(No Pre)']
+    col_labels  = ['No\nReplanner', 'Greedy', 'SC-CBBA']
+
+    algo_cell = {
+        'MILP':       (0, 0),
+        'DP':         (1, 0),
+        'DP-GR':      (1, 1),
+        'DP-SC-CBBA': (1, 2),
+        'None-None':  (2, 0),
+        'GR':         (2, 1),
+        'SC-CBBA':    (2, 2),
+    }
+
+    n_missions = len(MISSION_ORDER)
+    n_dp       = len(DP_ORDER)
+
+    # Centre colour scale at 1.0 (MILP reference)
+    vals_all = df[metric].dropna()
+    if vals_all.empty:
+        print('  [Fig 2b] Reward / MILP column absent — skipping.')
+        return
+    vmax = max(abs(vals_all.max() - 1.0), abs(vals_all.min() - 1.0)) + 0.05
+    # Diverging: below 1.0 = yellow/white, above 1.0 = orange/red
+    # Use RdYlGn reversed so red = high, centred at 1.0
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=1.0 - vmax,
+                                           vcenter=1.0,
+                                           vmax=1.0 + vmax)
+    cmap = 'RdYlGn'   # green = above MILP, red = below MILP
+    # cmap = 'YlOrRd'
+
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+
+    fig, axes = plt.subplots(
+        n_missions, n_dp,
+        figsize=(4.5 * n_dp, 4.2 * n_missions),
+        sharey='row')
+
+    for row_i, mission in enumerate(MISSION_ORDER):
+        mission_sub = df[df['Mission'] == mission]
+
+        for col_i, dp in enumerate(DP_ORDER):
+            ax  = axes[row_i][col_i]
+            sub = mission_sub[mission_sub['Data Processing'] == dp]
+            grid = np.full((3, 3), np.nan)
+            text = [[''] * 3 for _ in range(3)]
+
+            for algo, (ri, ci) in algo_cell.items():
+                vals = sub[sub['Algorithm'] == algo][metric].dropna()
+                if len(vals):
+                    m, s = vals.mean(), vals.std(ddof=0)
+                    grid[ri, ci] = m
+                    text[ri][ci] = f'{m:.2f}\n±{s:.2f}'
+
+            masked = np.ma.masked_invalid(grid)
+            ax.imshow(masked, cmap=cmap, norm=norm, aspect='auto')
+
+            for ri in range(3):
+                for ci in range(3):
+                    if text[ri][ci]:
+                        val = masked[ri, ci]
+                        # dark text near centre, light text at extremes
+                        fc = 'black' if abs(val - 1.0) < vmax * 0.5 else 'white'
+                        ax.text(ci, ri, text[ri][ci],
+                                ha='center', va='center',
+                                fontsize=7, color=fc)
+
+            # None-None: gray + hatch
+            nn_r, nn_c = algo_cell['None-None']
+            ax.add_patch(plt.Rectangle(
+                (nn_c - 0.5, nn_r - 0.5), 1, 1,
+                facecolor='#CCCCCC', hatch='//',
+                edgecolor='#777777', linewidth=0.8, zorder=2))
+            ax.text(nn_c, nn_r, 'Passive\n(ref.)',
+                    ha='center', va='center', fontsize=6,
+                    color='#444444', style='italic', zorder=3)
+
+            ax.set_xticks([0, 1, 2])
+            ax.set_xticklabels(col_labels, fontsize=7)
+            ax.set_yticks([0, 1, 2])
+            ax.set_yticklabels(row_labels, fontsize=7)
+            ax.set_xlabel('Replanner', fontsize=8)
+            if col_i == 0:
+                ax.set_ylabel('Preplanner', fontsize=8)
+            ax.axhline(0.5, color='white', linewidth=2)
+
+            if row_i == 0:
+                ax.set_title(DP_LABELS[dp], fontsize=9, fontweight='bold')
+            if col_i == n_dp - 1:
+                ax.yaxis.set_label_position('right')
+                ax.set_ylabel(MISSION_FULL_LABELS[mission], fontsize=9,
+                              rotation=270, labelpad=16, va='bottom')
+
+    plt.tight_layout(rect=[0, 0, 0.88, 1])
+    cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.70])
+    cb = fig.colorbar(sm, cax=cbar_ax, label='Reward / MILP Reward')
+    cb.ax.axhline(1.0, color='black', linewidth=1.0, linestyle='--')
+    # cb.ax.text(2.5, 1.0, 'MILP', fontsize=6, va='center', color='black')
+
+    plt.suptitle(
+        'Reward Decomposition (MILP-Normalised): Preplanner × Replanner\n',
+        # '(green = above MILP; red = below MILP; rows = Mission; '
+        # 'cols = Data Processing)',
+        fontsize=12, y=1.01)
+    save_plot(save_dir, 'Plot4_2b_1-Decomposition_Heatmap_Norm.png')
+    plt.close()
+
+# =============================================================================
+#  FIGURE 2c — Cumulative Normalised Heatmap
+#  Single 3×3 Preplanner×Replanner grid, all missions/connectivity/DP/dates
+#  collapsed into one mean Reward/MILP value per cell.
+#  Diverging colour scale centred at 1.0 (MILP reference).
+# =============================================================================
+
+def plot_cumulative_normalised_heatmap(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    metric = 'Reward / MILP'
+    if metric not in df.columns or df[metric].isna().all():
+        print('  [Fig 2c] Reward / MILP absent — skipping.')
+        return
+
+    row_labels = ['MILP\n(Centralized)', 'DP\n(Onboard)', 'None\n(No Pre)']
+    col_labels  = ['No\nReplanner', 'Greedy', 'SC-CBBA']
+
+    algo_cell = {
+        'MILP':       (0, 0),
+        'DP':         (1, 0),
+        'DP-GR':      (1, 1),
+        'DP-SC-CBBA': (1, 2),
+        'None-None':  (2, 0),
+        'GR':         (2, 1),
+        'SC-CBBA':    (2, 2),
+    }
+
+    grid = np.full((3, 3), np.nan)
+    text = [[''] * 3 for _ in range(3)]
+
+    for algo, (ri, ci) in algo_cell.items():
+        vals = df[df['Algorithm'] == algo][metric].dropna()
+        if len(vals):
+            m, s = vals.mean(), vals.std(ddof=0)
+            n    = len(vals)
+            grid[ri, ci] = m
+            text[ri][ci] = f'{m:.2f}\n±{s:.2f}\n(n={n})'
+
+    vals_all = df[metric].dropna()
+    vmax = max(abs(vals_all.max() - 1.0), abs(vals_all.min() - 1.0)) + 0.05
+    norm = matplotlib.colors.TwoSlopeNorm(
+        vmin=1.0 - vmax, vcenter=1.0, vmax=1.0 + vmax)
+    cmap = 'RdYlGn'
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+    masked = np.ma.masked_invalid(grid)
+    im = ax.imshow(masked, cmap=cmap, norm=norm, aspect='auto')
+
+    for ri in range(3):
+        for ci in range(3):
+            if text[ri][ci]:
+                val = masked[ri, ci]
+                fc = 'black' if abs(val - 1.0) < vmax * 0.5 else 'white'
+                ax.text(ci, ri, text[ri][ci],
+                        ha='center', va='center', fontsize=9, color=fc)
+
+    # None-None: gray + hatch
+    nn_r, nn_c = algo_cell['None-None']
+    ax.add_patch(plt.Rectangle(
+        (nn_c - 0.5, nn_r - 0.5), 1, 1,
+        facecolor='#CCCCCC', hatch='//',
+        edgecolor='#777777', linewidth=0.8, zorder=2))
+    ax.text(nn_c, nn_r, 'Passive\n(ref.)',
+            ha='center', va='center', fontsize=7,
+            color='#444444', style='italic', zorder=3)
+
+    ax.set_xticks([0, 1, 2])
+    ax.set_xticklabels(col_labels, fontsize=9)
+    ax.set_yticks([0, 1, 2])
+    ax.set_yticklabels(row_labels, fontsize=9)
+    ax.set_xlabel('Replanner', fontsize=10)
+    ax.set_ylabel('Preplanner', fontsize=10)
+    ax.axhline(0.5, color='white', linewidth=2)
+
+    cb = plt.colorbar(im, ax=ax, shrink=0.85, label='Reward / MILP Reward')
+    cb.ax.axhline(1.0, color='black', linewidth=1.0, linestyle='--')
+    # cb.ax.text(2.8, 1.0, 'MILP', fontsize=7, va='center', color='black')
+
+    plt.suptitle(
+        'Cumulative Normalised Reward: Preplanner × Replanner\n'
+        '(all missions, connectivity levels, data processing modes combined;\n'
+        ' green = above MILP, red = below MILP)',
+        fontsize=11, y=1.02)
+    plt.tight_layout()
+    save_plot(save_dir, 'Plot4_2c_1-Cumulative_Normalised_Heatmap.png')
+    plt.close()
 
 # =============================================================================
 #  MAIN DRIVER
 # =============================================================================
 
-def generate_plots(csv_path: str, trial_name: str,
-                   subset: str = 'abridged') -> None:
+def generate_plots(
+    csv_path: str,
+    trial_name: str,
+    trial_csv_path: str | None = None,
+    filter_date: str | None = None,
+    complete_date: str = '2019-02-15',
+) -> None:
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f'CSV not found: {csv_path}')
 
-    base_dir = os.path.join(
-        'experiments', '2_centralized_vs_decentralized', 'analysis')
-    df_all   = load_and_prepare(csv_path)
+    df_all   = load_and_prepare(csv_path, trial_csv_path=trial_csv_path)
     date_str = datetime.now().strftime('%Y-%m-%d')
 
-    subsets_to_run: list[tuple[str, pd.DataFrame]] = []
-    if subset in ('abridged', 'both'):
-        df_ab = df_all[df_all['in_abridged']].copy()
-        subsets_to_run.append(('abridged', df_ab)) if not df_ab.empty \
-            else print('  [abridged] No rows -- skipping.')
-    if subset in ('full', 'both'):
-        if 'in_full' not in df_all.columns:
-            print('  [full] `in_full` column absent -- skipping.')
-        else:
-            df_f = df_all[df_all['in_full']].copy()
-            subsets_to_run.append(('full', df_f)) if not df_f.empty \
-                else print('  [full] No rows -- skipping.')
+    base_dir = os.path.join(
+        'experiments', '2_centralized_vs_decentralized', 'analysis')
+    save_dir = os.path.join(
+        base_dir, 'plots', f'{trial_name}_P{date_str}')
+    os.makedirs(save_dir, exist_ok=True)
 
-    for tag, df in subsets_to_run:
-        stem_prefix = f'{trial_name}_{tag}'
-        save_dir = os.path.join(base_dir, 'plots', 'rq',
-                                f'{stem_prefix}_P{date_str}')
-        os.makedirs(save_dir, exist_ok=True)
+    df = df_all[df_all['Date'] == filter_date].copy() \
+        if filter_date else df_all
 
-        print(f'\n{"="*60}')
-        print(f'  Subset: {tag}  ({len(df)} trials)')
-        print(f'  Output -> {save_dir}')
-        print(f'{"="*60}')
+    print(f'\n{"="*65}')
+    print(f'  Trial: {trial_name}')
+    print(f'  Rows:  {len(df)} trials')
+    print(f'  Date filter: {filter_date or "all"}')
+    print(f'  Output: {save_dir}')
+    print(f'{"="*65}')
 
-        print('  Plot 1a -- Mission Reward (absolute)')
-        plot_metric(df, 'Total Obtained Reward', 'Total Obtained Reward',
-                    'Mission Reward by Algorithm', save_dir,
-                    f'{stem_prefix}_Plot1a-Mission_Reward')
+    print('  Fig 1b -- Unified Normalised Reward (all conditions)')
+    plot_unified_normalised_reward(df, save_dir)
 
-        print('  Plot 1b -- Mission Reward (normalised)')
-        plot_metric(df, 'Total Obtained Reward [norm]',
-                    'Total Obtained Reward (normalised)',
-                    'Normalised Mission Reward by Algorithm', save_dir,
-                    f'{stem_prefix}_Plot1b-Mission_Reward_Norm',
-                    hline_at_one=True, primal_ref=True)
+    print('  Fig 1 -- Mission Reward Degradation (all + per-date)')
+    plot_mission_degradation(df, save_dir)
 
-        print('  Plot 2a -- Decomposition heatmap')
-        plot_decomposition_heatmap(
-            df, metric='Total Obtained Reward [norm]',
-            ylabel='Reward (normalised)',
-            suptitle='Algorithm Decomposition: Preplanner x Replanner',
-            save_dir=save_dir,
-            filename_stem=f'{stem_prefix}_Plot2a-Decomposition')
+    print('  Fig 2 -- Decomposition Heatmap (supplemental)')
+    plot_decomposition_heatmap(df_all, save_dir)
 
-        print('  Plot 2b -- Decomposition box+strip')
-        plot_decomposition_boxplots(
-            df, metric='Total Obtained Reward [norm]',
-            ylabel='Total Obtained Reward (normalised)',
-            suptitle='Algorithm Decomposition by Detection Mode',
-            save_dir=save_dir,
-            filename_stem=f'{stem_prefix}_Plot2b-Decomposition',
-            hline_at_one=True)
+    print('  Fig 2b -- Normalised Decomposition Heatmap')
+    plot_normalised_decomposition_heatmap(df_all, save_dir)
 
-        print('  Plot 3 -- Observation Probability (4 panels)')
-        plot_metric(
-            df,
-            metrics=[
-                'P(Task Observed)',
-                'P(Task Observed | Task Observable)',
-                'P(Event Observed | Event Detected)',
-                'P(Event Observed | Event Observable and Detected)',
-            ],
-            ylabels=[
-                'P(Task Observed)',
-                'P(Task Obs | Observable)',
-                'P(Event Obs | Detected)',
-                'P(Event Obs | Obs.&Det.)',
-            ],
-            suptitle='Observation Probability by Algorithm',
-            save_dir=save_dir,
-            filename_stem=f'{stem_prefix}_Plot3-Obs_Probability')
+    print('  Fig 2c -- Cumulative Normalised Heatmap')
+    plot_cumulative_normalised_heatmap(df_all, save_dir)
 
-        print('  Plot 4a -- Co-observation Quality')
-        plot_metric(
-            df,
-            metrics=['P(Event Co-observed)',
-                     'P(Event Co-observed | Co-observable)'],
-            ylabels=['P(Event Co-obs)',
-                     'P(Event Co-obs | Co-obs.)'],
-            suptitle='Co-observation Quality by Algorithm',
-            save_dir=save_dir,
-            filename_stem=f'{stem_prefix}_Plot4a-Coobs_Quality')
+    print('  Fig 3 -- Two-Strategy Scatter (3 rows x 2 cols)')
+    plot_two_strategy_scatter(df, save_dir)
 
-        print('  Plot 4b -- Observations per Event')
-        if all(c in df.columns for c in [
-                'Average Observations per Event',
-                'Standard Deviation of Observations per Event',
-                'Median Observations per Event']):
-            plot_obs_distribution(
-                df,
-                mean_col='Average Observations per Event',
-                std_col='Standard Deviation of Observations per Event',
-                median_col='Median Observations per Event',
-                suptitle='Observations per Event by Algorithm',
-                ylabel='Observations per Event',
-                save_dir=save_dir,
-                filename_stem=f'{stem_prefix}_Plot4b-Obs_per_Event')
+    print('  Fig 4 -- Data Processing Effect')
+    plot_data_processing_effect(df_all, save_dir,
+                                complete_date=complete_date)
 
-        print('  Plot 5a -- Response Time')
-        plot_metric(
-            df,
-            metrics=[
-                'Average Normalized Earliest Response Time to Event',
-                'Average Normalized Latest Response Time to Event',
-                'Average Event Announcement Time [norm]',
-            ],
-            ylabels=[
-                'Avg. Norm. Earliest Response Time (Event)',
-                'Avg. Norm. Latest Response Time (Event)',
-                'Avg. Norm. Time to Announcement',
-            ],
-            suptitle='Event Response Time & Announcement Latency by Algorithm',
-            save_dir=save_dir,
-            filename_stem=f'{stem_prefix}_Plot5a-Response_Time',
-            response_time_note=True)
+    print('  Fig 5 -- Connectivity Effect (per mission)')
+    plot_connectivity_effect(df, save_dir)
 
-        print('  Plot 5b -- Event Latency Budget')
-        plot_latency_budget(df, save_dir,
-                            f'{stem_prefix}_Plot5b-Latency_Budget')
+    print('  Fig 6a -- Urgency Requirements')
+    plot_urgency_requirements(df, save_dir)
 
-        print('  Plot 6 -- Connectivity x Detection Interaction')
-        plot_interaction(
-            df,
-            metrics=[
-                'Total Obtained Reward [norm]',
-                'P(Task Observed | Task Observable)',
-                'P(Event Co-observed | Co-observable)',
-                'Average Normalized Earliest Response Time to Event',
-            ],
-            ylabels=[
-                'Reward (normalised)',
-                'P(Task Obs | Observable)',
-                'P(Co-obs | Co-obs.)',
-                'Avg. Norm. Earliest Response Time',
-            ],
-            suptitle='Effect of Detection Mode by Connectivity Level',
-            save_dir=save_dir,
-            filename_stem=f'{stem_prefix}_Plot6-Interaction',
-            hline_at_one=True)
+    print('  Fig 6b -- Revisit Requirements')
+    plot_revisit_requirements(df, save_dir)
 
-        print('  Plot 7 -- Detection Pipeline Cascade')
-        plot_detection_cascade(df, save_dir,
-                               f'{stem_prefix}_Plot7-Detection_Cascade')
+    print('  Fig 6c -- Co-observations Requirements')
+    plot_coobs_requirements(df, save_dir)
 
-        print('  Plot 8 -- Trade-off Scatter')
-        plot_tradeoff_scatter(df, save_dir,
-                              f'{stem_prefix}_Plot8-Tradeoff_Scatter')
+    print('  Fig 7 -- Communication Load')
+    plot_communication_load(df, save_dir)
 
-        print('  Plot 9 -- Communication Load')
-        plot_communication_load(df, save_dir,
-                                f'{stem_prefix}_Plot9-Communication_Load')
-
-        print('  Plot 10 -- Seasonal Sensitivity')
-        plot_seasonal_sensitivity(df, save_dir,
-                                  f'{stem_prefix}_Plot10-Seasonal')
+    print('  Fig 8 -- Seasonal Sensitivity')
+    plot_seasonal_sensitivity(df, save_dir)
 
     print('\nDONE.')
 
@@ -1177,24 +1639,34 @@ def generate_plots(csv_path: str, trial_name: str,
 # =============================================================================
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='Generate analysis figures for the SC-CBBA study.')
     parser.add_argument(
         '--csv',
         default=os.path.join(
             'experiments', '2_centralized_vs_decentralized', 'analysis',
             'compiled',
-            'full_factorial_trials_2026-05-22_compiled_results.csv'))
-    parser.add_argument('--trial-name',
-                        default='full_factorial_trials_2026-05-22')
-    parser.add_argument('--abridged', action='store_true')
-    parser.add_argument('--full',     action='store_true')
+            'full_factorial_trials_2026-05-25_compiled_results.csv'))
+    parser.add_argument(
+        '--trial-name', default='full_factorial_trials_2026-05-25')
+    parser.add_argument(
+        '--trial-csv',
+        default=os.path.join(
+            'experiments', '2_centralized_vs_decentralized', 'resources',
+            'trials', 'full_factorial_trials_2026-05-25.csv'),
+        help='Trial definition CSV for completeness filtering')
+    parser.add_argument(
+        '--date', default=None,
+        help='Filter to a single simulation date (e.g. 2019-02-15)')
+    parser.add_argument(
+        '--complete-date', default='2019-02-15',
+        help='Fully-complete date for Fig 4 (default: 2019-02-15)')
     args = parser.parse_args()
 
-    if not args.abridged and not args.full:
-        args.abridged = True
-
-    subset = ('both'     if args.abridged and args.full else
-              'abridged' if args.abridged else 'full')
-
-    generate_plots(csv_path=args.csv, trial_name=args.trial_name,
-                   subset=subset)
+    generate_plots(
+        csv_path=args.csv,
+        trial_name=args.trial_name,
+        trial_csv_path=args.trial_csv,
+        filter_date=args.date,
+        complete_date=args.complete_date,
+    )
