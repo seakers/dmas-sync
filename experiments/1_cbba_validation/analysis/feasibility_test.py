@@ -136,7 +136,7 @@ def generate_plots(trial_name: str,
         panel_vals=sorted(df['Num Sats'].unique()),
         panel_title_fn=lambda n: rf'$N_{{sat}} = {n}$',
         suptitle='Task Outcome Decomposition by Number of Satellites',
-        filename_stem='PlotF1a-Task_Accessibility_by_NumSats',
+        filename_stem='Plot3.1.F1a-Task_Accessibility_by_NumSats',
     )
 
     # ------------------------------------------------------------------
@@ -146,9 +146,9 @@ def generate_plots(trial_name: str,
         agg=_make_agg('Task Arrival Rate'),
         panel_col='Task Arrival Rate',
         panel_vals=sorted(df['Task Arrival Rate'].unique()),
-        panel_title_fn=lambda r: rf'$\lambda = {r}$',
+        panel_title_fn=lambda r: rf'$\gamma = {r}$ (1/day)',
         suptitle='Task Outcome Decomposition by Task Arrival Rate',
-        filename_stem='PlotF1b-Task_Accessibility_by_TaskRate',
+        filename_stem='Plot3.1.F1b-Task_Accessibility_by_TaskRate',
     )
 
     # ------------------------------------------------------------------
@@ -204,14 +204,14 @@ def generate_plots(trial_name: str,
     axes[0].set_ylabel('Fraction of Tasks')
     axes[0].legend(fontsize=8, loc='best')
     plt.suptitle(
-        r'CBBA Task Outcome Decomposition by Latency',
+        r'SC-CBBA Task Outcome Decomposition by Latency',
         # r' - Scheduling failure driven by latency; access failure driven by constellation size',
         fontsize=12
     )
     plt.tight_layout()
 
     save_plot(base_dir, local_base_dir, save_dir, local_save_dir,
-              'PlotF1c-CBBA_Task_Accessibility_by_Latency')
+              'Plot3.1.F1c-CBBA_Task_Accessibility_by_Latency.png')
     
     # ------------------------------------------------------------------
     #  PLOT F2 — Scheduling Failure Rate by Latency
@@ -273,7 +273,7 @@ def generate_plots(trial_name: str,
     plt.tight_layout()
 
     save_plot(base_dir, local_base_dir, save_dir, local_save_dir,
-                'PlotF2-Scheduling_Failure_by_Latency')
+                'Plot3.1.F2-Scheduling_Failure_by_Latency.png')
 
 if __name__ == '__main__':
     local_base_dir = os.path.join('experiments', '1_cbba_validation', 'analysis')

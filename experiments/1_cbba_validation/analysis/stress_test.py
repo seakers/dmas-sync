@@ -138,7 +138,7 @@ def generate_plots(trial_name : str,
     # ------------------------------------------------------------------
     #  PLOT 1 (line) — Runtime (two-panel: vs. Task Arrival Rate | vs. Num Sats)
     # ------------------------------------------------------------------
-    f, (ax1a, ax1b) = plt.subplots(1, 2, figsize=(16, 6))
+    f, (ax1a, ax1b) = plt.subplots(1, 2, figsize=(16, 6), sharey=True)
     f.suptitle('Simulation Runtime Scaling', fontsize=14)
 
     # Panel (a): Runtime vs. Task Arrival Rate
@@ -154,7 +154,7 @@ def generate_plots(trial_name : str,
                 ax=ax1a
             )
     ax1a.grid(True, which='both', linestyle='--', linewidth=0.4)
-    ax1a.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax1a.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax1a.set_ylabel('Simulation Runtime (s)')
     ax1a.set_xlim(min(n_tasks_values), max(n_tasks_values))
     ax1a.set_title('(a)')
@@ -184,7 +184,7 @@ def generate_plots(trial_name : str,
     plt.tight_layout()
 
     # define filename for plot
-    plot_filename = f'Plot1-Simulation_Runtime_s-line.png'
+    plot_filename = f'Plot3.1.1-Simulation_Runtime_s-line.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
 
@@ -199,14 +199,14 @@ def generate_plots(trial_name : str,
     # ------------------------------------------------------------------
     #  PLOT 1 (scatter) — Runtime scatter+trendline
     # ------------------------------------------------------------------
-    f, (ax1a, ax1b) = plt.subplots(1, 2, figsize=(16, 6))
+    f, (ax1a, ax1b) = plt.subplots(1, 2, figsize=(16, 6), sharey=True)
     f.suptitle('Simulation Runtime Scaling', fontsize=14)
 
     ax1a.set_xscale("log"); ax1a.set_yscale("log")
     _scatter_trendline(ax1a, filtered_df, 'Task Arrival Rate', 'Simulation Runtime [s]',
                        'Num Sats', sats_color_map)
     ax1a.grid(True, which='both', linestyle='--', linewidth=0.4)
-    ax1a.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax1a.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax1a.set_ylabel('Simulation Runtime (s)')
     # ax1a.set_xlim(min(n_tasks_values), max(n_tasks_values))
     ax1a.set_title('(a)')
@@ -224,7 +224,7 @@ def generate_plots(trial_name : str,
     ax1b.set_title('(b)')
 
     plt.tight_layout()
-    plot_filename = 'Plot1-Simulation_Runtime_s-scatter.png'
+    plot_filename = 'Plot3.1.1-Simulation_Runtime_s-scatter.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     plt.savefig(save_path)
@@ -252,7 +252,7 @@ def generate_plots(trial_name : str,
                 ax=ax2aa
             )
     ax2aa.grid(True, which='both', linestyle='--', linewidth=0.4)
-    # ax2aa.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    # ax2aa.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax2aa.set_xlabel('')
     ax2aa.tick_params(axis='x', labelbottom=False)
     ax2aa.set_ylabel('Total Messages Broadcasted')
@@ -273,7 +273,7 @@ def generate_plots(trial_name : str,
                 ax=ax2ab
             )
     ax2ab.grid(True, which='both', linestyle='--', linewidth=0.4)
-    ax2ab.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax2ab.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax2ab.set_ylabel('Average Messages Broadcasted per Task')
     ax2ab.set_xlim(min(n_tasks_values), max(n_tasks_values))
     ax2ab.set_title('(b)')
@@ -281,7 +281,7 @@ def generate_plots(trial_name : str,
     plt.tight_layout()
 
     # define filename for plot
-    plot_filename = f'Plot2a-Messages_Broadcasted_vs_Task_Arrival_Rate-line.png'
+    plot_filename = f'Plot3.1.2a-Messages_Broadcasted_vs_Task_Arrival_Rate-line.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
 
@@ -304,7 +304,7 @@ def generate_plots(trial_name : str,
     _scatter_trendline(ax2aa, filtered_df, 'Task Arrival Rate', 'Total Messages Broadcasted',
                        'Num Sats', sats_color_map)
     ax2aa.grid(True, which='both', linestyle='--', linewidth=0.4)
-    # ax2aa.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    # ax2aa.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax2aa.set_xlabel('')
     ax2aa.tick_params(axis='x', labelbottom=False)
     ax2aa.set_ylabel('Total Messages Broadcasted')
@@ -316,13 +316,13 @@ def generate_plots(trial_name : str,
                        'Num Sats', sats_color_map, annotate=True)
     ax2ab.get_legend().remove()
     ax2ab.grid(True, which='both', linestyle='--', linewidth=0.4)
-    ax2ab.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax2ab.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax2ab.set_ylabel('Average Messages Broadcasted per Task')
     # ax2ab.set_xlim(min(n_tasks_values), max(n_tasks_values))
     ax2ab.set_title('(b)')
 
     plt.tight_layout()
-    plot_filename = 'Plot2a-Messages_Broadcasted_vs_Task_Arrival_Rate-scatter.png'
+    plot_filename = 'Plot3.1.2a-Messages_Broadcasted_vs_Task_Arrival_Rate-scatter.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     plt.savefig(save_path)
@@ -385,7 +385,7 @@ def generate_plots(trial_name : str,
     plt.tight_layout()
 
     # define filename for plot
-    plot_filename = f'Plot2b-Messages_Broadcasted_vs_Num_Sats-line.png'
+    plot_filename = f'Plot3.1.2b-Messages_Broadcasted_vs_Num_Sats-line.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
 
@@ -431,7 +431,7 @@ def generate_plots(trial_name : str,
     ax2bb.set_title('(b)')
 
     plt.tight_layout()
-    plot_filename = 'Plot2b-Messages_Broadcasted_vs_Num_Sats-scatter.png'
+    plot_filename = 'Plot3.1.2b-Messages_Broadcasted_vs_Num_Sats-scatter.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     plt.savefig(save_path)
@@ -470,7 +470,7 @@ def generate_plots(trial_name : str,
     ax3b.set_title('(b)')
 
     plt.tight_layout()
-    plot_filename = 'Plot3a-Runtime_vs_Messages_Broadcasted.png'
+    plot_filename = 'Plot3.1.3a-Runtime_vs_Messages_Broadcasted.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     plt.savefig(save_path)
@@ -509,7 +509,7 @@ def generate_plots(trial_name : str,
     ax3b.set_title('(b)')
 
     plt.tight_layout()
-    plot_filename = 'Plot3b-Runtime_vs_Messages_Broadcasted.png'
+    plot_filename = 'Plot3.1.3b-Runtime_vs_Messages_Broadcasted.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     plt.savefig(save_path)
@@ -528,7 +528,7 @@ def generate_plots(trial_name : str,
     _scatter_trendline(ax4a, filtered_df, 'Task Arrival Rate', 'Total Obtained Reward',
                        'Num Sats', sats_color_map, trendline='log-log')
     ax4a.grid(True, which='both', linestyle='--', linewidth=0.4)
-    ax4a.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax4a.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax4a.set_ylabel('Total Obtained Reward')
     # ax4a.set_xlim(min(n_tasks_values), max(n_tasks_values))
     ax4a.set_title('(a)')
@@ -547,7 +547,7 @@ def generate_plots(trial_name : str,
     ax4b.set_title('(b)')
 
     plt.tight_layout()
-    plot_filename = 'Plot4a-Total_Obtained_Reward.png'
+    plot_filename = 'Plot3.1.4a-Total_Obtained_Reward.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     plt.savefig(save_path)
@@ -566,7 +566,7 @@ def generate_plots(trial_name : str,
     _scatter_trendline(ax4a, filtered_df, 'Task Arrival Rate', 'Total Obtained Reward [norm]',
                        'Num Sats', sats_color_map, trendline='log-x')
     ax4a.grid(True, which='both', linestyle='--', linewidth=0.4)
-    ax4a.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax4a.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax4a.set_ylabel('Total Obtained Reward (normalized)')
     # ax4a.set_xlim(min(n_tasks_values), max(n_tasks_values))
     ax4a.set_title('(a)')
@@ -585,7 +585,7 @@ def generate_plots(trial_name : str,
     ax4b.set_title('(b)')
 
     plt.tight_layout()
-    plot_filename = 'Plot4b-Total_Obtained_Reward_normalized.png'
+    plot_filename = 'Plot3.1.4b-Total_Obtained_Reward_normalized.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     plt.savefig(save_path)
@@ -605,7 +605,7 @@ def generate_plots(trial_name : str,
     _scatter_trendline(ax5a, filtered_df, 'Task Arrival Rate', 'Total Obtained Utility [norm]',
                        'Num Sats', sats_color_map, trendline='log-x')
     ax5a.grid(True, which='both', linestyle='--', linewidth=0.4)
-    ax5a.set_xlabel('Task Arrival Rate $\lambda$ (1/day)')
+    ax5a.set_xlabel('Task Arrival Rate $\gamma$ (1/day)')
     ax5a.set_ylabel('Total Obtained Utility (normalized)')
     # ax5a.set_xlim(min(n_tasks_values), max(n_tasks_values))
     ax5a.set_title('(a)')
@@ -624,7 +624,7 @@ def generate_plots(trial_name : str,
     ax5b.set_title('(b)')
 
     plt.tight_layout()
-    plot_filename = 'Plot5-Utility_normalized.png'
+    plot_filename = 'Plot3.1.5-Utility_normalized.png'
     save_path = os.path.join(save_dir, plot_filename)
     local_save_path = os.path.join(local_save_dir, plot_filename)
     plt.savefig(save_path)

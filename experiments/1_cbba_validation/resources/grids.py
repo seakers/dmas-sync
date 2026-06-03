@@ -55,7 +55,8 @@ def create_uniform_grid(n_points : int,
         filename = f'uniform_grid_{n_points}_latbounds-{bounds[0]}to{bounds[1]}.csv'
 
     # set grid path
-    grid_path : str = os.path.join('grids', filename)
+    grid_path : str = os.path.join("experiments", "1_cbba_validation", "resources", "grids", filename)
+    # grid_path : str = os.path.join('grids', filename)
 
     # check if grid already exists
     if os.path.isfile(grid_path) and not overwrite: return grid_path
@@ -119,7 +120,8 @@ def create_random_grid_uniform(n_points : int,
         filename = f'random_uniform_grid_{n_points}_latbounds-{bounds[0]}to{bounds[1]}_seed-{seed}.csv'
 
     # set grid path
-    grid_path : str = os.path.join('grids', filename)
+    # grid_path : str = os.path.join('grids', filename)
+    grid_path : str = os.path.join('experiments', '1_cbba_validation', 'resources', 'grids', filename)
 
     # check if grid already exists
     if os.path.isfile(grid_path) and not overwrite: return grid_path
@@ -172,7 +174,8 @@ def create_fibonacci_grid(n_points : int,
         filename = f'fibonacci_grid_{n_points}_latbounds-{bounds[0]}to{bounds[1]}.csv'
     
     # set grid path
-    grid_path : str = os.path.join('grids', filename)
+    # grid_path : str = os.path.join('grids', filename)
+    grid_path : str = os.path.join('experiments', '1_cbba_validation', 'resources', 'grids', filename)
 
     # check if grid already exists
     if os.path.isfile(grid_path) and not overwrite: return grid_path
@@ -234,22 +237,53 @@ def plot_grid(grid_path : str, grid_type : str, rand : bool, n_points : int, inl
     lats = [lat for lat,_ in df.values]
 
     # generate plot
-    m = Basemap(projection='ortho',lat_0=45,lon_0=-100,resolution='l')
-    x, y = m(lons,lats)
-    m.drawmapboundary(fill_color='#99ffff')
-    m.fillcontinents(color='#cc9966',lake_color='#99ffff')
-    m.scatter(x,y,3,marker='o',color='k')
+    BG = 'white'
+    HIST_COLOR = '#f0c040'
+    TICK_COLOR = 'black'
+
+    fig = plt.figure(figsize=(14, 8), facecolor=BG)
+    gs = fig.add_gridspec(2, 2, width_ratios=[5, 1], height_ratios=[1, 4], hspace=0.06, wspace=0.06)
+    ax_map = fig.add_subplot(gs[1, 0])
+    ax_lon = fig.add_subplot(gs[0, 0], facecolor=BG)
+    ax_lat = fig.add_subplot(gs[1, 1], facecolor=BG)
+
+    # map
+    m = Basemap(projection='robin', lon_0=0, resolution='l', ax=ax_map)
+    x, y = m(lons, lats)
+    m.drawmapboundary(fill_color='#1a2a3a')
+    m.fillcontinents(color='#3d3d3d', lake_color='#1a2a3a')
+    m.drawparallels(np.arange(-90, 91, 30), labels=[1, 0, 0, 0], fontsize=7, color='#888888', linewidth=0.4)
+    m.drawmeridians(np.arange(-180, 181, 60), labels=[0, 0, 0, 1], fontsize=7, color='#888888', linewidth=0.4)
+    m.scatter(x, y, 1.5, marker='o', color=HIST_COLOR, alpha=0.5)
+
+    # longitude histogram (top)
+    ax_lon.hist(lons, bins=72, color=HIST_COLOR, alpha=0.75, edgecolor='none')
+    ax_lon.set_xlim(-180, 180)
+    ax_lon.set_ylabel('count', color=TICK_COLOR, fontsize=7)
+    ax_lon.xaxis.set_visible(False)
+    ax_lon.tick_params(colors=TICK_COLOR, labelsize=7)
+    for spine in ax_lon.spines.values():
+        spine.set_edgecolor('#cccccc')
+
+    # latitude histogram (right, horizontal)
+    ax_lat.hist(lats, bins=36, color=HIST_COLOR, alpha=0.75, edgecolor='none', orientation='horizontal')
+    ax_lat.set_ylim(-90, 90)
+    ax_lat.set_xlabel('count', color=TICK_COLOR, fontsize=7)
+    ax_lat.yaxis.set_visible(False)
+    ax_lat.tick_params(colors=TICK_COLOR, labelsize=7)
+    for spine in ax_lat.spines.values():
+        spine.set_edgecolor('#cccccc')
 
     # set title
     title = f"{grid_type} grid of ~{n_points} points" if not inland else f"{grid_type} inland grid of ~{n_points} points"
     if rand: title = "Random " + title
-    plt.title(title.capitalize())
+    ax_lon.set_title(title.capitalize(), color='black', fontsize=10, pad=6)
 
     # save plot
-    plt.savefig(plot_path)
+    plt.savefig(plot_path, dpi=150, bbox_inches='tight', facecolor=BG)
 
     # close plot
-    plt.close()
+    plt.close(fig)
     
 if __name__ == "__main__":
 
@@ -263,10 +297,12 @@ if __name__ == "__main__":
     seed = 1000
 
     # set number of points to sample
-    points = [1000, 5000, 10000]
+    # points = [1000, 5000, 10000]
+    points = [5000]
 
     # load trials
-    trials_path = os.path.join('trials', f'full_factorial_trials.csv')
+    trials_path = os.path.join('experiments', '1_cbba_validation', 'resources', 'trials', f'full_factorial_trials_2026-03-15.csv')
+    # trials_path = os.path.join('trials', f'full_factorial_trials_2026-03-15.csv')
     trials : pd.DataFrame = pd.read_csv(trials_path)
 
     # collect grid types, number of groundpoints and grid distribution
@@ -289,6 +325,6 @@ if __name__ == "__main__":
 
     # generate grids and plots for all types and number of groundpoints
     for n_points,grid_type,rand,inland,bounds in tqdm(grids_to_generate, desc='Generating coverage grids', unit=' grids'):
-        main(n_points, grid_type, rand, bounds, world, inland, plot=True, seed=seed, overwrite=False)
+        main(n_points, grid_type, rand, bounds, world, inland, plot=True, seed=seed, overwrite=True)
 
     print("All grids generated!")

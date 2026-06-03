@@ -1,6 +1,7 @@
 from datetime import datetime
 import os
 from matplotlib import pyplot as plt
+from matplotlib.lines import Line2D
 import pandas as pd
 import seaborn as sns
 import numpy as np
@@ -18,8 +19,8 @@ def label_condition(row):
     if pre == 'DP' and pd.isna(rep):     return 'DP'
     if pd.isna(pre) and rep == 'Greedy': return 'GR'
     if pre == 'DP'  and rep == 'Greedy': return 'DP-GR'
-    if pd.isna(pre) and rep == 'CBBA':   return 'CBBA'
-    if pre == 'DP'  and rep == 'CBBA':   return 'DP-CBBA'
+    if pd.isna(pre) and rep == 'CBBA':   return 'SC-CBBA'
+    if pre == 'DP'  and rep == 'CBBA':   return 'DP-SC-CBBA'
 
     return 'Unknown'
 
@@ -58,6 +59,10 @@ def make_boxplot(data, metric, ax, algo_order, algo_palette, ylabel=None):
         hue='Algorithm', hue_order=algo_order,
         width=0.5, linewidth=0.8, fliersize=0,
         legend=False, ax=ax,
+        showmeans=True,
+        meanline=True,
+        medianprops=dict(color='black', linewidth=0.8),
+        meanprops=dict(color='red', linewidth=1.5, linestyle='--'),
     )
     sns.stripplot(
         data=data, x='Algorithm', y=metric,
@@ -70,6 +75,10 @@ def make_boxplot(data, metric, ax, algo_order, algo_palette, ylabel=None):
     ax.set_ylabel(ylabel if ylabel else metric)
     ax.tick_params(axis='x', rotation=15)
     ax.grid(True, axis='y', linestyle='--', linewidth=0.4)
+    ax.legend(
+        handles=[Line2D([], [], color='red', linewidth=1.5, linestyle='--', label='Mean')],
+        fontsize=7, loc='upper right',
+    )
 
 
 def plot_metric(df, agg, metrics, titles, ylabels,
@@ -140,8 +149,8 @@ def plot_metric(df, agg, metrics, titles, ylabels,
             .mean()
             .reset_index()
         )
-        bar_order   = algo_order + ['Dual Bound']
-        bar_palette = {**algo_palette, 'Dual Bound': '#222222'}
+        bar_order   = algo_order + ['optimistic reference $R^{ref}$']
+        bar_palette = {**algo_palette, 'optimistic reference $R^{ref}$': '#222222'}
     else:
         bound_agg   = None
         bar_order   = algo_order
@@ -164,7 +173,7 @@ def plot_metric(df, agg, metrics, titles, ylabels,
             if bound_agg is not None:
                 bound_rows = bound_agg[['Task Arrival Rate', 'Num Sats', upper_bound_col]].copy()
                 bound_rows = bound_rows.rename(columns={upper_bound_col: metric})
-                bound_rows['Algorithm'] = 'Dual Bound'
+                bound_rows['Algorithm'] = 'optimistic reference $R^{ref}$'
                 plot_data = pd.concat([agg, bound_rows], ignore_index=True)
             else:
                 plot_data = agg
@@ -191,6 +200,9 @@ def plot_metric(df, agg, metrics, titles, ylabels,
             ax.grid(True, axis='y', linestyle='--', linewidth=0.4)
             if log_y: ax.set_yscale('log')
             if plot_data[metric].max() <= 1: ax.set_ylim(0.0, 1.02)
+            # if n > 1:
+            i = row_idx * len(ylabels) + col_idx
+            ax.set_title(f'({chr(ord("a") + i)})')
 
             # single legend on top-right panel only
             if row_idx == 0 and col_idx == 1:
@@ -274,22 +286,25 @@ def generate_plots(trial_name: str,
 
     df['Algorithm'] = df.apply(label_condition, axis=1)
 
-    algo_order = ['DP', 'GR', 'DP-GR', 'CBBA', 'DP-CBBA']
+    algo_order = ['DP', 'GR', 'DP-GR', 'SC-CBBA', 'DP-SC-CBBA']
 
     algo_palette = {
-        'DP':      '#999999',  # gray
-        'GR':      '#E69F00',  # orange
-        'DP-GR':   '#009E73',  # teal
-        'SC-CBBA':    '#56B4E9',  # sky blue
-        'DP-SC-CBBA': '#0072B2',  # deep blue
+        # 'DP':      '#999999',  # gray
+        # 'GR':      '#E69F00',  # orange
+        # 'DP-GR':   '#009E73',  # teal
+        'DP':          '#D55E00',   # vermillion   (preplanner only)
+        'DP-GR':       '#E69F00',   # amber
+        'GR':          '#009E73',   # teal
+        'SC-CBBA':     '#56B4E9',   # sky blue
+        'DP-SC-CBBA':  '#0072B2',   # deep blue
     }
 
     linestyles = {
         'DP': (4, 2),
         'GR': (1, 2),
         'DP-GR': (4, 1, 1, 1),
-        'CBBA': (3, 1),
-        'DP-CBBA': '',
+        'SC-CBBA': (3, 1),
+        'DP-SC-CBBA': '',
     }
 
     # Pre-aggregate all metrics once — one mean per design cell
@@ -317,7 +332,7 @@ def generate_plots(trial_name: str,
         algo_order=algo_order, algo_palette=algo_palette,
         base_dir=base_dir, local_base_dir=local_base_dir,
         save_dir=save_dir, local_save_dir=local_save_dir,
-        filename_stem='Plot1a-Mission_Reward',
+        filename_stem='Plot3.2.1a-Mission_Reward',
         log_y=True,
         log_x=True,
         upper_bound_col='Task Reward Dual Bound',
@@ -336,7 +351,7 @@ def generate_plots(trial_name: str,
         algo_order=algo_order, algo_palette=algo_palette,
         base_dir=base_dir, local_base_dir=local_base_dir,
         save_dir=save_dir, local_save_dir=local_save_dir,
-        filename_stem='Plot1b-Mission_Reward_Normalized',
+        filename_stem='Plot3.2.1b-Mission_Reward_Normalized',
     )
 
     # ------------------------------------------------------------------
@@ -346,6 +361,7 @@ def generate_plots(trial_name: str,
     # ------------------------------------------------------------------
     fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharey=True)
 
+    i = 0
     for ax, (x_col, xlabel, xscale) in zip(axes, [
         ('Task Arrival Rate', r'Task Arrival Rate $\lambda$ (1/day)', 'log'),
         ('Num Sats',          'Number of Satellites',                 'log'),
@@ -366,6 +382,9 @@ def generate_plots(trial_name: str,
         ax.set_ylabel('Total Obtained Reward (normalized)')
         ax.grid(True, which='both', linestyle='--', linewidth=0.4)
 
+        ax.set_title(f'({chr(ord("a") + i)})')
+        i += 1
+
         # legend only on the right panel
         if "task" in x_col.lower():
             ax.get_legend().remove()
@@ -376,7 +395,7 @@ def generate_plots(trial_name: str,
     plt.tight_layout()
 
     save_plot(base_dir, local_base_dir, save_dir, local_save_dir,
-            'Plot2-Reward_Scaling.png')
+            'Plot3.2.2-Reward_Scaling.png')
     plt.close()
 
     # ------------------------------------------------------------------
@@ -401,7 +420,7 @@ def generate_plots(trial_name: str,
         algo_order=algo_order, algo_palette=algo_palette,
         base_dir=base_dir, local_base_dir=local_base_dir,
         save_dir=save_dir, local_save_dir=local_save_dir,
-        filename_stem='Plot3-Task_Observation_Probability',
+        filename_stem='Plot3.2.3-Task_Observation_Probability',
     )
 
     # ------------------------------------------------------------------
@@ -415,18 +434,18 @@ def generate_plots(trial_name: str,
             'P(Event Co-observed | Co-observable)',
         ],
         titles=[
-            r'$P(\mathrm{Event\ Co-observed})$',
-            r'$P(\mathrm{Event\ Co-observed\ |\ Co-observable})$',
+            r'$P(\mathrm{Task\ Multitype\ Completed})$',
+            r'$P(\mathrm{Task\ Multitype\ Completed\ |\ Completable})$',
         ],
         ylabels=[
-            r'$P(\mathrm{Event\ Co-observed})$',
-            r'$P(\mathrm{Event\ Co-observed\ |\ Co-observable})$',
+            r'$P(\mathrm{Task\ Multitype\ Completed})$',
+            r'$P(\mathrm{Task\ Multitype\ Completed\ |\ Completable})$',
         ],
         suptitle='Multi-Agent Coordination Quality by Algorithm',
         algo_order=algo_order, algo_palette=algo_palette,
         base_dir=base_dir, local_base_dir=local_base_dir,
         save_dir=save_dir, local_save_dir=local_save_dir,
-        filename_stem='Plot4-Coordination_Quality',
+        filename_stem='Plot3.2.4-Coordination_Quality',
     )
 
     # ------------------------------------------------------------------
@@ -439,12 +458,12 @@ def generate_plots(trial_name: str,
         df, agg,
         metrics='Average Normalized Response Time to Task',
         titles='Average Normalized Task Response Time by Algorithm',
-        ylabels='Average Normalized Response Time to Task',
+        ylabels='Average Normalized Response Time to Task ' + r'$\bar{\tau}_{\mathrm{resp}}$',
         suptitle='Average Normalized Task Response Time by Algorithm',
         algo_order=algo_order, algo_palette=algo_palette,
         base_dir=base_dir, local_base_dir=local_base_dir,
         save_dir=save_dir, local_save_dir=local_save_dir,
-        filename_stem='Plot5-Task_Response_Time',
+        filename_stem='Plot3.2.5-Task_Response_Time',
     )
 
     # ------------------------------------------------------------------
@@ -511,8 +530,8 @@ def generate_plots(trial_name: str,
 
             # --- annotate DP and CBBA mean markers ---
             for algo, ha, offset in [
-                ('DP',   'right', (-0.010,  0.020)),
-                ('CBBA', 'left',  ( 0.010,  0.020)),
+                ('DP',       'right', (-0.010,  0.020)),
+                ('SC-CBBA',  'left',  ( 0.010,  0.020)),
             ]:
                 row = summary.loc[algo]
                 ax.annotate(
@@ -526,12 +545,15 @@ def generate_plots(trial_name: str,
             ax.set_xlim(-0.02, 1.02)
             ax.set_ylim(-0.02, 1.02)
             ax.grid(True, linestyle='--', linewidth=0.4)
+            
+            if len(axes) > 1:
+                ax.set_title(f'({chr(ord("a") + i)})')
 
             if i < len(axes) - 1:
                 ax.set_xlabel('')
                 ax.tick_params(axis='x', labelbottom=False)
             else:
-                ax.set_xlabel('Avg. Normalized Response Time to Task')
+                ax.set_xlabel('Avg. Normalized Response Time to Task ' + r'$\bar{\tau}_{\mathrm{resp}}$')
 
         handles = [
             plt.scatter([], [], color=algo_palette[a], marker='D', s=80, label=a)
@@ -552,7 +574,7 @@ def generate_plots(trial_name: str,
     plt.suptitle('Response Time vs Task Observation Quality', fontsize=12)
     plt.tight_layout()
     save_plot(base_dir, local_base_dir, save_dir, local_save_dir,
-              'Plot6a-Response_Time_vs_Task_Observation.png')
+              'Plot3.2.6a-Response_Time_vs_Task_Observation.png')
     plt.close()
 
     # Plot 6b — co-observation
@@ -560,15 +582,16 @@ def generate_plots(trial_name: str,
     _draw_rt_scatter(axes, [
         ('P(Event Co-observed)',
          'cobs_mean', 'cobs_std',
-         r'$P(\mathrm{Event\ Co-observed})$'),
+         r'$P(\mathrm{Event\ Multitype\ Completed})$'),
         ('P(Event Co-observed | Co-observable)',
          'cobs_cond_mean', 'cobs_cond_std',
-         r'$P(\mathrm{Event\ Co-observed\ |\ Co-observable})$'),
+         r'$P(\mathrm{Event\ Multitype\ Completed\ |\ Completable})$'),
+        #  P(Multi-type completed∣Multi-type completable) 
     ])
     plt.suptitle('Response Time vs Co-observation Quality', fontsize=12)
     plt.tight_layout()
     save_plot(base_dir, local_base_dir, save_dir, local_save_dir,
-              'Plot6b-Response_Time_vs_Co_Observation.png')
+              'Plot3.2.6b-Response_Time_vs_Co_Observation.png')
     plt.close()    
 
 # ----------------------------------------------------------------------
