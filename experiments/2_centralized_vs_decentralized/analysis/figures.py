@@ -266,6 +266,30 @@ def _make_legend_handles(algos: list[str]) -> list:
             for a in algos]
 
 
+def _add_fig_legend(fig, algos: list[str],
+                    mean_line: bool = False,
+                    milp_line: bool = False,
+                    ncol_extra: int = 0) -> None:
+    """Attach a single shared legend to *fig* above all panels.
+
+    Algo patches come first, then optional stat-line handles (mean, MILP).
+    Style matches plot_two_strategy_scatter.
+    """
+    handles = _make_legend_handles(algos)
+    if mean_line:
+        handles.append(matplotlib.lines.Line2D(
+            [], [], color='red', linewidth=1.5, linestyle='-', label='Mean'))
+    if milp_line:
+        handles.append(matplotlib.lines.Line2D(
+            [], [], color=ALGO_PALETTE['MILP'], linewidth=1.4,
+            linestyle='--', alpha=0.8, label='MILP = 1.0'))
+    ncol = len(algos) + (1 if mean_line else 0) + (1 if milp_line else 0) + ncol_extra
+    fig.legend(handles=handles, title='Algorithm',
+               loc='upper center', ncol=ncol,
+               fontsize=8, title_fontsize=9,
+               bbox_to_anchor=(0.5, 1.01), framealpha=0.9)
+
+
 def _ci95(series: pd.Series) -> float:
     n = series.dropna().__len__()
     if n < 2:
@@ -308,7 +332,8 @@ def make_boxplot(data: pd.DataFrame, metric: str, ax: plt.Axes,
                  ylabel: str | None = None,
                  exclude_none_none: bool = True,
                  annotate_winner: bool = True,
-                 milp_line: bool = False) -> None:
+                 milp_line: bool = False,
+                 show_legend: bool = True) -> None:
     present = _algo_present(data, exclude_none_none=exclude_none_none)
     xs      = np.arange(len(present))
     box_w   = 0.85   # wider to compensate for multi-panel figure layout
@@ -321,7 +346,10 @@ def make_boxplot(data: pd.DataFrame, metric: str, ax: plt.Axes,
         positions=xs,
         widths=box_w,
         patch_artist=True,
-        medianprops=dict(color='red', linewidth=1.5),
+        showmeans=True,
+        meanline=True,
+        medianprops=dict(color='black', linewidth=0.8),
+        meanprops=dict(color='red', linewidth=1.5, linestyle='--'),
         whiskerprops=dict(linewidth=0.8, color='black'),
         capprops=dict(linewidth=0.8, color='black'),
         boxprops=dict(linewidth=0.8, edgecolor='black'),
@@ -351,13 +379,24 @@ def make_boxplot(data: pd.DataFrame, metric: str, ax: plt.Axes,
     ax.set_xticks(xs)
     ax.set_xticklabels(present, rotation=25, ha='right', fontsize=8)
 
-    if milp_line:
-        ax.axhline(1.0, color=ALGO_PALETTE['MILP'], linewidth=1.4,
-                   linestyle='--', alpha=0.8, label='MILP = 1.0')
-
     ax.set_xlabel('')
     ax.set_ylabel(ylabel if ylabel else metric)
     ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.7)
+
+    if milp_line:
+        ax.axhline(1.0, color=ALGO_PALETTE['MILP'], linewidth=1.4, linestyle='--', alpha=0.8)
+
+    if show_legend:
+        legend_handles = [
+            matplotlib.lines.Line2D([], [], color='red', linewidth=1.5, linestyle='-', label='Mean')
+        ]
+        if milp_line:
+            legend_handles.append(
+                matplotlib.lines.Line2D([], [], color=ALGO_PALETTE['MILP'], linewidth=1.4,
+                                        linestyle='--', alpha=0.8, label='MILP = 1.0')
+            )
+        ax.legend(handles=legend_handles, fontsize=7, loc='upper right',
+                  framealpha=0.7, handlelength=1.2)
 
     if annotate_winner and metric in data.columns:
         _annotate_winner(ax, metric, data, present)
@@ -915,75 +954,179 @@ def plot_data_processing_effect(
 #  One figure per mission.
 # =============================================================================
 
+# def plot_connectivity_effect(
+#     df: pd.DataFrame,
+#     save_dir: str,
+# ) -> None:
+#     metric   = 'Total Obtained Reward'
+#     data     = df[df['Algorithm'] != 'None-None'].copy()
+#     conn_pos = {c: i for i, c in enumerate(CONN_ORDER)}
+
+#     for mission_i, mission in enumerate(MISSION_ORDER, start=1):
+#         mission_data = data[data['Mission'] == mission]
+
+#         fig, axes = plt.subplots(
+#             1, len(DP_ORDER),
+#             figsize=(5 * len(DP_ORDER), 5), sharey=True)
+
+#         for ax, dp in zip(axes, DP_ORDER):
+#             sub = mission_data[mission_data['Data Processing'] == dp]
+
+#             for algo in ALGO_ORDER:
+#                 asub  = sub[sub['Algorithm'] == algo]
+#                 means = asub.groupby(
+#                     'Connectivity', observed=True)[metric].mean()
+#                 # Use IQR band instead of 95% CI to reduce noise
+#                 q25   = asub.groupby(
+#                     'Connectivity', observed=True)[metric].quantile(0.25)
+#                 q75   = asub.groupby(
+#                     'Connectivity', observed=True)[metric].quantile(0.75)
+
+#                 xs  = [conn_pos[c] for c in CONN_ORDER if c in means.index]
+#                 ys  = [means[c]    for c in CONN_ORDER if c in means.index]
+#                 lo  = [q25[c]      for c in CONN_ORDER if c in means.index]
+#                 hi  = [q75[c]      for c in CONN_ORDER if c in means.index]
+#                 if not xs:
+#                     continue
+
+#                 spec = ALGO_LINESTYLES[algo]
+#                 line, = ax.plot(
+#                     xs, ys,
+#                     color=ALGO_PALETTE[algo], linewidth=1.8,
+#                     marker='o', markersize=6,
+#                     linestyle='solid' if spec == '' else 'dashed',
+#                     label=algo)
+#                 _apply_linestyle(line, algo)
+#                 ax.fill_between(xs, lo, hi,
+#                                 color=ALGO_PALETTE[algo], alpha=0.13)
+
+#             ax.set_xticks(list(conn_pos.values()))
+#             ax.set_xticklabels(
+#                 [CONN_LABELS[c].replace('\n', ' ') for c in CONN_ORDER],
+#                 fontsize=8, rotation=12, ha='right')
+#             ax.set_xlabel('Connectivity Architecture', fontsize=9)
+#             ax.set_ylabel('Total Obtained Reward'
+#                           if dp == DP_ORDER[0] else '')
+#             ax.set_title(DP_LABELS[dp], fontsize=10, fontweight='bold')
+#             ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
+
+#             if dp == DP_ORDER[-1]:
+#                 ax.legend(title='Algorithm', fontsize=7,
+#                           title_fontsize=8, loc='best')
+
+#         plt.suptitle(
+#             f'{MISSION_FULL_LABELS[mission]} — '
+#             f'Effect of Connectivity Architecture\n'
+#             f'(shading = IQR across dates; cols = data processing mode)',
+#             fontsize=12, y=1.02)
+#         plt.tight_layout()
+#         save_plot(save_dir,
+#                   f'Plot4_5_{mission_i}-Connectivity_{mission}.png')
+#         plt.close()
+
 def plot_connectivity_effect(
     df: pd.DataFrame,
     save_dir: str,
 ) -> None:
-    metric   = 'Total Obtained Reward'
     data     = df[df['Algorithm'] != 'None-None'].copy()
     conn_pos = {c: i for i, c in enumerate(CONN_ORDER)}
-
+ 
+    variants = [
+        # (metric, ylabel, normalised, milp_ref_line, filename_suffix)
+        ('Total Obtained Reward',
+         'Total Obtained Reward',
+         False, False,
+         ''),
+        ('Reward / MILP',
+         'Reward / MILP Reward',
+         True,  True,
+         'b_norm'),
+    ]
+ 
     for mission_i, mission in enumerate(MISSION_ORDER, start=1):
         mission_data = data[data['Mission'] == mission]
+ 
+        for metric, ylabel, is_norm, milp_ref, suffix in variants:
+            if metric not in mission_data.columns or \
+               mission_data[metric].isna().all():
+                continue
+ 
+            # For normalised: exclude MILP (it IS the reference)
+            plot_data = (mission_data[mission_data['Algorithm'] != 'MILP']
+                         if is_norm else mission_data)
+ 
+            fig, axes = plt.subplots(
+                1, len(DP_ORDER),
+                figsize=(5 * len(DP_ORDER), 5), sharey=True)
+ 
+            for ax, dp in zip(axes, DP_ORDER):
+                sub = plot_data[plot_data['Data Processing'] == dp]
+ 
+                for algo in ALGO_ORDER:
+                    if is_norm and algo == 'MILP':
+                        continue
+                    asub  = sub[sub['Algorithm'] == algo]
+                    means = asub.groupby(
+                        'Connectivity', observed=True)[metric].mean()
+                    q25   = asub.groupby(
+                        'Connectivity', observed=True)[metric].quantile(0.25)
+                    q75   = asub.groupby(
+                        'Connectivity', observed=True)[metric].quantile(0.75)
+ 
+                    xs  = [conn_pos[c] for c in CONN_ORDER if c in means.index]
+                    ys  = [means[c]    for c in CONN_ORDER if c in means.index]
+                    lo  = [q25[c]      for c in CONN_ORDER if c in means.index]
+                    hi  = [q75[c]      for c in CONN_ORDER if c in means.index]
+                    if not xs:
+                        continue
+ 
+                    spec = ALGO_LINESTYLES[algo]
+                    line, = ax.plot(
+                        xs, ys,
+                        color=ALGO_PALETTE[algo], linewidth=1.8,
+                        marker='o', markersize=6,
+                        linestyle='solid' if spec == '' else 'dashed',
+                        label=algo)
+                    _apply_linestyle(line, algo)
+                    ax.fill_between(xs, lo, hi,
+                                    color=ALGO_PALETTE[algo], alpha=0.13)
+ 
+                if milp_ref:
+                    ax.axhline(1.0, color=ALGO_PALETTE['MILP'],
+                               linewidth=1.2, linestyle='--', alpha=0.7,
+                               label='MILP = 1.0')
+ 
+                ax.set_xticks(list(conn_pos.values()))
+                ax.set_xticklabels(
+                    [CONN_LABELS[c].replace('\n', ' ') for c in CONN_ORDER],
+                    fontsize=8, rotation=12, ha='right')
+                ax.set_xlabel('Connectivity Architecture', fontsize=9)
+                ax.set_ylabel(ylabel if dp == DP_ORDER[0] else '')
+                ax.set_title(DP_LABELS[dp], fontsize=10, fontweight='bold')
+                ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
+ 
+            present_algos = [a for a in ALGO_ORDER
+                              if a in plot_data['Algorithm'].values
+                              and (not is_norm or a != 'MILP')]
+            _add_fig_legend(fig, present_algos, milp_line=milp_ref)
+            norm_note = ' (MILP-Normalised)' if is_norm else ''
+            plt.suptitle(
+                f'{MISSION_FULL_LABELS[mission]} — '
+                f'Effect of Connectivity Architecture{norm_note}\n'
+                f'(shading = IQR across dates; cols = data processing mode'
+                + ('; dashed = MILP reference' if is_norm else '') + ')',
+                fontsize=12, y=1.02)
+            plt.tight_layout()
+ 
+            if suffix:
+                fname = (f'Plot4_5_{mission_i}{suffix}'
+                         f'-Connectivity_{mission}_Norm.png')
+            else:
+                fname = f'Plot4_5_{mission_i}-Connectivity_{mission}.png'
+ 
+            save_plot(save_dir, fname)
+            plt.close()
 
-        fig, axes = plt.subplots(
-            1, len(DP_ORDER),
-            figsize=(5 * len(DP_ORDER), 5), sharey=True)
-
-        for ax, dp in zip(axes, DP_ORDER):
-            sub = mission_data[mission_data['Data Processing'] == dp]
-
-            for algo in ALGO_ORDER:
-                asub  = sub[sub['Algorithm'] == algo]
-                means = asub.groupby(
-                    'Connectivity', observed=True)[metric].mean()
-                # Use IQR band instead of 95% CI to reduce noise
-                q25   = asub.groupby(
-                    'Connectivity', observed=True)[metric].quantile(0.25)
-                q75   = asub.groupby(
-                    'Connectivity', observed=True)[metric].quantile(0.75)
-
-                xs  = [conn_pos[c] for c in CONN_ORDER if c in means.index]
-                ys  = [means[c]    for c in CONN_ORDER if c in means.index]
-                lo  = [q25[c]      for c in CONN_ORDER if c in means.index]
-                hi  = [q75[c]      for c in CONN_ORDER if c in means.index]
-                if not xs:
-                    continue
-
-                spec = ALGO_LINESTYLES[algo]
-                line, = ax.plot(
-                    xs, ys,
-                    color=ALGO_PALETTE[algo], linewidth=1.8,
-                    marker='o', markersize=6,
-                    linestyle='solid' if spec == '' else 'dashed',
-                    label=algo)
-                _apply_linestyle(line, algo)
-                ax.fill_between(xs, lo, hi,
-                                color=ALGO_PALETTE[algo], alpha=0.13)
-
-            ax.set_xticks(list(conn_pos.values()))
-            ax.set_xticklabels(
-                [CONN_LABELS[c].replace('\n', ' ') for c in CONN_ORDER],
-                fontsize=8, rotation=12, ha='right')
-            ax.set_xlabel('Connectivity Architecture', fontsize=9)
-            ax.set_ylabel('Total Obtained Reward'
-                          if dp == DP_ORDER[0] else '')
-            ax.set_title(DP_LABELS[dp], fontsize=10, fontweight='bold')
-            ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
-
-            if dp == DP_ORDER[-1]:
-                ax.legend(title='Algorithm', fontsize=7,
-                          title_fontsize=8, loc='best')
-
-        plt.suptitle(
-            f'{MISSION_FULL_LABELS[mission]} — '
-            f'Effect of Connectivity Architecture\n'
-            f'(shading = IQR across dates; cols = data processing mode)',
-            fontsize=12, y=1.02)
-        plt.tight_layout()
-        save_plot(save_dir,
-                  f'Plot4_5_{mission_i}-Connectivity_{mission}.png')
-        plt.close()
 
 
 # =============================================================================
@@ -1045,15 +1188,13 @@ def plot_urgency_requirements(
         ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
         ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
 
-        if conn == CONN_ORDER[-1]:
-            ax.legend(title='Algorithm', fontsize=7,
-                      title_fontsize=8, loc='best')
-
+    present_algos = [a for a in ALGO_ORDER if a in data['Algorithm'].values]
+    _add_fig_legend(fig, present_algos)
     plt.suptitle(
         f'{MISSION_FULL_LABELS["Urgency"]} — Requirement Satisfaction\n'
         f'(efficient algorithms appear bottom-right with high coverage '
         f'and fast response)',
-        fontsize=12, y=1.02)
+        fontsize=12, y=1.06)
     plt.tight_layout()
     save_plot(save_dir, 'Plot4_6_1-Urgency_Requirements.png')
     plt.close()
@@ -1063,6 +1204,43 @@ def plot_urgency_requirements(
 #  FIGURE 6b — Revisits: Reobservation Time vs 3600s target
 # =============================================================================
 
+# def plot_revisit_requirements(
+#     df: pd.DataFrame,
+#     save_dir: str,
+# ) -> None:
+#     metric = 'Median Task Reobservation Time [s]'
+#     data   = df[(df['Mission'] == 'Revisits') &
+#                 (df['Algorithm'] != 'None-None')].copy()
+
+#     if not _col_ok(data, metric, 'Fig 6b'):
+#         return
+
+#     n_conn = len(CONN_ORDER)
+#     fig, axes = plt.subplots(1, n_conn, figsize=(5 * n_conn, 5), sharey=True)
+
+#     for ax, conn in zip(axes, CONN_ORDER):
+#         sub = data[data['Connectivity'] == conn]
+#         make_boxplot(sub, metric, ax,
+#                      ylabel='Median Reobservation Time'
+#                      if conn == CONN_ORDER[0] else '')
+#         ax.axhline(REVISIT_TARGET_S, color='#009E73',
+#                    linewidth=1.4, linestyle='--', alpha=0.85)
+#         ax.text(0.98, REVISIT_TARGET_S,
+#                 f'Target: {REVISIT_TARGET_S/60:.0f} min',
+#                 transform=ax.get_yaxis_transform(),
+#                 fontsize=7, color='#009E73', va='bottom', ha='right')
+#         ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
+#         ax.yaxis.set_major_formatter(
+#             mticker.FuncFormatter(lambda x, _: f'{x/60:.0f} min'))
+
+#     plt.suptitle(
+#         f'{MISSION_FULL_LABELS["Revisits"]} — Requirement Satisfaction\n'
+#         f'(taskable observations only; green dashed = 60 min target)',
+#         fontsize=12, y=1.01)
+#     plt.tight_layout()
+#     save_plot(save_dir, 'Plot4_6_2-Revisit_Requirements.png')
+#     plt.close()
+
 def plot_revisit_requirements(
     df: pd.DataFrame,
     save_dir: str,
@@ -1070,32 +1248,79 @@ def plot_revisit_requirements(
     metric = 'Median Task Reobservation Time [s]'
     data   = df[(df['Mission'] == 'Revisits') &
                 (df['Algorithm'] != 'None-None')].copy()
-
+ 
     if not _col_ok(data, metric, 'Fig 6b'):
         return
-
+ 
     n_conn = len(CONN_ORDER)
-    fig, axes = plt.subplots(1, n_conn, figsize=(5 * n_conn, 5), sharey=True)
-
+    fig, axes = plt.subplots(1, n_conn, figsize=(5 * n_conn, 5.5),
+                              sharey=True)
+ 
+    ymin = max(0, data[metric].min() * 0.85)
+    ymax = data[metric].max() * 1.10
+ 
     for ax, conn in zip(axes, CONN_ORDER):
         sub = data[data['Connectivity'] == conn]
         make_boxplot(sub, metric, ax,
                      ylabel='Median Reobservation Time'
-                     if conn == CONN_ORDER[0] else '')
+                     if conn == CONN_ORDER[0] else '',
+                     show_legend=False)
+ 
+        ax.set_ylim(ymin, ymax)
+ 
+        # --- Gradient background centred at REVISIT_TARGET_S ---
+        # White at target, deepens symmetrically toward extremes.
+        n_px   = 512
+        y_vals = np.linspace(ymin, ymax, n_px)
+        dist   = np.abs(y_vals - REVISIT_TARGET_S) / max(
+            REVISIT_TARGET_S - ymin, ymax - REVISIT_TARGET_S, 1e-9)
+        dist   = np.clip(dist, 0, 1)
+ 
+        rgba = np.zeros((n_px, 1, 4), dtype=float)
+        for i, (y, d) in enumerate(zip(y_vals, dist)):
+            if y <= REVISIT_TARGET_S:
+                rgba[i, 0] = [0.337, 0.706, 0.914, d * 0.35]   # blue
+            else:
+                rgba[i, 0] = [0.902, 0.624, 0.000, d * 0.35]   # amber
+ 
+        xlim = ax.get_xlim()
+        ax.imshow(rgba[::-1],
+                  extent=[xlim[0], xlim[1], ymin, ymax],
+                  aspect='auto', zorder=0, transform=ax.transData)
+ 
+        # Target line
         ax.axhline(REVISIT_TARGET_S, color='#009E73',
-                   linewidth=1.4, linestyle='--', alpha=0.85)
-        ax.text(0.98, REVISIT_TARGET_S,
+                   linewidth=1.6, linestyle='--', alpha=0.90, zorder=3)
+ 
+        # "Target" label — left side, just above the line
+        ax.text(0.02, REVISIT_TARGET_S,
                 f'Target: {REVISIT_TARGET_S/60:.0f} min',
                 transform=ax.get_yaxis_transform(),
-                fontsize=7, color='#009E73', va='bottom', ha='right')
+                fontsize=7.5, color='#009E73',
+                va='bottom', ha='left', fontweight='bold', zorder=5)
+ 
+        # Zone labels at very top / very bottom using axes fraction
+        ax.text(0.50, 0.97, 'Too infrequent → misses observation window',
+                transform=ax.transAxes,
+                fontsize=7, color='#B07800',
+                va='top', ha='center', style='italic')
+        ax.text(0.50, 0.03, 'Too frequent → redundant passes',
+                transform=ax.transAxes,
+                fontsize=7, color='#1A7AAF',
+                va='bottom', ha='center', style='italic')
+ 
+        from figures import CONN_FULL_LABELS
         ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
         ax.yaxis.set_major_formatter(
-            mticker.FuncFormatter(lambda x, _: f'{x/60:.0f} min'))
-
+            plt.FuncFormatter(lambda x, _: f'{x/60:.0f} min'))
+ 
+    present_algos = [a for a in ALGO_ORDER if a in data['Algorithm'].values]
+    _add_fig_legend(fig, present_algos, mean_line=True)
     plt.suptitle(
         f'{MISSION_FULL_LABELS["Revisits"]} — Requirement Satisfaction\n'
-        f'(taskable observations only; green dashed = 60 min target)',
-        fontsize=12, y=1.01)
+        f'(taskable observations only; reward peaks at '
+        f'{REVISIT_TARGET_S/60:.0f} min — both extremes reduce reward)',
+        fontsize=12, y=1.06)
     plt.tight_layout()
     save_plot(save_dir, 'Plot4_6_2-Revisit_Requirements.png')
     plt.close()
@@ -1204,10 +1429,8 @@ def plot_coobs_requirements(
         ax.set_title(CONN_FULL_LABELS[conn], fontsize=9, fontweight='bold')
         ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
  
-        if conn == CONN_ORDER[-1]:
-            ax.legend(title='Algorithm', fontsize=7,
-                      title_fontsize=8, loc='best')
- 
+    present_algos = [a for a in ALGO_ORDER if a in data['Algorithm'].values]
+    _add_fig_legend(fig, present_algos)
     plt.suptitle(
         f'{MISSION_FULL_LABELS["Co-observations"]} — '
         f'Requirement Satisfaction\n',
@@ -1340,9 +1563,8 @@ def plot_seasonal_sensitivity(
                      fontweight='bold')
         ax.grid(True, linestyle='--', linewidth=0.4, alpha=0.6)
 
-        if mission == MISSION_ORDER[-1]:
-            ax.legend(title='Algorithm', fontsize=7,
-                      title_fontsize=8, loc='best')
+    present_algos = [a for a in ALGO_ORDER if a in data['Algorithm'].values]
+    _add_fig_legend(fig, present_algos)
 
     # Star marker note
     fig.text(0.5, -0.03,
@@ -1381,19 +1603,7 @@ def plot_unified_normalised_reward(
     make_boxplot(data, metric, ax,
                  ylabel='Reward / MILP Reward',
                  milp_line=True)
-
-    ax.axhline(1.0, color=ALGO_PALETTE['MILP'], linewidth=1.4,
-               linestyle='--', alpha=0.8)
-    ax.text(len(_algo_present(data)) - 0.5, 1.01,
-            'MILP = 1.0', fontsize=7.5,
-            color=ALGO_PALETTE['MILP'], ha='right', va='bottom')
     ax.set_xlabel('Algorithm Configuration', fontsize=10)
-
-    # Add legend for MILP reference line
-    milp_handle = matplotlib.lines.Line2D(
-        [], [], color=ALGO_PALETTE['MILP'], linewidth=1.4,
-        linestyle='--', alpha=0.8, label='MILP reference (1.0)')
-    ax.legend(handles=[milp_handle], fontsize=8, loc='upper left')
 
     plt.suptitle(
         'Mission Reward by Algorithm — MILP-Normalised\n'
@@ -1418,19 +1628,7 @@ def plot_unified_reward(
     make_boxplot(data, metric, ax,
                  ylabel='Total Obtained Reward',
                  milp_line=True)
-
-    ax.axhline(1.0, color=ALGO_PALETTE['MILP'], linewidth=1.4,
-               linestyle='--', alpha=0.8)
-    ax.text(len(_algo_present(data)) - 0.5, 1.01,
-            'MILP = 1.0', fontsize=7.5,
-            color=ALGO_PALETTE['MILP'], ha='right', va='bottom')
     ax.set_xlabel('Algorithm Configuration', fontsize=10)
-
-    # Add legend for MILP reference line
-    milp_handle = matplotlib.lines.Line2D(
-        [], [], color=ALGO_PALETTE['MILP'], linewidth=1.4,
-        linestyle='--', alpha=0.8, label='MILP reference (1.0)')
-    ax.legend(handles=[milp_handle], fontsize=8, loc='upper left')
 
     plt.suptitle(
         'Mission Reward by Algorithm — MILP-Normalised\n'

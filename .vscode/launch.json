@@ -505,7 +505,7 @@
                 // "--single-trial", "227",
                 // "--trial-ids", "5", "13", "15", "27", "36", "45", "47",
 
-                "--profile-cpu",
+                // "--profile-cpu",
                 // "--profile-mem",
                 
                 "--single-thread",
@@ -514,11 +514,11 @@
                 // "--only-simulate",
                 // "--only-postprocess",
 
-                "--force-simulate",
+                // "--force-simulate",
                 "--force-postprocess",
                 "--force-summarize",
 
-                // "--reduced",
+                "--reduced",
                 // "--quiet",
                 "--exceptions",
             ]
