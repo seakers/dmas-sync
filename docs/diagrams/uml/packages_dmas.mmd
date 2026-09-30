@@ -1,0 +1,122 @@
+classDiagram
+  class dmas {
+  }
+  class core {
+  }
+  class environment {
+  }
+  class messages {
+  }
+  class simulation {
+  }
+  class models {
+  }
+  class actions {
+  }
+  class agent {
+  }
+  class planning {
+  }
+  class decentralized {
+  }
+  class announcer {
+  }
+  class blank {
+  }
+  class default {
+  }
+  class dynamic {
+  }
+  class earliest {
+  }
+  class heuristic {
+  }
+  class nadir {
+  }
+  class periodic {
+  }
+  class plan {
+  }
+  class planner {
+  }
+  class reactive {
+  }
+  class states {
+  }
+  class trackers {
+  }
+  class network {
+  }
+  environment --> messages
+  environment --> actions
+  environment --> states
+  environment --> trackers
+  simulation --> environment
+  simulation --> messages
+  simulation --> actions
+  simulation --> agent
+  simulation --> announcer
+  simulation --> blank
+  simulation --> default
+  simulation --> dynamic
+  simulation --> earliest
+  simulation --> heuristic
+  simulation --> nadir
+  simulation --> periodic
+  simulation --> reactive
+  simulation --> states
+  actions --> messages
+  agent --> messages
+  agent --> actions
+  agent --> periodic
+  agent --> plan
+  agent --> reactive
+  agent --> states
+  agent --> trackers
+  announcer --> messages
+  announcer --> actions
+  announcer --> periodic
+  announcer --> plan
+  announcer --> states
+  blank --> periodic
+  default --> messages
+  default --> actions
+  default --> plan
+  default --> reactive
+  default --> states
+  default --> trackers
+  dynamic --> messages
+  dynamic --> actions
+  dynamic --> periodic
+  dynamic --> states
+  dynamic --> trackers
+  earliest --> heuristic
+  heuristic --> messages
+  heuristic --> actions
+  heuristic --> periodic
+  heuristic --> plan
+  heuristic --> reactive
+  heuristic --> states
+  heuristic --> trackers
+  nadir --> actions
+  nadir --> earliest
+  nadir --> states
+  nadir --> trackers
+  periodic --> actions
+  periodic --> plan
+  periodic --> planner
+  periodic --> states
+  periodic --> trackers
+  plan --> actions
+  planner --> messages
+  planner --> actions
+  planner --> plan
+  planner --> states
+  planner --> trackers
+  reactive --> messages
+  reactive --> actions
+  reactive --> plan
+  reactive --> planner
+  reactive --> states
+  reactive --> trackers
+  states --> actions

@@ -1,0 +1,454 @@
+classDiagram
+  class AbstractAgentState {
+    is_failure()* None
+    perform_action()* tuple
+    to_dict()* dict
+    update()* None
+  }
+  class AbstractEventAnnouncerPlanner {
+    generate_plan(state: SimulationAgentState, _: object, orbitdata: OrbitData) Plan
+    load_events(events_path: str) pd.DataFrame
+  }
+  class AbstractPeriodicPlanner {
+    GROUND_BASED : str
+    NONE : str
+    OPPORTUNISTIC : str
+    PERIODIC : str
+    pending_reqs_to_broadcast : set[TaskRequest]
+    generate_plan(state: SimulationAgentState, specs: object, orbitdata: OrbitData, mission: Mission, tasks: list, observation_history: TaskObservationTracker) Plan
+    get_available_tasks(tasks: list, planning_horizon: Interval) list
+    get_ground_points(orbitdata: OrbitData) dict
+    needs_planning(state: SimulationAgentState, __: object, current_plan: Plan) bool
+    print_results()
+    update_percepts(state: SimulationAgentState, current_plan: Plan, tasks: Dict[Tuple, GenericObservationTask], incoming_reqs: Dict[Tuple, Dict], misc_messages: list, completed_actions: list, aborted_actions: list, pending_actions: list) None
+  }
+  class AbstractPlanner {
+    EPS : float
+    latest_performed_observations : Set[ObservationOpportunity]
+    calculate_access_opportunities(tasks: List[GenericObservationTask], planning_horizon: Interval, orbitdata: OrbitData) dict
+    check_task_observation_opportunity_clusterability(observation_opportunities: List[ObservationOpportunity], must_overlap: bool, threshold: float) dict
+    cluster_task_observation_opportunities(observation_opportunities: List[ObservationOpportunity], adj: Dict[str, Set[ObservationOpportunity]], must_overlap: bool, threshold: float) list
+    create_observation_opportunities_from_accesses(available_tasks: List[GenericObservationTask], access_times: List[tuple], cross_track_fovs: dict, orbitdata: OrbitData, must_overlap: bool, threshold: float) list
+    estimate_observation_opportunity_value(obs: ObservationOpportunity, t_img: float, d_img: float, specs: object, cross_track_fovs: Dict[str, float], orbitdata: OrbitData, mission: Mission, observation_history: TaskObservationTracker, task_n_obs: Dict[GenericObservationTask, int], task_t_prevs: Dict[GenericObservationTask, int], task_t_imgs: Dict[str, float]) float
+    generate_plan()* Plan
+    get_available_accesses(task: GenericObservationTask, instrument_name: str, th_img: float, t_img: float, d_img: float, orbitdata: OrbitData, cross_track_fovs: dict) dict
+    is_maneuver_path_valid(state: SimulationAgentState, specs: object, observations: List[ObservationAction], maneuvers: List[ManeuverAction], max_slew_rate: float, cross_track_fovs: dict) bool
+    is_observation_pair_valid(t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate, start_pair) bool
+    is_observation_path_valid(state: SimulationAgentState, observations: List[ObservationAction], max_slew_rate: float, max_torque: float, specs: object) bool
+    needs_planning()* bool
+    print_results()* None
+    single_task_observation_opportunity_from_accesses(available_tasks: List[GenericObservationTask], access_times: Dict[Tuple, List[tuple]], cross_track_fovs: dict, orbitdata: OrbitData, threshold: float) List[ObservationOpportunity]
+    update_percepts(completed_actions: list)* None
+  }
+  class AbstractReactivePlanner {
+    generate_plan(state: SimulationAgentState, specs: object, current_plan: Plan, orbitdata: OrbitData, mission: Mission, tasks: List[GenericObservationTask], observation_history: TaskObservationTracker)* Plan
+    update_percepts(state: SimulationAgentState, current_plan: Plan, tasks: List[GenericObservationTask], incoming_reqs: List[TaskRequest], misc_messages: List[SimulationMessage], completed_actions: List[AgentAction], aborted_actions: List[AgentAction], pending_actions: List[AgentAction])* None
+  }
+  class ActionStatuses {
+    name
+  }
+  class ActionTypes {
+    name
+  }
+  class AgentAction {
+    action_type : str
+    id : str
+    status : str
+    t_end : Union[float, int]
+    t_start : Union[float, int]
+    to_dict() dict
+    to_json() str
+  }
+  class AgentActionMessage {
+    action : dict
+    status : NoneType
+  }
+  class AgentConnectivityUpdate {
+    connected : int
+    target : str
+  }
+  class AgentStateMessage {
+    state : dict
+  }
+  class BlankPlanner {
+    print_results()
+  }
+  class BroadcastMessageAction {
+    id : str
+    msg : dict
+    t_end
+    t_start
+  }
+  class BusMessage {
+    msgs : list
+  }
+  class CoordinateTypes {
+    name
+  }
+  class DataSink {
+    data_name : str
+    flush_rows : int
+    out_dir : str
+    owner_name : str
+    append(obs: Dict[str, Any]) None
+    close() None
+    empty() bool
+    extend(obs_list: List[Dict[str, Any]]) None
+    flush(i_max: int) None
+    get_flush_count() int
+  }
+  class DynamicProgrammingPlanner {
+  }
+  class EarliestAccessPeriodicPlanner {
+  }
+  class EarliestAccessReactivePlanner {
+  }
+  class EarliestRequestArrivalPeriodicPlanner {
+  }
+  class EarliestRequestArrivalReactivePlanner {
+  }
+  class FixedPointingDefaultPlanner {
+    calculate_access_opportunities(tasks, planning_horizon: Interval, orbitdata: OrbitData) dict
+    generate_plan(state: SimulationAgentState, specs: object, current_plan: Plan, orbitdata: OrbitData, mission: Mission, tasks: List[GenericObservationTask], observation_history: TaskObservationTracker) Plan
+    needs_periodic_replan(state, current_plan: Plan) bool
+    needs_planning(state: SimulationAgentState, _: object, current_plan: Plan, __: OrbitData) bool
+    print_results()
+    update_percepts(state: SimulationAgentState, current_plan: Plan, tasks: List[GenericObservationTask], incoming_reqs: List[TaskRequest], misc_messages: List[SimulationMessage], completed_actions: List[AgentAction], aborted_actions: List[AgentAction], pending_actions: List[AgentAction]) None
+  }
+  class FutureBroadcastMessageAction {
+    BIDS : str
+    FUTURE_BROADCAST_TYPES : list
+    OBSERVATIONS : str
+    PLAN : str
+    REQUESTS : str
+    REWARD_GRID : str
+    STATE : str
+    action_type : str
+    broadcast_type : str
+    desc : Optional[Any]
+    id : str
+    only_own_info : bool
+    t_end
+    t_start
+  }
+  class GroundOperatorAgentState {
+    R : float
+    W : float
+    attitude
+    attitude_rates
+    pos
+    vel
+    from_dict(d: dict) object
+    is_failure() None
+    kinematic_model(_: Union[int, float]) tuple
+    perform_maneuver(action: ManeuverAction, _: Union[int, float]) tuple
+    perform_travel(action: TravelAction, _: Union[int, float]) tuple
+    to_dict() dict
+  }
+  class GroundProcessorEventAnnouncerPlanner {
+    print_results()
+    update_percepts(state: SimulationAgentState) None
+  }
+  class GroundSensorAgentState {
+    R : float
+    W : float
+    alt : float
+    lat : float
+    lon : float
+    from_dict(d)
+    is_failure() None
+    kinematic_model(_: Union[int, float]) tuple
+    perform_maneuver(action: ManeuverAction, _: Union[int, float]) tuple
+    perform_travel(action: TravelAction, _: Union[int, float]) tuple
+    to_dict() dict
+    to_rads(th: float) float
+  }
+  class HeuristicInsertionPeriodicPlanner {
+  }
+  class HeuristicInsertionReactivePlanner {
+    access_opportunities : Optional[dict[tuple]]
+    access_opportunity_horizon : Optional[Interval]
+    calculate_access_opportunities(state: SimulationAgentState, available_tasks: List[GenericObservationTask], planning_horizon: Interval, orbitdata: OrbitData) dict
+    generate_plan(state: SimulationAgentState, specs: object, _: Plan, orbitdata: OrbitData, mission: Mission, tasks: List[GenericObservationTask], observation_history: TaskObservationTracker) Plan
+    needs_planning() bool
+    print_results()
+    update_percepts(state: SimulationAgentState, current_plan: Plan, tasks: List[GenericObservationTask], incoming_reqs: List[TaskRequest], misc_messages: List[SimulationMessage], completed_actions: List[AgentAction], aborted_actions: List[AgentAction], pending_actions: List[AgentAction]) None
+  }
+  class IdleAction {
+    id : str
+    t_end
+    t_start
+  }
+  class InstantEventAnnouncerPlanner {
+    print_results()
+  }
+  class ManeuverAction {
+    attitude_rates
+    final_attitude
+    id : str
+    initial_attitude
+    t_end
+    t_start
+  }
+  class MeasurementBidMessage {
+    bid : dict
+  }
+  class MeasurementRequestMessage {
+    req : dict
+  }
+  class NadirPointingPeriodicPlanner {
+    is_observation_path_valid(state: SimulationAgentState, observations: List[ObservationAction], max_slew_rate: float, max_torque: float, specs: object) bool
+  }
+  class NadirPointingReactivePlanner {
+    is_observation_path_valid(state: SimulationAgentState, observations: List[ObservationAction], max_slew_rate: float, max_torque: float, specs: object) bool
+  }
+  class ObservationAction {
+    id : str
+    instrument_name : str
+    look_angle : float
+    obs_opp : ObservationOpportunity
+    req : Optional[dict]
+    t_end
+    t_imgs : Dict[str, float]
+    t_start
+    to_dict()
+  }
+  class ObservationPerformedMessage {
+    observation_action : dict
+  }
+  class ObservationRecord {
+    clock : Dict
+    last_actor : Optional[str]
+    last_instrument : Optional[str]
+    n_obs
+    t_last : float
+    from_dict(d: Dict[str, Any]) 'ObservationRecord'
+    ingest(t_end: float, actor: str, instrument: Optional[str]) bool
+    merge(foreign: 'ObservationRecord | dict') bool
+    merge_parts(f_clock: dict, f_t_last: float, f_actor: Optional[str], f_instr: Optional[str]) bool
+    to_dict() Dict[str, Any]
+  }
+  class ObservationResultsMessage {
+    agent_state : dict
+    instrument : dict
+    observation_action : dict
+    observation_data : list
+    t_end : float
+    t_start : float
+  }
+  class PeriodicPlan {
+    horizon
+    add(action: AgentAction, t: float) None
+    copy() object
+  }
+  class Plan {
+    actions : list[AgentAction]
+    t : float
+    t_next
+    add(new_action: AgentAction, t: float) None
+    add_all(actions: List[AgentAction], t: float, printouts: bool) None
+    copy() object
+    counters() dict
+    empty(t: float) None
+    get_horizon() float
+    get_next_actions(t: float, earliest: bool, tolerance: float) list
+    is_empty() bool
+    remove(action: AgentAction, t: float) None
+    update() None
+    update_action_completion(completed_actions: List[AgentAction], aborted_actions: List[AgentAction], pending_actions: List[AgentAction], t: float) Tuple[list, list]
+  }
+  class PlanMessage {
+    agent_name
+    plan : list
+    t_plan : float
+  }
+  class ReactivePlan {
+    copy() object
+    from_periodic_plan() object
+  }
+  class RewardGridMessage {
+    payload : object
+  }
+  class SatelliteAgentState {
+    EMPTY_VECTOR : list
+    attitude
+    attitude_rates : list
+    eclipse : int
+    eps : NoneType, float
+    keplerian_state : tuple
+    orbit_state : dict
+    pos
+    time_step : Optional[float]
+    vel
+    comp_vectors(v1: list, v2: list, eps: float)
+    from_dict(d) 'SatelliteAgentState'
+    is_failure() None
+    kinematic_model(tf: Union[int, float], update_keplerian: bool) tuple
+    perform_maneuver(action: ManeuverAction, t: Union[int, float]) tuple
+    perform_travel(action: TravelAction, t: Union[int, float]) tuple
+    to_dict() dict
+  }
+  class SenseMessage {
+    senses : list
+    state : dict
+  }
+  class Simulation {
+    close() None
+    execute(pbar_pos: int, pbar_leave) None
+    from_dict(d: dict, overwrite: bool, printouts: bool, level) 'Simulation'
+    generate_events(scenario_dict: dict) str
+    is_executed(printouts: bool) bool
+    load_missions(scenario_dict: dict) dict
+    process_results(force_process: bool, printouts: bool) List[pd.DataFrame]
+    summarize_results(force_summarize: bool, printouts: bool, print_to_csv: bool, calc_bounds_opt: int, precision: int) pd.DataFrame
+  }
+  class SimulationAgent {
+    name : str
+    decide_action(curr_state: SimulationAgentState, prev_action: AgentAction, prev_action_status: str, incoming_messages: List[SimulationMessage], my_measurements: list) Tuple[SimulationAgentState, AgentAction]
+    get_latest_observations(state: SimulationAgentState, latest_plan_only: bool)* List[dict]
+    get_next_planned_action(state: SatelliteAgentState) AgentAction
+    get_state() SimulationAgentState
+    log(msg: str, level) None
+    print_results() None
+  }
+  class SimulationAgentState {
+    IDLING : str
+    MANEUVERING : str
+    MEASURING : str
+    MESSAGING : str
+    TRAVELING : str
+    WAITING : str
+    agent_id : str
+    agent_name : str
+    attitude : list
+    attitude_rates : list
+    pos : list
+    state_type : str
+    status : NoneType, str
+    vel : list
+    comp_vectors(v1: list, v2: list, eps: float)
+    copy() 'AbstractAgentState'
+    from_dict()* object
+    get_time() float
+    kinematic_model(tf: Union[int, float])* tuple
+    perform_action(action: AgentAction, t: Union[int, float]) tuple
+    perform_maneuver(action: ManeuverAction, t: Union[int, float])* tuple
+    perform_travel(action: TravelAction, t: Union[int, float])* tuple
+    propagate(tf: Union[int, float]) tuple
+    to_dict()* dict
+    update(t: Union[int, float], status: str, state: dict) None
+  }
+  class SimulationAgentTypes {
+    name
+  }
+  class SimulationClockType {
+    name
+  }
+  class SimulationEnvironment {
+    agents : dict
+    log(msg: str, level) None
+    print_results() None
+    step(state_action_pairs: Dict[str, Tuple[SimulationAgentState, AgentAction]], t_curr: float) Dict[str, List[Tuple[SimulationAgentState, AgentAction, str, List[SimulationMessage], List[dict]]]]
+  }
+  class SimulationMessage {
+    dst : str
+    id : str
+    msg_type : str
+    path
+    src : str
+    to_dict() dict
+    to_json() str
+  }
+  class SimulationMessageTypes {
+    name
+  }
+  class TaskObservationTracker {
+    create(owner_name: str) 'TaskObservationTracker'
+    encode(task_ids: Optional[Iterable[str]], encoding_type: type) object
+    is_registered(task_id: str) bool
+    lookup(task_id: str) Dict[str, Any]
+    register_task(task: GenericObservationTask, shareable: bool) bool
+    registered_task_ids() List[str]
+    remove_task(task: GenericObservationTask) bool
+    tasks_at(grid_idx: int, gp_idx: int) List[str]
+    teardown() None
+    update_from_observations(measurements: Iterable[List[Dict[str, Any]]]) Dict[str, int]
+    update_from_peer(payload: object) Dict[str, str]
+  }
+  class TravelAction {
+    final_pos : list
+    id : str
+    pos_type : str
+    t_end
+    t_start
+  }
+  class TriggerReplan {
+  }
+  class UnknownTaskError {
+    source : str
+    task_id : str
+  }
+  class WaitAction {
+    id : str
+    t_end
+    t_start
+  }
+  AgentActionMessage --|> SimulationMessage
+  AgentConnectivityUpdate --|> SimulationMessage
+  AgentStateMessage --|> SimulationMessage
+  BusMessage --|> SimulationMessage
+  MeasurementBidMessage --|> SimulationMessage
+  MeasurementRequestMessage --|> SimulationMessage
+  ObservationPerformedMessage --|> SimulationMessage
+  ObservationResultsMessage --|> SimulationMessage
+  PlanMessage --|> SimulationMessage
+  RewardGridMessage --|> SimulationMessage
+  SenseMessage --|> SimulationMessage
+  BroadcastMessageAction --|> AgentAction
+  FutureBroadcastMessageAction --|> BroadcastMessageAction
+  IdleAction --|> AgentAction
+  ManeuverAction --|> AgentAction
+  ObservationAction --|> AgentAction
+  TravelAction --|> AgentAction
+  TriggerReplan --|> AgentAction
+  WaitAction --|> AgentAction
+  AbstractEventAnnouncerPlanner --|> AbstractPeriodicPlanner
+  GroundProcessorEventAnnouncerPlanner --|> AbstractEventAnnouncerPlanner
+  InstantEventAnnouncerPlanner --|> AbstractEventAnnouncerPlanner
+  BlankPlanner --|> AbstractPeriodicPlanner
+  FixedPointingDefaultPlanner --|> AbstractReactivePlanner
+  DynamicProgrammingPlanner --|> AbstractPeriodicPlanner
+  EarliestAccessPeriodicPlanner --|> HeuristicInsertionPeriodicPlanner
+  EarliestAccessReactivePlanner --|> HeuristicInsertionReactivePlanner
+  EarliestRequestArrivalPeriodicPlanner --|> HeuristicInsertionPeriodicPlanner
+  EarliestRequestArrivalReactivePlanner --|> HeuristicInsertionReactivePlanner
+  HeuristicInsertionPeriodicPlanner --|> AbstractPeriodicPlanner
+  HeuristicInsertionReactivePlanner --|> AbstractReactivePlanner
+  NadirPointingPeriodicPlanner --|> EarliestAccessPeriodicPlanner
+  NadirPointingReactivePlanner --|> EarliestAccessReactivePlanner
+  AbstractPeriodicPlanner --|> AbstractPlanner
+  PeriodicPlan --|> Plan
+  ReactivePlan --|> Plan
+  AbstractReactivePlanner --|> AbstractPlanner
+  GroundOperatorAgentState --|> SimulationAgentState
+  GroundSensorAgentState --|> SimulationAgentState
+  SatelliteAgentState --|> SimulationAgentState
+  SimulationAgentState --|> AbstractAgentState
+  PeriodicPlan --* AbstractEventAnnouncerPlanner : _plan
+  PeriodicPlan --* FixedPointingDefaultPlanner : _plan
+  PeriodicPlan --* AbstractPeriodicPlanner : _plan
+  PeriodicPlan --* AbstractPeriodicPlanner : _plan
+  PeriodicPlan --* AbstractReactivePlanner : _preplan
+  Plan --* SimulationAgent : _plan
+  ReactivePlan --* SimulationAgent : _plan
+  ReactivePlan --* FixedPointingDefaultPlanner : _plan
+  ReactivePlan --* HeuristicInsertionReactivePlanner : _plan
+  DataSink --* SimulationEnvironment : _task_reqs
+  DataSink --* SimulationEnvironment : _observation_history
+  DataSink --* SimulationEnvironment : _broadcasts_history
+  DataSink --* SimulationAgent : _observation_history
+  DataSink --* SimulationAgent : _state_history
+  DataSink --* AbstractPeriodicPlanner : _observation_rewards
+  TaskObservationTracker --* SimulationAgent : _observations_tracker
+  SimulationEnvironment --o Simulation : _environment
+  SimulationAgentState --o SimulationAgent : _state

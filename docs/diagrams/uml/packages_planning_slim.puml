@@ -1,0 +1,45 @@
+@startuml packages_planning_slim
+set namespaceSeparator none
+package "dmas.models.planning" as dmas.models.planning {
+}
+package "dmas.models.planning.decentralized" as dmas.models.planning.decentralized {
+}
+package "dmas.models.planning.decentralized.announcer" as dmas.models.planning.decentralized.announcer {
+}
+package "dmas.models.planning.decentralized.blank" as dmas.models.planning.decentralized.blank {
+}
+package "dmas.models.planning.decentralized.default" as dmas.models.planning.decentralized.default {
+}
+package "dmas.models.planning.decentralized.dynamic" as dmas.models.planning.decentralized.dynamic {
+}
+package "dmas.models.planning.decentralized.earliest" as dmas.models.planning.decentralized.earliest {
+}
+package "dmas.models.planning.decentralized.heuristic" as dmas.models.planning.decentralized.heuristic {
+}
+package "dmas.models.planning.decentralized.nadir" as dmas.models.planning.decentralized.nadir {
+}
+package "dmas.models.planning.periodic" as dmas.models.planning.periodic {
+}
+package "dmas.models.planning.plan" as dmas.models.planning.plan {
+}
+package "dmas.models.planning.planner" as dmas.models.planning.planner {
+}
+package "dmas.models.planning.reactive" as dmas.models.planning.reactive {
+}
+dmas.models.planning.decentralized.announcer --> dmas.models.planning.periodic
+dmas.models.planning.decentralized.announcer --> dmas.models.planning.plan
+dmas.models.planning.decentralized.blank --> dmas.models.planning.periodic
+dmas.models.planning.decentralized.default --> dmas.models.planning.plan
+dmas.models.planning.decentralized.default --> dmas.models.planning.reactive
+dmas.models.planning.decentralized.dynamic --> dmas.models.planning.periodic
+dmas.models.planning.decentralized.earliest --> dmas.models.planning.decentralized.heuristic
+dmas.models.planning.decentralized.heuristic --> dmas.models.planning.periodic
+dmas.models.planning.decentralized.heuristic --> dmas.models.planning.plan
+dmas.models.planning.decentralized.heuristic --> dmas.models.planning.reactive
+dmas.models.planning.decentralized.nadir --> dmas.models.planning.decentralized.earliest
+dmas.models.planning.periodic --> dmas.models.planning.plan
+dmas.models.planning.periodic --> dmas.models.planning.planner
+dmas.models.planning.planner --> dmas.models.planning.plan
+dmas.models.planning.reactive --> dmas.models.planning.plan
+dmas.models.planning.reactive --> dmas.models.planning.planner
+@enduml

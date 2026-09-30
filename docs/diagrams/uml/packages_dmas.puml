@@ -1,0 +1,124 @@
+@startuml packages_dmas
+set namespaceSeparator none
+package "dmas" as dmas {
+}
+package "dmas.core" as dmas.core {
+}
+package "dmas.core.environment" as dmas.core.environment {
+}
+package "dmas.core.messages" as dmas.core.messages {
+}
+package "dmas.core.simulation" as dmas.core.simulation {
+}
+package "dmas.models" as dmas.models {
+}
+package "dmas.models.actions" as dmas.models.actions {
+}
+package "dmas.models.agent" as dmas.models.agent {
+}
+package "dmas.models.planning" as dmas.models.planning {
+}
+package "dmas.models.planning.decentralized" as dmas.models.planning.decentralized {
+}
+package "dmas.models.planning.decentralized.announcer" as dmas.models.planning.decentralized.announcer {
+}
+package "dmas.models.planning.decentralized.blank" as dmas.models.planning.decentralized.blank {
+}
+package "dmas.models.planning.decentralized.default" as dmas.models.planning.decentralized.default {
+}
+package "dmas.models.planning.decentralized.dynamic" as dmas.models.planning.decentralized.dynamic {
+}
+package "dmas.models.planning.decentralized.earliest" as dmas.models.planning.decentralized.earliest {
+}
+package "dmas.models.planning.decentralized.heuristic" as dmas.models.planning.decentralized.heuristic {
+}
+package "dmas.models.planning.decentralized.nadir" as dmas.models.planning.decentralized.nadir {
+}
+package "dmas.models.planning.periodic" as dmas.models.planning.periodic {
+}
+package "dmas.models.planning.plan" as dmas.models.planning.plan {
+}
+package "dmas.models.planning.planner" as dmas.models.planning.planner {
+}
+package "dmas.models.planning.reactive" as dmas.models.planning.reactive {
+}
+package "dmas.models.states" as dmas.models.states {
+}
+package "dmas.models.trackers" as dmas.models.trackers {
+}
+package "dmas.network" as dmas.network {
+}
+dmas.core.environment --> dmas.core.messages
+dmas.core.environment --> dmas.models.actions
+dmas.core.environment --> dmas.models.states
+dmas.core.environment --> dmas.models.trackers
+dmas.core.simulation --> dmas.core.environment
+dmas.core.simulation --> dmas.core.messages
+dmas.core.simulation --> dmas.models.actions
+dmas.core.simulation --> dmas.models.agent
+dmas.core.simulation --> dmas.models.planning.decentralized.announcer
+dmas.core.simulation --> dmas.models.planning.decentralized.blank
+dmas.core.simulation --> dmas.models.planning.decentralized.default
+dmas.core.simulation --> dmas.models.planning.decentralized.dynamic
+dmas.core.simulation --> dmas.models.planning.decentralized.earliest
+dmas.core.simulation --> dmas.models.planning.decentralized.heuristic
+dmas.core.simulation --> dmas.models.planning.decentralized.nadir
+dmas.core.simulation --> dmas.models.planning.periodic
+dmas.core.simulation --> dmas.models.planning.reactive
+dmas.core.simulation --> dmas.models.states
+dmas.models.actions --> dmas.core.messages
+dmas.models.agent --> dmas.core.messages
+dmas.models.agent --> dmas.models.actions
+dmas.models.agent --> dmas.models.planning.periodic
+dmas.models.agent --> dmas.models.planning.plan
+dmas.models.agent --> dmas.models.planning.reactive
+dmas.models.agent --> dmas.models.states
+dmas.models.agent --> dmas.models.trackers
+dmas.models.planning.decentralized.announcer --> dmas.core.messages
+dmas.models.planning.decentralized.announcer --> dmas.models.actions
+dmas.models.planning.decentralized.announcer --> dmas.models.planning.periodic
+dmas.models.planning.decentralized.announcer --> dmas.models.planning.plan
+dmas.models.planning.decentralized.announcer --> dmas.models.states
+dmas.models.planning.decentralized.blank --> dmas.models.planning.periodic
+dmas.models.planning.decentralized.default --> dmas.core.messages
+dmas.models.planning.decentralized.default --> dmas.models.actions
+dmas.models.planning.decentralized.default --> dmas.models.planning.plan
+dmas.models.planning.decentralized.default --> dmas.models.planning.reactive
+dmas.models.planning.decentralized.default --> dmas.models.states
+dmas.models.planning.decentralized.default --> dmas.models.trackers
+dmas.models.planning.decentralized.dynamic --> dmas.core.messages
+dmas.models.planning.decentralized.dynamic --> dmas.models.actions
+dmas.models.planning.decentralized.dynamic --> dmas.models.planning.periodic
+dmas.models.planning.decentralized.dynamic --> dmas.models.states
+dmas.models.planning.decentralized.dynamic --> dmas.models.trackers
+dmas.models.planning.decentralized.earliest --> dmas.models.planning.decentralized.heuristic
+dmas.models.planning.decentralized.heuristic --> dmas.core.messages
+dmas.models.planning.decentralized.heuristic --> dmas.models.actions
+dmas.models.planning.decentralized.heuristic --> dmas.models.planning.periodic
+dmas.models.planning.decentralized.heuristic --> dmas.models.planning.plan
+dmas.models.planning.decentralized.heuristic --> dmas.models.planning.reactive
+dmas.models.planning.decentralized.heuristic --> dmas.models.states
+dmas.models.planning.decentralized.heuristic --> dmas.models.trackers
+dmas.models.planning.decentralized.nadir --> dmas.models.actions
+dmas.models.planning.decentralized.nadir --> dmas.models.planning.decentralized.earliest
+dmas.models.planning.decentralized.nadir --> dmas.models.states
+dmas.models.planning.decentralized.nadir --> dmas.models.trackers
+dmas.models.planning.periodic --> dmas.models.actions
+dmas.models.planning.periodic --> dmas.models.planning.plan
+dmas.models.planning.periodic --> dmas.models.planning.planner
+dmas.models.planning.periodic --> dmas.models.states
+dmas.models.planning.periodic --> dmas.models.trackers
+dmas.models.planning.plan --> dmas.models.actions
+dmas.models.planning.planner --> dmas.core.messages
+dmas.models.planning.planner --> dmas.models.actions
+dmas.models.planning.planner --> dmas.models.planning.plan
+dmas.models.planning.planner --> dmas.models.states
+dmas.models.planning.planner --> dmas.models.trackers
+dmas.models.planning.reactive --> dmas.core.messages
+dmas.models.planning.reactive --> dmas.models.actions
+dmas.models.planning.reactive --> dmas.models.planning.plan
+dmas.models.planning.reactive --> dmas.models.planning.planner
+dmas.models.planning.reactive --> dmas.models.states
+dmas.models.planning.reactive --> dmas.models.trackers
+dmas.models.states --> dmas.models.actions
+@enduml

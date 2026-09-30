@@ -1,0 +1,137 @@
+@startuml classes_planning
+set namespaceSeparator none
+class "AbstractEventAnnouncerPlanner" as dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner {
+  generate_plan(state: SimulationAgentState, _: object, orbitdata: OrbitData) -> Plan
+  load_events(events_path: str) -> pd.DataFrame
+}
+class "AbstractPeriodicPlanner" as dmas.models.planning.periodic.AbstractPeriodicPlanner {
+  GROUND_BASED : str
+  NONE : str
+  OPPORTUNISTIC : str
+  PERIODIC : str
+  pending_reqs_to_broadcast : set[TaskRequest]
+  generate_plan(state: SimulationAgentState, specs: object, orbitdata: OrbitData, mission: Mission, tasks: list, observation_history: TaskObservationTracker) -> Plan
+  get_available_tasks(tasks: list, planning_horizon: Interval) -> list
+  get_ground_points(orbitdata: OrbitData) -> dict
+  needs_planning(state: SimulationAgentState, __: object, current_plan: Plan) -> bool
+  print_results()
+  update_percepts(state: SimulationAgentState, current_plan: Plan, tasks: Dict[Tuple, GenericObservationTask], incoming_reqs: Dict[Tuple, Dict], misc_messages: list, completed_actions: list, aborted_actions: list, pending_actions: list) -> None
+}
+class "AbstractPlanner" as dmas.models.planning.planner.AbstractPlanner {
+  EPS : float
+  latest_performed_observations : Set[ObservationOpportunity]
+  calculate_access_opportunities(tasks: List[GenericObservationTask], planning_horizon: Interval, orbitdata: OrbitData) -> dict
+  check_task_observation_opportunity_clusterability(observation_opportunities: List[ObservationOpportunity], must_overlap: bool, threshold: float) -> dict
+  cluster_task_observation_opportunities(observation_opportunities: List[ObservationOpportunity], adj: Dict[str, Set[ObservationOpportunity]], must_overlap: bool, threshold: float) -> list
+  create_observation_opportunities_from_accesses(available_tasks: List[GenericObservationTask], access_times: List[tuple], cross_track_fovs: dict, orbitdata: OrbitData, must_overlap: bool, threshold: float) -> list
+  estimate_observation_opportunity_value(obs: ObservationOpportunity, t_img: float, d_img: float, specs: object, cross_track_fovs: Dict[str, float], orbitdata: OrbitData, mission: Mission, observation_history: TaskObservationTracker, task_n_obs: Dict[GenericObservationTask, int], task_t_prevs: Dict[GenericObservationTask, int], task_t_imgs: Dict[str, float]) -> float
+  {abstract}generate_plan() -> Plan
+  get_available_accesses(task: GenericObservationTask, instrument_name: str, th_img: float, t_img: float, d_img: float, orbitdata: OrbitData, cross_track_fovs: dict) -> dict
+  is_maneuver_path_valid(state: SimulationAgentState, specs: object, observations: List[ObservationAction], maneuvers: List[ManeuverAction], max_slew_rate: float, cross_track_fovs: dict) -> bool
+  is_observation_pair_valid(t_i, d_i, th_i, t_j, d_j, th_j, max_slew_rate, start_pair) -> bool
+  is_observation_path_valid(state: SimulationAgentState, observations: List[ObservationAction], max_slew_rate: float, max_torque: float, specs: object) -> bool
+  {abstract}needs_planning() -> bool
+  {abstract}print_results() -> None
+  single_task_observation_opportunity_from_accesses(available_tasks: List[GenericObservationTask], access_times: Dict[Tuple, List[tuple]], cross_track_fovs: dict, orbitdata: OrbitData, threshold: float) -> List[ObservationOpportunity]
+  {abstract}update_percepts(completed_actions: list) -> None
+}
+class "AbstractReactivePlanner" as dmas.models.planning.reactive.AbstractReactivePlanner {
+  {abstract}generate_plan(state: SimulationAgentState, specs: object, current_plan: Plan, orbitdata: OrbitData, mission: Mission, tasks: List[GenericObservationTask], observation_history: TaskObservationTracker) -> Plan
+  {abstract}update_percepts(state: SimulationAgentState, current_plan: Plan, tasks: List[GenericObservationTask], incoming_reqs: List[TaskRequest], misc_messages: List[SimulationMessage], completed_actions: List[AgentAction], aborted_actions: List[AgentAction], pending_actions: List[AgentAction]) -> None
+}
+class "BlankPlanner" as dmas.models.planning.decentralized.blank.BlankPlanner {
+  print_results()
+}
+class "DynamicProgrammingPlanner" as dmas.models.planning.decentralized.dynamic.DynamicProgrammingPlanner {
+}
+class "EarliestAccessPeriodicPlanner" as dmas.models.planning.decentralized.earliest.EarliestAccessPeriodicPlanner {
+}
+class "EarliestAccessReactivePlanner" as dmas.models.planning.decentralized.earliest.EarliestAccessReactivePlanner {
+}
+class "EarliestRequestArrivalPeriodicPlanner" as dmas.models.planning.decentralized.earliest.EarliestRequestArrivalPeriodicPlanner {
+}
+class "EarliestRequestArrivalReactivePlanner" as dmas.models.planning.decentralized.earliest.EarliestRequestArrivalReactivePlanner {
+}
+class "FixedPointingDefaultPlanner" as dmas.models.planning.decentralized.default.FixedPointingDefaultPlanner {
+  calculate_access_opportunities(tasks, planning_horizon: Interval, orbitdata: OrbitData) -> dict
+  generate_plan(state: SimulationAgentState, specs: object, current_plan: Plan, orbitdata: OrbitData, mission: Mission, tasks: List[GenericObservationTask], observation_history: TaskObservationTracker) -> Plan
+  needs_periodic_replan(state, current_plan: Plan) -> bool
+  needs_planning(state: SimulationAgentState, _: object, current_plan: Plan, __: OrbitData) -> bool
+  print_results()
+  update_percepts(state: SimulationAgentState, current_plan: Plan, tasks: List[GenericObservationTask], incoming_reqs: List[TaskRequest], misc_messages: List[SimulationMessage], completed_actions: List[AgentAction], aborted_actions: List[AgentAction], pending_actions: List[AgentAction]) -> None
+}
+class "GroundProcessorEventAnnouncerPlanner" as dmas.models.planning.decentralized.announcer.GroundProcessorEventAnnouncerPlanner {
+  print_results()
+  update_percepts(state: SimulationAgentState) -> None
+}
+class "HeuristicInsertionPeriodicPlanner" as dmas.models.planning.decentralized.heuristic.HeuristicInsertionPeriodicPlanner {
+}
+class "HeuristicInsertionReactivePlanner" as dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner {
+  access_opportunities : Optional[dict[tuple]]
+  access_opportunity_horizon : Optional[Interval]
+  calculate_access_opportunities(state: SimulationAgentState, available_tasks: List[GenericObservationTask], planning_horizon: Interval, orbitdata: OrbitData) -> dict
+  generate_plan(state: SimulationAgentState, specs: object, _: Plan, orbitdata: OrbitData, mission: Mission, tasks: List[GenericObservationTask], observation_history: TaskObservationTracker) -> Plan
+  needs_planning() -> bool
+  print_results()
+  update_percepts(state: SimulationAgentState, current_plan: Plan, tasks: List[GenericObservationTask], incoming_reqs: List[TaskRequest], misc_messages: List[SimulationMessage], completed_actions: List[AgentAction], aborted_actions: List[AgentAction], pending_actions: List[AgentAction]) -> None
+}
+class "InstantEventAnnouncerPlanner" as dmas.models.planning.decentralized.announcer.InstantEventAnnouncerPlanner {
+  print_results()
+}
+class "NadirPointingPeriodicPlanner" as dmas.models.planning.decentralized.nadir.NadirPointingPeriodicPlanner {
+  is_observation_path_valid(state: SimulationAgentState, observations: List[ObservationAction], max_slew_rate: float, max_torque: float, specs: object) -> bool
+}
+class "NadirPointingReactivePlanner" as dmas.models.planning.decentralized.nadir.NadirPointingReactivePlanner {
+  is_observation_path_valid(state: SimulationAgentState, observations: List[ObservationAction], max_slew_rate: float, max_torque: float, specs: object) -> bool
+}
+class "PeriodicPlan" as dmas.models.planning.plan.PeriodicPlan {
+  horizon
+  add(action: AgentAction, t: float) -> None
+  copy() -> object
+}
+class "Plan" as dmas.models.planning.plan.Plan {
+  actions : list[AgentAction]
+  t : float
+  t_next
+  add(new_action: AgentAction, t: float) -> None
+  add_all(actions: List[AgentAction], t: float, printouts: bool) -> None
+  copy() -> object
+  counters() -> dict
+  empty(t: float) -> None
+  get_horizon() -> float
+  get_next_actions(t: float, earliest: bool, tolerance: float) -> list
+  is_empty() -> bool
+  remove(action: AgentAction, t: float) -> None
+  update() -> None
+  update_action_completion(completed_actions: List[AgentAction], aborted_actions: List[AgentAction], pending_actions: List[AgentAction], t: float) -> Tuple[list, list]
+}
+class "ReactivePlan" as dmas.models.planning.plan.ReactivePlan {
+  copy() -> object
+  from_periodic_plan() -> object
+}
+dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner --|> dmas.models.planning.periodic.AbstractPeriodicPlanner
+dmas.models.planning.decentralized.announcer.GroundProcessorEventAnnouncerPlanner --|> dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner
+dmas.models.planning.decentralized.announcer.InstantEventAnnouncerPlanner --|> dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner
+dmas.models.planning.decentralized.blank.BlankPlanner --|> dmas.models.planning.periodic.AbstractPeriodicPlanner
+dmas.models.planning.decentralized.default.FixedPointingDefaultPlanner --|> dmas.models.planning.reactive.AbstractReactivePlanner
+dmas.models.planning.decentralized.dynamic.DynamicProgrammingPlanner --|> dmas.models.planning.periodic.AbstractPeriodicPlanner
+dmas.models.planning.decentralized.earliest.EarliestAccessPeriodicPlanner --|> dmas.models.planning.decentralized.heuristic.HeuristicInsertionPeriodicPlanner
+dmas.models.planning.decentralized.earliest.EarliestAccessReactivePlanner --|> dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner
+dmas.models.planning.decentralized.earliest.EarliestRequestArrivalPeriodicPlanner --|> dmas.models.planning.decentralized.heuristic.HeuristicInsertionPeriodicPlanner
+dmas.models.planning.decentralized.earliest.EarliestRequestArrivalReactivePlanner --|> dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner
+dmas.models.planning.decentralized.heuristic.HeuristicInsertionPeriodicPlanner --|> dmas.models.planning.periodic.AbstractPeriodicPlanner
+dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner --|> dmas.models.planning.reactive.AbstractReactivePlanner
+dmas.models.planning.decentralized.nadir.NadirPointingPeriodicPlanner --|> dmas.models.planning.decentralized.earliest.EarliestAccessPeriodicPlanner
+dmas.models.planning.decentralized.nadir.NadirPointingReactivePlanner --|> dmas.models.planning.decentralized.earliest.EarliestAccessReactivePlanner
+dmas.models.planning.periodic.AbstractPeriodicPlanner --|> dmas.models.planning.planner.AbstractPlanner
+dmas.models.planning.plan.PeriodicPlan --|> dmas.models.planning.plan.Plan
+dmas.models.planning.plan.ReactivePlan --|> dmas.models.planning.plan.Plan
+dmas.models.planning.reactive.AbstractReactivePlanner --|> dmas.models.planning.planner.AbstractPlanner
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner : _plan
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.decentralized.default.FixedPointingDefaultPlanner : _plan
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.periodic.AbstractPeriodicPlanner : _plan
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.periodic.AbstractPeriodicPlanner : _plan
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.reactive.AbstractReactivePlanner : _preplan
+dmas.models.planning.plan.ReactivePlan --* dmas.models.planning.decentralized.default.FixedPointingDefaultPlanner : _plan
+dmas.models.planning.plan.ReactivePlan --* dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner : _plan
+@enduml

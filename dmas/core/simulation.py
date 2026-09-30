@@ -1119,6 +1119,8 @@ class Simulation:
                 # create science module
                 processor = LookupProcessor(events_path, agent_name, mission)
 
+            # elif my new processor goes here
+
             else:
                 raise NotImplementedError(f'science module of type `{science_module_type}` not yet supported.')
             
@@ -1397,6 +1399,8 @@ class Simulation:
                 logger=logger,
                 printouts=printouts
             )
+
+        # elif my new planner goes here
 
         # fallback for unimplemented replanner types
         raise NotImplementedError(f'replanner of type `{replanner_dict}` not yet supported.')

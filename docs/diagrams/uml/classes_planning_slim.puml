@@ -1,0 +1,68 @@
+@startuml classes_planning_slim
+set namespaceSeparator none
+class "AbstractEventAnnouncerPlanner" as dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner {
+}
+class "AbstractPeriodicPlanner" as dmas.models.planning.periodic.AbstractPeriodicPlanner {
+}
+class "AbstractPlanner" as dmas.models.planning.planner.AbstractPlanner {
+}
+class "AbstractReactivePlanner" as dmas.models.planning.reactive.AbstractReactivePlanner {
+}
+class "BlankPlanner" as dmas.models.planning.decentralized.blank.BlankPlanner {
+}
+class "DynamicProgrammingPlanner" as dmas.models.planning.decentralized.dynamic.DynamicProgrammingPlanner {
+}
+class "EarliestAccessPeriodicPlanner" as dmas.models.planning.decentralized.earliest.EarliestAccessPeriodicPlanner {
+}
+class "EarliestAccessReactivePlanner" as dmas.models.planning.decentralized.earliest.EarliestAccessReactivePlanner {
+}
+class "EarliestRequestArrivalPeriodicPlanner" as dmas.models.planning.decentralized.earliest.EarliestRequestArrivalPeriodicPlanner {
+}
+class "EarliestRequestArrivalReactivePlanner" as dmas.models.planning.decentralized.earliest.EarliestRequestArrivalReactivePlanner {
+}
+class "FixedPointingDefaultPlanner" as dmas.models.planning.decentralized.default.FixedPointingDefaultPlanner {
+}
+class "GroundProcessorEventAnnouncerPlanner" as dmas.models.planning.decentralized.announcer.GroundProcessorEventAnnouncerPlanner {
+}
+class "HeuristicInsertionPeriodicPlanner" as dmas.models.planning.decentralized.heuristic.HeuristicInsertionPeriodicPlanner {
+}
+class "HeuristicInsertionReactivePlanner" as dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner {
+}
+class "InstantEventAnnouncerPlanner" as dmas.models.planning.decentralized.announcer.InstantEventAnnouncerPlanner {
+}
+class "NadirPointingPeriodicPlanner" as dmas.models.planning.decentralized.nadir.NadirPointingPeriodicPlanner {
+}
+class "NadirPointingReactivePlanner" as dmas.models.planning.decentralized.nadir.NadirPointingReactivePlanner {
+}
+class "PeriodicPlan" as dmas.models.planning.plan.PeriodicPlan {
+}
+class "Plan" as dmas.models.planning.plan.Plan {
+}
+class "ReactivePlan" as dmas.models.planning.plan.ReactivePlan {
+}
+dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner --|> dmas.models.planning.periodic.AbstractPeriodicPlanner
+dmas.models.planning.decentralized.announcer.GroundProcessorEventAnnouncerPlanner --|> dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner
+dmas.models.planning.decentralized.announcer.InstantEventAnnouncerPlanner --|> dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner
+dmas.models.planning.decentralized.blank.BlankPlanner --|> dmas.models.planning.periodic.AbstractPeriodicPlanner
+dmas.models.planning.decentralized.default.FixedPointingDefaultPlanner --|> dmas.models.planning.reactive.AbstractReactivePlanner
+dmas.models.planning.decentralized.dynamic.DynamicProgrammingPlanner --|> dmas.models.planning.periodic.AbstractPeriodicPlanner
+dmas.models.planning.decentralized.earliest.EarliestAccessPeriodicPlanner --|> dmas.models.planning.decentralized.heuristic.HeuristicInsertionPeriodicPlanner
+dmas.models.planning.decentralized.earliest.EarliestAccessReactivePlanner --|> dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner
+dmas.models.planning.decentralized.earliest.EarliestRequestArrivalPeriodicPlanner --|> dmas.models.planning.decentralized.heuristic.HeuristicInsertionPeriodicPlanner
+dmas.models.planning.decentralized.earliest.EarliestRequestArrivalReactivePlanner --|> dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner
+dmas.models.planning.decentralized.heuristic.HeuristicInsertionPeriodicPlanner --|> dmas.models.planning.periodic.AbstractPeriodicPlanner
+dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner --|> dmas.models.planning.reactive.AbstractReactivePlanner
+dmas.models.planning.decentralized.nadir.NadirPointingPeriodicPlanner --|> dmas.models.planning.decentralized.earliest.EarliestAccessPeriodicPlanner
+dmas.models.planning.decentralized.nadir.NadirPointingReactivePlanner --|> dmas.models.planning.decentralized.earliest.EarliestAccessReactivePlanner
+dmas.models.planning.periodic.AbstractPeriodicPlanner --|> dmas.models.planning.planner.AbstractPlanner
+dmas.models.planning.plan.PeriodicPlan --|> dmas.models.planning.plan.Plan
+dmas.models.planning.plan.ReactivePlan --|> dmas.models.planning.plan.Plan
+dmas.models.planning.reactive.AbstractReactivePlanner --|> dmas.models.planning.planner.AbstractPlanner
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.decentralized.announcer.AbstractEventAnnouncerPlanner : _plan
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.decentralized.default.FixedPointingDefaultPlanner : _plan
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.periodic.AbstractPeriodicPlanner : _plan
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.periodic.AbstractPeriodicPlanner : _plan
+dmas.models.planning.plan.PeriodicPlan --* dmas.models.planning.reactive.AbstractReactivePlanner : _preplan
+dmas.models.planning.plan.ReactivePlan --* dmas.models.planning.decentralized.default.FixedPointingDefaultPlanner : _plan
+dmas.models.planning.plan.ReactivePlan --* dmas.models.planning.decentralized.heuristic.HeuristicInsertionReactivePlanner : _plan
+@enduml

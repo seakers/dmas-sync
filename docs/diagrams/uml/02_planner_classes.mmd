@@ -1,0 +1,113 @@
+classDiagram
+    direction TB
+
+    class SimulationAgent {
+        +decide_action(curr_state, prev_action, prev_status, incoming_messages, my_measurements) (state, action)
+        +get_next_planned_action(state) AgentAction
+        -_plan : Plan
+        -_known_tasks
+        -_observations_tracker
+    }
+
+    class AbstractPlanner {
+        <<abstract>>
+        +update_percepts(...)*
+        +needs_planning(...) bool*
+        +generate_plan(...) Plan*
+        +print_results()*
+        +calculate_access_opportunities()
+        +create_observation_opportunities_from_accesses()
+        +estimate_observation_opportunity_value()
+        +is_observation_path_valid()
+    }
+
+    class AbstractPeriodicPlanner {
+        <<abstract>>
+        horizon, period, sharing
+        +needs_planning(state, specs, plan) bool
+        +generate_plan(state, specs, orbitdata, mission, tasks, obs_history) PeriodicPlan
+        #_schedule_observations(...) list*
+        #_schedule_broadcasts(...) list*
+    }
+
+    class AbstractReactivePlanner {
+        <<abstract>>
+        +update_percepts(...)*
+        +needs_planning(...) bool*
+        +generate_plan(state, specs, current_plan, orbitdata, mission, tasks, obs_history) Plan*
+    }
+
+    AbstractPlanner <|-- AbstractPeriodicPlanner
+    AbstractPlanner <|-- AbstractReactivePlanner
+    SimulationAgent o-- "0..1" AbstractPeriodicPlanner : preplanner
+    SimulationAgent o-- "0..1" AbstractReactivePlanner : replanner
+
+    %% Periodic family
+    class HeuristicInsertionPeriodicPlanner
+    class EarliestAccessPeriodicPlanner
+    class EarliestRequestArrivalPeriodicPlanner
+    class NadirPointingPeriodicPlanner
+    class DynamicProgrammingPlanner
+    class BlankPlanner
+    class AbstractEventAnnouncerPlanner {
+        <<abstract>>
+    }
+    class InstantEventAnnouncerPlanner
+    class GroundProcessorEventAnnouncerPlanner
+    class DealerPlanner
+    class DealerMILPPlanner
+    class TestingDealer
+    class WorkerPlanner
+
+    AbstractPeriodicPlanner <|-- HeuristicInsertionPeriodicPlanner
+    HeuristicInsertionPeriodicPlanner <|-- EarliestAccessPeriodicPlanner
+    HeuristicInsertionPeriodicPlanner <|-- EarliestRequestArrivalPeriodicPlanner
+    EarliestAccessPeriodicPlanner <|-- NadirPointingPeriodicPlanner
+    AbstractPeriodicPlanner <|-- DynamicProgrammingPlanner
+    AbstractPeriodicPlanner <|-- BlankPlanner
+    AbstractPeriodicPlanner <|-- AbstractEventAnnouncerPlanner
+    AbstractEventAnnouncerPlanner <|-- InstantEventAnnouncerPlanner
+    AbstractEventAnnouncerPlanner <|-- GroundProcessorEventAnnouncerPlanner
+    AbstractPeriodicPlanner <|-- DealerPlanner
+    DealerPlanner <|-- DealerMILPPlanner
+    DealerPlanner <|-- TestingDealer
+    AbstractPeriodicPlanner <|-- WorkerPlanner
+
+    %% Reactive family
+    class HeuristicInsertionReactivePlanner
+    class EarliestAccessReactivePlanner
+    class EarliestRequestArrivalReactivePlanner
+    class NadirPointingReactivePlanner
+    class FixedPointingDefaultPlanner
+    class ConsensusPlanner {
+        <<abstract>>
+        #_bundle_building_phase(...)*
+        #_build_bundle_from_preplan(...)*
+    }
+    class HeuristicInsertionConsensusPlanner
+    class AugmentedConsensusPlanner
+    class AugmentedHeuristicInsertionConsensusPlanner
+
+    AbstractReactivePlanner <|-- HeuristicInsertionReactivePlanner
+    HeuristicInsertionReactivePlanner <|-- EarliestAccessReactivePlanner
+    HeuristicInsertionReactivePlanner <|-- EarliestRequestArrivalReactivePlanner
+    EarliestAccessReactivePlanner <|-- NadirPointingReactivePlanner
+    AbstractReactivePlanner <|-- FixedPointingDefaultPlanner
+    AbstractReactivePlanner <|-- ConsensusPlanner
+    ConsensusPlanner <|-- HeuristicInsertionConsensusPlanner
+    ConsensusPlanner <|-- AugmentedConsensusPlanner
+    HeuristicInsertionConsensusPlanner <|-- AugmentedHeuristicInsertionConsensusPlanner
+    AugmentedConsensusPlanner <|-- AugmentedHeuristicInsertionConsensusPlanner
+
+    %% Plans
+    class Plan {
+        <<abstract>>
+        +add(action, t)
+        +get_next_actions(t)
+        +update_action_completion(...)
+    }
+    class PeriodicPlan
+    class ReactivePlan
+    Plan <|-- PeriodicPlan
+    Plan <|-- ReactivePlan
+    AbstractPlanner ..> Plan : generate_plan returns
