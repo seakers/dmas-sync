@@ -52,6 +52,8 @@ matplotlib.rcParams.update({
 #  CONSTANTS
 # =============================================================================
 
+COMPLETE_DATES:  list[str] = ['2019-02-15', '2019-05-15']
+
 ALGO_ORDER: list[str] = [
     'MILP', 'DP', 'DP-GR', 'GR', 'DP-SC-CBBA', 'SC-CBBA',
 ]
@@ -380,7 +382,9 @@ def make_boxplot(data: pd.DataFrame, metric: str, ax: plt.Axes,
     ax.set_xticklabels(present, rotation=25, ha='right', fontsize=8)
 
     ax.set_xlabel('')
-    ax.set_ylabel(ylabel if ylabel else metric)
+    # ax.set_ylabel(ylabel if ylabel else metric)
+    ax.set_ylabel(ylabel if ylabel else '')
+
     ax.grid(True, axis='y', linestyle='--', linewidth=0.4, alpha=0.7)
 
     if milp_line:
@@ -1761,6 +1765,103 @@ def plot_normalised_decomposition_heatmap(
 
 
 # =============================================================================
+#  FIGURE 2b-compact — Normalised Decomposition Heatmap 1×3
+#  One panel per mission, DP modes pooled (averaged).
+#  Diverging colour scale centred at 1.0 (MILP reference).
+# =============================================================================
+
+def plot_normalised_decomposition_heatmap_1x3(
+    df: pd.DataFrame,
+    save_dir: str,
+) -> None:
+    metric = 'Reward / MILP'
+
+    row_labels = ['MILP\n(Centralized)', 'DP\n(Onboard)', 'None\n(No Pre)']
+    col_labels  = ['No\nReplanner', 'Greedy', 'SC-CBBA']
+
+    algo_cell = {
+        'MILP':       (0, 0),
+        'DP':         (1, 0),
+        'DP-GR':      (1, 1),
+        'DP-SC-CBBA': (1, 2),
+        'None-None':  (2, 0),
+        'GR':         (2, 1),
+        'SC-CBBA':    (2, 2),
+    }
+
+    vals_all = df[metric].dropna()
+    if vals_all.empty:
+        print('  [Fig 2b-compact] Reward / MILP column absent — skipping.')
+        return
+
+    vmax = max(abs(vals_all.max() - 1.0), abs(vals_all.min() - 1.0)) + 0.05
+    norm = matplotlib.colors.TwoSlopeNorm(vmin=1.0 - vmax, vcenter=1.0, vmax=1.0 + vmax)
+    cmap = 'RdYlGn'
+
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+
+    fig, axes = plt.subplots(1, len(MISSION_ORDER),
+                             figsize=(4.5 * len(MISSION_ORDER), 4.2),
+                             sharey=True)
+
+    for col_i, mission in enumerate(MISSION_ORDER):
+        ax  = axes[col_i]
+        sub = df[df['Mission'] == mission]   # pool across all DP modes
+        grid = np.full((3, 3), np.nan)
+        text = [[''] * 3 for _ in range(3)]
+
+        for algo, (ri, ci) in algo_cell.items():
+            vals = sub[sub['Algorithm'] == algo][metric].dropna()
+            if len(vals):
+                m, s = vals.mean(), vals.std(ddof=0)
+                grid[ri, ci] = m
+                text[ri][ci] = f'{m:.2f}\n±{s:.2f}'
+
+        masked = np.ma.masked_invalid(grid)
+        ax.imshow(masked, cmap=cmap, norm=norm, aspect='auto')
+
+        for ri in range(3):
+            for ci in range(3):
+                if text[ri][ci]:
+                    val = masked[ri, ci]
+                    fc = 'black' if abs(val - 1.0) < vmax * 0.5 else 'white'
+                    ax.text(ci, ri, text[ri][ci],
+                            ha='center', va='center', fontsize=7, color=fc)
+
+        nn_r, nn_c = algo_cell['None-None']
+        ax.add_patch(plt.Rectangle(
+            (nn_c - 0.5, nn_r - 0.5), 1, 1,
+            facecolor='#CCCCCC', hatch='//',
+            edgecolor='#777777', linewidth=0.8, zorder=2))
+        ax.text(nn_c, nn_r, 'Passive\n(ref.)',
+                ha='center', va='center', fontsize=6,
+                color='#444444', style='italic', zorder=3)
+
+        ax.set_xticks([0, 1, 2])
+        ax.set_xticklabels(col_labels, fontsize=7)
+        ax.set_yticks([0, 1, 2])
+        ax.set_yticklabels(row_labels, fontsize=7)
+        ax.set_xlabel('Replanner', fontsize=8)
+        if col_i == 0:
+            ax.set_ylabel('Preplanner', fontsize=8)
+        ax.axhline(0.5, color='white', linewidth=2)
+        ax.set_title(MISSION_FULL_LABELS[mission], fontsize=9, fontweight='bold')
+
+    plt.tight_layout(rect=[0, 0, 0.88, 1])
+    cbar_ax = fig.add_axes([0.90, 0.15, 0.02, 0.70])
+    cb = fig.colorbar(sm, cax=cbar_ax, label='Reward / MILP Reward')
+    cb.ax.axhline(1.0, color='black', linewidth=1.0, linestyle='--')
+    # cb.ax.text(2.5, 1.0, 'MILP', fontsize=6, va='center', color='black')
+
+    plt.suptitle(
+        'Reward Decomposition (MILP-Normalised): Preplanner × Replanner\n',
+        fontsize=12, y=1.01)
+    save_plot(save_dir, 'Plot4_2b_2-Decomposition_Heatmap_Norm_1x3.png')
+    plt.close()
+
+
+# =============================================================================
 #  FIGURE 2c — Cumulative Normalised Heatmap
 #  Single 3×3 Preplanner×Replanner grid, all missions/connectivity/DP/dates
 #  collapsed into one mean Reward/MILP value per cell.
@@ -1983,6 +2084,320 @@ def plot_coobs_strategy(
     plt.close()
 
 
+def plot_event_type_reward(df: pd.DataFrame, output_dir: str) -> None:
+    df['Preplanner']   = df['Preplanner'].fillna('None')
+    df['Replanner']    = df['Replanner'].fillna('None')
+    df['Planner']      = df['Preplanner'] + '+' + df['Replanner']
+    planner_map = {
+        'Centralized-MILP_priority+None': 'MILP',
+        'DP+None':    'DP',
+        'None+Greedy':'GR',
+        'DP+Greedy':  'DP-GR',
+        'None+CBBA':  'SC-CBBA',
+        'DP+CBBA':    'DP-SC-CBBA',
+    }
+    df['Planner_Label'] = df['Planner'].map(planner_map)
+ 
+    milp = df[df['Planner_Label'] == 'MILP'][
+        ['Mission', 'Data Processing', 'Date', 'Connectivity',
+         'Total Obtained Reward (Mission: wildfire response)',
+         'Total Obtained Reward (Mission: algal bloom response)']
+    ].rename(columns={
+        'Total Obtained Reward (Mission: wildfire response)': 'MILP_WF',
+        'Total Obtained Reward (Mission: algal bloom response)': 'MILP_AB',
+    })
+    df = df.merge(milp,
+                  on=['Mission', 'Data Processing', 'Date', 'Connectivity'],
+                  how='left')
+    df['Norm_WF'] = (df['Total Obtained Reward (Mission: wildfire response)']
+                     / df['MILP_WF'].replace(0, np.nan))
+    df['Norm_AB'] = (df['Total Obtained Reward (Mission: algal bloom response)']
+                     / df['MILP_AB'].replace(0, np.nan))
+    # full = df[df['in_full'] == True].copy()
+    full = df[df['Date'].isin(COMPLETE_DATES)].copy()
+
+    x     = np.arange(len(ALGO_ORDER))
+    width = 0.35
+ 
+    fig, axes = plt.subplots(1, 3, figsize=(5 * len(MISSION_ORDER), 5), sharey=False)
+ 
+    # Shared legend above all panels
+    legend_handles = [
+        mpatches.Patch(facecolor='#666', alpha=0.85, edgecolor='black',
+                       linewidth=0.6,
+                       label='Wildfire (short, median 10\u00a0min)'),
+        mpatches.Patch(facecolor='#666', alpha=0.40, edgecolor='black',
+                       linewidth=0.6, hatch='///',
+                       label='Algal bloom (long, median 11\u00a0hr)'),
+        plt.Line2D([0], [0], color='black', linestyle='--',
+                   linewidth=1.0, alpha=0.5, label='MILP\u00a0=\u00a01'),
+    ]
+    fig.legend(handles=legend_handles, fontsize=8,
+               loc='upper center', ncol=3,
+               bbox_to_anchor=(0.5, 1.00), framealpha=0.9)
+    fig.suptitle(
+        'MILP-Normalized Reward by Event Type, Planner, and Mission Tier',
+        fontsize=11, y=1.06,
+    )
+ 
+    for mi, mission in enumerate(MISSION_ORDER):
+        ax  = axes[mi]
+        sub = full[full['Mission'] == mission]
+ 
+        wf_means = [sub[sub['Planner_Label'] == p]['Norm_WF'].mean()
+                    for p in ALGO_ORDER]
+        ab_means = [sub[sub['Planner_Label'] == p]['Norm_AB'].mean()
+                    for p in ALGO_ORDER]
+        wf_sems  = [sub[sub['Planner_Label'] == p]['Norm_WF'].sem()
+                    for p in ALGO_ORDER]
+        ab_sems  = [sub[sub['Planner_Label'] == p]['Norm_AB'].sem()
+                    for p in ALGO_ORDER]
+        colors = [ALGO_PALETTE[p] for p in ALGO_ORDER]
+ 
+        ax.bar(x - width / 2, wf_means, width, color=colors,
+               alpha=0.85, edgecolor='black', linewidth=0.6)
+        ax.errorbar(x - width / 2, wf_means, yerr=wf_sems,
+                    fmt='none', ecolor='#333', capsize=3, linewidth=0.8)
+ 
+        ax.bar(x + width / 2, ab_means, width, color=colors,
+               alpha=0.40, edgecolor='black', linewidth=0.6, hatch='///')
+        ax.errorbar(x + width / 2, ab_means, yerr=ab_sems,
+                    fmt='none', ecolor='#333', capsize=3, linewidth=0.8)
+ 
+        ax.axhline(1.0, color='black', linestyle='--',
+                   linewidth=1.0, alpha=0.5)
+        ax.set_title(f'{mission} Priority Mission', fontweight='bold', fontsize=11)
+        ax.set_xticks(x)
+        ax.set_xticklabels(ALGO_ORDER, rotation=25, ha='right', fontsize=8)
+        ax.set_ylim(0.55, 1.45)
+        ax.grid(axis='y', alpha=0.3)
+        if mi == 0:
+            # ax.set_ylabel('Norm.\u00a0reward\u00a0(MILP\u00a0=\u00a01)')
+            ax.set_ylabel('Reward / MILP Reward')
+
+            
+ 
+        # Annotations on Co-observation panel only
+        # Positions computed dynamically from axis limits to stay inside plot
+        if mission == 'Co-observations':
+            sc_idx   = ALGO_ORDER.index('SC-CBBA')
+            dpgr_idx = ALGO_ORDER.index('DP-GR')
+            ymin, ymax = ax.get_ylim()
+ 
+            sc_ab = ab_means[sc_idx]
+            ax.annotate(
+                'SC-CBBA leads\non long events',
+                xy=(sc_idx + width / 2, sc_ab),
+                xytext=(sc_idx - 1.5, ymax - 0.12),
+                fontsize=7, color=ALGO_PALETTE['SC-CBBA'],
+                arrowprops=dict(arrowstyle='->',
+                                color=ALGO_PALETTE['SC-CBBA'], lw=0.9),
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                          edgecolor='#CCCCCC', alpha=0.9),
+            )
+ 
+            dpgr_ab = ab_means[dpgr_idx]
+            ax.annotate(
+                'DP-GR falls below\nMILP on long events',
+                xy=(dpgr_idx + width / 2, dpgr_ab),
+                xytext=(dpgr_idx + 0.1, ymin + 0.60),
+                fontsize=7, color=ALGO_PALETTE['DP-GR'],
+                arrowprops=dict(arrowstyle='->',
+                                color=ALGO_PALETTE['DP-GR'], lw=0.9),
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                          edgecolor='#CCCCCC', alpha=0.9),
+            )
+ 
+    plt.tight_layout()
+    out = os.path.join(output_dir, 'fig_rq1_event_type_reward.png')
+    plt.savefig(out, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f'Saved -> {out}')
+
+# ================================================================
+# FIGURE
+# ================================================================
+def plot_req_satisfaction(df: pd.DataFrame, output_dir: str) -> None:
+    df['Preplanner']   = df['Preplanner'].fillna('None')
+    df['Replanner']    = df['Replanner'].fillna('None')
+    df['Planner']      = df['Preplanner'] + '+' + df['Replanner']
+    planner_map = {
+        'Centralized-MILP_priority+None': 'MILP',
+        'DP+None':    'DP',
+        'None+Greedy':'GR',
+        'DP+Greedy':  'DP-GR',
+        'None+CBBA':  'SC-CBBA',
+        'DP+CBBA':    'DP-SC-CBBA',
+    }
+    df['Planner_Label'] = df['Planner'].map(planner_map)
+ 
+    milp = df[df['Planner_Label'] == 'MILP'][
+        ['Mission', 'Data Processing', 'Date', 'Connectivity',
+         'Total Obtained Reward (Mission: wildfire response)',
+         'Total Obtained Reward (Mission: algal bloom response)']
+    ].rename(columns={
+        'Total Obtained Reward (Mission: wildfire response)': 'MILP_WF',
+        'Total Obtained Reward (Mission: algal bloom response)': 'MILP_AB',
+    })
+    df = df.merge(milp,
+                  on=['Mission', 'Data Processing', 'Date', 'Connectivity'],
+                  how='left')
+    df['Norm_WF'] = (df['Total Obtained Reward (Mission: wildfire response)']
+                     / df['MILP_WF'].replace(0, np.nan))
+    df['Norm_AB'] = (df['Total Obtained Reward (Mission: algal bloom response)']
+                     / df['MILP_AB'].replace(0, np.nan))
+    # full = df[df['in_full'] == True].copy()
+    full = df[df['Date'].isin(COMPLETE_DATES)].copy()
+
+    # Response quality: 1 - normalised response time (higher = faster)
+    full['RT_quality'] = 1.0 - full['Average Normalized Response Time to Event']
+ 
+    # Revisit quality: 1 - |median_reobs - target| / target, clipped to [0,1]
+    # Penalises deviations in both directions from the target interval
+    full['Revisit_quality'] = (
+        1.0
+        - (full['Median Task Reobservation Time [s]'] - REVISIT_TARGET_S).abs()
+        / REVISIT_TARGET_S
+    ).clip(0, 1)
+    
+    
+    perf_metrics = {
+        'Response\nquality':    'RT_quality',
+        'Revisit\nquality':     'Revisit_quality',
+        'Co-obs\nunique':       'P(Tasked Co-observation Unique)',
+        'Full\nco-obs':         'P(Event Fully Co-observed | Fully Co-observable)',
+    }
+    obs_col    = 'Average Observations per Task'
+    m_labels   = list(perf_metrics.keys())
+    m_cols     = list(perf_metrics.values())
+    x          = np.arange(len(m_labels))
+    x_obs      = np.array([len(m_labels) + 0.8])   # gap before obs/task bar
+    n_planners = len(ALGO_ORDER)
+    width      = 0.12
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
+
+    handles = [mpatches.Patch(facecolor=ALGO_PALETTE[p], label=p)
+               for p in ALGO_ORDER]
+    fig.legend(handles=handles, title='Planner', loc='upper center',
+               ncol=6, fontsize=8, title_fontsize=9,
+               bbox_to_anchor=(0.5, 0.90), framealpha=0.9)
+    fig.suptitle(
+        'Requirement Performance by Planner Configuration and Mission Priority Tier\n'
+        'Performance-based metrics; obs\u00a0per\u00a0task on secondary axis (right)\n\n',
+        fontsize=11)
+
+    for mi, mission in enumerate(MISSION_ORDER):
+        ax  = axes[mi]
+        ax2 = ax.twinx()
+        sub = full[full['Mission'] == mission]
+
+        for pi, planner in enumerate(ALGO_ORDER):
+            psub   = sub[sub['Planner_Label'] == planner]
+            offset = (pi - n_planners / 2 + 0.5) * width
+            color  = ALGO_PALETTE[planner]
+
+            # Primary bars: four performance metrics
+            vals = [psub[col].mean() for col in m_cols]
+            ax.bar(x + offset, vals, width,
+                   color=color, alpha=0.82,
+                   edgecolor='white', linewidth=0.4)
+
+            # Secondary bar: obs per task (dotted hatch, right axis)
+            ax2.bar(x_obs + offset, psub[obs_col].mean(), width,
+                    color=color, alpha=0.82,
+                    edgecolor='white', linewidth=0.4, hatch='...')
+
+        # Separator between requirement metrics and obs/task
+        sep_x = (x[-1] + x_obs[0]) / 2
+        ax.axvline(sep_x, color='#999999', linewidth=1.2,
+                   linestyle=':', alpha=0.8)
+
+        ax.axhline(1.0, color='black', linestyle=':',
+                   linewidth=0.8, alpha=0.4)
+
+        all_ticks  = list(x) + list(x_obs)
+        all_labels = m_labels + ['Obs per\ntask']
+        ax.set_xticks(all_ticks)
+        ax.set_xticklabels(all_labels, fontsize=8)
+        ax.set_xlim(-0.7, x_obs[0] + 0.7)
+        ax.set_ylim(0, 1.15)
+        ax.set_title(f'{mission} Priority Mission', fontweight='bold', fontsize=11)
+        ax.grid(axis='y', alpha=0.3)
+
+        ax2.set_ylim(0, 12)
+        if mi == 2:
+            ax2.set_ylabel('Obs per task\n(dotted bars)',
+                           fontsize=8, color='#444', labelpad=4)
+            ax2.tick_params(axis='y', labelsize=8, labelcolor='#444')
+        else:
+            ax2.set_yticks([])
+
+        if mi == 0:
+            ax.set_ylabel('Performance score (higher\u00a0=\u00a0better)')
+
+        # ── Annotations on Co-observations panel only ────────────
+        if mission == 'Co-observations':
+            sc_idx   = ALGO_ORDER.index('SC-CBBA')
+            sc_off   = (sc_idx - n_planners / 2 + 0.5) * width
+            dpgr_idx = ALGO_ORDER.index('DP-GR')
+            dpgr_off = (dpgr_idx - n_planners / 2 + 0.5) * width
+
+            # SC-CBBA revisit quality
+            sc_rev = sub[sub['Planner_Label'] == 'SC-CBBA']['Revisit_quality'].mean()
+            ax.annotate(
+                'SC-CBBA spaces revisits\nclose to 60\u00a0min target\n(quality\u00a0=\u00a00.93)',
+                xy=(x[1] + sc_off, sc_rev),
+                xytext=(x[1] - 0.5, 1.0),
+                fontsize=6.5, color=ALGO_PALETTE['SC-CBBA'],
+                arrowprops=dict(arrowstyle='->', lw=0.8,
+                                color=ALGO_PALETTE['SC-CBBA']),
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                          edgecolor='#CCCCCC', alpha=0.9))
+
+            # SC-CBBA unique co-obs
+            sc_uniq = sub[sub['Planner_Label'] == 'SC-CBBA'][
+                'P(Tasked Co-observation Unique)'].mean()
+            ax.annotate(
+                'Highest unique\nco-obs fraction',
+                xy=(x[2] + sc_off, sc_uniq),
+                xytext=(x[2] + 0.0, 0.85),
+                fontsize=6.5, color=ALGO_PALETTE['SC-CBBA'],
+                arrowprops=dict(arrowstyle='->', lw=0.8,
+                                color=ALGO_PALETTE['SC-CBBA']),
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                          edgecolor='#CCCCCC', alpha=0.9))
+
+            # SC-CBBA obs/task: fewest, geometric decay note
+            sc_obs = sub[sub['Planner_Label'] == 'SC-CBBA'][obs_col].mean()
+            ax2.annotate(
+                'Fewest obs/task\n(geometric decay\nreduces marginal\nvalue)',
+                xy=(x_obs[0] + sc_off, sc_obs),
+                xytext=(x_obs[0] - 0.5, 10.2),
+                fontsize=6.5, color=ALGO_PALETTE['SC-CBBA'],
+                arrowprops=dict(arrowstyle='->', lw=0.8,
+                                color=ALGO_PALETTE['SC-CBBA']),
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                          edgecolor='#CCCCCC', alpha=0.9))
+
+            # DP-GR revisit too rapid
+            dpgr_rev = sub[sub['Planner_Label'] == 'DP-GR']['Revisit_quality'].mean()
+            ax.annotate(
+                'DP-GR revisits too rapidly\n(\u223c24\u00a0min vs 60\u00a0min target)',
+                xy=(x[1] + dpgr_off, dpgr_rev),
+                xytext=(x[1] - 1.4, 0.65),
+                fontsize=6.5, color=ALGO_PALETTE['DP-GR'],
+                arrowprops=dict(arrowstyle='->', lw=0.8,
+                                color=ALGO_PALETTE['DP-GR']),
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white',
+                          edgecolor='#CCCCCC', alpha=0.9))
+
+    plt.tight_layout()
+    out = os.path.join(output_dir, 'fig_rq1_req_satisfaction.png')
+    plt.savefig(out, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f'Saved -> {out}')
+
 
 # =============================================================================
 #  MAIN DRIVER
@@ -2004,7 +2419,7 @@ def generate_plots(
     base_dir = os.path.join(
         'experiments', '2_centralized_vs_decentralized', 'analysis')
     save_dir = os.path.join(
-        base_dir, 'plots', f'{trial_name}_P{date_str}')
+        base_dir, 'plots', 'rq1', f'{trial_name}_P{date_str}')
     os.makedirs(save_dir, exist_ok=True)
 
     df = df_all[df_all['Date'] == filter_date].copy() \
@@ -2017,51 +2432,60 @@ def generate_plots(
     print(f'  Output: {save_dir}')
     print(f'{"="*65}')
 
-    print('  Fig 1a -- Unified Reward (all conditions)')
-    plot_unified_reward(df, save_dir)
+    # print('  Fig 1a -- Unified Reward (all conditions)')
+    # plot_unified_reward(df, save_dir)
 
-    print('  Fig 1b -- Unified Normalised Reward (all conditions)')
-    plot_unified_normalised_reward(df, save_dir)
+    # print('  Fig 1b -- Unified Normalised Reward (all conditions)')
+    # plot_unified_normalised_reward(df, save_dir)
 
-    print('  Fig 1 -- Mission Reward Degradation (all + per-date)')
-    plot_mission_degradation(df, save_dir)
+    # print('  Fig 1 -- Mission Reward Degradation (all + per-date)')
+    # plot_mission_degradation(df, save_dir)
 
-    print('  Fig 2 -- Decomposition Heatmap (supplemental)')
-    plot_decomposition_heatmap(df_all, save_dir)
+    # print('  Fig 2 -- Decomposition Heatmap (supplemental)')
+    # plot_decomposition_heatmap(df_all, save_dir)
 
-    print('  Fig 2b -- Normalised Decomposition Heatmap')
-    plot_normalised_decomposition_heatmap(df_all, save_dir)
+    # print('  Fig 2b -- Normalised Decomposition Heatmap')
+    # plot_normalised_decomposition_heatmap(df_all, save_dir)
 
-    print('  Fig 2c -- Cumulative Normalised Heatmap')
-    plot_cumulative_normalised_heatmap(df_all, save_dir)
+    print('  Fig 2b-compact -- Normalised Decomposition Heatmap 1x3 (DP pooled)')
+    plot_normalised_decomposition_heatmap_1x3(df_all, save_dir)
 
-    print('  Fig 3 -- Two-Strategy Scatter (3 rows x 2 cols)')
-    plot_two_strategy_scatter(df, save_dir)
+    # print('  Fig 2c -- Cumulative Normalised Heatmap')
+    # plot_cumulative_normalised_heatmap(df_all, save_dir)
 
-    print('  Fig 4 -- Data Processing Effect')
-    plot_data_processing_effect(df_all, save_dir,
-                                complete_date=complete_date)
+    # print('  Fig 3 -- Two-Strategy Scatter (3 rows x 2 cols)')
+    # plot_two_strategy_scatter(df, save_dir)
 
-    print('  Fig 5 -- Connectivity Effect (per mission)')
-    plot_connectivity_effect(df, save_dir)
+    # print('  Fig 4 -- Data Processing Effect')
+    # plot_data_processing_effect(df_all, save_dir,
+    #                             complete_date=complete_date)
 
-    print('  Fig 6a -- Urgency Requirements')
-    plot_urgency_requirements(df, save_dir)
+    # print('  Fig 5 -- Connectivity Effect (per mission)')
+    # plot_connectivity_effect(df, save_dir)
 
-    print('  Fig 6b -- Revisit Requirements')
-    plot_revisit_requirements(df, save_dir)
+    # print('  Fig 6a -- Urgency Requirements')
+    # plot_urgency_requirements(df, save_dir)
 
-    print('  Fig 6c -- Co-observations Requirements')
-    plot_coobs_requirements(df, save_dir)
+    # print('  Fig 6b -- Revisit Requirements')
+    # plot_revisit_requirements(df, save_dir)
 
-    print('  Fig 6d -- Co-observations Strategy (unique vs repeated)')
-    plot_coobs_strategy(df, save_dir)
+    # print('  Fig 6c -- Co-observations Requirements')
+    # plot_coobs_requirements(df, save_dir)
 
-    print('  Fig 7 -- Communication Load')
-    plot_communication_load(df, save_dir)
+    # print('  Fig 6d -- Co-observations Strategy (unique vs repeated)')
+    # plot_coobs_strategy(df, save_dir)
 
-    print('  Fig 8 -- Seasonal Sensitivity')
-    plot_seasonal_sensitivity(df, save_dir)
+    # print('  Fig 7 -- Communication Load')
+    # plot_communication_load(df, save_dir)
+
+    # print('  Fig 8 -- Seasonal Sensitivity')
+    # plot_seasonal_sensitivity(df, save_dir)
+
+    print('  Fig RQ1 -- Event Type Reward')
+    plot_event_type_reward(df, save_dir)
+
+    print('  Fig RQ1 -- Requirement Satisfaction')
+    plot_req_satisfaction(df, save_dir)
 
     print('\nDONE.')
 

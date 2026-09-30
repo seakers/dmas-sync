@@ -292,15 +292,15 @@ def generate_plots(trial_name: str,
 
     algo_order = ['MILP', 'DP', 'GR', 'DP-GR', 'CBBA', 'DP-CBBA']
 
-    algo_palette = {
-        'MILP':    '#D55E00',  # vermillion  (centralized reference)
-        'DP':      '#CC79A7',  # gray
-        'GR':      '#E69F00',  # orange
-        'DP-GR':   '#56B4E9',  # sky blue
-        'CBBA':    '#009E73',  # teal
-        'DP-CBBA': '#0072B2',  # deep blue
+    algo_palette : dict[str, str] = {
+        'None-None':  '#BBBBBB',   # light gray   (passive reference / hatched)
+        'MILP':       '#999999',   # mid gray     (centralised benchmark)
+        'DP':         '#D55E00',   # vermillion   (preplanner only)
+        'DP-GR':      '#E69F00',   # amber
+        'GR':         '#009E73',   # teal
+        'DP-SC-CBBA': '#0072B2',   # blue
+        'SC-CBBA':    '#56B4E9',   # sky blue
     }
-
     linestyles = {
         'MILP':    (6, 2),
         'DP':      (4, 2),

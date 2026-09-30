@@ -165,7 +165,7 @@ def plot_metric(df, agg, metrics, titles, ylabels,
 
     for row_idx, (metric, ylabel) in enumerate(zip(metrics, ylabels)):
         for col_idx, (group_col, xlabel) in enumerate([
-            ('Task Arrival Rate', r'Task Arrival Rate $\lambda$ (1/day)'),
+            ('Task Arrival Rate', r'Task Arrival Rate $\gamma$ (1/day)'),
             ('Num Sats',          'Number of Satellites'),
         ]):
             ax = axes[row_idx][col_idx]
@@ -363,7 +363,7 @@ def generate_plots(trial_name: str,
 
     i = 0
     for ax, (x_col, xlabel, xscale) in zip(axes, [
-        ('Task Arrival Rate', r'Task Arrival Rate $\lambda$ (1/day)', 'log'),
+        ('Task Arrival Rate', r'Task Arrival Rate $\gamma$ (1/day)', 'log'),
         ('Num Sats',          'Number of Satellites',                 'log'),
     ]):
         sns.lineplot(
